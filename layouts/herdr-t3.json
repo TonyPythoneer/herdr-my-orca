@@ -343,16 +343,6 @@
         12
       ],
       "preview": "layouts/herdr-t3.svg"
-    },
-    {
-      "id": "be324ff33dd9d1910d40bb4c35b8e6af1",
-      "type": "block",
-      "content": {
-        "mod": "over9k-usage"
-      },
-      "size": {
-        "px": 30
-      }
     }
   ],
   "divider": {
