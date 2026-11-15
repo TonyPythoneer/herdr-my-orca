@@ -1,6 +1,6 @@
 # Spec v2 收斂版（第二輪 CTO 收斂）
 
-進度：已完成 1 到 8 全部；未完成：無（待 owner 回答 3.1 的三個問題）
+進度：已完成 1 到 8 全部；P1 已跑完，階梯 5、7、8-lite 已自驗（V42 到 V45），第二輪審查見 8.2.6；P1（opencode 前置測試）已於 2026-11-16 跑完（V30 到 V33，結果寫回 3.1 Q1、4.5、6、8）；待 owner 回答 3.1 的 Q2、Q3，以及 8.2 的 E2E 安全審查
 
 日期：2026-11-16
 分支：`worktree-workflow-stages-panel`
@@ -10,12 +10,14 @@
 
 **可以開工。** Runner、狀態檔、Planning skill、Tuning、UI 都不依賴 opencode 的行為，可以先用一個會模擬 agent 的 shell 腳本（`fake-agent.sh`）做完並測完；這一輪已經用同樣的方法在真的 core 上實測過派發、標籤、等待、`blocked`、kill、rm 與父子關係（第 6 節 V1 到 V29），並確認沒有留下任何 terminal、tab 或檔案。
 
-**被卡住的只有三樣，全部卡在同一個前置測試 P1（等 opencode 額度重置）：**
-1. 4.5 表中 opencode 那一列：最終的啟動旗標與送達方式。
-2. 唯一一次真實 E2E，以及只能靠它證明的驗收項目（AT-10，與 AT-04、06、08、09、11、22 中「真的 opencode」那一半）。
-3. AT-21 之中「opencode 卡在提問時能否被立刻發現」這個分支。
+**P1 已跑完（2026-11-16，model `omlx/LiquidAI--LFM3-1.7B-MLX-4bit`，結果見 V30 到 V33）：** opencode 會回報 7501、`--prompt` 會自動送出、新資料夾沒看到對話框；**不加 `--standalone` 時 kill 之後工具指令仍在跑（`late.txt` 出現），加了就不會**。所以 dev 的旗標定為 `opencode --auto --standalone --prompt "<指標 prompt>"`，「會改變範圍的結果」沒有發生。
 
-P1 比上一輪想的多三個問題（U2、U3、U4）。其中只有一個結果會改變範圍：如果不論加不加 `--standalone`，kill 掉 terminal 之後 opencode 的工具指令都還在背景跑，「一次只有一個 worker」就無法保證，那時要停下來請 owner 決定（第 7 節質疑 5）。
+**仍然沒有證據的只剩：**
+1. 唯一一次真實 E2E，以及只能靠它證明的驗收項目（AT-10，與 AT-04、06、08、09、11、22 中「真的 opencode」那一半）。P1 只驗了單次小任務，不是 E2E。
+2. AT-21 之中「opencode 卡在提問」的 `blocked` 分支：P1 沒有觸發任何權限詢問（U13）。
+3. 換成其他 model 後 tool call 的穩定度（U14）：P1 的 1.7B 小模型每項只跑一次。
+
+E2E 開跑之前要先過第 8.2 節的安全審查。
 
 **與第一輪審查不同的地方（都有本輪的實測依據）：**
 - **不用 hc template。** 實測發現 template 對不回報狀態的程式根本不送第一則訊息（等 60 秒後回報沒送出，V16）。改成啟動時用參數帶入一句「去讀這個檔案並照做」。
@@ -89,11 +91,11 @@ AT-22（「User-owned terminals … are preserved」）同步改寫為：「除�
 
 ### 3.1 需要 owner 決定的三件事
 
-**Q1. opencode 用什麼旗標啟動？（卡住：dev 派發的那一行設定）**
+**Q1. opencode 用什麼旗標啟動？（旗標已由 P1 定案；只剩「誰指定 model」待決）**
 決定 4 說「沿用 `programs.json` 的全權限參數」，但 `programs.json` 裡沒有 opencode（V27），沒有東西可沿用。
-- **建議：`opencode --auto`**（「Auto-approve permissions that are not explicitly denied」，V25）；若前置測試 P1 顯示不加 `--standalone` 時 kill 不掉它的工具指令（U3），再加 `--standalone`。
+- **P1 實測結果（已定案建議）：`opencode --auto --standalone`**。`--auto`（「Auto-approve permissions that are not explicitly denied」，V25）；`--standalone` 必加，因為不加時 kill 之後工具指令仍會在 `opencode-pty daemon` 底下跑完（V32：`late.txt` 出現），「kill 之後工作樹靜止」與「同時只有一個 worker」都會被破壞。
 - 理由：與決定 4 對 claude、codex 的立場一致；背景 session 沒人回答提問，不加 `--auto` 只會讓每個 task 卡到 60 分鐘上限。
-- 你要知道的代價：opencode 互動模式沒有 `--model`（V25），dev 用的是你 opencode 設定檔的預設 model，workflow 無法逐次指定。
+- 你要知道的代價：opencode 互動模式沒有 `--model`（V25），dev 用的是 opencode 設定檔的預設 model，workflow 無法逐次指定。P1 是用專案層的 `opencode.json`（`{"model":"omlx/…"}`，放在拋棄式資料夾）指定的（V30）。真實 worktree 要不要由 Runner 寫這個檔，會讓工作樹變髒、違反 R-D，**需要 owner 決定**（預設：不寫，用 user 的設定檔預設 model；E2E 用拋棄式 repo，可以把 `opencode.json` 一起 commit 進去）。
 
 **Q2. 開始時 worktree 有還沒 commit 的變更怎麼辦？（卡住：`my-orca init` 與 Runner 的 git 規則）**
 - **建議：直接拒絕**，訊息是「請先 commit 或 stash，再執行一次」。
@@ -141,7 +143,7 @@ User 在自己的 tab 用 `/herdr-planning` 做完規劃；之後一個不含 AI
 | `herdr-planning` skill | 唯一的 skill。規劃 → 寫 `handoff.md` + `tasks.json` → 呼叫 `my-orca init` → 把 `init` 印出的 profile 念給 user | `~/.agents/skills/herdr-planning/`（claude 經 symlink 讀到），另複製到 `~/.codex/skills/` |
 | `orca-workflow` mod | 同一個 mod 兩種畫法：`props().strip` 為真時畫四燈列，否則畫 inspector 對話框（沿用 `orca-chrome` 用 `props().footer` 分兩種畫法的既有做法） | `mods/orca-workflow/` |
 
-Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 Runner 寫在狀態資料夾的 `dispatch/<dispatch-id>.md`，啟動時以 argv 帶入一句固定的指標 prompt（「讀 `<絕對路徑>` 並完全照做」）。這偏離規格的「三個 skill」與「Prefer Agent Templates」，理由是 V16：template 對不回報 7501 的程式根本不送第一則訊息，會讓整條派發路徑卡在 opencode 的前置測試上；argv 路徑對 claude（V10，App 自己就這樣啟動）與 codex（V26）已有依據，對 opencode 是 `--prompt`（U2）。
+Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 Runner 寫在狀態資料夾的 `dispatch/<dispatch-id>.md`，啟動時以 argv 帶入一句固定的指標 prompt（「讀 `<絕對路徑>` 並完全照做」）。這偏離規格的「三個 skill」與「Prefer Agent Templates」，理由是 V16：template 對不回報 7501 的程式根本不送第一則訊息，會讓整條派發路徑卡在 opencode 的前置測試上；argv 路徑對 claude（V10，App 自己就這樣啟動）與 codex（V26）已有依據，對 opencode 是 `--prompt`（V31）。
 
 ### 4.3 狀態檔
 
@@ -184,7 +186,7 @@ Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 R
 
 **R-C 驗收（只有 Runner 說了算）**：dev task 被接受的條件是全部成立：(1) result 檔是合法 JSON 且 `dispatch` 相符；(2) Runner **自己**在 worktree 重跑 `tasks.json` 裡該 task 的 `test` 指令，exit 0（上限 15 分鐘）；(3) `git status --porcelain` 是空的；(4) 目前 branch 沒變，且新的 `HEAD` 是上一個紀錄的 `head` 的後代（`git merge-base --is-ancestor`）。不成立 → 這次嘗試記為 `rejected:<原因>`；同一個 task 最多 2 次嘗試，第 2 次的指示檔附上第 1 次失敗的測試輸出（截到 16 KiB）；再失敗 → `needs_user`。
 
-順序是：看到 result 檔 → 把畫面存到 `logs/` → **先 `hc kill` 該 worker** → 驗收 → 寫狀態 → `hc rm`。先 kill 再驗收，是因為 worker 交了結果之後若還在改檔，Runner 重跑的測試就是跑在會變動的工作樹上；worker 已宣告完成，結果都在檔案與 commit 裡，kill 不會損失東西。這把規格的「CHECK RESULT → COMMIT STATE → CLEAN UP」中的「結束程式」提前一步，「移除紀錄（`rm`）」仍在寫狀態之後。
+順序是：看到 result 檔 → 把畫面存到 `logs/` → **先 `hc kill` 該 worker** → 驗收 → 寫狀態 → `hc rm`。先 kill 再驗收，是因為 worker 交了結果之後若還在改檔，Runner 重跑的測試就是跑在會變動的工作樹上；worker 已宣告完成，結果都在檔案與 commit 裡，kill 不會損失已交付的東西。**但 `hc kill` 只結束 terminal 的程式與前景工作，脫離 process group 的程序（`setsid`、雙重 fork）會存活並繼續寫檔（V42）**，所以 kill 之後、驗收之前還要做 **M14 掃描**（見 4.9）：掃不乾淨就不得驗收，`needs_user`（`sweep_incomplete`）。這把規格的「CHECK RESULT → COMMIT STATE → CLEAN UP」中的「結束程式」提前一步，「移除紀錄（`rm`）」仍在寫狀態之後。
 
 **R-D Git 保護**：Runner 只執行唯讀的 git 指令（`rev-parse`、`status --porcelain`、`merge-base --is-ancestor`、`log`）；從不 `checkout`、`reset`、`stash`、`clean`、`commit`、`push`。每次派發前檢查：branch 與紀錄相同、`HEAD` 等於紀錄的 `head`、工作樹乾淨；任一不成立 → `needs_user`（`tree_changed`），附 `git status` 輸出。`init` 要求工作樹乾淨（見 3.1 的 Q2）。
 
@@ -207,7 +209,7 @@ Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 R
 
 Runner 開機時另外掃一次 `hc ls --json --label orca.run=<run_id>`：dispatch id 已記在某次嘗試且該嘗試已結束的 live worker（寫完狀態、來不及清理就當掉留下的）→ kill + rm；dispatch id 不在 state 裡的 → 不碰，進 `needs_user`（`unknown_worker`）。
 
-**R-G 只清自己的東西**：Runner 會 kill / rm 的 terminal 只有兩種：帶 `orca.run=<本 run>` 標籤且 `orca.dispatch` 等於 state 紀錄的；以及第 2 節定義的那一個 Planning terminal。每次 kill 之前重新 `hc get` 核對標籤，並寫一筆 `kill` 事件。
+**R-G 只清自己的東西**：Runner 會 kill / rm 的 terminal 只有兩種：帶 `orca.run=<本 run>` 標籤且 `orca.dispatch` 等於 state 紀錄的；以及第 2 節定義的那一個 Planning terminal。每次 kill 之前重新 `hc get` 核對標籤，並寫一筆 `kill` 事件。**M13**：每個破壞性的 `hc` 指令（`kill`、`rm`、`server stop`、`server restart`）執行前，先讀 `hc server status --json` 的 `core.id`，必須等於 `state.core_id`（E2E 另設禁用清單：你的 core 的 id），否則拒絕並 `needs_user`（`core_mismatch`）；讀不到 id 一律視為拒絕。address（`t1`…）只在單一 core 內唯一，專屬 core 與你的 core 會撞號，所以不能只憑 address 下破壞性指令；程式碼：`my-orca/my-orca.mjs` 的 `guardedHc`。
 
 ### 4.5 三個 CLI 的啟動方式（P1 只影響表中 opencode 那一列）
 
@@ -215,9 +217,9 @@ Runner 開機時另外掃一次 `hc ls --json --label orca.run=<run_id>`：dispa
 |---|---|---|
 | Tuning（claude） | `claude --dangerously-skip-permissions --model <M> --effort <E> "<指標 prompt>"` | V10、V26、V27 |
 | Tuning（codex） | `codex --no-daemon -c disable_paste_burst=true --dangerously-bypass-approvals-and-sandbox -m <M> -c model_reasoning_effort=<E> "<指標 prompt>"` | V26、V27；`foreground.argv` 是否保留這些旗標見 U12 |
-| Dev（opencode） | `opencode --auto [--standalone] --prompt "<指標 prompt>"` | V25；`--prompt` 是否自動送出、是否需要 `--standalone` 由 P1 決定（U1 到 U4） |
+| Dev（opencode） | `opencode --auto --standalone --prompt "<指標 prompt>"` | V25；P1 已驗：`--prompt` 自動送出（V31）、會回報（V30）、不加 `--standalone` 會漏（V32） |
 
-Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差別只在這張表（opencode 的旗標，以及送達方式是 `argv` 還是「啟動後 `hc send`」）。P1 各種結果對應的送達方式，以及唯一會改變範圍的結果（M5），見第 7 節質疑 5 的表。P1 兩種結果下的行為：
+Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差別只在這張表（opencode 的旗標，以及送達方式是 `argv` 還是「啟動後 `hc send`」）。**P1 的實際結果是「有回報」且 `--prompt` 自動送出（送達方式 = argv）**，下表右欄（沒回報）只在日後換成不回報的 CLI 時才用得上，仍須用 `fake-agent.sh` 保持可測。P1 各種結果對應的送達方式見第 7 節質疑 5 的表。兩種結果下的行為：
 
 | | opencode 有回報 | opencode 沒回報 |
 |---|---|---|
@@ -277,6 +279,38 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 | `layouts/orca.json` | **新增一個 block** | 四燈列的位置待 owner 決定（3.1 的 Q3） |
 
 四燈的畫法：8px 圓點 + 階段名稱 + `accepted / total`。顏色用規格的四個固定 hex（階段識別色，明暗主題相同）；狀態不只靠顏色：完成 = 實心加勾（`circle-check.svg`）、進行中 = `.loop("opacity", …)` 原生脈動、未開始 = 空心圈、`needs_user` = `triangle-alert.svg`、`failed` = `alert-circle.svg`（三個圖示 `mods/orca-status/` 已有）。計數：Planning = 閘門 `1/1`；Development = 已接受的 dev task ÷ 全部 dev task（含 rework 新增的）；Tuning = 最新一份 review 通過的 acceptance ÷ 全部 acceptance；Ready = `0/1` 或 `1/1`。
+
+### 4.9 介面定義（E2E 前必須釘死；由審查 advisor 提案，owner 未逐項核可，視為實作預設）
+
+**`results/<id>.ack`**：空檔，worker 第一個動作 `: > <絕對路徑>`。**`results/<id>.json`**：`{"dispatch":"<id>","task":"T-01","status":"done|blocked","summary":"<=500 字","commits":["sha"],"test":{"cmd":"…","exit":0}}`。Runner 只信 `dispatch`；`status != done` 立刻 `rejected:agent_blocked`（不花一次測試）。**worker 必須最後才寫這個檔**（在最後一個 commit 之後）。
+
+**`reviews/<id>.json`**：`{"dispatch","verdict":"pass|rework|needs_user","criteria":[{"id":"AC-1","pass":true,"evidence":"…"}],"new_tasks":[{"title","test","deps":["T-03","@1"]}],"summary"}`；`@n` = 同一批中第 n 個新 task（Tuning 無法預先知道 `R<cycle>-<nn>`）。
+
+**`tasks.json`**：`{"schema":1,"tasks":[{"id":"T-01","title","test","deps":[]}],"acceptance":[{"id":"AC-1","text","verify":"cmd"},{"id":"AC-2","text","manual":true}]}`；acceptance id 為 `^AC-\d+$`；所有指令以 `sh -c`、cwd = `toplevel` 執行。
+
+**指標 prompt**：`Read <abs>/dispatch/<id>.md and follow it exactly. Do nothing else first.`
+
+**`dispatch/<id>.md`**：由 Runner 預先渲染，所有 id 與絕對路徑都已代入，不留佔位符。步驟固定：(1) `: > results/<id>.ack`；(2) 做 task（標題與 `test` 指令）；(3) 跑 `test`；(4) `git add -A && git commit -m "orca(<task>): …"`；(5) 用單一 `cat > results/<id>.json <<'EOF'` 寫結果；(6) 停。再附 D3 的禁止事項，並**明文禁止 `nohup`、`&`、`setsid`、常駐伺服器與 watcher**。重派時附上一次失敗輸出（16 KiB）。小模型需要這種可直接複製的形式。
+
+**`my-orca` 結束碼**：0 成功（含第二個 `start` 遇到 `name_taken`）；1 拒絕或驗證失敗；2 用法錯誤；3 環境問題（沒有 `hc` / App）。`init` 以 `--handoff <path> --tasks <path> [--model … --effort …] [--no-start]` 接收輸入。
+
+**`needs_user.code` 完整清單**：`undelivered`、`spawn_failed`、`exit_without_result`、`stopped_without_result`、`timeout`、`blocked`、`task_failed`（同一 task 2 次被拒）、`bad_review`（Tuning 2 次產生不合法 review，含「說 pass 但 Runner 重跑 verify 失敗」）、`tree_changed`、`partial_changes`、`unknown_worker`、`identity`、`rework_exhausted`、`rework_too_large`、`blocked_tasks`、`worktree_moved`、`worktree_missing`、`hc_incompatible`、`core_mismatch`（M13）、`sweep_incomplete`（M14）。`status: failed` v1 不使用。
+
+**`events.jsonl`**：每行 `{"ts","type","run","task","dispatch","detail"}`；type：`runner_start`、`intent`、`launched`、`acked`、`result_seen`、`accepted`、`rejected`、`kill`（必須帶目標 address 與 `created_ms`）、`rm`、`review`、`rework`、`needs_user`、`resumed`、`planning_closed`、`config_ignored`、`sweep`（M14：只記被清的 PID 與結果，不記環境內容）、`runner_exit`。
+
+**`config.json` 鍵與範圍**：`max_rework_cycles` 3（1–9）、`close_planning_tab` false、`ack_timeout_s` 120（10–600）、`dev_timeout_min` 60（1–240）、`tuning_timeout_min` 60（1–240）、`test_timeout_min` 15（1–60）、`poll_s` 10（2–60）、`hc_retry_min` 5（1–30）、`stopped_grace_s` 60（10–600）。
+
+**對 4.4 的修正（M6 到 M15，來自 8.2 的邏輯審查，已併入本文的規則；M13 到 M15 已有程式與測試：`my-orca/my-orca.mjs`、`node --test my-orca`）：**
+- **M6（R-C）**：接受條件加上「`git rev-list --count <記錄的 head>..HEAD` ≥ 1」，因為 `is-ancestor X X` 也回 0，worker 什麼都沒做、測試本來就過時會被誤判成功。順序改為：porcelain 檢查 → 跑測試 → porcelain 再查一次，第二次髒 = `rejected:test_dirtied_tree`（測試產物必須被 `.gitignore` 涵蓋）。
+- **M7（R-B／R-C）**：看到 result 後，先等 terminal 離開 `working`，或連續 2 次輪詢 `HEAD` 與 porcelain 都沒變（上限 60 秒），再 kill；**kill 之後才解析 result**。避免 worker 寫完結果、正在 `git commit` 時被殺。
+- **M8（R-B 的 60 秒規則）**：靜止時間用 `hc get` 的 `status_ms` 算（`now - status_ms`，僅在狀態不是 `working` 時），且 `turn` 要等於最後一次觀察到 `working` 時的值；每次輪詢先看 result 檔；**看到第一次 `working` 或 ack 之前不啟動這個計時**（啟動時的 idle 不算停住）。
+- **M9（D6／C4／S8）**：逾時計時存「累計經過時間」而不是單調時鐘起點（Runner 重啟後單調時鐘無意義）。**Resume 是一次明確的 user 介入：給新的時間預算，且該 task 再允許 2 次嘗試**（D12 的「沒有 user 介入不得有第 3 次」由此界定）。
+- **M10（R-A／R-F）**：`needs_user` 之後被保留的 worker，Resume 時**先看 result 檔，再明確 kill（過 R-G 的標籤核對）**，之後才重派；否則 R-A「同一時間只有一個 worker」的檢查會擋住自己。
+- **M11（R-E）**：Tuning 回 `pass`、但 Runner 重跑 `verify` 失敗 → 這份 review 不合法，計入 E20 的 2 次上限，之後 `needs_user`（`bad_review`）。新增 F 測試。
+- **M12（驗證判準）**：E2E 的「乾淨」判準是「沒有 **live** 的 runner／dev／tuning terminal」。Runner 結束後 finished 的紀錄會留在 `hc ls --all`（`hc rm` 由 `my-orca stop` 或下次 `start` 清理），不能要求 `--all` 為空。
+- **M13（R-G，破壞性指令前的 core 斷言）**：`kill`、`rm`、`server stop`、`server restart` 之前，先讀 `hc server status --json` 的 `core.id`；不等於 `state.core_id`、在禁用清單內、或讀不到，一律拒絕（`core_mismatch`），不執行該指令。唯讀指令（`get`、`ls`、`read`）不檢查。專屬 core 的操作一律在同一個命令內帶著 `HC_SESSION`。
+- **M14（R-C，kill 之後的程序掃描）**：Runner 啟動 worker、測試指令、preflight 時都帶環境變數 `ORCA_DISPATCH=<dispatch id>`。kill 之後以 `ps -Eww -o pid=,lstart=,command=`（`LC_ALL=C`）找出帶這個標記的程序（整個 token 相符，所以 `d1` 不會誤中 `d10`；排除 Runner 自己），**kill 之前重新讀一次並核對 PID 與啟動時間都沒變**（避免 PID 被重用而誤殺），前兩輪 `SIGTERM`、之後 `SIGKILL`，最多 4 輪，最後重掃。掃不乾淨 → 不得驗收、`needs_user`（`sweep_incomplete`），保留證據。只記 PID，不存 `ps` 的原始輸出（含環境內容）。**限制**：這是合作式清理，不是邊界：清空環境變數的程序、掃描與 kill 之間才 fork 的程序都會漏；macOS only（Linux 的 `ps` 選項不同，v1 延後）。
+- **M15（R-E，rework task 的信任邊界）**：Tuning 產生的 `new_tasks` 在入列前套用與 D14 同一組結構檢查：`title` 非空、`test` 非空且不是空測試（`true`、`:`、`exit 0`、單純 `echo`）、`deps` 只能是既有 id 或 `@n`（同一批中**排在前面**的第 n 個，所以不可能成環）、1 到 10 個。另外 `test` 不得含網路、提權或 worktree 外路徑的樣式（`curl`、`wget`、`sudo`、`ssh`、`git push`、`npm install`、`pip install`、`$HOME`、`~/`、`..` 等；**這只是警報，不是邊界**，`sh script.sh` 能藏任何東西）。失敗 → 這份 review 不合法，計入 E20 的 2 次上限（`bad_review`）；超過 10 個 → `rework_too_large`。通過的 task 帶 `preflight:"pending"`，**必須先通過沙盒預檢（8.2.6）才能被派發或執行**（`isRunnable`），Runner 不得在沒有沙盒的情況下直接執行 Tuning 寫的指令。
 
 ## 5. 邊界情況表
 
@@ -376,7 +410,7 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 | E47 | Worker 交的 result 是別的 dispatch 的（上一次嘗試留下的） | 檔名與內容的 `dispatch` 都要等於目前的 id，否則當作沒有 | R-C | T |
 | E48 | Worker 自己 push、改別的 branch、動別的 worktree、寫 worktree 以外的檔案 | **擋不住也偵測不到**（全權限，決定 4）。指示檔明文禁止；Runner 能驗證的只有：本 worktree 的 branch、`HEAD` 的祖先關係、工作樹是否乾淨。被 git 忽略的檔案與 worktree 以外的一切都看不到 | D3（已知限制，README 寫明） | 無 |
 | E49 | Worker 自己再起子 agent | 指示檔禁止；worker 的 hc 子 terminal 會在 worker 被 kill 時一起結束（V21），除非它用了 `--no-parent`（偵測不到） | D3 | 無 |
-| E50 | opencode 的 background service 讓工具指令活在 terminal 之外 | 未驗證（U3）。若屬實而不處理，kill 之後檔案仍可能被改，「同時只有一個 worker」就不成立 → 所以 P1 必須測，並依結果加 `--standalone` | P1 | P1 |
+| E50 | opencode 的 background service 讓工具指令活在 terminal 之外 | **已驗證（V32）**：不加 `--standalone` 會漏，加了不會；dev 一律帶 `--standalone`。整棵 process tree 是否殺乾淨見 U15（`nohup … &` 已驗，`setsid`／雙重 fork 未驗） | 4.5 的旗標 | V32、U15 |
 | E51 | 磁碟滿或狀態資料夾不可寫 | 暫存檔寫入失敗 → Runner 印錯誤後結束，原本的 `state.json` 不變；UI 顯示停住 | D5 | T：唯讀資料夾 |
 | E52 | User 刪掉狀態資料夾 | Runner 下一次寫入失敗而結束；worker 還活著的話，`my-orca status --all` 用 `hc ls --label orca.role=dev`（與 `tuning`、`runner`）列出沒有對應狀態的 terminal，由 user 決定，不自動 kill | R-G | T |
 | E53 | Herdr App 沒開 | Runner 不受影響（只用 core）；Planning tab 不關（`skipped:app_unavailable`） | 2.2 檢查 h | F（假 `herdr-app`） |
@@ -426,6 +460,18 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 | V27 | `programs.json` 有 `run` 的只有 `omp`、`codex`（`codex --no-daemon -c disable_paste_burst=true --dangerously-bypass-approvals-and-sandbox`）、`claude`（`claude --dangerously-skip-permissions`）；**沒有 opencode** | 讀 `~/.config/herdr-app/programs.json` 的 `run` 欄位 |
 | V28 | Linked worktree 的 `git rev-parse --path-format=absolute --git-dir` = `<repo>/.git/worktrees/<name>`，`--git-common-dir` = `<repo>/.git`；可用 `--is-inside-work-tree`、`--is-bare-repository` 判斷 | 在本 worktree 實跑（git 2.54.0） |
 | V29 | Mod API：`terminals()` 列出所有 core terminal 但**不會**觸發重繪（要配 timer）；`agents()` 只含視窗內的；`readTextFile` 上限 1 MiB；`writeTextFile(path,text,expected)` 與 `watchFolder` 只限本機；沒有任何 reduced-motion 設定；原生動畫有 `.loop()`、`.spin()`、`.frames()` | `herdr.d.ts:24-29,182-183,216-221,411-421`、`AGENTS.md:1020-1036`、`gpui-kit.d.ts:1209-1219`、`mods/orca-pane/main.js:32` 的註解；`grep -i "reduce"` 在三個檔案都沒有相關結果 |
+| V30 | **opencode 會回報 7501，且 model 可用專案層 `opencode.json` 指定。** 在拋棄式 git repo（含 `opencode.json` = `{"model":"omlx/LiquidAI--LFM3-1.7B-MLX-4bit"}`）以 `env -u HC_TERMINAL_ID -u HC_SCOPE hc run --bg --no-parent --no-notify --json --name orca-p1 --label orca.probe=1 --cwd <repo> -- opencode --auto --prompt "…"` 啟動；30 秒後 `hc get` → `reported:true, status:{app:"opencode",state:"idle"}, turn:1`；工作中是 `state:"working"` 且帶 `title`（`Bash sleep 45, touch late.txt`）。`hc read` 畫面底列顯示 `Build auto · LiquidAI--LFM3-1.7B-MLX-4bit oMLX` | 實跑（opencode v2.3.0，hc 0.1.21）；`opencode models` 列有 `omlx/LiquidAI--LFM3-1.7B-MLX-4bit` |
+| V31 | **`--prompt` 在互動 TUI 會自動送出。** prompt 要求建立 `./ack.txt` 內容 `ok`，30 秒內檔案出現且內容為 `ok`；`hc get` 的 `first_message` 為 `null`（沒有透過 hc 送訊息） | 同 V30 |
+| V32 | **不加 `--standalone`：`hc kill` 之後工具指令繼續跑；加了就停。** 兩個 worker 各被要求執行 `sleep 45 && touch late.txt`，跑到一半各自 `hc kill`：不加的那個，`zsh -c "sleep 45 && touch late.txt"` 的父程序是 `opencode-pty daemon`（`opencode serve --service` 之下，ppid 1 的背景服務），kill 後 `sleep` 仍在，50 秒後 `late.txt` 出現；加 `--standalone` 的那個 kill 後 `sleep` 消失、`late.txt` 沒出現。與 `hc --skill` 對 codex 的 `--no-daemon` 警告同類 | 同 V30，`ps -o pid,ppid,command`、`pgrep -fl "sleep 45"`、`ls late.txt` |
+| V33 | 新資料夾（`/private/tmp` 下）以 `--auto` 啟動，`hc read` 的畫面沒有任何權限或信任對話框；P1 各探針 kill + rm 後，`hc ls` 與基準完全相同、`hc ls --all --label orca.probe=1` 為空、repo 無變動。**限制**：只看了一個新資料夾、一個 model、一次 | 同 V30 |
+| V34 | **worker 讀寫 cwd 以外的隱藏資料夾，`--auto` 不會擋。** 拋棄式 repo 之外建 `<scratch>/ext/.my-orca/{dispatch,results}/`，`dispatch/d1.md` 寫「先建空檔 `results/d1.ack`，再建 `results/d1.json`（含 `{"dispatch":"d1","status":"done"}`），然後停」；prompt 為 `Read <abs>/dispatch/d1.md and follow it exactly.`；25 秒內兩個檔案都出現且 JSON 內容正確。**限制**：1.7B、一次；沒測過 `~/.config/herdr-app/` 的真實路徑 | 實跑（同 V30 的環境） |
+| V35 | **`--standalone` 下 `nohup sh -c 'sleep 40 && touch late2.txt' &` 在 `hc kill` 後也被清掉**：kill 前 `pgrep` 看得到 `sh -c sleep 40` 與 `sleep 40`，kill 後兩者消失，再等 45 秒 `late2.txt` 不存在。**限制**：沒測 `setsid`（macOS 沒有這個指令）、雙重 fork、常駐伺服器 | 實跑 |
+| V36 | **專屬 core 可行且與你的 core 完全隔離。** `HC_SESSION=oe2e` + 暫存 `XDG_CONFIG_HOME/STATE_HOME/DATA_HOME` 下，`hc server status` 會自動起一個新 core（id 前綴 `7e3ba` 不等於你的 `4d8f7`），`hc ls` 為空、看不到你的 terminal。**socket 路徑上限 103 bytes**：session 與 XDG 路徑要很短（用 `/private/tmp/oe-e2e`；scratchpad 的長路徑直接報錯 `socket path … too long`）。只在同一個命令內帶著 `HC_SESSION` 執行 `hc server stop` 才停得掉它；停掉後你的 core 的 id 與 7 個 live terminal 都沒變 | 實跑；停機前先比對 core id 不等於你的 id |
+| V37 | **scratch XDG 會被 terminal 內的程式繼承，opencode 因此壞掉。** 在專屬 core 的 terminal 內直接跑 opencode：它去 `$XDG_DATA_HOME/opencode` 建資料夾（`EPERM: mkdir …/oe-e2e/data/opencode`），而且會找不到你 `~/.config` 裡的 provider 設定。**worker 必須以 `env -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME` 啟動**，同時保留 `HC_SESSION`／`HC_TERMINAL_SOCKET`。HOME 沒動，claude／codex 的憑證在 HOME 底下，推論不受影響（未實測 claude／codex 在專屬 core 內啟動） | 實跑 |
+| V38 | **sandbox-exec 黑名單式 profile 可行**：`(version 1)(allow default)(deny file-write*)(allow file-write* (subpath <repo>)(subpath <scratch>)(subpath ~/.local/share/opencode)(subpath ~/.local/state/opencode)(subpath ~/.cache/opencode)(subpath /private/var/folders)(literal /dev/null)(literal /dev/tty)(regex #"^/dev/(tty\|pty)"))(deny network-outbound)(allow network-outbound (remote ip "localhost:*"))`。`hc run … -- env -u XDG_… sandbox-exec -f <profile> opencode --auto --standalone --prompt …` 在專屬 core 內：回報 `{app:opencode,state:idle}`、`ack.txt` 建立、model 為 `LiquidAI--LFM3-1.7B-MLX-4bit`、omlx（`127.0.0.1:8000`）可連。**坑**：只放行 `localhost:8000` 會得到 `EPERM: Transport`（opencode 的 TUI 要連它自己的 `--standalone` 本機伺服器，埠隨機），所以必須放行整個 loopback；`(allow network* … (remote unix-socket))` 反而讓外網通了（`curl example.com` 回 200），不可加。`hc run` 回傳的 `agent` 欄位是啟動時的程序名（`env`／`sandbox-exec`），**不是 `opencode`**，Runner 不能依賴它，只能看 `status.app` | 實跑 |
+| V39 | **sandbox 實際擋得住的東西**：直接在 sandbox 內 `touch ~/oe-canary.txt` 得到 `Operation not permitted`；`curl https://example.com` 得到 `000`；repo 內寫入正常；omlx 回 HTTP 401（連得到，沒帶 key）。由 opencode 的 bash tool 執行時：`curl example.com` 的結果檔為 `000`，`~/oe-canary2.txt` 不存在（無法分辨是 `touch` 被擋還是小模型沒執行，直接測試才是證據）。**限制**：讀取不受限制、環境變數沒清、loopback 全開（包含你的 opencode service `127.0.0.1:49374`）、unix socket 被 deny 但不代表所有 IPC 都被擋 | 實跑 |
+| V40 | U15 再驗一項：sandbox + `--standalone` 下，`sh -c '(sleep 40 && touch late3.txt) &'`（子 shell 背景化）在 `hc kill` 後 `pgrep` 為空、`late3.txt` 不存在。**仍未驗**：真正脫離 process group 的 daemon（`setsid`、常駐伺服器） | 實跑 |
+| V41 | **沙盒只放行 worktree 目錄時，linked worktree 裡的 `git commit` 會失敗**：`fatal: Unable to create '<主 repo>/.git/worktrees/<name>/index.lock': Operation not permitted`（寫檔到 worktree 目錄本身正常）。額外放行 `git rev-parse --absolute-git-dir` 與 `--git-common-dir` 兩個 subpath 後 `git add`／`git commit` 成功。**代價**：common-dir 可寫 = worker 理論上能改同一個 repo 的 objects 與其他分支的 refs（我試著 `git branch -f main` 被 git 自己的規則擋下，因為 `main` 被另一個 worktree checkout；**不是沙盒擋的**，沒有被 checkout 的分支沒有這層保護，未實測）。另外，worker 要寫 `ack`／`result` 的狀態資料夾（在 `~/.config/herdr-app/my-orca/<wt-id>/results/`）不在上面 V38 的放行清單裡，**必須另外放行，而且只放行 `results/` 這個子資料夾**，否則每個 dispatch 都會被判 `undelivered`；放行整個 `my-orca/` 則 worker 可以改 `state.json` | 實跑 + 推論（狀態資料夾那半是推論，V34 的測試資料夾剛好在放行範圍內） |
 
 **探針後清理（已確認）**：所有 `orca.probe=1` 的 terminal 都已 kill + rm（`hc ls --all --json --label orca.probe=1` → 空）；`hc ls` 的 live 清單與基準完全相同（`t1 t14 t25 t26 t4v t51`）；三個 space 的 tab 數仍是 1 / 2 / 3；`overlays` 為空；拋棄式 template 兩個檔案與為此建立的 `~/.config/herdr-core/` 空資料夾已刪除（`hc templates` 回空）；`/private/tmp/orca-probe-7d820812` 已刪除；core pid 沒變（沒有重啟）。探針期間 owner 的視窗曾短暫掛著一個 peek 疊層（約一分鐘，已關）。
 
@@ -433,10 +479,10 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 
 | # | 宣稱（目前只是假設） | 為什麼沒驗 | 探針 |
 |---|---|---|---|
-| U1 | opencode 在 `hc` 底下會回報 OSC 7501（`working/done/blocked`） | 禁止啟動 opencode；owner 已延後（**卡關的前置測試 P1**） | 拋棄式 repo：`hc run --bg --no-parent --no-notify --name p1 --label orca.probe=1 --cwd <tmp> -- opencode --auto`，30 秒後 `hc get p1 --json` 看 `reported` 與 `status` |
-| U2 | `opencode --prompt "<文字>"` 在互動 TUI 會自動送出該 prompt（不是只填進輸入框） | 同上（P1 的一部分） | `hc run --bg … -- opencode --auto --prompt "create the file ./ack.txt then stop"`，120 秒內檢查 `ack.txt` 是否出現；沒出現就 `hc read p1` 看畫面 |
-| U3 | opencode 預設連 background service 時，`hc kill` terminal 之後 session 與它的工具指令是否真的停止；`--standalone` 是否讓它們留在 terminal 的 process tree 內 | 同上（P1 的一部分）。codex 有同類問題（`hc --skill`：「Codex must run with `--no-daemon` … or its commands execute outside hc」） | 讓 opencode 執行 `sleep 300 && touch late.txt`，途中 `hc kill`，5 分鐘後檢查 `late.txt` 是否出現；分別測有無 `--standalone` |
-| U4 | `opencode --auto` 之下不會再出現任何權限或信任對話框（新資料夾第一次開啟時） | 同上（P1 的一部分） | U2 的探針在全新的 `/private/tmp` 資料夾執行，看 `hc read` 畫面 |
+| U1 | ~~opencode 會回報 OSC 7501~~ **已驗證 → V30** | | |
+| U2 | ~~`--prompt` 自動送出~~ **已驗證 → V31** | | |
+| U3 | ~~kill 之後工具指令是否停止~~ **已驗證 → V32**（不加 `--standalone` 會漏，加了不會） | | |
+| U4 | ~~`--auto` 之下沒有對話框~~ **部分驗證 → V33**（只看了一個新資料夾；其他情況仍未知） | | |
 | U5 | `herdr-app do tab.close --id <tab>` 會關掉該 tab 並結束其 terminal，不會動到其他 tab；該 tab 是 space 唯一 tab 時會跳確認對話框 | 需要開一個看得到的 tab，本輪禁止新增 tab | owner 同意後：`herdr-app do tab.new --name orca-close-probe --argv '["sh"]'` → 記下 tab id 與 address → `herdr-app do tab.close --id <id>` → `hc get <addr>` 應為 finished，`herdr-app ls` 其他 tab 不變 |
 | U6 | peek 疊層在畫面上真的顯示該背景 terminal 的內容，且「keep-as-tab」按鈕只有 user 點了才會建 tab | 視窗當時沒有重繪，`shot` 拿到舊畫面 | owner 在場時：起一個 `orca.probe=1` 的背景 `sh`，`herdr-app do terminal.peek --terminal <addr>`，`herdr-app shot` 看圖，再 `overlay.close` |
 | U7 | `hc server restart` / core 當掉之後，Runner 與 worker 繼續活著、address 不變 | 手冊明文禁止動 user 的 core。文件依據：`hc --skill`「`hc update` … terminals keep running」「address: this terminal forever on this core」 | 只能在獨立的 `HC_SESSION` + 暫存 XDG 路徑起一個測試用 core 來測；設計上**不依賴**這點：恢復流程一律用標籤重新找 terminal（見第 5 節 E11、E18） |
@@ -445,6 +491,9 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 | U10 | `watchFolder(<my-orca 目錄>)` 在外部以 tmp + rename 覆寫 `state.json` 時會觸發 | 同 U9 | 實作第 8 步時驗；不觸發就退回 5 秒 timer（v1 現有做法） |
 | U11 | claude 與 codex 在同一個 worktree 開新 session 時不會再跳信任對話框；`~/.agents/skills` 裡的 skill 兩者都看得到（codex 需另外複製到 `~/.codex/skills`） | 禁止啟動 claude、codex | 實作第 4 步由 owner 各開一次確認 `/herdr-planning` 出現 |
 | U12 | codex 的 Planning terminal 的 `foreground.argv` 也保留 `-m` 與 `-c model_reasoning_effort=`（claude 的已由 V10 證實） | 這台目前沒有 live 的 codex terminal 可讀 | owner 開一個 codex tab 後 `hc get <addr> --json` 看 `foreground.argv` |
+| U13 | opencode 在 `--auto` 下遇到「明確 deny」的權限或提問時，會回報 `blocked`（`kind:question` 之類）而不是默默卡住或自己跳過 | P1 的 1.7B 模型沒有觸發任何權限詢問 | 拋棄式 repo 放 `opencode.json` 的 `permission` 設 deny 某個指令，prompt 要求執行它；看 `hc get` 的 `status` 與 `hc read` 畫面；沒回報就把 AT-21 的 `blocked` 分支對 opencode 標 NOT TESTED |
+| U14 | 較大或不同的 model 下，opencode 仍照指示寫 ack、result、commit（遵從率） | P1 每項只跑一次、只用 1.7B | E2E 的 3 個 dev task 逐一記錄（第 7 節質疑 1）；另在 fake 之外加跑「模型不照做」的情境，確認結果永遠是 `needs_user` 而非誤判成功 |
+| U15 | `--standalone` 下 `hc kill` 是否殺乾淨「整棵」process tree。**已驗證（V42）**：`nohup &`（V35）與子 shell 背景化（V40）會被清掉，但**真正脫離 process group 的 daemon（`setsid` 加雙重 fork）在 kill 後存活**；用環境標記掃描可清（M14）。常駐伺服器未驗。`hc --skill` 明載「Unix 上 kill 不會清掉 detached 的程式」 | V32 只驗了前景；V35 加驗 `nohup &` | 讓 opencode 執行 `nohup sh -c 'sleep 60 && touch late2.txt' &` 與 `setsid` 版本，途中 kill，檢查 `late2.txt`；若會漏，R-C 的「kill 後工作樹靜止」不成立，要加驗收前的 process group 檢查或在 README 列為已知限制 |
 
 ## 7. 五個最強質疑與回應
 
@@ -483,35 +532,36 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 - Runner 本體不依賴 opencode 的任何行為：派發、等待、驗收、恢復全部可以用 `fake-agent.sh` 的兩種模式（回報、不回報）測完，這是本輪用探針 C、D、H 實際做過的事（V13 到 V19），不是推測。
 - **M5**：把 P1 各種結果的對應寫死在 4.5：
 
-| `--prompt` 會自動送出（U2） | 會回報 7501（U1） | 送達方式 |
+| `--prompt` 會自動送出（V31） | 會回報 7501（V30） | 送達方式 |
 |---|---|---|
-| 是 | 不論 | argv（預設路徑） |
+| 是 | 不論 | argv（預設路徑）**← P1 實測屬於這一列** |
 | 否 | 是 | 啟動 → 等它回報 `idle`（上限 60 秒）→ `hc send` 指標 prompt（V15、V19 已證實這條路對會回報的程式可行） |
 | 否 | 否 | 啟動 → 畫面連續 3 次輪詢不變（上限 60 秒）→ `hc send`（V18：對不回報的程式也送得到）→ 以 ack 檔確認；沒有 ack 就 `needs_user`，不重送 |
 
+- **P1 實測結果（2026-11-16）：** U2 是「是」、U1 是「會回報」→ 送達方式 = argv（第一列）。**U3 的壞結果沒有發生**：加了 `--standalone`，kill 之後工具指令會停（V32）。下面保留原本的備案，只在日後 opencode 版本改變行為時用。
 - **會改變範圍的唯一結果**：U3 顯示不論有沒有 `--standalone`，kill 之後 opencode 的工具指令都還在跑。那樣「同時只有一個 worker」與「kill 之後工作樹靜止」都無法保證，不能靠 prompt 補救。此時停下來回報 owner，備案是 dev 改用 `codex --no-daemon`（`hc --skill` 明載這個旗標讓指令留在 hc 內），這違反規格「Development must use OpenCode」，需要 owner 決定。
 
 ## 8. 最終行動項目（含卡關的前置測試）
 
 執行順序：0 → 1 → 2 →（3、6、8 可平行）→ 4 → **5（卡關）** → **7（卡關）** → 9 → 10。「誰」一欄：**sub** = 可交給實作 subagent 獨立完成；**owner** = 需要 owner 本人。
 
-| # | 工作 | 完成標準 | 誰 | 卡關？ |
+| # | 工作 | 完成標準 | 誰 | 卡關？（P1 已完成；現在的閘門是 8.2） |
 |---|---|---|---|---|
 | 0 | 回答 3.1 的 Q1、Q2（Q3 可晚到第 8 步之前） | 三個答案寫進本檔 3.1 | owner | 否 |
 | 1 | `my-orca` 的純邏輯：state 的讀寫（tmp + rename、`updated` 檢查）、「下一步」的選擇規則、handoff 檢查（D14）、profile 解析（白名單旗標）、secrets 掃描（D15）、設定值檢查 | `node --test` 通過，涵蓋第 5 節所有標 **T** 的列；不需要 core 就能跑 | sub | 否（Q2 未答時先照建議值「拒絕髒的工作樹」做） |
 | 2 | `fake-agent.sh`（模式：回報、不回報、`block`、不理 prompt、結束不交結果、commit 後死掉、交結果後繼續寫檔）+ Runner 迴圈（R-A 到 R-G），dev 與 tuning 的 argv 先指向 fake | 第 5 節所有標 **F** 的列在「回報」與「不回報」兩種模式都通過（S5 到 S20、C1 到 C11、E 開頭的 F 列）；測試結束後 `hc ls --all --json --label orca.role=dev`（以及 `tuning`、`runner`）為空，`herdr-app ls` 的 tab 數與測試前相同 | sub | 否 |
 | 3 | `herdr-planning` skill + `my-orca init` 串接（M2 的事前確認、印出 profile） | 用固定的範例 handoff 跑 `my-orca init --check`：合格的回 0、每種不合格的回非零並指出位置；owner 各開一次 claude 與 codex，確認 `/herdr-planning` 出現（U11），並用 `hc get` 確認 codex 的 `foreground.argv` 含 model 旗標（U12） | sub 寫；owner 確認約 5 分鐘 | 否 |
 | 4 | Planning tab 的關閉（第 2 節），先以預設關閉合入；跑 U5 探針與 AT-03 (a)、(b)、(c)；通過後把預設改成開啟 | U5 的結果寫回 6.2；AT-03 四小項各有 `hc get` 與 `herdr-app ls` 的前後輸出為證 | sub 實作；**owner 要在場並同意在視窗開一個測試 tab** | 否 |
-| **5** | **前置測試 P1（opencode）**：在拋棄式 repo 跑 6.2 的 U1、U2、U3、U4 四個探針 | 四個答案寫回 6.2；4.5 的 opencode 那一列填上最終的旗標與送達方式；若 U3 在有無 `--standalone` 兩種情況都失敗 → 停下來回報 owner（第 7 節質疑 5） | **owner 同意啟動 opencode 後**，sub 可照腳本執行 | **是：等 opencode 額度重置** |
+| ~~5~~ | ~~前置測試 P1（opencode）~~ **已完成（2026-11-16）**：U1 到 U4 的結果見 V30 到 V33；4.5 的 opencode 那一列已填 `--auto --standalone`、送達方式 argv。**未做的部分另列 U13、U14、U15** | U13（`blocked`）、U15（整棵 process tree）在 E2E 前補測 | sub | 否 |
 | 6 | Tuning 的啟動（由 profile 組出 claude / codex 的 argv）、rework、直接修算一次 cycle、`ready_for_review` 閘門 | 用 fake tuning 通過 S16、S17、E19、E20、E60、C9；組出的 argv 與 4.5 的表逐字相符（單元測試） | sub | 否 |
-| **7** | **唯一一次真 E2E**：拋棄式 repo，至少 3 個 dev task，加 1 條故意不過的 acceptance 以觸發 1 輪 rework | AT-04、06、07、08、09、10、11、14、20、22 各附 `hc get` 輸出、`git log`、`state.json`；3 個 dev task 的 ack 與 result 遵從率 3/3（第 7 節質疑 1）；run 前後不帶 `orca.run` 標籤的 terminal 完全相同 | **owner**（會花額度，需同意時間點）；sub 可協助整理證據 | **是：依賴第 5 步** |
+| **7** | **唯一一次真 E2E**：拋棄式 repo，至少 3 個 dev task，加 1 條故意不過的 acceptance 以觸發 1 輪 rework | AT-04、06、07、08、09、10、11、14、20、22 各附 `hc get` 輸出、`git log`、`state.json`；3 個 dev task 的 ack 與 result 遵從率 3/3（第 7 節質疑 1）；run 前後不帶 `orca.run` 標籤的 terminal 完全相同 | **owner**（會花額度，需同意時間點）；sub 可協助整理證據 | 否（P1 已完成）；**但必須先過 8.2 的安全審查，且 owner 同意時間點** |
 | 8 | UI：改寫 `mods/orca-workflow`（`model.js` + 測試、inspector、`props().strip` 的四燈列），`layouts/orca.json` 加一個 block | `node --test mods/orca-workflow` 通過；`herdr-app check mods/orca-workflow` 通過；對「沒有 run、進行中、`needs_user`、`ready_for_review`、Runner 停住」五種固定的 `state.json` 各有一張 `herdr-app shot`，由人看過；從 inspector 按 Peek 看得到背景 terminal 且 `herdr-app ls` 沒有多出 tab（U6、U10；AT-15、16、17） | sub；看圖需要人；位置需要 Q3 | 否（用固定的 state 檔開發，不需要真的 run） |
 | 9 | UI 改 rework 上限、Resume / Stop 按鈕 | 輸入 0、10、非數字被擋；合法值寫進 `config.json` 且下一次 rework 判斷採用（U9；AT-18） | sub | 否 |
 | 10 | README 一節 + 22 條 AT 的結果表 | 每條 AT 標 PASS / FAIL / NOT TESTED 並附證據位置；AT-03、AT-22 用第 2 節改寫後的版本；已知限制列出 E6、E10、E37、E48、E49 與 reduced-motion | sub | 第 7 步未做時，相關 AT 標 NOT TESTED |
 
 ### 8.1 每條 AT 靠什麼證明
 
-| AT | 證明方式 | 是否等 P1 |
+| AT | 證明方式 | 是否等第 7 步（E2E） |
 |---|---|---|
 | 01 | 第 1 步（profile 解析的單元測試）+ 第 3 步 owner 的 `hc get` 確認 | 否 |
 | 02 | 第 1 步（D14） | 否 |
@@ -522,5 +572,168 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 | 09 | 第 6 步（argv 逐字比對）+ 第 7 步（Tuning terminal 的 `hc get`） | 第 7 步的部分要等 |
 | 10 | 第 7 步 | 是 |
 | 15、16、17、18 | 第 8、9 步（`check` + `shot` + 人看圖；不宣稱全自動） | 否 |
-| 21 | 第 2 步兩種模式；opencode 的 `blocked` 分支依 P1：不回報就標 NOT TESTED | `blocked` 分支要等 |
+| 21 | 第 2 步兩種模式；opencode 的 `blocked` 分支待 U13：沒回報就標 NOT TESTED | 否；`blocked` 分支要等 U13 |
 | 22（改寫） | 第 2 步 + 第 7 步 | 第 7 步的部分要等 |
+
+### 8.2 E2E 安全審查（三位 advisor，2026-11-16；全部唯讀、沒有啟動任何 agent）
+
+審查角度：破壞範圍、Runner 邏輯與競態、規格完整性。引述 advisor 的內容中，凡我沒有自己驗證的，都標「advisor 讀到」。我自己驗證過的：`hc --skill` 明載測試需要專屬 `HC_SESSION` 與暫存 XDG 路徑、kill 不清 detached 程式；`/usr/bin/sandbox-exec` 存在；V34、V35（本檔 6.1）。
+
+#### 8.2.1 風險與處置（按嚴重度）
+
+| # | 風險 | 規格現況 | E2E 前的處置 |
+|---|---|---|---|
+| 1 | （**已有實測：V38、V39**）worker 繼承你的整個登入環境（SSH agent、各種 API key），全權限，可 `git push`、讀 `~/.ssh`、改 `~/.gitconfig`（advisor 讀到 `env` 有 `SSH_AUTH_SOCK` 等） | E48：擋不住也偵測不到，只靠 D3 的 prompt 禁令 | E2E 用 `sandbox-exec` 包住 dev 的 argv（只允許寫拋棄式 repo、狀態資料夾、opencode 的 `~/.local/share|state`、`~/.cache` 與 `/private/tmp`，網路只開 omlx 的本機連線）。**已實測可行（V38、V39）**，profile 見 V38；前綴要是 `env -u XDG_… sandbox-exec -f <profile>`（V37）。這要求 Runner 能接受「argv 前綴」（新增 `config.json` 的 `dev_argv_prefix`，只在 E2E 設）。**只保護 dev**：Tuning（claude/codex）仍無沙盒，見 8.2.4 |
+| 2 | 沒有整體花費、時間、磁碟上限（只有單 task 限制） | D6、D12、D13 | E2E 的 `config.json`：dev／tuning 10 分鐘、測試 2 分鐘、`max_rework_cycles=1`；外層再套 `timeout 2400`；跑前後 `df` |
+| 3 | E2E 對 **你真實的 core** 與 App 操作；Runner 的 bug 可能 kill 到你的 terminal（`t1 t14 t25 t26 t4v t51 t5n`） | R-G 只 kill 帶 `orca.run` 標籤的，但那是規格，不是已實作的程式 | **專屬 core**（**已實測 V36**）：短路徑的 `HC_SESSION` + 暫存 XDG（socket 路徑 ≤103 bytes），worker 必須 `env -u XDG_*`（V37）。代價：測不到 AT-03 的真實 App 關 tab，AT-03 另外在 owner 在場時對測試 tab 單獨做 |
+| 4 | `close_planning_tab` 在 E2E 被打開（U5 未測） | M4：預設 false | E2E 設定鎖 `false`；不從你的 tab 執行 `/herdr-planning` |
+| 5 | model 沒釘死，大 model 可能擠掉你的 omlx 服務 | D2：用 opencode 設定檔預設 | 拋棄式 repo 內 commit `opencode.json = {"model":"omlx/LiquidAI--LFM3-1.7B-MLX-4bit"}`；Tuning model 明確傳 `--model/--effort`，並先告知你會花 claude 額度 |
+| 6 | Runner 會執行 AI 寫的 `test`／`verify` 指令，沒有沙盒；`init` 的空測試過濾只擋 `true`、`:` 之類 | M2：user 事前核可 | 你逐行讀過所有 `test`／`verify`；`init` 另掃 `~`、`$HOME`、`..`、`sudo`、`curl`、`rm`、`git push`（命中就拒絕）；Runner 本身也放進 sandbox |
+| 7 | worker 殘留程序 | U15 | `nohup &` 已驗會被清掉（V35）；`setsid`／雙重 fork 仍未驗；dispatch 明文禁止；跑後 `ps`、`lsof -iTCP -sTCP:LISTEN` 對基準 |
+| 8 | 全域狀態污染：opencode 的共用 `opencode.db`、plugin、`~/.config/herdr-app/my-orca/index.json` | 無 | 跑前後記錄大小與 session 數；跑完把 `<wt-id>` 資料夾搬走、移除 index 項目（advisor：DB 並行行為是猜的） |
+| 9 | 秘密進到 `logs/<id>.txt` 或 repo | D15、E43 | 跑後用 `grep -rEn 'sk-|AKIA|ghp_|PRIVATE KEY'` 掃狀態資料夾與 repo |
+| 10 | repo 若是真實 repo 的 clone，worker 摸得到真的 remote／hooks | 無 | 用全新 `git init` 在 `/private/tmp/orca-e2e-*`，`git remote -v` 為空，本機 `core.hooksPath=/dev/null`、`core.autocrlf=false` |
+| 11 | worker 讀寫 cwd 之外的狀態資料夾可能被 `--auto` 擋 | 未驗 | **已驗 V34**（隱藏資料夾、1.7B、一次）；仍需用真實路徑再驗一次 |
+| 12 | 額度中途耗盡留下半個 commit | E44、`--accept-head` | 只會停在 `needs_user`，不是破壞 |
+
+#### 8.2.2 E2E 安全規程
+
+**前置條件（全部成立才開跑）**：①專屬 core 已啟動，`hc ls` 看不到你的 terminal；②拋棄式 repo 已建好（含 `.gitignore`、`opencode.json`、3 個 dev task、1 條故意不過的 acceptance、已紅的測試）；③`config.json` 已設小上限；④U13、U15 的剩餘部分補測完；⑤M6 到 M12 已實作並有單元測試；⑥你已讀過所有 `test`／`verify` 指令；⑦你同意 claude Tuning 花額度的時間點。
+
+**基準（跑前存到暫存資料夾）**：`hc ls --json`、`herdr-app ls`、`ps -axo pid,ppid,command`、`lsof -iTCP -sTCP:LISTEN -nP`、重要檔案的 `shasum`（`~/.gitconfig`、`~/.zshrc`、`~/.ssh/config`、`~/.config/herdr-app/{programs,settings,keys}.json`）、`crontab -l`、`~/Library/LaunchAgents`、`df -h /`、你的真實 repo 的 `for-each-ref` 與 `stash list` 雜湊；`touch marker`。**不要讀 `~/.config/opencode/` 的內容**（含 API key；其中一位 advisor 讀過它，沒有回報金鑰內容）。
+
+**即時監控（每 15 秒）**：新增的 terminal 只能是帶 `orca.run` 標籤的；`hc ls --label orca.role=dev` 至多 1 個；repo 以外沒有寫入；沒有新的監聽埠；總時間超過 40 分鐘。任何一項違反 = 立刻中止。
+
+**中止**：①`hc kill orca-r-<wt>`；②對每個 dev worker 以名稱或標籤 `hc kill`（不用萬用字元，**每個指令之前都過 M13 的 core id 斷言**；address 在專屬 core 與你的 core 之間會撞號）；③`pgrep -fl <repo 路徑>` 後 `kill`；④只停專屬 core，**永遠不對你的 core 執行 `hc server stop`**；⑤稽核完成前不刪狀態資料夾。
+
+**跑後稽核**：`hc ls`／`herdr-app ls` 與基準 diff 為空；沒有 **live** 的 runner／dev／tuning terminal（M12）；`shasum -c` 與真實 repo 雜湊不變；`find ~ -xdev -newer marker` 排除 repo、狀態資料夾、opencode 目錄後為空；`ps`／`lsof` 沒有多餘程序或埠；秘密掃描無命中；`git reflog` 只有 `orca(...)` commit；`events.jsonl` 每筆 `kill` 都帶 `orca.run` 標籤。
+
+#### 8.2.3 E2E 測試計畫
+
+1. **預檢（不花模型額度）**：補測 U13（deny 權限的行為）與 U15 的 `setsid`／雙重 fork；用手動模擬 worker 走一遍 dispatch 範本與 Runner。
+2. **拋棄式 repo**：`/private/tmp/orca-e2e-<ts>/`，含 `.gitignore`、`opencode.json`、`tests/t01.sh` 到 `t03.sh`、`tests/all.sh`。T-01 `greet.sh` 印 `hello`；T-02 `add.sh`（deps T-01）；T-03 `upper.sh`（deps T-02）。AC-1 `sh tests/all.sh`；AC-2 `grep -q '^v1$' CHANGELOG.md`（沒有 task 會建立它，強制一輪 rework 產生 `R1-01`）。handoff §9：Tuning 不得直接改檔，要用 rework task。
+3. **Planning**：不付 skill 的錢，用 `my-orca init --handoff … --tasks …` 直接呼叫（涵蓋 AT-01、02）。
+4. **取樣器**：每 2 秒存 `hc ls --all --json`、`herdr-app ls`、`git log --oneline` 與每個 `orca.*` terminal 的 `hc get`（AT-04、05、06、09 的證據；Tuning terminal 在 review 後會被 rm，所以要邊跑邊存，或把白名單 argv 記進 `launched` 事件）。
+5. **通過標準**：3/3 dev task 有 ack 與合法 result；剛好 1 輪 rework；`ready_for_review`；沒有多餘 tab；非 `orca.run` terminal 前後相同；`git stash list` 不變；沒有不在許可清單內的 kill。
+6. **失敗分類**：Runner 的轉移與證據矛盾（有效 result、測試過、樹乾淨、`HEAD` 是後代卻被拒絕；出現第二個 worker；kill 了無標籤 terminal；Runner log 有例外）= **Runner bug**。Runner 正確地得到 `undelivered`／`exit_without_result`／`task_failed`，且 `logs/` 顯示模型沒照步驟做 = **模型問題**。1.7B 很可能過不了多步驟的 worker 合約：先把 dispatch 縮成可直接複製的 shell 區塊；再不行，只改 `opencode.json` 換較強的 model、其他完全不動重跑；較強者過關 = 1.7B 是原因。**絕不放寬 Runner 的檢查。**
+7. **證據**：`state.json`、`events.jsonl`、`dispatch/`、`results/`、`reviews/`、`logs/`、`git log --stat --graph`、每次 `git status --porcelain --ignored`（測試前、後、kill 後）、測試的 exit code 與耗時、各個時點的 `hc get` 原始輸出、`hc --version`、`opencode --version`、使用的 model、任何出現過的權限或對話框畫面。
+
+**AT 證明上的缺口（advisor 提出）**：AT-14 缺「Tuning 說 pass 但 Runner 重跑 verify 失敗」的 F 測試（加進第 6 步）；AT-16 需要點擊，`shot` 不能點，標 M 或 NOT TESTED；AT-20 需要兩個 worktree，單一 E2E 不涵蓋，用 E7 的 F 測試；AT-11 與 AT-13 要注意 Tuning 可能選「直接修」而不是 rework，要在 handoff 寫明；AT-09 的 `hc get` 證據需邊跑邊存。
+
+**仍待 owner 決定（寫進 3.1 以外的新問題）**
+- **Q-E1**：E2E 是否用 `sandbox-exec` 包 dev（需要新增 `dev_argv_prefix`）？建議：要。
+- **Q-E2**：E2E 是否用專屬 core？建議：要；AT-03 另做。
+- **Q-E3**：Resume 的語意採 M9（新預算、再 2 次嘗試）是否同意？
+
+#### 8.2.4 全部採最佳配置（Q-E1 沙盒、Q-E2 專屬 core、Q-E3 M9）的預測與邊界
+
+**意見來源**：Fable 5.2（medium，唯讀）加上我在本輪實跑的 V36 到 V40。本節的「預測」是推論，不是測試結果。（harness 提示 Fable 的輸出含 `settings.json`、`dangerously-skip-permissions` 字樣，那是它在引用本文與 Tuning 的旗標，沒有夾帶指令。）
+
+**預測結果**
+- 時間約 40 到 70 分鐘；claude Tuning 約 2 個中型 session 的額度；opencode 本機免費。
+- **最可能失敗的不是 Runner，是 1.7B 的合約遵從**：ack、改檔、跑測試、commit、最後才寫 result，一次要全做對。預期 3/3 拿不到，至少一個 task 進 `task_failed`，歸類為模型問題，照 8.2.3 第 6 步換 model 重跑。
+- **第二個失敗點是環境**：V37（XDG 繼承）與 V38（loopback 一定要放行）都是我實測時一開始踩到的，實作時沒寫進 Runner 就會被誤判成 `undelivered`。
+- Runner 的邏輯在 fake-agent 階段就該全部通過；E2E 真正多出來的證據只有 AT-10 與「真 opencode 那一半」。
+
+**買到的安全**：dev worker 不能寫 repo 以外的地方（`~/.ssh`、`~/.gitconfig`、其他 worktree 的寫入被 deny）、不能連外網（`git push`、`curl` 都會失敗，V39）；你的 terminal 不在專屬 core 內，Runner 的 bug 殺不到它們（V36）。
+
+**邊界（最佳配置之後仍然沒保護或沒驗證的）**
+1. **Tuning（claude／codex）完全沒有沙盒**：全權限、你的憑證、全網路、可 push，只靠 handoff 的禁令。
+2. **Runner 自己跑的 `test`／`verify` 沒有沙盒**；規格沒有對應設定（8.2.1 第 6 項「Runner 也放進 sandbox」目前只是想法）。
+3. **讀取不受限**：dev 仍可讀你的任何檔案（`~/.ssh`、`~/.codex/auth.json`、opencode 設定檔裡的其他 key），環境變數也沒清。要擋要另加 `deny file-read*` 與 `env -i` 的清單（沒測）。
+4. loopback 全開：包含你的 opencode service（`127.0.0.1:49374`）與 omlx（`:8000`，狀態不可重置）。
+5. opencode 共用的 `opencode.db`、`opencode serve --service`、pty daemon 仍是全域的；`--standalone` 是否完全不碰 service 只有間接證據。
+6. 真正脫離 process group 的 daemon 是否殘留（U15 剩餘部分）。
+7. AT-03 的 `tab.close` 沒有證據（U5），要在你在場時另外測，專屬 core 看不到 App。
+8. claude／codex 在專屬 core 內是否能啟動、憑證是否可用：**未測**（推論 HOME 不變就沒事）。
+9. sandbox-exec 已被 Apple 標記為 deprecated，目前可用，不保證跨 macOS 版本。
+
+**逐題意見**
+- **Q-E1（沙盒）**：同意。反方論點：deprecated 工具，調 profile 可能比 E2E 本身花更久。回應：profile 已經調好（V38），只剩寫進 `dev_argv_prefix`。`dev_argv_prefix` 只在 E2E 的 `config.json` 設，README 標「macOS only」。
+- **Q-E2（專屬 core）**：同意。反方論點：證明的是「在測試 core 上可行」。回應：差異只有 XDG 與 App 功能，V36、V37 已把它們變成事實。socket 路徑要短。
+- **Q-E3（M9）**：Fable 同意但提醒：Resume 給 2 次新嘗試，連按 Resume 就等於無限次。**建議微調**：`attempts[]` 不清零，Resume 只把上限 `max_attempts += 2` 並寫 `resumed` 事件，稽核時看得到總次數。**owner 已同意（2026-11-16）：採這個微調**。
+
+**現在就能跑的收斂階梯（★ 是本輪已完成）**
+
+| # | 內容 | 狀態 |
+|---|---|---|
+| 1 | 專屬 core 起得來、與你的 core 隔離、停得掉 | ★ V36 |
+| 2 | 專屬 core 內 opencode 找得到 omlx model（需 `env -u XDG_*`） | ★ V37、V38 |
+| 3 | sandbox 內 opencode 能完成 V34 等級任務 | ★ V38 |
+| 4 | sandbox 擋寫入與外網 | ★ V39（opencode 內的 `touch` 無法與「沒執行」區分，已用直接測試補） |
+| 5 | U15：脫離 process group 的 daemon | ★ 已完成（V42：會存活，環境標記掃描可清）；原：剩 `setsid` 類（macOS 沒有 `setsid` 指令，需用 python `os.setsid`），可無人值守 |
+| 6 | U13：`opencode.json` 對 `rm` 設 deny，看會不會回報 `blocked` | 未做，可無人值守 |
+| 7 | 手動扮演 worker 走完 4.9 的 dispatch 範本（5 步），在專屬 core 加 sandbox 內 | ★ 已完成（V43、V44；linked worktree 與真實 `results/` 路徑未涵蓋，見 8.2.6 第 12 項） |
+| 8 | claude／codex 在專屬 core 內能否啟動（Tuning 用） | 部分 ★（V45：auth 與 model 檢查）；真 session 啟動併入 E2E 第一次 Tuning，需 owner 授權少量額度 |
+| 9 | U5：`tab.close` | 未做，**需 owner 在場** |
+
+**「E2E 可安全開跑」清單**：①專屬 core 的 `hc ls` 為空且 core id 不等於你的（V36）；②sandbox 內 opencode 完成任務、寫 `~` 失敗、外網失敗（V38、V39）；③階梯 5 到 9 完成；④8.2.2 的基準已存；⑤`config.json` 小上限、`close_planning_tab=false`；⑥M6 到 M12 已實作並有單元測試；⑦你已讀過所有 `test`／`verify`；⑧你同意 Tuning 花額度的時間點。
+
+#### 8.2.5 owner 的決定與其含意（2026-11-16）
+
+**Q-E1、Q-E2：採用**（沙盒包 dev、專屬 core）。**Q-E3：採用**（`attempts[]` 不清零，Resume 只把上限 `+2`，寫 `resumed` 事件）。
+
+**對 8.2.4 邊界 1 到 3（Tuning 無沙盒、Runner 的測試無沙盒、讀取不受限）的回答：靠 skill 約束行為。** 做法：Planning 階段（user 在場）必須先釐清「進入 cycle 之前就要解決的外部依賴」，釐清不了就不准進入 cycle，cycle 內一律不連外網。
+
+**這個決定能硬性做到的與做不到的（我的評估，待 owner 確認）：**
+- **能硬性執行**：dev worker 的網路（沙盒已 deny，V38、V39）。所以「cycle 內不連外網」對 dev 是真的，不只是請求。
+- **只能靠 skill／prompt（無硬性保證）**：Tuning（claude／codex）。它必須連 Anthropic／OpenAI 的 API，而 `sandbox-exec` 只能用 IP 與埠過濾，不能用網域，所以無法做到「只允許 API、擋其他」。Tuning 的「不連外網」只是指示，不是強制。
+- **skill 的檢查必須落在 `init` 能機械檢查的欄位上**，否則只是文字承諾。建議（提案，未寫入 D14）：`tasks.json` 加 `"network":"none"` 與 `"external_needs":[]`（套件安裝、下載、API 文件等，Planning 階段先備妥並 commit 進 repo 或 vendor）；`init` 拒絕 `network` 不是 `none` 的內容、並掃 `test`／`verify` 指令是否含 `curl`、`wget`、`npm install`、`pip install`、`git clone`、`git push`。這能擋住「計畫就需要網路」，擋不住「model 臨時起意」。
+- 讀取面（`~/.ssh` 等）仍沒有硬性保護，skill 約束同樣只是指示。
+
+#### 8.2.6 第二輪審查（Fable 5.2 xhigh 與 Codex `gpt-6-astra` high）與本輪自驗結果（2026-11-16）
+
+**審查方式**：兩位都是唯讀、拿到同一份問題（Planning 能否消除阻塞、步驟 6／8／9 的自我驗證、找出文件錯誤）。Codex 是在 owner 授權下，用 `herdr-app do tab.new` 開了一個可見的 `codex-astra` tab（`-s workspace-write -a never`，cwd 是暫存資料夾，只能寫 `answer.md`）；`hc` 用來監看。兩位的結論高度一致，下面只列結論與新增項。
+
+**本輪我自己驗證完的（不需要 owner）**
+
+| # | 結果 | 證據 |
+|---|---|---|
+| V42（步驟 5，U15 完成） | **真正脫離 process group 的 daemon（`os.setsid` 加雙重 fork）在 `hc kill` 後存活**，40 秒後還寫出標記檔。**收斂辦法有效**：worker 的環境變數帶 `ORCA_DISPATCH=<id>`，kill 之後 `ps -Eww` 找出帶該標記的程序並 kill，標記檔沒有出現。限制：這是「合作式」清理，不是邊界（清空環境、掃描與 kill 之間 fork、PID 重用都會漏或誤殺）；只驗了一種 daemon 寫法 | 實跑（專屬 core、沙盒內） |
+| V43（步驟 7，腳本 worker） | 沙盒內腳本照 4.9 範本走五步：worker 寫得到 `results/`，寫不到 `state.json`、`dispatch/`、`~`，外網失敗；Runner 端檢查全過（porcelain 空、`is-ancestor`、commit 數 ≥1、重跑測試 exit 0、`state.json` 雜湊不變、結果 JSON 合法）。worker 腳本結束碼是 6（最後一個被擋的 `curl`），**terminal 結束碼不能當成敗依據** | 實跑 |
+| V44（步驟 7 加碼） | **真的 opencode 1.7B（沙盒內）照 4.9 範本一次完成**：ack、建 `greet.sh`、測試通過、1 個 commit、結果檔合法、工作樹乾淨，約 40 秒。結果檔出現時狀態仍是 `working`（支持 M7）。**只跑一次**，推翻不了「遵從率低」的假說，也不證明它高 | 實跑 |
+| V45（步驟 8-lite） | 專屬 core 的 terminal 內（`env -u XDG_*`）：`claude auth status` 為已登入、`codex login status` 為已登入、`opencode models` 含 `omlx/LiquidAI--LFM3-1.7B-MLX-4bit`。**只證明憑證與 model 找得到，不證明 Tuning session 能啟動** | 實跑 |
+
+**兩位審查一致的結論（已採納為規格決定）**
+1. **owner 的質疑對一半**：Planning 應把「已知且可準備」的阻塞消除掉，但執行期的阻塞（model 自己提問、額度、不穩定測試、環境漂移）原理上消除不了，Runner 的安全網不能拆。U13 從「驗收閘門」降為「量測延遲」：沒回報 `blocked` 時，60 秒靜止或 60 分鐘硬上限一樣進 `needs_user`，不會誤判成功。**U13 不再是 E2E 的閘門**。
+2. **`init` 加「沙盒預檢」**（提案，D14 的擴充）：進 cycle 之前，在與 dev 相同的沙盒（網路 deny）內把每條 `test`／`verify` 跑一次，每條有時間上限。
+   - 通過條件**不是 exit 0**：`tasks.json` 每條指令帶 `preflight:{expected:"pass"|"red", red_case?}`；紅測試必須用指定的失敗判準，不能把任意非零碼當成預期的紅。`sh: node: command not found`、缺套件、等輸入、逾時都不算 red。
+   - **不能用 exit 127 判工具缺失**（被測的檔案尚不存在時同樣 127）。
+   - 預檢紀錄由 `init` 自己產生，綁定 base HEAD、`tasks.json` 與測試檔雜湊、工具版本、沙盒政策；Planning 自填的 `preflight_passed` 不採信。
+   - 在無 remote、停用 hooks 的拋棄式快照內跑，不在 owner 工作樹。
+   - 證明範圍：只證明這次走過的路徑不需要網路；測試檔若由後續 task 才建立，標「未驗」。
+   - `network:"none"` 只涵蓋 task 工具與驗收指令，**不含 Tuning 對模型 API 的傳輸**（否則 Tuning 本身就違反這條文字）。`external_needs` 記錄「已解決並落地的需求」（路徑與雜湊），不是強迫為空陣列。
+3. **步驟 5、7、8-lite 不需要 owner**（已完成，V42 到 V45）。
+4. **步驟 8 分三層**：①零額度的 fake CLI，只斷言 argv、model／effort 白名單、cwd、core 路由；②（已做）auth 與 model 檢查；③真 smoke **併進 E2E 的第一次 Tuning**，不另跑。第三層需要 owner 對「花少量 claude 額度」的授權，不需要陪跑。
+5. **步驟 9 分兩段**：2.2 的 a 到 i 用假的 `hc` 加假的 `herdr-app`（PATH shim）寫單元測試，必須測真正 Runner 的判斷函式；未知呼叫一律失敗、不得退回真 CLI。真實 `tab.close`（U5）**不能被 shim 取代**，只剩 owner 確認一次。`HERDR_APP_HOME` 開第二個 App 視窗：兩位都認為**未證實隔離**（App 的 layout 存在 core 的 document，連上的視窗共用），不採用。**U5 不是核心 E2E 的閘門**：`close_planning_tab` 維持預設 `false`，U5 與 AT-03 留到最後。
+
+**新增與需修正的風險（依嚴重度；M13 起為規格修正）**
+
+| # | 風險 | 修正 |
+|---|---|---|
+| 1 | **專屬 core 的 address 會與你的 core 撞號**（兩邊都從 `t1` 起編），指令漏帶 `HC_SESSION` 就會殺到你的 terminal | **M13**：所有對專屬 core 的操作走包裝函式 `hc(){ HC_SESSION=… command hc "$@"; }`，破壞性指令前先斷言 core id ≠ 你的 core；優先用 `--name`／標籤，不用裸 address。（本輪我已照這個做。） |
+| 2 | **loopback 放行是後門**：`localhost:*` 包含你無沙盒的 opencode service（`127.0.0.1:49374`），它能跑 bash，理論上可繞過寫入與網路限制。V39 與 8.2.4「買到的安全」過度宣稱 | 文字改為「dev 對部分路徑與直接外網受限」；E2E 稽核加 `lsof -i :49374`；查 `--standalone` 能否固定埠；換大 model 時重新評估 |
+| 3 | **`needs_user` 不是物理停止**：被保留的 worker 可能繼續寫檔、耗額度；殺 Runner 不會殺 `--no-parent` 的 worker；測試與 Tuning 的後代程序同樣會逃 | **M14（取代 R-C 的「kill 不損失東西」）**：kill 之後依 V42 的環境標記掃描，核對 PID 身分、重新掃描、確認靜止；清不乾淨就保留證據並 `needs_user`，不得接受結果。中止流程涵蓋 runner、dev、tuning、test／verify／preflight 的後代 |
+| 4 | Tuning 產生的 rework `test` 會在無沙盒的 Runner 執行，初始的 owner 核可與預檢沒涵蓋 | **M15**：rework 指令套用同一結構檢查與受限預檢，才可執行；「把整個 Runner 放進 dev 沙盒」行不通（Tuning 會失去 API 連線），測試的執行邊界與模型傳輸邊界要分開設計 |
+| 5 | **M7 的「兩次輪詢不變」不證明 worker 已停止修改**（可能在寫 ignored 檔、持鎖） | 60 秒上限到了的處理要寫明；kill 後半寫的結果、殘留 `index.lock`、partial changes 一律停下保留，不自動 reset 或清鎖 |
+| 6 | a 到 i 只檢查「一個 terminal」，不檢查 pane 結構（mod pane 也會被一起關）；「不到一秒的空窗」無法保證 | f 改核對 pane 結構，拿不到就不關；空窗改寫「無法保證」；維持預設關閉 |
+| 7 | U13 把「工具直接拒絕」「CLI 等人回答」「worker 自報 blocked」混在一起；`status != done` 被記為 `rejected` 可能再重試，與 `blocked → needs_user` 不一致 | 三種出口分開處理；確定要改政策的阻塞不要重試 |
+| 8 | 閘門不一致：E2E 要求階梯 5 到 9 全完成，卻又設定 `close_planning_tab=false`；`init` 的 E33／E34／E35 需要 App、Herdr terminal、claude／codex，與 E2E 直接呼叫 `init` 衝突；`init --check` 與 4.9 的旗標清單不同 | 閘門改為：U5 不擋核心 E2E；`init` 的測試入口釘死為 fake Planning 身分，並揭露與 production 檢查的差異 |
+| 9 | 監控判準自相矛盾：「沒有新監聽埠」「repo 外無寫入」與 opencode 必須寫共用資料、起隨機 loopback 伺服器衝突；預估 40 到 70 分鐘卻以 40 分鐘中止；`find ~ -newer` 必有雜訊；秘密掃描 `grep -rEn` 會印出命中的整行，違反 D15 | 改成「允許路徑與程序的差分」；40 分鐘是硬停止；掃描只報檔名、行號與類別 |
+| 10 | 環境洩漏：worker 繼承 `SSH_AUTH_SOCK` 與各種 API key 變數；`env -i` 會弄壞 opencode；`env -u XDG_*` 成立只因你的環境本來沒設 XDG | 改用白名單 `env -i HOME PATH TERM HC_SESSION …`，先用 opencode 實測 |
+| 11 | 黑名單式沙盒下，`launchctl submit`、`open -a`、Apple Events 可在沙盒外起程序；放行 `/private/var/folders` 太寬 | 記為已知限制；1.7B 不會利用，換大 model 要重評 |
+| 12 | V41 沒被 E2E 走到（E2E 用獨立 repo）；真實部署的 common-dir 放行可收窄為 git-dir 加 `objects`、`refs/heads/<branch>`、`logs/refs/heads/<branch>`、`packed-refs` | 在步驟 7 補一次 linked worktree 加真實 `results/` 路徑的驗證（未做） |
+| 13 | 失敗分類只有 Runner bug／模型問題；「換大 model 通過＝1.7B 是原因」過強 | 分類改為 `environment / policy / model / runner / inconclusive`；8.2.1 第 1 項仍寫放行「狀態資料夾」，應為 `results/`；8.2.4 預測「1.7B 多半不遵約」撤回，不再量化猜測 |
+
+**修訂後的驗證順序（★ = assistant 可單獨完成）**
+
+| # | 內容 | 狀態 / 停止條件 |
+|---|---|---|
+| 1★ | 規格統一（M13 到 M15、閘門解耦、過度宣稱改寫、`init` 測試入口） | M13 到 M15 ★ 已寫入 4.4／4.9；其餘（閘門解耦、過度宣稱改寫、`init` 測試入口、8.2.1 第 1 項的 `results/`）待做 |
+| 2★ | 無模型單元測試：D14、M6 到 M12、a 到 i（假 `hc`／`herdr-app`）、壞資料、未授權目標、逾時與恢復 | M13 到 M15 ★ 已完成（`my-orca/my-orca.test.mjs`，20 項，`node --test my-orca`）；其餘待做；任何不安全目標被呼叫、未驗收即成功、未知輸入卻放行 → 立即停止 |
+| 3★ | `init` 沙盒預檢（含紅測試語意） | 待做；不能分類的失敗、必要網路、需提問、清理失敗 → 擋住 cycle |
+| 4★ | fake worker 在專屬 core 跑停止、當掉、恢復、rework；把 V42 的清理接進真 Runner 的每條路徑 | 待做；殘留寫入、未知 PID、第二個 worker、跨 core 目標 → 停止 |
+| 5★ | U13 最小真探針：先用 allow 的對照例確認工具確有被呼叫，再設 deny；沒有工具呼叫證據標 INCONCLUSIVE | 待做；60 到 120 秒上限 |
+| 6★ | 補 V41（linked worktree 加真實 `results/`）與 1.7B 重複 3 次；Tuning 的 fake argv 測試 | 待做 |
+| 7 | **E2E**（owner 只需同意時間點與少量 claude 額度；真 Tuning smoke 併入） | 達硬時限、core 身分變動、政策外寫入或網路、清不乾淨、超限 → 停止並保留現場，不自動 Resume |
+| 8 | U5：`tab.close`（owner 確認一個拋棄式 tab，一次、不用 `confirmed`） | 最後才做；不擋 E2E；證據不全就維持 `close_planning_tab=false` |
