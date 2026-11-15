@@ -1,6 +1,6 @@
 # Spec v2 收斂版（第二輪 CTO 收斂）
 
-進度：已完成 2、3、4、5、6、7；未完成 1、8
+進度：已完成 1 到 8 全部；未完成：無（待 owner 回答 3.1 的三個問題）
 
 日期：2026-11-16
 分支：`worktree-workflow-stages-panel`
@@ -8,7 +8,29 @@
 
 ## 1. 結論與能否開工（哪些被卡住）
 
-待補
+**可以開工。** Runner、狀態檔、Planning skill、Tuning、UI 都不依賴 opencode 的行為，可以先用一個會模擬 agent 的 shell 腳本（`fake-agent.sh`）做完並測完；這一輪已經用同樣的方法在真的 core 上實測過派發、標籤、等待、`blocked`、kill、rm 與父子關係（第 6 節 V1 到 V29），並確認沒有留下任何 terminal、tab 或檔案。
+
+**被卡住的只有三樣，全部卡在同一個前置測試 P1（等 opencode 額度重置）：**
+1. 4.5 表中 opencode 那一列：最終的啟動旗標與送達方式。
+2. 唯一一次真實 E2E，以及只能靠它證明的驗收項目（AT-10，與 AT-04、06、08、09、11、22 中「真的 opencode」那一半）。
+3. AT-21 之中「opencode 卡在提問時能否被立刻發現」這個分支。
+
+P1 比上一輪想的多三個問題（U2、U3、U4）。其中只有一個結果會改變範圍：如果不論加不加 `--standalone`，kill 掉 terminal 之後 opencode 的工具指令都還在背景跑，「一次只有一個 worker」就無法保證，那時要停下來請 owner 決定（第 7 節質疑 5）。
+
+**與第一輪審查不同的地方（都有本輪的實測依據）：**
+- **不用 hc template。** 實測發現 template 對不回報狀態的程式根本不送第一則訊息（等 60 秒後回報沒送出，V16）。改成啟動時用參數帶入一句「去讀這個檔案並照做」。
+- **不用 lock 檔。** core 保證 live terminal 的名稱唯一（V5），Runner 與每個 worker 各用一個固定名稱，重複啟動會直接被 core 擋下。
+- **不用 `hc wait`。** 它在 agent 閒置時會立刻返回（V14）。改成每 10 秒看一次結果檔與 terminal 狀態，這也讓「做完了沒」完全不依賴狀態回報。
+- **「Planning 的 model 設定永遠拿得到」是錯的。** terminal 的 argv 是 shell 包裝，裡面還有 user 的第一則 prompt 全文（V10），不能整段存；model 也可能根本不在 argv 裡。改成只取白名單旗標，拿不到就要求明確指定。
+- **Runner 必須用 `--no-parent` 啟動。** 實測子 terminal 會跟著父 terminal 一起死（V21）；否則 Planning tab 一關，Runner 就跟著沒了。
+- **Tuning 的「直接小修」改回保留**，算一次 rework、並強制重新驗收。
+
+**與 owner 決定有摩擦的地方（只標示，不重議）：**
+- 決定 4：`programs.json` 裡沒有 opencode，沒有東西可沿用（→ 3.1 的 Q1）。另外要說清楚：worktree 不是沙盒。全權限的 agent 可以寫磁碟上任何你能寫的地方、可以 push、可以動同一個 repo 的其他 branch。Runner **能驗證**的只有三件事：本 worktree 的 branch 沒變、`HEAD` 是上一個紀錄點的後代、工作樹乾淨。被 git 忽略的檔案與 worktree 以外的一切，Runner 看不到（第 5 節 E48）。
+- 決定 5：關 tab 的指令本輪無法實測（禁止新增 tab），所以這個功能先以「預設關閉」合入，探針與 AT-03 通過後才改成預設開啟；另外，若該 tab 是 space 裡唯一的 tab 就不關（否則會連 space 一起關）。
+- 決定 2：設計在兩種結果下都成立（4.5 的對照表）；差別只在「卡住時多快被發現」與 inspector 顯示的狀態細緻度。
+
+**本輪執行者**：Claude Fable 5.2（`claude-fable-5-2`，effort high；由本 session 自己的 terminal argv 確認，V10）。各個 WIP commit 的 `Co-Authored-By` 依任務指示寫的是「Claude Sonnet 5.5」，與實際模型不符，在此註明。
 
 ## 2. AT-03 的處理（白話 + 精確規則 + 改寫後的 AT-03）
 
@@ -471,4 +493,34 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 
 ## 8. 最終行動項目（含卡關的前置測試）
 
-待補
+執行順序：0 → 1 → 2 →（3、6、8 可平行）→ 4 → **5（卡關）** → **7（卡關）** → 9 → 10。「誰」一欄：**sub** = 可交給實作 subagent 獨立完成；**owner** = 需要 owner 本人。
+
+| # | 工作 | 完成標準 | 誰 | 卡關？ |
+|---|---|---|---|---|
+| 0 | 回答 3.1 的 Q1、Q2（Q3 可晚到第 8 步之前） | 三個答案寫進本檔 3.1 | owner | 否 |
+| 1 | `my-orca` 的純邏輯：state 的讀寫（tmp + rename、`updated` 檢查）、「下一步」的選擇規則、handoff 檢查（D14）、profile 解析（白名單旗標）、secrets 掃描（D15）、設定值檢查 | `node --test` 通過，涵蓋第 5 節所有標 **T** 的列；不需要 core 就能跑 | sub | 否（Q2 未答時先照建議值「拒絕髒的工作樹」做） |
+| 2 | `fake-agent.sh`（模式：回報、不回報、`block`、不理 prompt、結束不交結果、commit 後死掉、交結果後繼續寫檔）+ Runner 迴圈（R-A 到 R-G），dev 與 tuning 的 argv 先指向 fake | 第 5 節所有標 **F** 的列在「回報」與「不回報」兩種模式都通過（S5 到 S20、C1 到 C11、E 開頭的 F 列）；測試結束後 `hc ls --all --json --label orca.role=dev`（以及 `tuning`、`runner`）為空，`herdr-app ls` 的 tab 數與測試前相同 | sub | 否 |
+| 3 | `herdr-planning` skill + `my-orca init` 串接（M2 的事前確認、印出 profile） | 用固定的範例 handoff 跑 `my-orca init --check`：合格的回 0、每種不合格的回非零並指出位置；owner 各開一次 claude 與 codex，確認 `/herdr-planning` 出現（U11），並用 `hc get` 確認 codex 的 `foreground.argv` 含 model 旗標（U12） | sub 寫；owner 確認約 5 分鐘 | 否 |
+| 4 | Planning tab 的關閉（第 2 節），先以預設關閉合入；跑 U5 探針與 AT-03 (a)、(b)、(c)；通過後把預設改成開啟 | U5 的結果寫回 6.2；AT-03 四小項各有 `hc get` 與 `herdr-app ls` 的前後輸出為證 | sub 實作；**owner 要在場並同意在視窗開一個測試 tab** | 否 |
+| **5** | **前置測試 P1（opencode）**：在拋棄式 repo 跑 6.2 的 U1、U2、U3、U4 四個探針 | 四個答案寫回 6.2；4.5 的 opencode 那一列填上最終的旗標與送達方式；若 U3 在有無 `--standalone` 兩種情況都失敗 → 停下來回報 owner（第 7 節質疑 5） | **owner 同意啟動 opencode 後**，sub 可照腳本執行 | **是：等 opencode 額度重置** |
+| 6 | Tuning 的啟動（由 profile 組出 claude / codex 的 argv）、rework、直接修算一次 cycle、`ready_for_review` 閘門 | 用 fake tuning 通過 S16、S17、E19、E20、E60、C9；組出的 argv 與 4.5 的表逐字相符（單元測試） | sub | 否 |
+| **7** | **唯一一次真 E2E**：拋棄式 repo，至少 3 個 dev task，加 1 條故意不過的 acceptance 以觸發 1 輪 rework | AT-04、06、07、08、09、10、11、14、20、22 各附 `hc get` 輸出、`git log`、`state.json`；3 個 dev task 的 ack 與 result 遵從率 3/3（第 7 節質疑 1）；run 前後不帶 `orca.run` 標籤的 terminal 完全相同 | **owner**（會花額度，需同意時間點）；sub 可協助整理證據 | **是：依賴第 5 步** |
+| 8 | UI：改寫 `mods/orca-workflow`（`model.js` + 測試、inspector、`props().strip` 的四燈列），`layouts/orca.json` 加一個 block | `node --test mods/orca-workflow` 通過；`herdr-app check mods/orca-workflow` 通過；對「沒有 run、進行中、`needs_user`、`ready_for_review`、Runner 停住」五種固定的 `state.json` 各有一張 `herdr-app shot`，由人看過；從 inspector 按 Peek 看得到背景 terminal 且 `herdr-app ls` 沒有多出 tab（U6、U10；AT-15、16、17） | sub；看圖需要人；位置需要 Q3 | 否（用固定的 state 檔開發，不需要真的 run） |
+| 9 | UI 改 rework 上限、Resume / Stop 按鈕 | 輸入 0、10、非數字被擋；合法值寫進 `config.json` 且下一次 rework 判斷採用（U9；AT-18） | sub | 否 |
+| 10 | README 一節 + 22 條 AT 的結果表 | 每條 AT 標 PASS / FAIL / NOT TESTED 並附證據位置；AT-03、AT-22 用第 2 節改寫後的版本；已知限制列出 E6、E10、E37、E48、E49 與 reduced-motion | sub | 第 7 步未做時，相關 AT 標 NOT TESTED |
+
+### 8.1 每條 AT 靠什麼證明
+
+| AT | 證明方式 | 是否等 P1 |
+|---|---|---|
+| 01 | 第 1 步（profile 解析的單元測試）+ 第 3 步 owner 的 `hc get` 確認 | 否 |
+| 02 | 第 1 步（D14） | 否 |
+| 03（改寫） | 第 4 步 | 否 |
+| 04 | 機制：第 2 步（V2 已證實不帶標籤就不進視窗）；真 opencode：第 7 步 | 真 opencode 的部分要等 |
+| 05、07、12、13、14、19、20 | 第 2、6 步（fake agent） | 否 |
+| 06、08、11 | 第 2、6 步 + 第 7 步 | 真 opencode 的部分要等 |
+| 09 | 第 6 步（argv 逐字比對）+ 第 7 步（Tuning terminal 的 `hc get`） | 第 7 步的部分要等 |
+| 10 | 第 7 步 | 是 |
+| 15、16、17、18 | 第 8、9 步（`check` + `shot` + 人看圖；不宣稱全自動） | 否 |
+| 21 | 第 2 步兩種模式；opencode 的 `blocked` 分支依 P1：不回報就標 NOT TESTED | `blocked` 分支要等 |
+| 22（改寫） | 第 2 步 + 第 7 步 | 第 7 步的部分要等 |
