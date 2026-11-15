@@ -16,6 +16,9 @@ export const MAX_INFLIGHT_PR_LOOKUPS = 2;
 // Orca `pr-branch-lookup.ts:28` BRANCH_PR_LOOKUP_PAGE_SIZE (10)
 export const BRANCH_PR_LOOKUP_PAGE_SIZE = 10;
 
+// Cap the on-disk review cache so it cannot grow without bound across repos/branches.
+const MAX_REVIEW_CACHE_ENTRIES = 200;
+
 /**
  * Key format `<common-dir>::<branch>`
  * Matches Orca's scope-prefixed branch cache key (`hosted-review-branch-cache.ts:66-79`).
@@ -55,6 +58,20 @@ export function loadReviewCache() {
  * Saves review cache to localStorage and broadcasts via setShared.
  */
 export function saveReviewCache(cache) {
+  // Evict the least recently refreshed entries; `at` also controls freshness.
+  const keys = Object.keys(cache);
+  if (keys.length > MAX_REVIEW_CACHE_ENTRIES) {
+    const active = shared("pr.active.v1");
+    const protectedKeys = new Set(Array.isArray(active) ? active : []);
+    const now = Date.now();
+    // shortcut: active or fresh branches can exceed the cap, preserve refresh pacing.
+    keys
+      .filter((k) => !protectedKeys.has(k) && !isReviewFresh(cache[k], now))
+      .map((k) => ({ k, at: (cache[k] && typeof cache[k].at === "number") ? cache[k].at : 0 }))
+      .sort((a, b) => a.at - b.at)
+      .slice(0, keys.length - MAX_REVIEW_CACHE_ENTRIES)
+      .forEach(({ k }) => { delete cache[k]; });
+  }
   try {
     localStorage.setItem("pr.cache.v2", JSON.stringify(cache));
   } catch {}

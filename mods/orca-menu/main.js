@@ -17,10 +17,16 @@ const TAB_COLORS = [["None", null], ["Blue", "#3b82f6"], ["Purple", "#a855f7"], 
   ["Teal", "#14b8a6"], ["Gray", "#9ca3af"]];
 
 // Herdr has no tab colour field, so the menu writes the store orca-tabs reads.
+const _storedCache = new Map();
 function stored(key, fallback) {
   try {
-    const v = JSON.parse(localStorage.getItem(key) ?? "null");
-    return v && typeof v === "object" ? v : fallback;
+    const raw = localStorage.getItem(key);
+    const cached = _storedCache.get(key);
+    if (cached && cached.raw === raw) return cached.value;
+    const v = JSON.parse(raw ?? "null");
+    const value = v && typeof v === "object" ? v : fallback;
+    _storedCache.set(key, { raw, value });
+    return value;
   } catch { return fallback; }
 }
 
@@ -405,7 +411,7 @@ export default class Menu extends View {
       // WorktreeContextMenuView.tsx:203-214 — toggle read / unread
       if (it[1] === "orca-menu.toggle-unread") {
         try {
-          const list = JSON.parse(localStorage.getItem("spaces.unread.v1") ?? "[]");
+          const list = stored("spaces.unread.v1", []);
           const set = new Set(Array.isArray(list) ? list : []);
           set.has(it[2].id) ? set.delete(it[2].id) : set.add(it[2].id);
           const updated = [...set];
@@ -647,7 +653,7 @@ export default class Menu extends View {
   setTabColor(tabId, color) {
     if (!tabId) return;
     const cur = shared("tab.colors");
-    const all = cur && typeof cur === "object" ? { ...cur } : stored("tab.colors.v1", {});
+    const all = { ...(cur && typeof cur === "object" ? cur : stored("tab.colors.v1", {})) };
     if (color) all[tabId] = color;
     else delete all[tabId];
     try { localStorage.setItem("tab.colors.v1", JSON.stringify(all)); } catch {}

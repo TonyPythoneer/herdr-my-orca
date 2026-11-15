@@ -13,7 +13,7 @@ import { statusMark, agentStateMark } from "./status.js";
 import { getFolderWorkspaceRowGeometry, getFlushWorktreeCardPaddingLeft, getProjectGroupHeaderPaddingLeft, WORKTREE_CARD_SURFACE_MARGIN, LEGACY_STATUS_LANE_WIDTH } from "./indentation.js";
 import { tip, tipMark } from "./tip.js";
 import { stopsInit, stop, focusRoot, enter, within } from "./focus.js";
-import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, STATUS_RANK } from "./worktree-plan.js";
+import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, activeReviewKeys, planRenderRows, STATUS_RANK } from "./worktree-plan.js";
 import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUPS, BRANCH_PR_LOOKUP_PAGE_SIZE } from "./review-store.js";
 
 // `BRANCH_PR_LOOKUP_PAGE_SIZE` (pr-branch-lookup.ts:28): "GitHub lists a branch's PRs newest
@@ -23,10 +23,18 @@ import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUP
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
 // Safely read a stored JSON value of the expected shape; a mangled key never throws.
+// Memoized by the raw string so repeated renders skip re-parsing; an external write
+// changes the raw string and invalidates the entry automatically.
+const _storedCache = new Map();
 function stored(key, fallback) {
   try {
-    const v = JSON.parse(localStorage.getItem(key) ?? "null");
-    return Array.isArray(fallback) === Array.isArray(v) && v !== null && typeof v === "object" ? v : fallback;
+    const raw = localStorage.getItem(key);
+    const cached = _storedCache.get(key);
+    if (cached && cached.raw === raw) return cached.value;
+    const v = JSON.parse(raw ?? "null");
+    const value = Array.isArray(fallback) === Array.isArray(v) && v !== null && typeof v === "object" ? v : fallback;
+    _storedCache.set(key, { raw, value });
+    return value;
   } catch { return fallback; }
 }
 
@@ -50,9 +58,13 @@ const WORKSPACE_OPTIONS_DEFAULTS = {
   hideWorkspacesFromOtherDevices: false,
   hideDetachedHeadWorkspaces: false,
 };
+let _workspaceOptionsCache = { src: undefined, value: null };
 function workspaceOptions() {
   const saved = stored(WORKSPACE_OPTIONS_KEY, null);
-  return saved && !Array.isArray(saved) ? { ...WORKSPACE_OPTIONS_DEFAULTS, ...saved } : { ...WORKSPACE_OPTIONS_DEFAULTS };
+  if (_workspaceOptionsCache.src === saved) return _workspaceOptionsCache.value;
+  const value = saved && !Array.isArray(saved) ? { ...WORKSPACE_OPTIONS_DEFAULTS, ...saved } : { ...WORKSPACE_OPTIONS_DEFAULTS };
+  _workspaceOptionsCache = { src: saved, value };
+  return value;
 }
 
 export default class Spaces extends View {
@@ -100,7 +112,7 @@ export default class Spaces extends View {
     // `main/persistence/loading-store/store.ts:68` owns it). Herdr exposes no project catalog
     // (`defaults/herdr.d.ts`), so a repo no `exec` has ever probed is unreachable; this cache
     // is seeded whenever a space's git is read, and rows paint from it while refresh runs.
-    this.git = stored("git.cache.v2", {});
+    this.git = { ...stored("git.cache.v2", {}) };
     // Orca keeps reviews out of the worktree row: `buildWorkspaceReviewFacts` reads a
     // persisted cache keyed `repo::branch` (`getGitHubPRCacheKeyCandidates`) and the card
     // draws whatever sits there. Nothing is fetched while rendering. Same shape here:
@@ -133,7 +145,7 @@ export default class Spaces extends View {
     // the placed bar's own `hover` mode only sees the bar, so the list's pointer drives it.
     this.listHover = false;
     this.machines = [];
-    this.reconnecting = stored("machines.reconnecting", {});
+    this.reconnecting = Object.fromEntries(Object.entries(stored("machines.reconnecting", {})).map(([key, value]) => [key, value && typeof value === "object" ? { ...value } : value]));
     for (const state of Object.values(this.reconnecting)) if (state && typeof state === "object") state.busy = false;
     this.folded = new Set(stored("machines.folded", []));
     this.foldedRepos = new Set(stored("repos.folded", []));
@@ -316,6 +328,7 @@ export default class Spaces extends View {
       this.refreshing = false;
       this.loaded = true;
       // The refresh is the only writer, so one write per completed pass is enough.
+      pruneGitCache(this.git, spaces(), this.checked);
       localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
       cx.notify();
     });
@@ -420,7 +433,7 @@ export default class Spaces extends View {
     const sh = shared("pr.cache.v2");
     if (sh && typeof sh === "object" && sh !== this.lastSharedPrCache) {
       this.lastSharedPrCache = sh;
-      this.prCache = { ...this.prCache, ...sh };
+      this.prCache = { ...sh };
     }
     return this.prCache;
   }
@@ -489,7 +502,7 @@ export default class Spaces extends View {
   }
 
   setPr(key, data) {
-    this.prCache[key] = { data, at: Date.now() };
+    this.reviewCache()[key] = { data, at: Date.now() };
     saveReviewCache(this.prCache);
   }
 
@@ -554,6 +567,12 @@ export default class Spaces extends View {
   // built itself outward from the middle. Sorting in the plan removes the cascade entirely.
   settleRows(cx) {
     const out = this.ordered();
+    const keys = activeReviewKeys(out);
+    const signature = JSON.stringify(keys);
+    if (signature !== this.activeReviewSignature) {
+      this.activeReviewSignature = signature;
+      setShared("pr.active.v1", keys);
+    }
     // Rows with no open space still need their review: nothing else probes those branches. Ask
     // here, in the task phase, keyed exactly like `reviewOf` looks it up. Local machine only —
     // `gh` on the far side of an ssh may not be authenticated. This used to live in the row
@@ -609,6 +628,7 @@ export default class Spaces extends View {
 
   grouped(t, cx, rows = this.ordered()) {
     const ps = panes();
+    const rowAgents = agentsByRow(rows, agents());
     // `SectionHeader.tsx:190-192`: a header draws its collapse chevron only when its group
     // has rows (`row.count > 0`). Count per group from projected plan.
     const counts = new Map((this.plan?.groups ?? []).map((g) => [g.key, g.rows.length]));
@@ -618,23 +638,25 @@ export default class Spaces extends View {
     const draw = (r, i) => {
       const pos = this.rowIndex?.get(r.w.id) ?? i;
       return groupBy === "repo"
-        ? this.row({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps)
-        : this.card({ ...r, pos }, t, ps);
+        ? this.row({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps, rowAgents.get(r))
+        : this.card({ ...r, pos }, t, ps, rowAgents.get(r));
     };
-    const flat = (list) => this.groupRows(list, groupBy, draw, t);
-    // `host-section-rows.ts:236-246`: a host header exists only for a host that has rows.
-    // With one such host Orca draws no headers at all (`:135-136`); an empty registered host
-    // stays in the host picker, never in the list. A machine being repaired keeps its header
-    // even with no rows: its Connect button is Herdr's only recovery path in this mod.
+    // The descriptors reference row positions, so equal signatures can reuse them with fresh row data.
     const repairing = new Set([...Object.keys(this.reconnecting), ...this.machines.filter(m => this.rebuilt(m)).map(m => m.name)]);
-    const hasRows = (m) => rows.some((r) => (r.w.machine ?? null) === m);
-    const machineNames = [null, ...new Set([...rows.map(r => r.w.machine).filter(Boolean), ...repairing])]
-      .filter((m) => hasRows(m) || repairing.has(m));
-    if (machineNames.filter(hasRows).length <= 1 && !machineNames.some((m) => repairing.has(m))) {
-      return flat(rows);
+    const hidden = new Set([...repairing].filter(m => {
+      const repair = this.reconnecting[m];
+      return this.rebuilt(this.machines.find(k => k.name === m) ?? repair?.machine) || !!repair;
+    }));
+    const signature = JSON.stringify([groupBy, rows.map(r => [r.w.machine ?? null, r.w.status]), [...repairing], [...this.folded], [...hidden]]);
+    if (signature !== this.renderPlanSignature) {
+      this.renderPlanSignature = signature;
+      this.renderPlan = planRenderRows(rows, groupBy, repairing, this.folded, hidden);
     }
-    return machineNames.flatMap((m, i) => {
-      const mine = rows.filter((r) => (r.w.machine ?? null) === m);
+    return this.renderPlan.flatMap((item) => {
+      if (item.kind === "row") return draw(rows[item.index], item.position);
+      if (item.kind === "status") return [this.statusHead(item.label, item.count, t)];
+      const m = item.machine;
+      const count = item.count;
       const repair = this.reconnecting[m];
       const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
       const connected = !m || machine?.state === "connected";
@@ -666,7 +688,7 @@ export default class Spaces extends View {
           .child(tipMark(this, t, `machine-state-${m ?? "local"}`, connected ? "Connected" : (machine?.state ?? "asleep").replace(/_/g, " ").replace(/^./, c => c.toUpperCase()), div().size(6).rounded_full().flex_none().bg(connected ? t.ansi2 : t.dim))))
         // `HostSectionHeader.tsx:11-35,119`: the count badge is always drawn beside the label
         // (its `count` is the host's workspace rows, folded groups included).
-        .child(div().flex_none().h(16).px(6).flex().items_center().justify_center().rounded_full().border_1().border_color(t.border).bg(t.hover).text_size(9).line_height("9px").text_color(t.muted).child(String(mine.length)))
+        .child(div().flex_none().h(16).px(6).flex().items_center().justify_center().rounded_full().border_1().border_color(t.border).bg(t.hover).text_size(9).line_height("9px").text_color(t.muted).child(String(count)))
         .when(!connected && !rebuilt, el => el.child(div().flex_none().child((machine?.state ?? "asleep").replace(/_/g, " "))))
         .when(rebuilt, el => el.child(h_flex().flex_none().gap(3).items_center()
           .child(div().max_w(140).truncate().child(repair?.error || "rebuilt ·"))
@@ -687,25 +709,13 @@ export default class Spaces extends View {
           // header is hovered (`group-hover/host-header:opacity-100`), keeping its slot; and
           // `SectionHeader.tsx:190-192` draws a collapse affordance only when there is something
           // to collapse (`row.count > 0`).
-          .when(mine.length > 0, el => el.child(div().id(`machine-fold-${m ?? "local"}`).w(26).flex_none().flex().items_center().justify_center()
+          .when(count > 0, el => el.child(div().id(`machine-fold-${m ?? "local"}`).w(26).flex_none().flex().items_center().justify_center()
             .opacity(this.overMachine === `machine-${m ?? "local"}` ? 1 : 0)
             .child(svg(`mods/orca-spaces/chevron-${folded ? "right" : "down"}.svg`).size(12).flex_none()))))
       // `host-section-rows.ts:236-246`: a host header exists only for a host with rows, and a
       // host with no rows draws no section — and no placeholder beneath it.
       const heading = stop(this, t, `machine-${m ?? "local"}`, head, 8);
-      if (rebuilt) return [heading];
-      return [heading, ...(folded ? [] : flat(mine))];
-    });
-  }
-
-  // Group by None: cards under the host section. Group by Status: one section per status, in the
-  // order the status lane uses (`workspace-statuses.ts`; Herdr fixes the labels to Model::status).
-  groupRows(rows, groupBy, draw, t) {
-    if (groupBy !== "workspace-status") return rows.flatMap(draw);
-    const sections = [["blocked", "Blocked"], ["working", "Working"], ["done", "Done"], ["idle", "Idle"]];
-    return sections.flatMap(([status, label]) => {
-      const group = rows.filter((r) => r.w.status === status);
-      return group.length ? [this.statusHead(label, group.length, t), ...group.flatMap(draw)] : [];
+      return [heading];
     });
   }
 
@@ -827,7 +837,7 @@ export default class Spaces extends View {
 
   // Orca's worktree card (worktree-card-surface.tsx): ml-1, py-2 (36px single line), rounded-lg,
   // a status lane, a 13px/20px title, the primary pill on the main checkout.
-  card({ w, g, also, unopened, pos }, t, ps) {
+  card({ w, g, also, unopened, pos }, t, ps, mine) {
     // A merged card lights with any of its spaces and rolls all of their tabs up, as one
     // worktree with two open sessions is still one worktree.
     const group = [w, ...(also ?? []).map(a => a.w)];
@@ -851,8 +861,6 @@ export default class Spaces extends View {
     const metaMono = !g;
     // Orca's card lists its own agents (inlineAgents) as `AgentStateDot` rows, from agents():
     // the same rows the agents view reads, so a collapsed card shows real rows, never invented.
-    const tabIds = new Set(group.flatMap(s => (s.tabs ?? []).map(c => c.id)));
-    const mine = agents().filter(a => tabIds.has(a.tab));
     // The host already rolled each space's agents up (model.rs:92-97 `priority`); the worktree's rollup
     // is the most urgent of its sessions (STATUS order: blocked > done > working > idle).
     const dot = group.map(s => s.status).reduce((b, s) => ((STATUS_RANK[s] ?? 0) > (STATUS_RANK[b] ?? 0) ? s : b), null);
@@ -1160,11 +1168,11 @@ export default class Spaces extends View {
 
   // A repo is a project group: a SectionHeader, then its worktree cards (SectionHeader.tsx:185-195).
   // A bare folder workspace renders its folder row above its session card.
-  row(r, t, ps) {
+  row(r, t, ps, mine) {
     const key = foldKey(r);
     const folded = this.foldedRepos.has(key);
     if (folded) return r.head ? [this.header(r, t, ps)] : [];
-    return r.head ? [this.header(r, t, ps), this.card(r, t, ps)] : [this.card(r, t, ps)];
+    return r.head ? [this.header(r, t, ps), this.card(r, t, ps, mine)] : [this.card(r, t, ps, mine)];
   }
 
   render(cx) {

@@ -3,6 +3,25 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile } from "herdr";
+import { selectTabPanes } from "./tab-panes.js";
+
+// Memoized tab colour store: shared() is the primary source; localStorage is the fallback.
+// Cache the parsed fallback by its raw string so repeated renders skip re-parsing.
+let _tabColorCache = { raw: undefined, value: null };
+function readTabColorStore() {
+  const s = shared("tab.colors");
+  if (s && typeof s === "object") return s;
+  try {
+    const raw = localStorage.getItem("tab.colors.v1");
+    if (_tabColorCache.raw === raw && _tabColorCache.value) return _tabColorCache.value;
+    const v = raw ? JSON.parse(raw) : {};
+    const value = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+    _tabColorCache = { raw, value };
+    return value;
+  } catch {
+    return {};
+  }
+}
 
 // `src/shared/agent-status/title/agent-title-decoration.ts`: the tab already shows the
 // provider icon, so a known agent's own leading status glyph is dropped. Glyph-only titles
@@ -454,8 +473,8 @@ export default class Tabs extends View {
   }
 
   // Resolves tab display title matching SortableTab.tsx:130-131 & terminal-tab-actions.ts:111.
-  getTabLabel(c) {
-    const pane = (panes() ?? []).find(p => p.tab === c.id && p.program?.agent) ?? (panes() ?? []).find(p => p.tab === c.id);
+  getTabLabel(c, pane = undefined) {
+    if (pane === undefined) pane = (panes() ?? []).find(p => p.tab === c.id && p.program?.agent) ?? (panes() ?? []).find(p => p.tab === c.id);
     const program = pane?.program;
     const raw = c.name ?? "Terminal";
     const name = c.named ? raw : (pane?.title || program?.name || raw || "Terminal");
@@ -735,18 +754,10 @@ export default class Tabs extends View {
     const t = theme();
     const space = (spaces() ?? []).find(p => p.active);
     const shown = space?.tabs ?? [];
+    const tabPanes = selectTabPanes(panes() ?? []);
     // Tab colour store, read once per render. orca-menu writes shared("tab.colors")
     // and mirrors to localStorage["tab.colors.v1"]. SortableTab.tsx:293-297 drives the dot below.
-    const tabColorStore = (() => {
-      const s = shared("tab.colors");
-      if (s && typeof s === "object") return s;
-      try {
-        const v = localStorage.getItem("tab.colors.v1");
-        return v ? JSON.parse(v) : {};
-      } catch {
-        return {};
-      }
-    })();
+    const tabColorStore = readTabColorStore();
     const stop = (_e, cx) => cx.stop_propagation();
     // .sidebar-toggle (main.css:1213-1230) — padding 4px 8px around a 16px glyph = 32x24,
     // radius 4, muted, hover --accent. .window-controls-btn (main.css:1145-1168) — 46x36,
@@ -784,10 +795,10 @@ export default class Tabs extends View {
       .on_mouse_down("left", stop).on_click(action)
       .child(svg("mods/orca-tabs/panel-right.svg").size(16));
     const item = (c, i) => {
-      const pane = (panes() ?? []).find(p => p.tab === c.id && p.program?.agent) ?? (panes() ?? []).find(p => p.tab === c.id);
+      const pane = tabPanes.get(c.id) ?? null;
       const program = pane?.program;
       // SortableTab.tsx:130 — displayTitle = customTitle ?? (tabAgent ? strip(title) : title).
-      const label = this.getTabLabel(c);
+      const label = this.getTabLabel(c, pane);
       const tabColour = tabColorStore[c.id] ?? null;
       // TerminalTabLeadingIcon.tsx:31-45 — the agent's identity mark, `opacity-70` while the
       // tab is inactive. Orca's `AgentIcon` (`agent-catalog.tsx:50-122`) decides which mark an

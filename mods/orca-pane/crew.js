@@ -32,9 +32,18 @@ export function crewMembers(crew) {
 
 export function crewGroups(crew) {
   const members = crewMembers(crew);
-  return STATUS_ORDER
-    .map((status) => ({ status, members: members.filter((t) => t.status === status) }))
-    .filter((group) => group.members.length > 0);
+  const byStatus = new Map();
+  for (const t of members) {
+    const list = byStatus.get(t.status);
+    if (list) list.push(t);
+    else byStatus.set(t.status, [t]);
+  }
+  const groups = [];
+  for (const status of STATUS_ORDER) {
+    const ms = byStatus.get(status);
+    if (ms && ms.length) groups.push({ status, members: ms });
+  }
+  return groups;
 }
 
 export function crewSignature(crew) {

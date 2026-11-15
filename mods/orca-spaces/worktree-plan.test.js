@@ -1,0 +1,91 @@
+import { test } from 'node:test';
+import { strict as assert } from 'node:assert';
+import { projectWorktreePlan, where } from './worktree-plan.js';
+
+test('duplicate worktree spaces stay attached to the first row in order', () => {
+  const spaces = [
+    { id: 'first', folder: '/repo', tabs: [] },
+    { id: 'other', folder: '/other', tabs: [] },
+    { id: 'second', folder: '/repo', tabs: [] },
+    { id: 'third', folder: '/repo', tabs: [] },
+  ];
+  const gitState = Object.fromEntries(spaces.map(w => [where(w), {
+    repo: w.folder, top: w.folder, name: w.folder, linked: false,
+    worktrees: [{ path: w.folder }],
+  }]));
+  const plan = projectWorktreePlan({ spaces, gitState, loaded: true });
+  assert.deepEqual(plan.list.map(r => r.w.id), ['first', 'other']);
+  assert.deepEqual(plan.list[0].also.map(r => r.w.id), ['second', 'third']);
+});
+
+test('agents are grouped by card while preserving agent order and merged tabs', async () => {
+  const { agentsByRow } = await import('./worktree-plan.js');
+  const rows = [
+    { w: { tabs: [{ id: 'a' }, { id: 'a' }] }, also: [{ w: { tabs: [{ id: 'b' }] } }] },
+    { w: { tabs: [{ id: 'c' }] } },
+    { w: { tabs: [{ id: 'a' }] } },
+  ];
+  const agents = [{ tab: 'b', id: 1 }, { tab: 'c', id: 2 }, { tab: 'a', id: 3 }, { tab: 'none', id: 4 }];
+  const grouped = agentsByRow(rows, agents);
+  assert.deepEqual(rows.map(row => grouped.get(row).map(a => a.id)), [[1, 3], [2], [3]]);
+});
+
+test('pruning git cache drops only inactive negative entries and preserves projects', async () => {
+  const { pruneGitCache } = await import('./worktree-plan.js');
+  const active = { id: 'open', folder: '/open' };
+  const cache = { [where(active)]: null, [where({ folder: '/old' })]: null, repo: { repo: 'known' } };
+  pruneGitCache(cache, [active]);
+  assert.deepEqual(cache, { [where(active)]: null, repo: { repo: 'known' } });
+});
+
+test('render row planning preserves host, status, fold and repair order', async () => {
+  const { planRenderRows } = await import('./worktree-plan.js');
+  const rows = [
+    { w: { machine: null, status: 'idle' } },
+    { w: { machine: 'remote', status: 'working' } },
+    { w: { machine: 'remote', status: 'blocked' } },
+  ];
+  assert.deepEqual(planRenderRows(rows, 'workspace-status', new Set(['offline']), new Set(['remote'])), [
+    { kind: 'host', machine: null, count: 1 },
+    { kind: 'status', label: 'Idle', count: 1 },
+    { kind: 'row', index: 0, position: 0 },
+    { kind: 'host', machine: 'remote', count: 2 },
+    { kind: 'host', machine: 'offline', count: 0 },
+  ]);
+  assert.deepEqual(planRenderRows(rows.slice(0, 1), 'repo', new Set(), new Set()), [
+    { kind: 'row', index: 0, position: 0 },
+  ]);
+  assert.deepEqual(planRenderRows(rows, 'workspace-status', new Set(), new Set()).map(x => x.kind === 'row' ? x.index : x.kind), [
+    'host', 'status', 0, 'host', 'status', 2, 'status', 1,
+  ]);
+});
+
+test('a listed repair entry without a usable repair state does not hide its rows', async () => {
+  const { planRenderRows } = await import('./worktree-plan.js');
+  const rows = [{ w: { machine: 'remote', status: 'idle' } }];
+  assert.deepEqual(planRenderRows(rows, 'repo', new Set(['remote']), new Set(), new Set()), [
+    { kind: 'host', machine: 'remote', count: 1 },
+    { kind: 'row', index: 0, position: 0 },
+  ]);
+});
+
+test('render descriptors use current row positions after a same-shape reorder', async () => {
+  const { planRenderRows } = await import('./worktree-plan.js');
+  const first = [{ w: { id: 'a', status: 'idle' } }, { w: { id: 'b', status: 'idle' } }];
+  const descriptors = planRenderRows(first, 'repo', new Set(), new Set());
+  const reordered = [first[1], first[0]];
+  assert.deepEqual(descriptors.map(d => reordered[d.index].w.id), ['b', 'a']);
+});
+
+test('active review keys cover each visible local branch once', async () => {
+  const { activeReviewKeys } = await import('./worktree-plan.js');
+  const repo = JSON.stringify([null, '/repo/.git']);
+  const rows = [
+    { w: {}, g: { repo, branch: 'main' } },
+    { w: {}, g: { repo, branch: 'main' } },
+    { w: {}, g: { repo, branch: 'feature' } },
+    { w: { machine: 'remote' }, g: { repo, branch: 'remote' } },
+    { w: {}, g: { repo, branch: '' } },
+  ];
+  assert.deepEqual(activeReviewKeys(rows), ['/repo/.git::main', '/repo/.git::feature']);
+});

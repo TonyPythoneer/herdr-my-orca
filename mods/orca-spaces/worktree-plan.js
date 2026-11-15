@@ -44,6 +44,14 @@ export function place(s, _ps = []) {
  */
 export const where = (s, ps) => JSON.stringify([s?.machine ?? null, place(s, ps)]);
 
+export function pruneGitCache(cache, spaces, checked = {}) {
+  const active = new Set(spaces.map(s => where(s)));
+  const remove = key => { delete cache[key]; delete checked[key]; };
+  for (const key of Object.keys(cache)) {
+    if (cache[key] === null && !active.has(key)) remove(key);
+  }
+}
+
 export const base = (path) => path.replace(/\/+$/, "").split("/").pop();
 
 /**
@@ -58,6 +66,11 @@ export const readPair = (s) => {
   }
 };
 
+export function activeReviewKeys(rows) {
+  return [...new Set(rows.filter(r => !r.w.machine && r.g?.branch)
+    .map(r => `${readPair(r.g.repo)[1]}::${r.g.branch}`))];
+}
+
 /**
  * Project group fold key: repo path for repository worktrees, or `space:<id>` for standalone folders.
  * Port of Orca's project section collapse keys (`project-collapse-all.ts:10-12`).
@@ -71,6 +84,51 @@ export function foldKey({ w, g }) {
  * blocked (4) > done (3) > working (2) > idle (1) > none (0).
  */
 export const STATUS_RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
+
+export function planRenderRows(rows, groupBy, repairing, folded, hidden = repairing) {
+  const hosts = new Map();
+  rows.forEach((row, index) => {
+    const machine = row.w.machine ?? null;
+    if (!hosts.has(machine)) hosts.set(machine, []);
+    hosts.get(machine).push(index);
+  });
+  const names = [null, ...new Set([...rows.map(r => r.w.machine).filter(Boolean), ...repairing])]
+    .filter(m => hosts.has(m) || repairing.has(m));
+  const result = [];
+  const addRows = (indices) => {
+    if (groupBy !== "workspace-status") {
+      indices.forEach((index, position) => result.push({ kind: "row", index, position }));
+      return;
+    }
+    for (const [status, label] of [["blocked", "Blocked"], ["working", "Working"], ["done", "Done"], ["idle", "Idle"]]) {
+      const group = indices.filter(index => rows[index].w.status === status);
+      if (group.length) result.push({ kind: "status", label, count: group.length });
+      group.forEach((index, position) => result.push({ kind: "row", index, position }));
+    }
+  };
+  if (names.filter(m => hosts.has(m)).length <= 1 && !names.some(m => repairing.has(m))) {
+    addRows(rows.map((_, i) => i));
+  } else for (const machine of names) {
+    const indices = hosts.get(machine) ?? [];
+    result.push({ kind: "host", machine, count: indices.length });
+    if (!hidden.has(machine) && !folded.has(machine)) addRows(indices);
+  }
+  return result;
+}
+
+export function agentsByRow(rows, agents) {
+  const result = new Map(rows.map(row => [row, []]));
+  const tabs = new Map();
+  for (const row of rows) {
+    const ids = new Set([row.w, ...(row.also ?? []).map(a => a.w)].flatMap(w => (w.tabs ?? []).map(t => t.id)));
+    for (const id of ids) {
+      if (!tabs.has(id)) tabs.set(id, []);
+      tabs.get(id).push(row);
+    }
+  }
+  for (const agent of agents) for (const row of tabs.get(agent.tab) ?? []) result.get(row).push(agent);
+  return result;
+}
 
 /**
  * Recent = the newest tab change of the card (`smart-sort.ts:31` reads `lastActivityAt`; Herdr's
@@ -217,16 +275,17 @@ export function projectWorktreePlan({
   // A repo worktree is one card: `linked` worktrees and second same-checkout spaces fold
   // into the first space on that top-level folder. Folder spaces merge only with themselves.
   // (host-qualified-identity.ts: getWorktreeHostIdentity)
-  const seen = new Set();
+  const seen = new Map();
   const list = [];
   for (const r of rows) {
     const key = r.g ? JSON.stringify([r.w.machine ?? null, r.g.top]) : `space:${r.w.id}`;
     if (seen.has(key)) {
-      (list.find((l) => l.key === key).also ??= []).push(r);
+      seen.get(key).also.push(r);
       continue;
     }
-    seen.add(key);
-    list.push({ ...r, key, also: [] });
+    const row = { ...r, key, also: [] };
+    seen.set(key, row);
+    list.push(row);
   }
 
   // Group rows into sections: git repos group by repo; folder workspaces stand alone.
