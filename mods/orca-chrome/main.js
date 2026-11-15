@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { theme, run, props, window, setShared, layout } from "herdr";
+import { theme, run, props, window, setShared, layout, openOverlay } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -46,10 +46,12 @@ export default class WorkspaceChrome extends View {
           .child(row("settings", "settings", "Settings", () => run("app.settings")))
           // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
           // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).
-          .child(row("help", "circle-help", "Help", () => run("app.palette"))));
+          .child(row("help", "circle-help", "Help", () => run("app.palette"))))
         // Orca's right cluster holds Reveal active workspace and Workspace board
-        // (SidebarToolbar.tsx:76-112); neither has a Herdr command, so nothing is drawn.
-        // The Herdr-only `+` (Add machine) that sat here is gone: Orca's footer has no plus.
+        // (SidebarToolbar.tsx:76-112); neither has a Herdr command. The Herdr-only button here
+        // opens the three-stage workflow board (orca-workflow) as a dialog.
+        .child(h_flex().items_center().gap(4)
+          .child(row("workflow", "workflow", "Workflow stages", () => openOverlay({ mod: "orca-workflow", kind: "dialog", width: 0.9, height: 480 }))));
     }
     // TitlebarLeftControls.tsx: with a custom titlebar (Linux/Windows) the row is the logo,
     // then the application-menu button; macOS instead reserves `.titlebar-traffic-light-pad`
