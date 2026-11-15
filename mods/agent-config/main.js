@@ -326,7 +326,8 @@ export default class AgentConfig extends View {
     if (!this.current()) return;
 
     const extra = [];
-    if (this.advisorOn) {
+    // --advisor, --agents and --append-system-prompt are Claude CLI flags; codex rejects them.
+    if (this.key === "claude" && this.advisorOn) {
       const agents = this.agentsInput.value();
       if (agents.trim()) {
         try {
