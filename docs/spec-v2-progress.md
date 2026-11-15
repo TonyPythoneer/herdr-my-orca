@@ -28,6 +28,8 @@
 
 ## 下次繼續時
 
+**完整任務指示在 `docs/spec-v2-resume-prompt.md`**（含「先建立檔案、邊做邊存、每章 commit」的規則）。已排定計時器：2026-11-16 02:14 以後在新 tab 用 Fable 5.2 high 讀該檔執行。以下為摘要。
+
 1. 重新啟動 Fable（xhigh，CTO 角色）做第二輪收斂，輸出寫到 `docs/spec-v2-converged.md`。指示要點：
    - 納入上面 7 項決定。
    - 收斂 v1 範圍。
