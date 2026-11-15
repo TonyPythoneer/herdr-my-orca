@@ -1,6 +1,6 @@
 # Spec v2 收斂版（第二輪 CTO 收斂）
 
-進度：已完成 2、4、6；未完成 1、3、5、7、8
+進度：已完成 2、3、4、6；未完成 1、5、7、8
 
 日期：2026-11-16
 分支：`worktree-workflow-stages-panel`
@@ -65,7 +65,45 @@ AT-22（「User-owned terminals … are preserved」）同步改寫為：「除�
 
 ## 3. owner 還需決定的核心問題（最多 3 個）與已委派的問題（預設 + 規則）
 
-待補
+### 3.1 需要 owner 決定的三件事
+
+**Q1. opencode 用什麼旗標啟動？（卡住：dev 派發的那一行設定）**
+決定 4 說「沿用 `programs.json` 的全權限參數」，但 `programs.json` 裡沒有 opencode（V27），沒有東西可沿用。
+- **建議：`opencode --auto`**（「Auto-approve permissions that are not explicitly denied」，V25）；若前置測試 P1 顯示不加 `--standalone` 時 kill 不掉它的工具指令（U3），再加 `--standalone`。
+- 理由：與決定 4 對 claude、codex 的立場一致；背景 session 沒人回答提問，不加 `--auto` 只會讓每個 task 卡到 60 分鐘上限。
+- 你要知道的代價：opencode 互動模式沒有 `--model`（V25），dev 用的是你 opencode 設定檔的預設 model，workflow 無法逐次指定。
+
+**Q2. 開始時 worktree 有還沒 commit 的變更怎麼辦？（卡住：`my-orca init` 與 Runner 的 git 規則）**
+- **建議：直接拒絕**，訊息是「請先 commit 或 stash，再執行一次」。
+- 理由：worker 是全權限、會自己 `git add` + commit。只有從乾淨的工作樹開始，之後每一個變更才分得出是 workflow 做的還是你做的；「規格 #20：unexpected partial modifications」與「不可覆蓋 user 既有變更」才有辦法用三個唯讀 git 指令檢查。允許髒的工作樹的話，你的未提交變更很可能被 worker 一起 commit 進去，而 Runner 沒有可靠的方法擋。
+- 另一個選項（不建議）：允許，並記下當時的髒檔清單、要求 worker 不要碰。這只是寫在 prompt 裡的請求，無法強制。
+
+**Q3. 四盞燈放在哪裡？（只卡住第 8 步的 UI，不卡 Runner；不回答就用建議值）**
+- **建議 A：sidebar 最下面、設定列（`sidebar-footer`）的上方，新增一條 28px**。每盞燈是「圓點 + 短名稱（Plan / Dev / Tune / Ready）+ `07/12`」；sidebar 窄於 260px 時只留圓點與數字，名稱改成 tooltip。理由：打開 inspector 的 workflow 按鈕就在正下方；最底下的狀態列在窄視窗已經排滿用量資訊。代價：sidebar 收起來時看不到燈。
+- 選項 B：最底下 24px 狀態列的左邊（把 `status` 那一列拆成兩格）。優點：sidebar 收起來也看得到、放得下完整名稱；代價：擠壓現有的用量顯示。
+
+### 3.2 已委派給實作 subagent 的問題（附預設與必須遵守的規則）
+
+第一輪的 8 個問題：1、2、3 已由 owner 拍板（決定 1、3、4）；4、5、6、7、8 處置如下，另加這一輪新出現的。
+
+| # | 問題 | 預設 | 實作時必須遵守的規則 |
+|---|---|---|---|
+| D1 | （第一輪 Q4）opencode 不回報 7501 時怎麼辦 | 不需要選：完成判定一律看 result 檔（4.4 R-B） | Runner 本體不得依「有沒有回報」分支；差異只能出現在 4.5 的 CLI 設定表 |
+| D2 | （第一輪 Q5）dev 階段的 model | opencode 設定檔的預設 model；inspector 顯示「opencode（config default）」 | 不得讀取或複製 `~/.config/opencode/` 內任何檔案的內容（裡面有 API key）；不得把 model 名稱寫死 |
+| D3 | （第一輪 Q6）commit 慣例 | 每個 task 一個以上的 commit，訊息以 `orca(<task-id>): ` 開頭 | Runner 自己不 commit；交結果時工作樹必須乾淨；指示檔明寫「不得 push、不得切換 branch、不得改動其他 worktree、不得 amend 或 rebase 既有 commit」 |
+| D4 | （第一輪 Q8）mod 命名 | 不新增 mod：四燈列是 `orca-workflow` 加 `props: {strip: true}` | 不得使用 `my-orca-status` 這個名稱（與既有的 `orca-status` 太像）；在 README 的已知偏離寫明 |
+| D5 | 狀態資料夾與 ID | 4.3 的配置；`wt-id` = sha256(absolute git-dir) 前 12 碼；`run_id` = `<wt-id>-<UTC yyyymmddHHMMSS>`；dispatch id = 8 碼隨機 hex | 所有路徑先 `realpath`；不得用 repo 名稱或 branch 名稱當路徑的一部分；`state.json` 一律「寫暫存檔 → fsync → rename」 |
+| D6 | 各種時間上限 | ack 120 秒；dev、tuning 各 60 分鐘；單一測試指令 15 分鐘；輪詢 10 秒；`hc` 失敗重試 5 分鐘 | 每一個等待都要有上限；逾時一律進 `needs_user`，既不是成功也不是失敗；用單調時鐘（`process.hrtime` / `performance.now`）計時，牆上時間只拿來顯示；數值放 `config.json` 並檢查範圍 |
+| D7 | Planning 那盞燈的數字 | 閘門 `1/1`（handoff 檢查通過才有 run，所以一出現就是完成） | 不得用 agent 的 `done` / `idle` 增加任何計數 |
+| D8 | UI 怎麼改 rework 上限 | UI 檢查是 1 到 9 的整數後 `writeTextFile(config.json, …, expected)`；Runner 讀取時再檢查一次 | UI 不得寫 `state.json`；`writeTextFile` 不能用（U9）就改 `fs/promises`；寫入被拒（`expected` 過期）要重讀再讓 user 重試 |
+| D9 | `needs_user` 與 `ready_for_review` 的通知 | mod 偵測到 `state.json` 的 `status` 轉變時呼叫一次 `notify()` | 以 `state.updated` 去重，同一次轉變只通知一次；不自己播聲音 |
+| D10 | 安裝位置 | skill：`~/.agents/skills/herdr-planning/` + 複製到 `~/.codex/skills/`；`my-orca`：repo 內 + `~/.local/bin` 的 symlink | 不得寫入 `~/.config/herdr-core/`；不得修改 `programs.json`、`settings.json`、`keys.json` |
+| D11 | 封存 | 完成的 run 留在原地；同一個 worktree 下次 `init` 時整包搬到 `archive/` | 永不刪除任何 run 的資料；`init` 遇到 `status` 是 `working` 或 `needs_user` 的既有 run 要拒絕 |
+| D12 | 單一 task 的嘗試次數 | 最多 2 次；第 2 次附上第 1 次的失敗輸出 | 沒有 user 介入不得有第 3 次；重派之前必須通過 4.4 R-D 的 git 檢查 |
+| D13 | 每輪 rework 新增的 task 數 | 上限 10 個，ID 由 Runner 指定為 `R<cycle>-<nn>` | 超過上限進 `needs_user`（`rework_too_large`），不得截斷後繼續 |
+| D14 | handoff 檢查的定義（AT-02） | `handoff.md` 含規格的 10 個章節標題；`tasks.json`：1 到 100 個 task，每個有唯一 `id`（`^[A-Z]+-\d+$`）、`title`、非空的 `test` 指令、`deps` 都指向存在的 id 且沒有循環；至少 1 條 acceptance，每條有 `verify` 指令或 `manual: true` | 檢查失敗時不得寫入任何狀態；錯誤訊息要指出是哪一個 task 或哪一個章節 |
+| D15 | secrets | `init` 用幾個常見金鑰樣式（`sk-`、`AKIA`、`ghp_`、`-----BEGIN … PRIVATE KEY`）掃 `handoff.md`、`tasks.json`，命中就拒絕並只報行號 | `state.json`、`events.jsonl` 不得保存：完整 argv、環境變數、terminal 畫面；畫面只進 `logs/` 且截到 64 KiB；錯誤訊息不得印出命中的字串本身。這只是盡力而為的過濾，README 要寫明 |
+| D16 | Runner 的輸出 | Runner 的 stdout 每個轉移印一行（時間、事件、task id）；`hc read orca-r-<wt-id>` 就是 log | 不印 prompt 內容、不印測試輸出全文（只印 exit code 與 `logs/` 路徑） |
 
 ## 4. 收斂後的 v1 範圍（做 / 延後）與 v1 面板的保留 / 改寫 / 刪除
 
