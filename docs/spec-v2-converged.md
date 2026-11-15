@@ -1,6 +1,6 @@
 # Spec v2 收斂版（第二輪 CTO 收斂）
 
-進度：已完成 6（所有探針已跑完並清理）；未完成 1、2、3、4、5、7、8
+進度：已完成 4、6；未完成 1、2、3、5、7、8
 
 日期：2026-11-16
 分支：`worktree-workflow-stages-panel`
@@ -20,7 +20,148 @@
 
 ## 4. 收斂後的 v1 範圍（做 / 延後）與 v1 面板的保留 / 改寫 / 刪除
 
-待補
+### 4.1 一句話的核心
+
+User 在自己的 tab 用 `/herdr-planning` 做完規劃；之後一個不含 AI 的小程式（Runner）用 opencode 一次做一個 task、做完交給原本那個 model 驗收、最多來回三次；四盞燈顯示進度。
+
+### 4.2 元件（只有三個）
+
+| 元件 | 內容 | 位置（預設） |
+|---|---|---|
+| `my-orca` | 單一 Node 檔、零相依。子指令：`init`（由 skill 呼叫）、`start`（啟動或恢復 Runner）、`run`（Runner 迴圈本體，只能在名為 `orca-r-<wt-id>` 的 hc terminal 內執行）、`stop`、`status [--json]`、`config set` | repo 的 `my-orca/my-orca.mjs`，symlink 到 `~/.local/bin/my-orca` |
+| `herdr-planning` skill | 唯一的 skill。規劃 → 寫 `handoff.md` + `tasks.json` → 呼叫 `my-orca init` → 把 `init` 印出的 profile 念給 user | `~/.agents/skills/herdr-planning/`（claude 經 symlink 讀到），另複製到 `~/.codex/skills/` |
+| `orca-workflow` mod | 同一個 mod 兩種畫法：`props().strip` 為真時畫四燈列，否則畫 inspector 對話框（沿用 `orca-chrome` 用 `props().footer` 分兩種畫法的既有做法） | `mods/orca-workflow/` |
+
+Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 Runner 寫在狀態資料夾的 `dispatch/<dispatch-id>.md`，啟動時以 argv 帶入一句固定的指標 prompt（「讀 `<絕對路徑>` 並完全照做」）。這偏離規格的「三個 skill」與「Prefer Agent Templates」，理由是 V16：template 對不回報 7501 的程式根本不送第一則訊息，會讓整條派發路徑卡在 opencode 的前置測試上；argv 路徑對 claude（V10，App 自己就這樣啟動）與 codex（V26）已有依據，對 opencode 是 `--prompt`（U2）。
+
+### 4.3 狀態檔
+
+```text
+~/.config/herdr-app/my-orca/
+  config.json                 # UI 可寫的設定：max_rework_cycles 等（見 3.2 的 D6、D8）
+  index.json                  # { "<absolute git-dir>": "<wt-id>" }，讓 UI 不必自己算 hash
+  <wt-id>/                    # wt-id = sha256(absolute git-dir) 的前 12 碼（V28）
+    state.json                # 唯一的執行狀態；只有 Runner（與建立它的 init）會寫，tmp + rename
+    events.jsonl              # 只增不改的轉移紀錄；UI 不讀
+    handoff.md  tasks.json    # init 時複製進來，之後不改
+    dispatch/<id>.md          # 給 worker 的指示
+    results/<id>.ack          # worker 的第一個動作：建立這個空檔（送達確認）
+    results/<id>.json         # dev worker 的結果
+    reviews/<id>.json         # tuning 的判定
+    logs/<id>.txt             # 失敗時 `hc read` 的最後畫面（截到 64 KiB）
+  archive/<wt-id>-<utc>/      # 同一個 worktree 下次 init 時，舊的整包搬來這裡；永不刪除
+```
+
+`state.json` 的欄位（`schema: 1`）：`run_id`、`core_id`、`repo{git_dir, common_dir, toplevel, branch, base_head, head}`、`profile{cli, model, effort, argv}`、`planning{address, created_ms, tab, space, agent_pid, turn, closed}`、`stage`（`development | tuning | ready_for_review`）、`status`（`working | needs_user | failed | completed`）、`needs_user{code, detail, at}`、`rework{cycles}`、`tasks[]`（`id, kind, title, test, deps, cycle, state, attempts[]`）、`acceptance[]`（`id, text, verify | manual`）、`reviews[]`、`dispatch`（進行中的那一個：`id, kind, task, name, address, phase`）、`updated`。
+
+砍掉的規格欄位：`revision`、`execution_stage`、`progress.*`、`development.queue`、`development.active_task_id`、`max_concurrent_workers` 等固定值。四盞燈的數字在讀取端由 `tasks[]`、`acceptance[]`、`reviews[]` 算出。
+
+### 4.4 Runner 的規則（取代規格的 20 條）
+
+**R-A 派發（防重派）**：先把 `dispatch{id, phase:"intent"}` 寫進 `state.json` → 寫 `dispatch/<id>.md` → `hc run --bg --no-parent --no-notify --json --name orca-d-<id> --label orca.run=<run_id> --label orca.dispatch=<id> --label orca.task=<task> --label orca.role=<dev|tuning> --cwd <toplevel> -- <CLI argv…> "<指標 prompt>"`（呼叫時拿掉 `HC_TERMINAL_ID`，V17）→ 把 address 寫回、`phase:"launched"` → 等 `results/<id>.ack`（上限 120 秒）→ `phase:"acked"`。名稱 `orca-d-<id>` 由 core 保證 live 期間唯一（V5），所以同一個 dispatch 不可能有兩個活的 worker；`name_taken` 視為「已經啟動過」，改走認養。派發前另外確認 `hc ls --json --label orca.run=<run_id> --label orca.role=dev`（以及 `tuning`）是空的，確保同時只有一個 worker。
+
+**R-B 等待**：每 10 秒做兩件事：看 result 檔在不在、`hc get <address> --json`。不用 `hc wait`（V14：idle 時立刻返回會空轉；V6：不回報時只有逾時）也不用 `hc events`。這讓完成判定完全不依賴 OSC 7501：
+
+| 觀察到 | 動作 |
+|---|---|
+| result 檔存在且 `dispatch` 欄位等於目前的 id | 進 R-C 驗收 |
+| terminal 已 `finished`，沒有 result 檔 | 這次嘗試失敗（agent 結束但沒交結果）→ 存畫面到 `logs/` → `needs_user` |
+| `status.state == "blocked"`（只有會回報的 CLI 才看得到） | `needs_user`（附 `kind`），terminal 留著給 user 看 |
+| 超過硬上限（dev、tuning 預設各 60 分鐘） | `needs_user`（`timeout`），terminal 留著；不算失敗也不算成功 |
+| 120 秒內沒有 ack 檔 | `needs_user`（`undelivered`），存畫面；**不自動重送** |
+| `hc` 呼叫本身失敗（core 重啟中） | 退避重試最多 5 分鐘，之後 Runner 結束、不改狀態（UI 顯示「已停住，可恢復」） |
+
+**R-C 驗收（只有 Runner 說了算）**：dev task 被接受的條件是全部成立：(1) result 檔是合法 JSON 且 `dispatch` 相符；(2) Runner **自己**在 worktree 重跑 `tasks.json` 裡該 task 的 `test` 指令，exit 0（上限 15 分鐘）；(3) `git status --porcelain` 是空的；(4) 目前 branch 沒變，且新的 `HEAD` 是上一個紀錄的 `head` 的後代（`git merge-base --is-ancestor`）。不成立 → 這次嘗試記為 `rejected:<原因>`；同一個 task 最多 2 次嘗試，第 2 次的指示檔附上第 1 次失敗的測試輸出（截到 16 KiB）；再失敗 → `needs_user`。接受後才 `hc kill` + `hc rm` 該 worker（先寫狀態、後清理）。
+
+**R-D Git 保護**：Runner 只執行唯讀的 git 指令（`rev-parse`、`status --porcelain`、`merge-base --is-ancestor`、`log`）；從不 `checkout`、`reset`、`stash`、`clean`、`commit`、`push`。每次派發前檢查：branch 與紀錄相同、`HEAD` 等於紀錄的 `head`、工作樹乾淨；任一不成立 → `needs_user`（`tree_changed`），附 `git status` 輸出。`init` 要求工作樹乾淨（見 3.1 的 Q2）。
+
+**R-E Tuning 與 rework**：所有 dev task 被接受後，用 `profile.argv` 起一個全新的 Tuning session。它寫 `reviews/<id>.json`：`verdict`（`pass | rework | needs_user`）、`criteria[]`（每條 acceptance 的 `id, pass, evidence`）、`new_tasks[]`。
+- `pass` 成立的條件：`criteria` 涵蓋全部 acceptance 且都 `pass:true`；Runner 自己重跑每條有 `verify` 指令的 acceptance 且都 exit 0；工作樹乾淨；Tuning 期間 `HEAD` 沒動。→ `stage: ready_for_review`、`status: completed`。
+- `rework`：`new_tasks` 1 到 10 個；ID 由 Runner 指定為 `R<cycle>-<nn>`（Tuning 不能自己取 ID，所以不會撞號）；`cycles + 1` 超過上限 → `needs_user`（`rework_exhausted`），否則 `cycles += 1`、新 task 進佇列，`stage` 維持 `tuning`。
+- **Tuning 直接修**（規格允許，第一輪建議砍掉，這輪改回保留）：Tuning 可以自己 commit 小修正。Runner 看到 Tuning 期間 `HEAD` 前進，就把那份 review 視為過期、`cycles += 1`、再起一個全新的 Tuning session 重新驗收。同一個計數器，所以不會無限循環。保留的理由：Tuning 有全權限，「它改了檔案」這個情況本來就必須處理，處理方式剛好就是規格要的 revalidate，AT-13 因此可測。
+- 上限在每次要 `cycles += 1` 之前才讀 `config.json`（1 到 9，預設 3，不合法就沿用舊值並記事件）。調低到小於目前 cycles 不會回溯判失敗，只是下一次 rework 請求會進 `needs_user`。計數器永不自動歸零。
+
+**R-F 單一 Runner 與恢復**：Runner 由 `my-orca start` 以 `hc run --bg --no-parent --no-notify --name orca-r-<wt-id> --label orca.run=<run_id> --label orca.role=runner -- node <my-orca> run <wt-id>` 啟動；名稱唯一（V5）就是鎖，Runner 死掉名稱自動釋出（V24），沒有殘留的 lock 檔。**絕不加 `--keep`**（keep 會在程式消失後補一個 shell 佔住名稱）。Runner 開機時若 `state.dispatch` 非空，先對帳再做事：
+
+| `hc ls --all --json --label orca.dispatch=<id>` | result 檔 | git | 動作 |
+|---|---|---|---|
+| 有 live 的 | － | － | 認養，回到 R-B |
+| 有 finished 的，或查不到 | 有且合法 | － | 進 R-C |
+| 有 finished 的，或查不到 | 沒有 | 乾淨且 `HEAD` 未動 | 沒留下任何東西，可安全重派（新的 dispatch id，嘗試次數 +1，受 2 次上限限制） |
+| 有 finished 的，或查不到 | 沒有 | 髒或 `HEAD` 動了 | `needs_user`（`partial_changes`），附 `git status` |
+
+`needs_user` 時 Runner 寫完狀態就結束。User 處理後按 inspector 的 Resume（= `my-orca start`）；Runner 開機看到 `needs_user` 會重跑 R-D 的檢查，通過才清掉並繼續。
+
+**R-G 只清自己的東西**：Runner 會 kill / rm 的 terminal 只有兩種：帶 `orca.run=<本 run>` 標籤且 `orca.dispatch` 等於 state 紀錄的；以及第 2 節定義的那一個 Planning terminal。每次 kill 之前重新 `hc get` 核對標籤，並寫一筆 `kill` 事件。
+
+### 4.5 三個 CLI 的啟動方式（P1 只影響表中 opencode 那一列）
+
+| 角色 | argv | 依據 |
+|---|---|---|
+| Tuning（claude） | `claude --dangerously-skip-permissions --model <M> --effort <E> "<指標 prompt>"` | V10、V26、V27 |
+| Tuning（codex） | `codex --no-daemon -c disable_paste_burst=true --dangerously-bypass-approvals-and-sandbox -m <M> -c model_reasoning_effort=<E> "<指標 prompt>"` | V26、V27；`foreground.argv` 是否保留這些旗標見 U12 |
+| Dev（opencode） | `opencode --auto [--standalone] --prompt "<指標 prompt>"` | V25；`--prompt` 是否自動送出、是否需要 `--standalone` 由 P1 決定（U1 到 U4） |
+
+Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差別只在這張表（opencode 的旗標，以及送達方式是 `argv` 還是「啟動後 `hc send`」）。P1 兩種結果下的行為：
+
+| | opencode 有回報 | opencode 沒回報 |
+|---|---|---|
+| 送達確認 | ack 檔 | ack 檔 |
+| 完成判定 | result 檔（最慢 10 秒後發現） | 相同 |
+| 卡在提問或權限 | 立刻 `needs_user`（`blocked`） | 等到硬上限才 `needs_user`（`timeout`） |
+| inspector 的 agent 狀態 | `working / blocked / done` | 只有 `live / finished` |
+| AT-21 | 全部可測 | `blocked` 分支對 opencode 標 NOT TESTED；timeout 與「不誤判成功」照測 |
+
+`profile` 的來源：`hc get $HC_TERMINAL_ID --json` 的 `foreground.argv`，**只取白名單旗標**（claude：`--model`、`--effort`；codex：`-m`、`-c model_reasoning_effort=`），絕不保存整段 argv（V10：裡面有 user 的第一則 prompt）。argv 沒有 `--model`（user 用預設值啟動）→ `init` 失敗並要求 skill 以 `--model <id> --effort <level>` 明確傳入（agent 知道自己的 model）。`init` 最後印出「Tuning 將使用：…」，skill 必須原文轉述給 user。**已知限制**：user 在 session 中途用 `/model` 換過 model 的話，argv 不會反映，只能靠這行轉述讓 user 發現。
+
+### 4.6 第一輪簡化建議的重新驗證
+
+| 第一輪建議 | 重新驗證後 | 依據 |
+|---|---|---|
+| 一個 skill + 兩個 hc template | **改**：一個 skill、零個 template，prompt 走 argv | V16 |
+| `runner.lock`（O_EXCL pidfile）取代檔案鎖 | **改**：用 core 的名稱唯一性當鎖，沒有 lock 檔 | V5、V24 |
+| 砍 `revision`、`execution_stage`、`progress.*`、`queue` | 保留此簡化；但 `status`、`needs_user`、`dispatch` 推導不出來，要存 | 4.3 |
+| 目錄壓成 `<wt-id>/` 一層 | 保留；加 `index.json` 給 UI 查 | V28 |
+| 三個標籤 | **改**：四個（多 `orca.role`，用來查「現在有沒有 worker」） | V3 |
+| `hc wait` 迴圈取代 `hc events` | **改**：固定 10 秒 `hc get` + 看檔案 | V6、V14 |
+| Runner 跑在 `hc run --bg --no-parent` 裡 | 保留，已驗證；補「不可 `--keep`」 | V21、V22、V24 |
+| 「profile = Planning terminal 的 argv，永遠可得」 | **錯**：`argv` 是 shell 包裝且含 prompt；要用 `foreground.argv` 的白名單旗標，而且 model 可能不在裡面 | V10 |
+| 「`hc ls --json` 沒有 labels，只能逐一 `hc get`」 | **部分錯**：輸出確實沒有 labels，但 `hc ls --label` 可以直接篩 | V3、V4 |
+| worker 用 `--no-parent --no-notify` | 保留；再加「呼叫時拿掉 `HC_TERMINAL_ID`」 | V17 |
+| v1 砍掉 Tuning 直接修 | **改回保留**（算一次 rework cycle、強制重新驗收） | 4.4 R-E |
+| 砍 reduced-motion、inspector 的 session history | 保留此簡化 | V29 |
+| 測試：`node --test` + stub agent，真 E2E 只跑一次 | 保留；stub 就是會送 7501 的 `fake-agent.sh`，兩種模式（回報 / 不回報）都測 | V13 |
+| 硬 timeout → `NEEDS_USER` | 保留 | 4.4 R-B |
+
+### 4.7 v1 做什麼、延後什麼
+
+| 做（v1） | 延後 |
+|---|---|
+| `my-orca`：`init / start / run / stop / status / config set` | 多個 worker 並行 |
+| `herdr-planning` skill（claude、codex） | 遠端 machine（`watchFolder`、`writeTextFile` 只限本機，V29）；v1 只支援本機 worktree |
+| Dev 用 opencode、一次一個、每個 task 全新 session | codex 或 claude 當 dev worker |
+| Tuning 用鎖定的 profile、全新 session；rework 上限；直接修算一次 cycle | 重開機後自動恢復（v1 要 user 按 Resume） |
+| `ready_for_review` 閘門（Runner 自己重跑測試） | inspector 內的 session history（v1 用 `my-orca status` 看 `events.jsonl` 尾端） |
+| Planning tab 的安全關閉（第 2 節） | reduced-motion（平台沒有這個設定，V29；列為已知限制） |
+| 四燈列 + inspector + peek + rework 上限設定 | `hc events` 事件流、hc template、`revision` 與檔案鎖 |
+| `fake-agent.sh` 測試 + 一次真 E2E | Linux、Windows |
+| README 一節（啟動、查看、停止、恢復、狀態欄位、已知限制） | 獨立的多份文件 |
+
+### 4.8 v1 面板（`dfb7acc`）的保留 / 改寫 / 刪除
+
+| 檔案 | 處置 | 說明 |
+|---|---|---|
+| `mods/orca-chrome/main.js:54` 的 workflow 按鈕與 `workflow.svg` | **保留** | 仍然開同一個對話框，現在它是 inspector |
+| `mods/orca-workflow/mod.json` | **保留** | |
+| `mods/orca-workflow/model.js` | **改寫** | 保留「純函式 + `node:test`」的形式與 `stageCards` 的數字夾限寫法；輸入改成 `state.json`，輸出改成四盞燈（`lights(state)`）與 inspector 列（`rows(state, terminals)`） |
+| `mods/orca-workflow/model.test.js` | **改寫** | 跟著 `model.js` |
+| `mods/orca-workflow/main.js` | **改寫** | 改讀 `index.json` + `state.json`；`watchFolder`（U10，不行就留 5 秒 timer）；agent 列改用 `terminals()` 依 `orca.run` 標籤篩選並配 timer（V29）；每列加 Peek（`run("terminal.peek", {terminal})`，V23）；加 rework 上限設定與 Resume / Stop 按鈕；加 `props().strip` 的四燈畫法 |
+| `herdr-orca-workflow.md` 這個資料檔與 markdown fence 格式、`parseDoc` | **刪除** | 改成直接 `JSON.parse(state.json)` |
+| `SAMPLE` 假資料、`agent_addresses`、`agent_tasks`、`review_return_to_implementation`、對 `agents()` 的使用 | **刪除** | 沒有 state 時顯示空狀態文字「No workflow in this worktree · run /herdr-planning」；`agents()` 看不到背景 worker（V29） |
+| 三張大卡片的版面 | **改寫** | 四欄、縮小；第四欄是閘門（`0/1`） |
+| `layouts/orca.json` | **新增一個 block** | 四燈列的位置待 owner 決定（3.1 的 Q3） |
+
+四燈的畫法：8px 圓點 + 階段名稱 + `accepted / total`。顏色用規格的四個固定 hex（階段識別色，明暗主題相同）；狀態不只靠顏色：完成 = 實心加勾（`circle-check.svg`）、進行中 = `.loop("opacity", …)` 原生脈動、未開始 = 空心圈、`needs_user` = `triangle-alert.svg`、`failed` = `alert-circle.svg`（三個圖示 `mods/orca-status/` 已有）。計數：Planning = 閘門 `1/1`；Development = 已接受的 dev task ÷ 全部 dev task（含 rework 新增的）；Tuning = 最新一份 review 通過的 acceptance ÷ 全部 acceptance；Ready = `0/1` 或 `1/1`。
 
 ## 5. 邊界情況表
 
