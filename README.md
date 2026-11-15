@@ -3,7 +3,7 @@
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
-- **Usage**: the bottom bar shows Codex and opencode usage from their own files on this computer (`orca-status/local-usage.js`). Claude usage is not shown.
+- **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status/local-usage.js`). Claude's comes from Anthropic's usage API with the token read from the macOS Keychain, cached in `~/.cache/herdr-usage/`.
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
 
 ## Setup
