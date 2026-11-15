@@ -1,6 +1,6 @@
 # Spec v2 收斂版（第二輪 CTO 收斂）
 
-進度：已完成 4、6；未完成 1、2、3、5、7、8
+進度：已完成 2、4、6；未完成 1、3、5、7、8
 
 日期：2026-11-16
 分支：`worktree-workflow-stages-panel`
@@ -12,7 +12,56 @@
 
 ## 2. AT-03 的處理（白話 + 精確規則 + 改寫後的 AT-03）
 
-待補
+### 2.1 白話
+
+原本的規格同時寫了兩句互相打架的話：「Planning 是 workflow 自己開的 session，做完要自動關掉」，以及「user 自己開的 terminal 絕對不能自動關」。但你已經決定 Planning 一定是你自己在看得到的 tab 裡啟動的，所以照原文不管關或不關都會違反其中一句，這一條測試怎麼做都不可能老實打勾。
+
+解法是把規則改成一句可以檢查的話：**只有你用來跑 Planning 的那一個 tab，在交接文件檢查通過、進度存檔之後，由 Runner 關掉；只要它看起來還有別的用途就不關，只在面板留一行說明；你開的其他 terminal 永遠不碰。**
+
+### 2.2 精確規則
+
+**誰關**：只有 Runner（不含 AI 的那個程式）。Skill、agent、UI 都不關任何東西。
+
+**何時關**：以下四件事都成立之後：
+1. `my-orca init` 的 handoff 檢查全部通過；
+2. `state.json` 已寫入磁碟（`stage: development`，並含 `planning` 紀錄）；
+3. Runner 已啟動並持有 `orca-r-<wt-id>` 這個名稱（Runner 是 `--no-parent`，所以關 tab 不會連它一起殺掉，V21）；
+4. Planning terminal 的狀態已離開 `working`（呼叫 `init` 的那一輪已結束）。Runner 每 10 秒 `hc get` 一次，最多等 120 秒；還在 `working` 就不關。
+
+**用什麼識別**：`init` 執行時（在 Planning terminal 裡，`$HC_TERMINAL_ID` 就是它的 address）記下 `address`、`created_ms`、`labels["herdr.tab"]`、`labels["herdr.space"]`、`foreground.pid`、`turn`，以及當時的 core id（V10、V12）。
+
+**關之前重新核對（任一條不成立就不關，並把原因寫進 `planning.closed`）**：
+
+| # | 檢查 | 擋掉的情況 | `planning.closed` |
+|---|---|---|---|
+| a | 目前 core id 與紀錄相同；`hc get <address>` 存在且 `state: live` | core 換了、tab 已被 user 關掉 | `skipped:gone` |
+| b | `created_ms` 與紀錄相同 | address 指到別的 terminal | `skipped:identity` |
+| c | `herdr.tab`、`herdr.space` 標籤與紀錄相同 | terminal 被移到別的 tab | `skipped:moved` |
+| d | `foreground.pid` 與紀錄相同 | agent 已退出，user 正在同一個 shell 做別的事 | `skipped:agent_exited` |
+| e | `status.state` 是 `done` 或 `idle`，且 `turn` 等於紀錄值 + 1 | user 在 Planning 結束後又送了訊息（還在用這個 session） | `skipped:in_use` |
+| f | `herdr-app ls` 裡該 tab 恰好只有這一個 terminal，且 `sub_agents` 是空的 | tab 有分割出來的其他 pane，或 Planning agent 自己起了子 agent | `skipped:other_work` |
+| g | 該 space 還有別的 tab | 關掉最後一個 tab 會連 space 一起關、還會跳確認框（`AGENTS.md:563`） | `skipped:last_tab` |
+| h | `herdr-app ls` 呼叫成功 | App 沒開，無法確認 f、g | `skipped:app_unavailable` |
+| i | `config.json` 的 `close_planning_tab` 不是 `false` | user 選擇永遠不關 | `skipped:disabled` |
+
+**怎麼關**：`herdr-app do tab.close --id <紀錄的 tab id>`（一定帶明確的 id，不用「目前聚焦的 tab」這個預設；不帶 `confirmed`）。之後 `hc get <address>` 應為 `finished` 或查無 → `planning.closed = "closed"`，寫一筆 `kill` 事件。指令失敗 → `skipped:close_failed`。
+
+**不關不算錯**：任何 `skipped:*` 都不影響 workflow 繼續；inspector 顯示「Planning tab 保留：<原因>」。
+
+**誠實列出的限制**：(1) 檢查與關閉之間有不到一秒的空窗，user 剛好在這瞬間開始打字的話，草稿會跟著 tab 消失；(2) `tab.close` 的實際效果本輪沒有實測（禁止新增 tab），見 U5，實作第 4 步要先跑那個探針；(3) 關掉 tab 之後 Planning 的對話就看不到了，交接內容以 `handoff.md` 為準。
+
+### 2.3 改寫後的 AT-03（取代原文「Planning's workflow-owned session closes safely」）
+
+> **AT-03 Planning tab 只在安全時被關閉。** 全部在拋棄式 repo、專用的測試 tab 進行。
+>
+> - **(a) 正常關閉**：`/herdr-planning` 完成且 handoff 通過後 150 秒內，該 tab 消失；`hc get <address>` 為 `finished`；`state.planning.closed == "closed"`；Runner 的 terminal 仍 `live`；其他 space 與 tab 的數量和 id 不變。
+> - **(b) 不該關的五種情況各測一次**，tab 必須還在，且 `planning.closed` 是對應的值：tab 多了一個 pane（`skipped:other_work`）；Planning 結束後又送了一則訊息（`skipped:in_use`）；agent 已退出只剩 shell（`skipped:agent_exited`）；它是 space 唯一的 tab（`skipped:last_tab`）；`close_planning_tab=false`（`skipped:disabled`）。
+> - **(c) handoff 檢查失敗**：tab 不關，`state.json` 不存在，Runner 沒有啟動。
+> - **(d) 稽核**：整個 run 結束後，`events.jsonl` 裡每一筆 `kill` 事件的對象，要嘛帶 `orca.run=<本 run>` 標籤，要嘛就是 (a) 記錄的那一個 address + `created_ms`；沒有第三種。
+>
+> (a)、(b) 可以用「測試 tab 裡跑 `fake-agent.sh`」完成（不必真的跑 Planning），所以可重複、不花額度。(a) 需要 owner 同意在自己的視窗開一個測試 tab。
+
+AT-22（「User-owned terminals … are preserved」）同步改寫為：「除了 AT-03 (a) 那一個 terminal 之外，run 前後 `hc ls --json` 中不帶 `orca.run` 標籤的 terminal 完全相同；run 前後 `git stash list` 相同，且 `base_head` 仍是 `HEAD` 的祖先。」
 
 ## 3. owner 還需決定的核心問題（最多 3 個）與已委派的問題（預設 + 規則）
 
