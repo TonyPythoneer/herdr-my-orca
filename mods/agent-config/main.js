@@ -135,7 +135,7 @@ export default class AgentConfig extends View {
     this.advisorOn = true;
     this.advisorModel = DEFAULT_ADVISOR;
     this.advisorOpen = false;
-    this.modelOpen = false; // Claude only: model/effort are selects whose lists open inline
+    this.modelOpen = false; // model/effort are selects whose lists open inline
     this.effortOpen = false;
     this.agentsSaved = DEFAULT_AGENTS_TEXT;
     this.agentsDirty = false;
@@ -400,38 +400,6 @@ export default class AgentConfig extends View {
       );
   }
 
-  effortRow(t) {
-    const efforts = this.current()?.efforts ?? [];
-    // Same inset as the model rows (mx 6 + px 10), so the labels line up with the list above.
-    return h_flex()
-      .mx(6)
-      .px(10)
-      .gap(4)
-      .children(efforts.map((e) => {
-        const on = this.effort === e;
-        return h_flex()
-          .id(`effort-${e}`)
-          .flex_1()
-          .min_w(0)
-          .h(28)
-          .items_center()
-          .justify_center()
-          .rounded(6)
-          .text_size(12)
-          .cursor_pointer()
-          .text_color(on ? t.foreground : t.muted)
-          .when(on, (el) => el.bg(t.selected))
-          .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
-          .on_click((_e, cx) => {
-            this.effort = e;
-            this.effortOpen = false;
-            this.remember();
-            cx.notify();
-          })
-          .child(EFFORT_LABEL[e] ?? e);
-      }));
-  }
-
   // Visible models, then the collapsed "-- hidden --" section: the list as the other agents show it.
   modelList(t) {
     const all = this.models ?? [];
@@ -511,7 +479,7 @@ export default class AgentConfig extends View {
       .child(div().flex_none().text_size(11).text_color(t.muted).child("▾"));
   }
 
-  // Claude: model and effort side by side as selects; one list open at a time, inline below.
+  // Model and effort side by side as selects; one list open at a time, inline below.
   pickerRow(t) {
     const box = (list) => v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(list);
     return v_flex()
@@ -548,8 +516,8 @@ export default class AgentConfig extends View {
       .mb(2)
       .gap(8)
       .items_center()
-      .child(div().text_size(13).font_medium().text_color(t.foreground).child("Claude"))
-      .child(
+      .child(div().text_size(13).font_medium().text_color(t.foreground).child(this.key === "claude" ? "Claude" : "Codex"))
+      .when(this.key === "claude", (el) => el.child(
         h_flex()
           .items_center()
           .justify_center()
@@ -562,9 +530,9 @@ export default class AgentConfig extends View {
           .text_size(9)
           .text_color(t.accent)
           .child("PRESET"),
-      )
+      ))
       .child(div().flex_1())
-      .child(
+      .when(this.key === "claude", (el) => el.child(
         h_flex()
           .id("reset-preset")
           .h(24)
@@ -577,7 +545,7 @@ export default class AgentConfig extends View {
           .on_click((_e, cx) => this.resetPreset(cx))
           .child(div().text_size(10).text_color(t.muted).child("Reset defaults"))
           .child(svg("mods/agent-config/rotate-ccw.svg").size(14).text_color(t.muted)),
-      );
+      ));
   }
 
   switchRow(id, on, onToggle, t) {
@@ -811,7 +779,6 @@ export default class AgentConfig extends View {
 
   render() {
     const t = theme();
-    const ready = Boolean(this.current());
     return v_flex()
       .id("agent-config")
       .on_hover((hovered, cx) => this.hover(hovered, cx))
@@ -821,13 +788,11 @@ export default class AgentConfig extends View {
       .gap(2)
       .bg(t.popover)
       .text_size(12)
-      .when(this.key === "claude" && this.models, (el) => el.child(this.header(t)))
+      .when(this.models, (el) => el.child(this.header(t)))
       .when(!this.models && !this.error, (el) => el.child(div().px(14).py(6).text_color(t.muted).child("Loading models…")))
       .when(Boolean(this.error), (el) => el.child(div().px(14).py(6).text_color(t.blocked).child(this.error)))
-      .when(this.key !== "claude", (el) => el.child(this.modelList(t)))
-      .when(this.key === "claude" && this.models, (el) => el.child(this.pickerRow(t)))
+      .when(this.models, (el) => el.child(this.pickerRow(t)))
       .child(div().h(1).mx(6).my(4).bg(t.border))
-      .when(ready && this.key !== "claude", (el) => el.child(this.effortRow(t)))
       .when(this.key === "claude" && this.models, (el) => el.child(this.presetSection(t)))
       .child(
         h_flex()
