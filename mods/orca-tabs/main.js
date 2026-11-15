@@ -800,7 +800,7 @@ export default class Tabs extends View {
       // a mod cannot reach another's files, so each carries its own copies.
       const ownFills = new Set(["omp", "droid", "kilo"]);
       const agentMarks = {
-        codex: "mono",
+        codex: "mods/orca-tabs/agent-icons/codex.svg",
         omp: "mods/orca-tabs/agent-icons/omp.svg",
         gemini: "mods/orca-tabs/agent-icons/gemini.png",
         cursor: "mods/orca-tabs/agent-icons/cursor.png",

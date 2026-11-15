@@ -888,7 +888,7 @@ export default class Spaces extends View {
     // colored marks as images because svg() is a one-color mask (gpui-kit.d.ts:20273-20281).
     const ownFills = new Set(["omp", "droid", "kilo"]);
     const agentIconOverrides = {
-      codex: "mono",
+      codex: "mods/orca-spaces/agent-icons/codex.svg",
       omp: "mods/orca-spaces/omp.svg",
       gemini: "mods/orca-spaces/agent-icons/gemini.png",
       cursor: "mods/orca-spaces/agent-icons/cursor.png",
