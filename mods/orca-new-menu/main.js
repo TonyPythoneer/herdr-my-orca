@@ -38,6 +38,7 @@ function rememberModels(key, models) {
 // Menu padding (4) plus a small gap, so the flyout clears the menu's outer edge.
 const FLYOUT_GAP = 6;
 const FIT = { list: 13, models: 11 };
+const CHEVRON_W = 32;
 
 // Herdr keys are dash-joined (herdr's own keys.json ships "ctrl-shift-t"); Orca's menu shows
 // the combo in caps (ShortcutKeyCombo.tsx:6-18).
@@ -128,7 +129,7 @@ export default class NewMenu extends View {
     }));
     // Not an Orca agent: no model list, and the login shell finds it on PATH the way a terminal does.
     const freebuff = { key: "freebuff", name: "freebuff", run: ["zsh", "-lic", "exec freebuff"] };
-    return [...rows, { label: "freebuff", icon: "square-terminal", section: "-- unofficial --", run: () => this.launch(freebuff) }];
+    return [...rows, { label: "freebuff", image: "freebuff.png", section: "-- unofficial --", run: () => this.launch(freebuff) }];
   }
 
   // Orca only adds `--model` after selection (`AgentLaunchTextModelDefault.tsx:23-33`,
@@ -242,12 +243,14 @@ export default class NewMenu extends View {
   }
 
   // Program icons are the program table's `icon` (an appHome path; a tinted one is a one-color
-  // glyph); a mod's own rows use `mods/orca-new-menu/<icon>.svg`.
+  // glyph); a mod's own rows use `mods/orca-new-menu/<icon>.svg` or a full-colour `image` file
+  // (freebuff.png is Orca's own asset).
   icon(row, size, t) {
     const p = row.program;
     if (p?.icon) return p.tint
       ? svg(p.icon).size(size).flex_none().text_color(t.muted)
       : image(p.icon).size(size).flex_none();
+    if (row.image) return image(`mods/orca-new-menu/${row.image}`).size(size).flex_none().rounded(4);
     if (row.icon) return svg(`mods/orca-new-menu/${row.icon}.svg`).size(size).flex_none().text_color(t.muted);
     return div().w(size).flex_none();
   }
@@ -331,13 +334,20 @@ export default class NewMenu extends View {
   }
 
   chevron(agent, t) {
+    // Orca's setup button is a bordered zone at the row's right edge (AgentLaunchSetupButton.tsx),
+    // so the divider shows how far the hover reaches.
     return div()
       .id(`cfg-${agent.key}`)
+      .h_full()
+      .w(CHEVRON_W)
+      .flex()
       .flex_none()
-      .p(2)
-      .rounded(4)
+      .items_center()
+      .justify_center()
+      .rounded_r(7)
+      .border_l(1)
+      .border_color(t.border)
       .hover((s) => s.bg(t.hover))
-      .on_hover((hovered) => this.hoverConfig(agent, hovered))
       .child(svg("mods/orca-new-menu/chevron-right.svg").size(14).text_color(t.muted));
   }
 
@@ -352,6 +362,7 @@ export default class NewMenu extends View {
         .px(8)
         .gap(8)
         .rounded(7)
+        .when(Boolean(row.config), (el) => el.pr(0))
         .items_center()
         .whitespace_nowrap()
         .font_medium()
@@ -370,7 +381,12 @@ export default class NewMenu extends View {
         // be longer than the row, so the hint keeps a ceiling instead of crushing the label.
         .child(div().flex_none().pl(16).max_w(110).truncate().text_color(t.muted).child(row.hint ?? ""))
         .when(Boolean(row.config), (el) => el
-          .on_mouse_move((e) => this.trackRow(row.config, e))
+          // Track and open in one event: the chevron's own on_hover fires before the row has seen
+          // the move, so it would place the flyout from the previous row's position.
+          .on_mouse_move((e) => {
+            this.trackRow(row.config, e);
+            if (e.local_position && e.bounds && e.local_position.x >= e.bounds.width - CHEVRON_W) this.hoverConfig(row.config, true);
+          })
           .child(this.chevron(row.config, t))));
   }
 
