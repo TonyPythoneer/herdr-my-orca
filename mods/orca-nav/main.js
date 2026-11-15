@@ -177,18 +177,7 @@ export default class Nav extends View {
       .on_click(() => { pushHistory(page); run("layout.select", { stack: "main", child: page }); })
       .child(svg(`mods/orca-nav/${icon}.svg`).size(16).flex_none().text_color(shown === page ? t.accent_foreground : "#f0f0f04d"))
       .child(div().flex_1().truncate().child(label));
-    // `.sidebar-toggle-compact` (`main.css:1233-1251`): 4/5 padding around a 16px glyph, radius 4,
-    // muted, hover accent + foreground, disabled muted; no history in that direction disables it.
-    const arrow = (id, icon, label, step, enabled) => div().id(id).size(24).flex_none().flex().items_center().justify_center().rounded(4)
-      .text_color(enabled ? t.muted : "#f0f0f033")
-      .role("button").accessibility_label(label).tooltip(label)
-      .when(enabled, el => el.cursor_pointer().hover(s => s.bg(t.hover).text_color(t.foreground))
-        .on_click(() => { HISTORY.at = step(HISTORY.at); run("layout.select", { stack: "main", child: HISTORY.pages[HISTORY.at] }); }))
-      .child(svg(`mods/orca-nav/${icon}.svg`).size(16));
     return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(t.chrome)
-      .child(h_flex().w_full().gap(6).items_center().flex_none()
-        .child(arrow("nav-back", "arrow-left", "Back", at => Math.max(0, at - 1), HISTORY.at > 0))
-        .child(arrow("nav-forward", "arrow-right", "Forward", at => Math.min(HISTORY.pages.length - 1, at + 1), HISTORY.at < HISTORY.pages.length - 1)))
       .child(search)
       // Projects header — SidebarHeader.tsx:60-63: `group/sidebar-header mt-2 flex h-8 min-w-0
       // shrink-0 items-center justify-between gap-1.5 px-2`; title `pl-2 pr-0.5 text-xs

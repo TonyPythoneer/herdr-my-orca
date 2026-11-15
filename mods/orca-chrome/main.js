@@ -56,13 +56,18 @@ export default class WorkspaceChrome extends View {
     // (80px, main.css:1109-1113) or `pl-2` in full screen (line 62), and never shows the
     // app-name label or a logo. `···` opens the same command surface the sidebar's search
     // row does, since Herdr has no native app menu. Herdr's own logo replaces Orca's.
-    const mac = window()?.platform === "macos";
-    const leftPad = collapsed ? 6 : mac ? (window()?.fullscreen ? 8 : 80) : 10;
+    // `window()` is null on the first paint; without a fallback the row is drawn as non-mac and
+    // the toggle lands under the traffic lights. The layout's `traffic_lights` stands in until it reports.
+    const live = window();
+    if (live) this.win = live;
+    const win = live ?? this.win;
+    const mac = win ? win.platform === "macos" : Boolean(layout()?.traffic_lights);
+    const leftPad = collapsed ? 6 : mac ? (win?.fullscreen ? 8 : 80) : 10;
     return h_flex().size_full().bg(t.chrome).pl(leftPad).pr(10).gap(4).items_center().border_b(1).border_color(t.border).text_size(13.5)
       .when(!collapsed && !mac, el => el.child(h_flex().gap(0).items_center()
         .child(image("frame/welcome/herdr.png").size(16).opacity(0.75))
-        .child(this.button("menu", svg("mods/orca-chrome/menu.svg").size(14), () => run("mod.open", { name: "picker" })).tooltip("Menu")))
+        .child(this.button("menu", svg("mods/orca-chrome/menu.svg").size(14), () => run("mod.open", { name: "picker" })).tooltip("Menu"))))
       // On the macOS rail the traffic lights fill the row; the agents list's » unfolds it.
-      .when(!(collapsed && mac), el => el.child(this.button("sidebar-toggle", svg("mods/orca-chrome/panel-left.svg").size(16), toggleSidebar, 32, 24)).tooltip("Sidebar toggle")));
+      .when(!(collapsed && mac), el => el.child(this.button("sidebar-toggle", svg("mods/orca-chrome/panel-left.svg").size(16), toggleSidebar, 32, 24).tooltip("Sidebar toggle")));
   }
 }

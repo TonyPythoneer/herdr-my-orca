@@ -749,7 +749,7 @@ export default class Tabs extends View {
     // (layout.rs:551) and there would otherwise be no way back. Orca keeps the control
     // reachable by floating `titlebar-left` over the workspace
     // (AppWorkspaceShell.tsx:163-167).
-    const sidebarToggle = (glyph, action) => div().id("sidebar-toggle").ml(6).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
+    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
       .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
       .role("button").accessibility_label("Toggle sidebar").tooltip("Toggle sidebar")
       .on_mouse_down("left", stop).on_click(action).child(glyph);
@@ -1025,10 +1025,11 @@ export default class Tabs extends View {
       // Herdr skips a hidden node's content (layout.rs:551); Orca keeps the control at the same
       // left slot by floating `titlebar-left` over the workspace
       // (AppWorkspaceShell.tsx:163-167).
-      .when(Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-tabs/sidebar.svg").size(16), () => {
+      .when(Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), () => {
         setShared("sidebar.collapsed", false);
         run("layout.show", { id: "sidebar" });
-      })))
+        // Same x and glyph as orca-chrome's toggle (80, or 8 in full screen) so the button does not jump on collapse.
+      }, w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 80) - leftPad : 6)))
       // Orca hides the strip's native scrollbar (`tab-bar-surface.tsx:164-175`) and paints only
       // its 3px hover thumb (`TabStripScrollIndicator.tsx:196-215`), which Herdr has no
       // primitive for — so no scrollbar is painted and no thumb is faked. The wheel scrolls the
@@ -1037,8 +1038,9 @@ export default class Tabs extends View {
       // programmatic scroll for an overflow container (only VirtualListScrollHandle,
       // gpui-kit.d.ts:21305), so a chevron would be a dead control.
       // `tab-bar-surface.tsx:164-170` — the strip is `w-max … max-w-full shrink`: content-wide,
-      // never stretched, so the `+` that follows it sits directly after the last tab.
-      .child(h_flex().id("tab-scroll").flex_none().max_w("100%").min_w(0).h_full().items_center().gap(0).overflow_x_scroll().children(shown.map(item)))
+      // never stretched, so the `+` that follows it sits directly after the last tab. It shrinks
+      // (and scrolls) once the tabs outgrow the row, so the `+` and the right-sidebar toggle stay visible.
+      .child(h_flex().id("tab-scroll").flex_shrink(1).min_w(0).h_full().items_center().gap(0).overflow_x_scroll().children(shown.map(item)))
       // Orca terminal-tab-strip-drop-target.ts:39-52 — visual drop indicator when a pane is dragged to the tab strip.
       .when(Boolean(paneDrag?.inTabStrip), el =>
         el.child(

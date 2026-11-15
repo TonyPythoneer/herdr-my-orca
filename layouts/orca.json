@@ -8,7 +8,7 @@
   "titlebar": "none",
   "traffic_lights": [
     12,
-    16
+    7.5
   ],
   "background": "canvas",
   "terminal_padding": [
@@ -51,7 +51,7 @@
               "id": "brand",
               "type": "block",
               "size": {
-                "px": 36
+                "px": 32
               },
               "window_drag": true,
               "content": {
@@ -107,7 +107,7 @@
               "id": "tabs",
               "type": "block",
               "size": {
-                "px": 36
+                "px": 32
               },
               "window_drag": true,
               "content": {
