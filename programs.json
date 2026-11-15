@@ -1,0 +1,18 @@
+{
+  "programs": {
+    "omp": {
+      "name": "OMP",
+      "icon": "icons/omp.svg",
+      "tint": false,
+      "run": ["omp"],
+      "tile": "#1c1d21",
+      "color": "#ffffff"
+    },
+    "codex": {
+      "run": ["codex", "--no-daemon", "-c", "disable_paste_burst=true", "--dangerously-bypass-approvals-and-sandbox"]
+    },
+    "claude": {
+      "run": ["claude", "--dangerously-skip-permissions"]
+    }
+  }
+}

@@ -1,0 +1,270 @@
+{
+  "id": "root",
+  "cloned_from": {
+    "name": "main",
+    "version": "0.1.10"
+  },
+  "type": "column",
+  "titlebar": "none",
+  "traffic_lights": [
+    12,
+    16
+  ],
+  "background": "canvas",
+  "terminal_padding": [
+    14,
+    12
+  ],
+  "divider": {
+    "width": 1,
+    "color": "border"
+  },
+  "preview": "layouts/orca.svg",
+  "theme": "orca-dark",
+  "terminal_menu": "orca-menu",
+  "children": [
+    {
+      "id": "body",
+      "type": "row",
+      "floating": [
+        {
+          "id": "float-workspace",
+          "content": {
+            "mod": "orca-float"
+          },
+          "edge": "bottom",
+          "align": "end"
+        }
+      ],
+      "children": [
+        {
+          "id": "sidebar",
+          "type": "column",
+          "size": {
+            "px": 280
+          },
+          "min": 220,
+          "max": 500,
+          "background": "chrome",
+          "children": [
+            {
+              "id": "brand",
+              "type": "block",
+              "size": {
+                "px": 36
+              },
+              "window_drag": true,
+              "content": {
+                "mod": "orca-chrome"
+              }
+            },
+            {
+              "id": "nav",
+              "type": "column",
+              "children": [
+                {
+                  "id": "nav-top",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-nav"
+                  },
+                  "size": {
+                    "px": 108
+                  }
+                },
+                {
+                  "id": "spaces",
+                  "type": "block",
+                  "size": {
+                    "weight": 1
+                  },
+                  "content": {
+                    "mod": "orca-spaces"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "sidebar-footer",
+              "type": "block",
+              "size": {
+                "px": 32
+              },
+              "content": {
+                "mod": "orca-chrome",
+                "props": {
+                  "footer": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "work",
+          "type": "column",
+          "children": [
+            {
+              "id": "tabs",
+              "type": "block",
+              "size": {
+                "px": 36
+              },
+              "window_drag": true,
+              "content": {
+                "mod": "orca-tabs"
+              }
+            },
+            {
+              "id": "work-body",
+              "type": "row",
+              "children": [
+                {
+                  "id": "main",
+                  "type": "stack",
+                  "active": "main-terminals",
+                  "children": [
+                    {
+                      "id": "main-terminals",
+                      "type": "block",
+                      "movable": false,
+                      "content": {
+                        "tab": "active",
+                        "pane": {
+                          "gap": 0,
+                          "radius": 0,
+                          "background": "background",
+                          "lone": false,
+                          "header": {
+                            "content": {
+                              "mod": "orca-pane"
+                            },
+                            "height": 32,
+                            "position": "top"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "id": "main-landing",
+                      "type": "block",
+                      "content": {
+                        "mod": "orca-landing"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "panel",
+                  "type": "column",
+                  "size": {
+                    "px": 350
+                  },
+                  "min": 220,
+                  "max": 900,
+                  "children": [
+                    {
+                      "id": "panel-head",
+                      "type": "block",
+                      "size": {
+                        "px": 36
+                      },
+                      "content": {
+                        "mod": "orca-panel-head"
+                      }
+                    },
+                    {
+                      "id": "panel-body",
+                      "type": "stack",
+                      "active": "files",
+                      "children": [
+                        {
+                          "id": "files",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-files"
+                          }
+                        },
+                        {
+                          "id": "vault",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-agents"
+                          }
+                        },
+                        {
+                          "id": "workspaces",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-panel-gap",
+                            "props": {
+                              "tab": "workspaces"
+                            }
+                          }
+                        },
+                        {
+                          "id": "pr-checks",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-panel-gap",
+                            "props": {
+                              "tab": "pr-checks"
+                            }
+                          }
+                        },
+                        {
+                          "id": "changes",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-changes"
+                          }
+                        },
+                        {
+                          "id": "checks",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-panel-gap",
+                            "props": {
+                              "tab": "checks"
+                            }
+                          }
+                        },
+                        {
+                          "id": "ports",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-panel-gap",
+                            "props": {
+                              "tab": "ports"
+                            }
+                          }
+                        }
+                      ],
+                      "size": {
+                        "weight": 1
+                      }
+                    }
+                  ],
+                  "background": "surface",
+                  "border": {
+                    "width": 1,
+                    "color": "border"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "status",
+      "type": "block",
+      "size": {
+        "px": 24
+      },
+      "content": {
+        "mod": "orca-status"
+      }
+    }
+  ]
+}
