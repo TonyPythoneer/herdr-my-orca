@@ -82,8 +82,11 @@ const AGENT_LABEL = { claude: "Claude", codex: "Codex", opencode: "OpenCode" };
 const EFFORT_LABEL = { low: "Low", medium: "Med", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra" };
 const ADVISOR_MODELS = ["opus", "haiku", "fable", "sonnet"];
 const DEFAULT_ADVISOR = "opus";
-// Ten model rows: the rest scroll by wheel (modelRow is 30px high, the list gap is 2).
-const MODEL_LIST_H = 10 * 30 + 9 * 2;
+// modelRow is 30px high and the list gap is 2px, so N rows take N * 30 + (N - 1) * 2 px. The
+// list is capped at MODEL_ROWS rows worth of height (MODEL_LIST_H below): beyond that the rest scroll.
+const MODEL_ROWS = 10;
+const rowsH = (n) => n * 30 + (n - 1) * 2;
+const MODEL_LIST_H = rowsH(MODEL_ROWS);
 // Bump when the cached model shape changes (opencode gained providers/groups).
 const CATALOG_SCHEMA = 2;
 // Reuse a cache for ten minutes; the CLI and the upstream list are checked again after that.
@@ -454,6 +457,7 @@ export default class AgentConfig extends View {
     return h_flex()
       .id(`model-${m.id}`)
       .h(30)
+      .flex_none()
       .mx(6)
       .px(10)
       .gap(8)
@@ -517,6 +521,16 @@ export default class AgentConfig extends View {
       : this.models ?? [];
     const visible = all.filter((m) => !this.hidden.has(m.id));
     const hiddenModels = all.filter((m) => this.hidden.has(m.id));
+    // Rows actually rendered: visible plus (if expanded) hidden ones; the hidden heading counts
+    // as a row whenever anything is hidden, so a list of only hidden models cannot collapse to
+    // zero height and hide the way back. The box gets a definite height — gpui sizes a
+    // content-based flex item to its content and does not clamp it to max-height, so max_h(..)
+    // alone lets every model render with no scrollbar. Fewer than MODEL_ROWS rows set the box
+    // to their exact height (nothing blank below them); more cap and the rest scroll.
+    const shownRows = visible.length
+      + (hiddenModels.length > 0 ? 1 : 0)
+      + (this.showHidden ? hiddenModels.length : 0);
+    const listH = shownRows === 0 ? 0 : Math.min(rowsH(shownRows), MODEL_LIST_H);
     return v_flex()
       .gap(2)
       .when(this.key === "opencode", (el) => el
@@ -563,7 +577,7 @@ export default class AgentConfig extends View {
       .child(
         v_flex()
           .id("agent-config-models")
-          .max_h(MODEL_LIST_H)
+          .h(listH)
           .min_h(0)
           .flex_shrink(1)
           .overflow_y_scroll()
@@ -682,20 +696,6 @@ export default class AgentConfig extends View {
       .gap(8)
       .items_center()
       .child(div().text_size(13).font_medium().text_color(t.foreground).child(AGENT_LABEL[this.key] ?? this.key))
-      .when(this.key === "claude", (el) => el.child(
-        h_flex()
-          .items_center()
-          .justify_center()
-          .px(7)
-          .h(18)
-          .rounded(9)
-          .border_1()
-          .border_color("#3b82f633")
-          .bg("#3b82f612")
-          .text_size(9)
-          .text_color(t.accent)
-          .child("PRESET"),
-      ))
       .child(div().flex_1())
       .when(this.key === "claude", (el) => el.child(
         h_flex()
