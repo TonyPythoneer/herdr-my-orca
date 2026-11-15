@@ -1,6 +1,6 @@
 // Derived from Herdr App's defaults/mods/files/main.js (Apache-2.0, Copyright Herdr App authors).
 // Modified for herdr-orca; see LICENSE and NOTICE.
-// A lazy file browser for the active space's folder, with bounded read-only previews.
+// A lazy file browser for the active space's folder, with bounded previews; local files under 400 KB are editable.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, v_virtual_list, Scrollbar, Input, InputState, Editor, EditorState } from "gpui-base";
 import { spaces, exec, readTextFile, writeTextFile, watchFolder, theme, settings, window, props, run, openOverlay, closeOverlay, shared, setShared, nextCommand } from "herdr";
@@ -167,7 +167,7 @@ function statusLetter(char) {
 export default class Files extends View {
   init(_props, cx) {
     if (!props()?.tab) mainFilesView = this;
-    this.saved = new Map();
+    this.saved = new Map(); this.doc = null;
     this.entries = new Map(); this.folders = new Set(); this.pending = new Set(); this.marks = {};
     this.ignored = new Set(); this.git = false; this.folderMarks = {}; this.folderErrors = {};
     this.inputHandle = cx.focus_handle();
@@ -489,8 +489,41 @@ export default class Files extends View {
     return this.root ? this.root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "" : "";
   }
 
+  // Edits write straight to disk (like agent-config): 800 ms after the last keystroke, and on leaving the file.
+  // `expected` is the text last read or written, so a file changed on disk meanwhile is refused, not overwritten.
+  edited(doc, cx) {
+    if (this.doc !== doc) return;
+    const v = ++doc.ver;
+    doc.status = "editing";
+    cx.timer.after(800, (cx) => { if (this.doc === doc && doc.ver === v) this.save(doc, cx); });
+    cx.notify();
+  }
+
+  save(doc, cx) {
+    const text = this.code.value(), v = doc.ver;
+    if (text === doc.disk) { doc.status = "saved"; cx.notify(); return; }
+    cx.spawn(async (cx) => {
+      try { await writeTextFile(doc.full, text, doc.disk); doc.disk = text; if (doc.ver === v) doc.status = "saved"; }
+      catch (e) { doc.status = "failed"; doc.error = String(e); }
+      cx.notify();
+    });
+  }
+
+  // Leaving a file (another file, back, a new workspace) writes what is still pending. `doc.full` is fixed at
+  // open: by the time a workspace switch gets here `this.root` already points at the new one.
+  flush() {
+    const doc = this.doc;
+    if (!doc || !this.code || doc.status === "failed") return;
+    const text = this.code.value();
+    if (text !== doc.disk) return writeTextFile(doc.full, text, doc.disk).catch(() => {});
+  }
+
+  // A pane, tab or layout slot closing. Best effort: only `exec` and `terminal.kill` are promised to finish on app quit.
+  async close() { await this.flush(); }
+
   show(path, cx) {
-    this.code?.release(); this.code = null; this.file = path; this.fileError = null;
+    this.flush();
+    this.code?.release(); this.code = null; this.doc = null; this.file = path; this.fileError = null;
     if (!path || !cx) return;
     const context = this.context, root = this.root, on = this.on;
     cx.spawn(async cx => {
@@ -500,10 +533,19 @@ export default class Files extends View {
         if (text === null) { this.fileError = "This file is no longer available"; return; }
         if (text.includes("\0")) { this.fileError = "Binary file · no text preview"; return; }
         const t = theme(), ext = path.includes(".") ? path.split(".").pop() : "txt";
-        this.code = EditorState.new({ language: LANG[ext] ?? ext, readonly: true,
+        // Read-only where saving is unsafe: another machine (`writeTextFile` is local only), a truncated preview, and
+        // text the editor does not hand back unchanged (line endings, BOM, normalisation), which a save would rewrite.
+        const make = (readonly) => EditorState.new({ language: LANG[ext] ?? ext, readonly,
           value: text.length > 400000 ? text.slice(0, 400000) + "\n… (file truncated)" : text,
           font_family: settings().font_family, font_size: 12,
           syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
+        let editable = !on && text.length <= 400000;
+        this.code = make(!editable);
+        if (editable && this.code.value() !== text) { this.code.release(); this.code = make(true); editable = false; }
+        if (editable) {
+          const doc = this.doc = { full: `${root}/${path}`, disk: text, status: "", ver: 0 };
+          this.code.on("change", (_e, cx) => this.edited(doc, cx));
+        }
       } catch { if (this.file === path && this.current(context)) this.fileError = "Cannot preview this file (binary, too large, or unreadable)"; }
       finally { cx.notify(); }
     });
@@ -1059,8 +1101,10 @@ cp -r "$src" "$cand"
     if (props()?.tab === "more") return this.moreView(t);
     return v_flex().id("files").size_full().min_h(0).overflow_hidden().text_color(t.foreground).text_size(13)
       .when(Boolean(this.file), el => el.child(h_flex().h(30).flex_none().px(10).gap(6).items_center().border_b(1).border_color(t.border)
-        .child(div().id("files-back").w(20).cursor_pointer().text_color(t.muted).on_click((_e, cx) => { this.show(null); cx.notify(); }).child("←"))
-        .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.dim).child(this.file ?? ""))))
+        .child(div().id("files-back").w(20).cursor_pointer().text_color(t.muted).on_click((_e, cx) => { this.show(null, cx); cx.notify(); }).child("←"))
+        .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.dim).child(this.file ?? ""))
+        .when(Boolean(this.code), el => el.child(div().flex_none().text_size(10).text_color(this.doc?.status === "failed" ? t.ansi1 : t.muted)
+          .child(!this.doc ? "Read-only" : this.doc.status === "failed" ? `Not saved: ${this.doc.error.slice(0, 60)}` : ({ editing: "Editing…", saved: "Saved" })[this.doc.status] ?? "")))))
       // FileExplorerToolbar.tsx:66-198 (the h-8 title/actions band, above) then
       // FileExplorerQueryStrip.tsx:35-52 (switch + active query input) then the tree.
       .when(!this.file, el => el.child(this.toolbar(t)))
