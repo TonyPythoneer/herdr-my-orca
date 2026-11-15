@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, Input, InputState } from "gpui-base";
-import { spaces, exec, watchFolder, theme, window, run, props, openOverlay, closeOverlay, nextCommand } from "herdr";
+import { spaces, exec, watchFolder, theme, focused, panes, shared, setShared, window, run, props, openOverlay, closeOverlay, nextCommand } from "herdr";
 import { recordReview, invalidateReview } from "./review-store.js";
 import { copyText, reveal } from "./clip.js";
 
@@ -433,13 +433,13 @@ export default class Changes extends View {
         buttons.push(this.actionButton(icon, t, cx, () => this.resolveConflict(f, r, cx), title, !this.busy));
       }
     }
-    // Row click opens a diff in Orca (open-uncommitted-entry.ts:28-31); the diff half has no Herdr
-    // primitive, but the open-file half is ported through orca-files' `props.file` (see openEntry).
+    // Row click opens the file's diff in the diff pane (openDiff); Open in File Explorer opens the file itself.
+    const selected = this.openTarget?.path === f.path && this.openTarget?.section === f.section;
     return h_flex().id(id).w_full().h(24).flex_none().pl(20).pr(12).gap(4).items_center().relative()
       // Non-open rows hover at accent/40 (row-layout.ts:9-11); t.hover is --accent.
-      .hover((s) => s.bg(t.hover + "66"))
+      .hover((s) => s.bg(t.hover + "66")).when(selected, (e) => e.bg(t.selected))
       .on_hover((on, cx) => { if (on !== hovered) { this.hovered = on ? id : null; cx.notify(); } })
-      .on_click(() => this.openEntry(f))
+      .on_click(() => this.openDiff(f))
       // uncommitted-entry-row.tsx:100-277 — right-click context menu (SourceControlEntryContextMenu)
       .on_mouse_down("right", (_e, cx) => {
         cx.stop_propagation();
@@ -467,10 +467,25 @@ export default class Changes extends View {
 
   // openUncommittedEntry (open-uncommitted-entry.ts:6-36, entry-context-menu.tsx:93-99) opens a diff editor for most rows,
   // the file itself for added/untracked markdown, and the conflicted file for conflicts. Herdr's
-  // editor holds one buffer and has no diff model, so the diff half has no primitive; the
-  // open-file half is ported through orca-files' `props.file` (a tab whose only pane is that mod),
-  // which resolves it against space.folder. The conflict merge view has no equivalent either,
+  // editor holds one buffer and has no diff model, so the diff is drawn by the `orca-diff` pane (openDiff);
+  // this is the open-file half, ported through orca-files' `props.file` (a tab whose only pane is
+  // that mod), which resolves it against space.folder. The conflict merge view has no equivalent,
   // so a conflicted file opens as plain text.
+  // Shows `f` (or every change, `{ all: true }`) in the `orca-diff` pane beside the terminals: this tab's pane if it has one,
+  // else a split of the focused terminal. Conflicts stay on openEntry: their `git diff` is the combined `--cc` format.
+  // `root` and `on` are passed along because status paths are relative to the git toplevel; the popup passes its own.
+  openDiff(f, root = this.root, on = location().on) {
+    if (f.section === "conflicts") return this.openEntry(f, root);
+    if (!root) return;
+    const target = { root, on, all: Boolean(f.all), path: f.path, section: f.section, status: f.status };
+    setShared("orca-diff.target", target);
+    const tab = focused()?.tab, inTab = panes().filter((p) => p.tab === tab);
+    if (inTab.some((p) => p.mod === "orca-diff")) return run("orca-diff.show");
+    const host = inTab.find((p) => p.focused && !p.mod) ?? inTab.find((p) => !p.mod);
+    if (host) run("pane.split", { direction: "right", pane: host.pane, mod: "orca-diff", props: target });
+    else run("tab.new", { mod: "orca-diff", props: target });
+  }
+
   openEntry(f, root = this.root) {
     const cwd = location().cwd;
     if (!root || !cwd) return;
@@ -588,8 +603,8 @@ export default class Changes extends View {
       () => this.confirmDiscardAll(key, items.map((f) => f.path), cx), "Discard all", !this.busy));
     if (key === "changes") bulk.push(this.actionButton("plus.svg", t, cx, () => this.stagePaths(items.map((f) => f.path), cx), "Stage all", !this.busy));
     if (key === "staged") bulk.push(this.actionButton("minus.svg", t, cx, () => this.unstagePaths(items.map((f) => f.path), cx), "Unstage all", !this.busy));
-    // View all (uncommitted-sections.tsx:144-175) opens the section's combined diff. Herdr's editor
-    // is one buffer with no diff model, so it is not drawn rather than as a dead button.
+    // View all (uncommitted-sections.tsx:144-175) opens the section's combined diff; the diff pane is
+    // per file (or all changes), so it is not drawn rather than as a dead button.
     return div().child(
       div().pl(4).pr(12).pt(12).pb(4).child(
         h_flex().rounded(6).pr(4).gap(4).items_center()
@@ -689,7 +704,7 @@ export default class Changes extends View {
     return v_flex().id("orca-changes-entry-menu").w_full().min_h(0).p(5).bg(t.popover).text_size(12.8).text_color(t.foreground)
       .child(div().px(8).py(4).text_size(11).text_color(t.dim).child(entry.path ?? ""))
       // View — entry-context-menu.tsx:93-99
-      .child(item(0, "View", "eye", () => this.openEntry(entry, root)))
+      .child(item(0, "View", "eye", () => this.openDiff(entry, root)))
       .when(resolutions.length > 0, el => el
         .child(sep())
         .children(resolutions.map((r, idx) => {
@@ -720,6 +735,7 @@ export default class Changes extends View {
     // Deferred off the frame for the same reason as `orca-files`: a spawn body runs immediately
     // up to its first `await`, and calling into a view from render invites the same refusal.
     if (key() !== this.context) cx.timer.after(0, (cx) => this.refresh(cx));
+    this.openTarget = shared("orca-diff.target");
     const t = theme(), action = this.primaryAction();
     if (props()?.tab === "entry-menu") return this.entryMenuView(t, cx);
     // Orca pins conflicts first, then applies the group order (default changes-first):
@@ -745,8 +761,7 @@ export default class Changes extends View {
       // Stage All stages every change on the host, past the cap, and Retry re-runs the status read.
       .when(this.limited, (e) => e.child(this.tooManyBanner(t, cx)))
       // Orca opens a Monaco DiffEditor in an editor tab (open-uncommitted-entry.ts:28-31); Herdr's
-      // EditorState is one buffer with no diff model, so no diff is drawn rather than a look-alike;
-      // a row click opens the file in orca-files instead.
+      // EditorState is one buffer with no diff model, so a row click opens the `orca-diff` pane.
       .child(v_flex().id("changes-list").flex_1().min_h(0).overflow_y_scrollbar()
         .children(sections.map(([key, label]) => this.section(key, label, t, cx)).filter(Boolean))
         .when(!this.files.length, (e) => e.child(this.emptyState(t))))
