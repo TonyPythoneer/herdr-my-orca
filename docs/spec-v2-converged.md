@@ -1,6 +1,6 @@
 # Spec v2 收斂版（第二輪 CTO 收斂）
 
-進度：已完成 2、3、4、6；未完成 1、5、7、8
+進度：已完成 2、3、4、5、6；未完成 1、7、8
 
 日期：2026-11-16
 分支：`worktree-workflow-stages-panel`
@@ -101,7 +101,7 @@ AT-22（「User-owned terminals … are preserved」）同步改寫為：「除�
 | D11 | 封存 | 完成的 run 留在原地；同一個 worktree 下次 `init` 時整包搬到 `archive/` | 永不刪除任何 run 的資料；`init` 遇到 `status` 是 `working` 或 `needs_user` 的既有 run 要拒絕 |
 | D12 | 單一 task 的嘗試次數 | 最多 2 次；第 2 次附上第 1 次的失敗輸出 | 沒有 user 介入不得有第 3 次；重派之前必須通過 4.4 R-D 的 git 檢查 |
 | D13 | 每輪 rework 新增的 task 數 | 上限 10 個，ID 由 Runner 指定為 `R<cycle>-<nn>` | 超過上限進 `needs_user`（`rework_too_large`），不得截斷後繼續 |
-| D14 | handoff 檢查的定義（AT-02） | `handoff.md` 含規格的 10 個章節標題；`tasks.json`：1 到 100 個 task，每個有唯一 `id`（`^[A-Z]+-\d+$`）、`title`、非空的 `test` 指令、`deps` 都指向存在的 id 且沒有循環；至少 1 條 acceptance，每條有 `verify` 指令或 `manual: true` | 檢查失敗時不得寫入任何狀態；錯誤訊息要指出是哪一個 task 或哪一個章節 |
+| D14 | handoff 檢查的定義（AT-02） | `handoff.md` 含規格的 10 個章節標題；`tasks.json`：1 到 100 個 task，每個有唯一 `id`（`^[A-Z]+-\d+$`）、`title`、非空的 `test` 指令、`deps` 都指向存在的 id 且沒有循環；至少 1 條 acceptance，每條有 `verify` 指令或 `manual: true`，且至少 1 條有 `verify`（`ready_for_review` 不能只靠 AI 自己的判斷）；初始 task 的 id 不得以 `R<數字>-` 開頭（保留給 rework） | 檢查失敗時不得寫入任何狀態；錯誤訊息要指出是哪一個 task 或哪一個章節 |
 | D15 | secrets | `init` 用幾個常見金鑰樣式（`sk-`、`AKIA`、`ghp_`、`-----BEGIN … PRIVATE KEY`）掃 `handoff.md`、`tasks.json`，命中就拒絕並只報行號 | `state.json`、`events.jsonl` 不得保存：完整 argv、環境變數、terminal 畫面；畫面只進 `logs/` 且截到 64 KiB；錯誤訊息不得印出命中的字串本身。這只是盡力而為的過濾，README 要寫明 |
 | D16 | Runner 的輸出 | Runner 的 stdout 每個轉移印一行（時間、事件、task id）；`hc read orca-r-<wt-id>` 就是 log | 不印 prompt 內容、不印測試輸出全文（只印 exit code 與 `logs/` 路徑） |
 
@@ -154,11 +154,15 @@ Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 R
 | result 檔存在且 `dispatch` 欄位等於目前的 id | 進 R-C 驗收 |
 | terminal 已 `finished`，沒有 result 檔 | 這次嘗試失敗（agent 結束但沒交結果）→ 存畫面到 `logs/` → `needs_user` |
 | `status.state == "blocked"`（只有會回報的 CLI 才看得到） | `needs_user`（附 `kind`），terminal 留著給 user 看 |
+| 回報 `done` / `idle` / `error` 已超過 60 秒，仍沒有 result 檔（同上，只有會回報的 CLI） | `needs_user`（`stopped_without_result`），存畫面，terminal 留著。額度或 model 中途用完通常長這樣 |
+| result 檔存在但 JSON 解析失敗 | 可能還在寫：再等最多 3 次輪詢，仍失敗才記為 `rejected:bad_result` |
 | 超過硬上限（dev、tuning 預設各 60 分鐘） | `needs_user`（`timeout`），terminal 留著；不算失敗也不算成功 |
 | 120 秒內沒有 ack 檔 | `needs_user`（`undelivered`），存畫面；**不自動重送** |
 | `hc` 呼叫本身失敗（core 重啟中） | 退避重試最多 5 分鐘，之後 Runner 結束、不改狀態（UI 顯示「已停住，可恢復」） |
 
-**R-C 驗收（只有 Runner 說了算）**：dev task 被接受的條件是全部成立：(1) result 檔是合法 JSON 且 `dispatch` 相符；(2) Runner **自己**在 worktree 重跑 `tasks.json` 裡該 task 的 `test` 指令，exit 0（上限 15 分鐘）；(3) `git status --porcelain` 是空的；(4) 目前 branch 沒變，且新的 `HEAD` 是上一個紀錄的 `head` 的後代（`git merge-base --is-ancestor`）。不成立 → 這次嘗試記為 `rejected:<原因>`；同一個 task 最多 2 次嘗試，第 2 次的指示檔附上第 1 次失敗的測試輸出（截到 16 KiB）；再失敗 → `needs_user`。接受後才 `hc kill` + `hc rm` 該 worker（先寫狀態、後清理）。
+**R-C 驗收（只有 Runner 說了算）**：dev task 被接受的條件是全部成立：(1) result 檔是合法 JSON 且 `dispatch` 相符；(2) Runner **自己**在 worktree 重跑 `tasks.json` 裡該 task 的 `test` 指令，exit 0（上限 15 分鐘）；(3) `git status --porcelain` 是空的；(4) 目前 branch 沒變，且新的 `HEAD` 是上一個紀錄的 `head` 的後代（`git merge-base --is-ancestor`）。不成立 → 這次嘗試記為 `rejected:<原因>`；同一個 task 最多 2 次嘗試，第 2 次的指示檔附上第 1 次失敗的測試輸出（截到 16 KiB）；再失敗 → `needs_user`。
+
+順序是：看到 result 檔 → 把畫面存到 `logs/` → **先 `hc kill` 該 worker** → 驗收 → 寫狀態 → `hc rm`。先 kill 再驗收，是因為 worker 交了結果之後若還在改檔，Runner 重跑的測試就是跑在會變動的工作樹上；worker 已宣告完成，結果都在檔案與 commit 裡，kill 不會損失東西。這把規格的「CHECK RESULT → COMMIT STATE → CLEAN UP」中的「結束程式」提前一步，「移除紀錄（`rm`）」仍在寫狀態之後。
 
 **R-D Git 保護**：Runner 只執行唯讀的 git 指令（`rev-parse`、`status --porcelain`、`merge-base --is-ancestor`、`log`）；從不 `checkout`、`reset`、`stash`、`clean`、`commit`、`push`。每次派發前檢查：branch 與紀錄相同、`HEAD` 等於紀錄的 `head`、工作樹乾淨；任一不成立 → `needs_user`（`tree_changed`），附 `git status` 輸出。`init` 要求工作樹乾淨（見 3.1 的 Q2）。
 
@@ -177,7 +181,9 @@ Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 R
 | 有 finished 的，或查不到 | 沒有 | 乾淨且 `HEAD` 未動 | 沒留下任何東西，可安全重派（新的 dispatch id，嘗試次數 +1，受 2 次上限限制） |
 | 有 finished 的，或查不到 | 沒有 | 髒或 `HEAD` 動了 | `needs_user`（`partial_changes`），附 `git status` |
 
-`needs_user` 時 Runner 寫完狀態就結束。User 處理後按 inspector 的 Resume（= `my-orca start`）；Runner 開機看到 `needs_user` 會重跑 R-D 的檢查，通過才清掉並繼續。
+`needs_user` 時 Runner 寫完狀態就結束。User 處理後按 inspector 的 Resume（= `my-orca start`）；Runner 開機看到 `needs_user` 會重跑 R-D 的檢查，通過才清掉並繼續。若 worker 中途死掉但已留下 commit（`HEAD` 前進、工作樹乾淨），user 有兩條路：自己把 branch 退回紀錄的 `head` 再 Resume；或執行 `my-orca start --accept-head`，明確表示「接受目前的 `HEAD` 當新基準」，該 task 以新的一次嘗試重派。Runner 自己永遠不做這個選擇。
+
+Runner 開機時另外掃一次 `hc ls --json --label orca.run=<run_id>`：dispatch id 已記在某次嘗試且該嘗試已結束的 live worker（寫完狀態、來不及清理就當掉留下的）→ kill + rm；dispatch id 不在 state 裡的 → 不碰，進 `needs_user`（`unknown_worker`）。
 
 **R-G 只清自己的東西**：Runner 會 kill / rm 的 terminal 只有兩種：帶 `orca.run=<本 run>` 標籤且 `orca.dispatch` 等於 state 紀錄的；以及第 2 節定義的那一個 Planning terminal。每次 kill 之前重新 `hc get` 核對標籤，並寫一筆 `kill` 事件。
 
@@ -252,7 +258,113 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 
 ## 5. 邊界情況表
 
-待補
+測試代號：**T** = `node --test` 單元測試（不需要 core）；**F** = 用 `fake-agent.sh` 對真的 core 做整合測試（拋棄式 repo 在 `/private/tmp`，全部是隱藏的背景 terminal，「回報」與「不回報」兩種模式各跑一次）；**M** = owner 在場的手動測試；**E2E** = 唯一一次真實執行。規則代號 R-A 到 R-G 見 4.4，D 開頭見 3.2。
+
+### 5.1 規格第 9 節的 20 條
+
+| # | 情況 | 預期行為 | 處理機制 | 測試 |
+|---|---|---|---|---|
+| S1 | 沒有 Herdr Core | `init` 失敗並說明，什麼都不寫 | `init` 先跑 `hc server status` | T：PATH 裡沒有 `hc` → 非零、狀態資料夾不存在 |
+| S2 | 沒有 opencode | `init` 失敗；執行中途才消失則 `needs_user`（`spawn_failed`），不消耗嘗試次數 | `init` 檢查 `command -v`；`hc run` 的 `spawn_failed`（V20） | T + F：把 dev 的 argv 換成不存在的指令 |
+| S3 | Planning / Tuning 的 model 不可用 | `init` 只能確認 CLI 存在且 model 字串非空；真的不可用會在 Tuning 啟動時表現為「沒有 ack」或「結束但沒結果」→ `needs_user`，畫面存 `logs/` | R-B；無法事先驗證 model 是否可用（誠實列為限制） | F：tuning 的 argv 換成立刻 exit 1 的 fake |
+| S4 | handoff 不完整 | `init` 非零、指出缺哪個章節或哪個 task；不寫狀態、不啟動 Runner、不關 tab | D14 | T：缺章節、缺 `test`、id 重複、空清單各一 |
+| S5 | Agent 啟動失敗 | `needs_user`（`spawn_failed` 或 `exit_without_result`） | V20 + R-B | F：同 S2、S3 |
+| S6 | 第一則 prompt 沒送達 | 120 秒沒有 ack → `needs_user`（`undelivered`），存畫面，terminal 留著，**不重送** | R-A 的 ack 檔 | F：fake 的「不理 prompt」模式 |
+| S7 | Agent 卡在權限詢問 | 全權限旗標下不該出現（決定 4）；出現且有回報 → `needs_user`（`blocked`）；沒回報 → 60 分鐘後 `needs_user`（`timeout`）。Runner 從不 `hc send --force`、從不代答 | R-B；V19 | F：fake 的 `block` 模式；opencode 本身的行為待 P1 |
+| S8 | 逾時但沒有確定失敗 | `needs_user`（`timeout`）；task 維持 `dispatched`；terminal 留著；Resume 時先看 result 檔是否已出現 | R-B、D6 | F：把上限設成 5 秒 |
+| S9 | Agent 結束但沒有 result | 這次嘗試失敗 → `needs_user`（`exit_without_result`）；不自動重派 | R-B | F：fake exit 0 但不寫檔 |
+| S10 | Agent 說成功但測試失敗 | 拒絕；第 2 次嘗試附失敗輸出；再失敗 → `needs_user` | R-C（Runner 自己重跑測試）、D12 | F：fake 寫 `status: done`，`test` 是 `false` |
+| S11 | Runner 中斷或當掉 | 重啟後對帳，已接受的 task 不重做 | R-F 的對帳表 | F：見 5.2 的 C1 到 C8 |
+| S12 | 重複派發的風險 | 同一個 dispatch 永遠最多一個 terminal | 先寫意圖、名稱鎖（V5）、標籤查找（V3） | F：在 `hc run` 與寫回 address 之間 `kill -9` Runner，重啟後 `hc ls --all --label orca.dispatch=<id>` 恰好一筆 |
+| S13 | 同時寫 JSON | `state.json` 只有一個寫入者 | Runner 的名稱鎖；`init` 用「先寫暫存資料夾再 rename」；UI 只寫 `config.json`（帶 `expected`） | F：同時執行兩次 `my-orca start`，第二次得到 `name_taken` 後正常結束；T：在非指定名稱的 terminal 執行 `my-orca run` 會拒絕 |
+| S14 | 過期或被重用的 terminal 參照 | 絕不只憑 address 行動 | kill 前重新核對標籤（R-G）；Planning terminal 另核對 `created_ms` 與 core id（2.2） | T：state 裡的 address 指向沒有標籤的 terminal → 不 kill，`needs_user`（`identity`） |
+| S15 | Branch 或 worktree 改變 | `needs_user`（`tree_changed`），附 `git status` | R-D：每次派發前與驗收時檢查 | F：兩個 task 之間 `git checkout -b other` |
+| S16 | Tuning 產生過多 task | 超過 10 個 → `needs_user`（`rework_too_large`） | D13 | F：fake tuning 回 11 個 |
+| S17 | Rework 次數用完 | `needs_user`（`rework_exhausted`）；不會進 `ready_for_review`；計數器不歸零 | R-E | F：上限設 2、fake tuning 永遠回 `rework` → 第 3 次請求時停住，`cycles == 2` |
+| S18 | Herdr Core 重啟 | Runner 的 `hc` 呼叫失敗 → 退避重試 5 分鐘 → 仍失敗就結束且不改狀態；Resume 後用標籤重新找 worker | R-B 最後一列、R-F；core 重啟後 terminal 是否存活未驗證（U7），設計不依賴 | T：用假的 `hc`（PATH shim）回錯誤 N 秒；真的 core 重啟只能在獨立的測試 core 上測 |
+| S19 | 誤選 user 的 terminal 來清理 | 不可能通過檢查 | R-G + 2.2 | AT-03 (d) 的稽核；T：同 S14 |
+| S20 | 專案檔案出現非預期的部分修改 | 驗收要求工作樹乾淨；恢復時工作樹是髒的 → `needs_user`（`partial_changes`）；Runner 不清理、不還原 | R-C、R-D、R-F | F：fake 留下未 commit 的檔案後交結果 → 被拒絕，檔案仍在 |
+
+### 5.2 Runner 每一步的當掉與重啟
+
+| # | 當掉的時間點 | 重啟後 | 測試 |
+|---|---|---|---|
+| C1 | 寫派發意圖之前 | 什麼都沒發生；重新算出同一個下一步 | F：每個點用環境變數 `ORCA_CRASH_AT=<點>` 讓 Runner 自己 `process.exit(137)`，重啟後比對最終 state 與「沒當掉的那次」相同 |
+| C2 | 寫了意圖、還沒 `hc run` | 找不到 terminal、沒有 ack、工作樹乾淨 → 以新的 dispatch id 重派；沒有 ack 的 dispatch 不算一次嘗試 | 同上 |
+| C3 | `hc run` 成功、address 還沒寫回 | 用 `orca.dispatch` 標籤找到 live terminal → 認養 | 同上（即 S12） |
+| C4 | 等待中 | 認養，繼續等；逾時從 `dispatch` 記錄的開始時間算 | 同上 |
+| C5 | result 已出現並已 kill worker、還沒寫狀態 | terminal 是 finished、result 檔在 → 重新驗收（重跑測試，結果相同） | 同上 |
+| C6 | 已寫狀態（接受）、還沒 `rm` | 開機掃描發現「已結束的嘗試」留下的 terminal → 清掉 | 同上 |
+| C7 | 正在寫 `state.json` | 只會看到舊檔或新檔（rename 是原子的）；殘留的暫存檔開機時刪除 | T：寫入函式在 rename 前丟例外 → 原檔不變 |
+| C8 | 寫了 `events.jsonl`、還沒寫 `state.json`（或反過來） | 以 `state.json` 為準；`events.jsonl` 最後一行殘缺時讀取端略過 | T |
+| C9 | Tuning 的 review 已出現、`cycles` 還沒加 | `cycles += 1` 與「新 task 入列、review 記入 `reviews[]`」在同一次寫入；已在 `reviews[]` 的 review id 不會再套用一次 | F：在 review 檔出現後立刻當掉，重啟後 `cycles` 恰好加 1 |
+| C10 | 整台機器重開機 | 所有 terminal 都沒了；user 按 Resume；走 R-F 對帳表（找不到 terminal 的那幾列）。v1 不自動恢復 | M；重開機後 terminal 的呈現方式未驗證（U8），兩種呈現的處理相同 |
+| C11 | User 手動 kill Runner 的 terminal | 與當掉相同；worker 是 `--no-parent`，會繼續跑，Resume 後被認養 | F：`hc kill orca-r-<wt-id>` |
+
+### 5.3 其他情況
+
+| # | 情況 | 預期行為 | 處理機制 | 測試 |
+|---|---|---|---|---|
+| E1 | 連按兩次 Resume、或同時兩個 `my-orca start` | 第二個什麼都不做 | 名稱鎖（V5） | F（同 S13） |
+| E2 | 同一個 worktree 在 run 進行中又執行 `/herdr-planning` | `init` 拒絕 | D11 | T |
+| E3 | 兩個 `init` 同時搶同一個 worktree | 只有一個成功 | 暫存資料夾 rename 成 `<wt-id>/`，第二個 rename 失敗 | T |
+| E4 | `git worktree move`（改名或搬位置） | `git-dir` 不變所以 `wt-id` 不變；Runner 發現 `toplevel` 不在或它的 `git-dir` 不符 → `needs_user`（`worktree_moved`）；從新位置 `my-orca start` 會核對 `git-dir` 後更新 `toplevel` 再繼續 | 每次派發前 `git -C <toplevel> rev-parse --absolute-git-dir` | F：兩個 task 之間 move |
+| E5 | Worktree 被刪除 | `needs_user`（`worktree_missing`）；狀態保留、不自動刪 | 同 E4 | F |
+| E6 | 整個 repo 搬家 | `git-dir` 路徑變了 → `wt-id` 變了 → 舊 run 變孤兒，新位置看不到它。**v1 的已知限制**：重新 Planning；舊資料留在原資料夾 | 無（README 寫明） | 無 |
+| E7 | 同一個 repo 的兩個 worktree 各跑一個 run | 互不影響：`wt-id`、Runner 名稱、狀態資料夾、標籤都不同；git 不允許兩個 worktree checkout 同一個 branch | 4.3 | F：同一個拋棄式 repo 開兩個 worktree 平行跑完（AT-20） |
+| E8 | 中途切換 branch | 同 S15 | R-D | F |
+| E9 | Run 期間 user 修改檔案（兩個 task 之間） | 下一次派發前發現工作樹不乾淨 → `needs_user`（`tree_changed`） | R-D | F：兩個 task 之間 `touch` 一個檔 |
+| E10 | Run 期間 user 修改檔案（worker 正在跑的時候） | **無法可靠偵測**：worker 的 `git add` 可能把它一起 commit。已知限制；inspector 與四燈列在 run 進行中顯示「此 worktree 由 workflow 使用中」 | 無（這就是要用獨立 worktree 的原因） | 無 |
+| E11 | core 重啟後 address 失效 | Runner 從不只憑 address：每次都用 `orca.dispatch` 標籤重新找；找不到就看 result 檔與 git 狀態 | R-F | T（假 `hc`） |
+| E12 | core id 與紀錄不同（換了一個 core） | 沒有進行中的 dispatch → 更新 `core_id` 繼續，Planning tab 不關（`skipped:gone`）；有進行中的 → 走 R-F「查不到」那幾列 | `hc server status` 的 `core.id`（V12） | T |
+| E13 | `init` 執行到一半 Planning tab 被關掉（`init` 被中斷） | rename 之前中斷 → 只留暫存資料夾，下次 `init` 清掉；rename 之後、Runner 啟動之前中斷 → 有狀態但沒有 Runner，UI 顯示「已停住」，按 Resume 即可 | `init` 的寫入順序；UI 用 `terminals()` 找不到名為 `orca-r-<wt-id>` 的 live terminal 就顯示停住 | T：`init --no-start` 之後 model 的輸出是 stalled |
+| E14 | Planning 結束後、Runner 來關之前，user 自己關了 tab | `planning.closed = "skipped:gone"`，workflow 照常 | 2.2 檢查 a；Runner 是 `--no-parent`（V21） | F |
+| E15 | Planning tab 有其他工作 | 不關 | 2.2 檢查 d、e、f | AT-03 (b) |
+| E16 | User 關掉或 kill 背景 worker（例如從 peek 按 close） | `needs_user`（`exit_without_result`）；不自動重派（可能是故意的） | R-B | F：測試中 `hc kill` worker |
+| E17 | User 在 peek 按「keep-as-tab」把 worker 變成一般 tab | 它得到 `herdr.*` 標籤與 `keep`，但 `orca.*` 標籤還在，仍是 workflow 的 worker；task 結束時照樣被 kill，那個 tab 會跟著消失。README 寫明 | R-G | M |
+| E18 | User 手動在背景 worker 裡打字 | 視為 user 的介入；結果照 R-C 驗收，不特別處理 | 無 | 無 |
+| E19 | Rework 的計數時機 | 只在「一批 rework task 入列」或「Tuning 直接修（`HEAD` 前進）」時加 1，且與該次狀態寫入是同一次寫入 | R-E、C9 | F |
+| E20 | Tuning 回 `rework` 但 `new_tasks` 是空的，或 `pass` 但有 acceptance 沒過 | review 不合法 → 這次 Tuning 嘗試被拒絕 → 再起一次全新的 Tuning（最多 2 次）→ `needs_user` | R-E 的檢查 | T + F |
+| E21 | 空的 task 清單 | `init` 拒絕 | D14 | T |
+| E22 | 循環相依 | `init` 拒絕（拓撲排序）；rework 的 `deps` 只能指向既有 id 或同批中排在前面的 task，結構上不可能成環，否則 review 不合法 | D14、R-E | T |
+| E23 | 有 task 的前置 task 沒被接受 | 它不會被派發；沒有任何可派發的 task 而又沒全部完成 → `needs_user`（`blocked_tasks`）；絕不跳過 | 下一步的選擇規則 | T |
+| E24 | Rework 的 task id 與既有的衝突 | 不會發生：id 由 Runner 指定（`R<cycle>-<nn>`），初始 id 不得用這個前綴 | D13、D14 | T |
+| E25 | 超大輸出 | result / review 檔超過 256 KiB → 拒絕（先 `stat` 再讀）；測試輸出寫到 `logs/`，state 只存路徑與 exit code；附給下一次嘗試的失敗輸出截到 16 KiB；畫面截到 64 KiB；`handoff.md` 上限 256 KiB | D6、D14、D15 | T：2 MiB 的 result 檔 |
+| E26 | `state.json` 大到 UI 讀不了 | 上限估算：100 + 9 × 10 個 task、每個最多 2 次嘗試，遠小於 `readTextFile` 的 1 MiB（V29）；`events.jsonl` 沒有上限但 UI 不讀 | 4.3 | T：產生最大規模的 state，檢查小於 512 KiB |
+| E27 | 時鐘跳動、電腦睡眠 | 期間用單調時鐘；就算誤判逾時，結果只是 `needs_user`，按一次 Resume，不會誤判成功或失敗 | D6 | T：注入假的時鐘 |
+| E28 | 測試指令卡住或留下背景程序 | 15 分鐘後殺掉整個 process group → `rejected:test_timeout`；測試以關閉的 stdin 執行 | R-C | T：`test` 是 `sleep 9999` 配 2 秒上限 |
+| E29 | 測試在 worker 手上過、在 Runner 手上不過（不穩定的測試） | 第 2 次嘗試；再不過 → `needs_user` | D12 | F |
+| E30 | 路徑經過 symlink | 所有路徑先 `realpath`；同一個 worktree 經不同路徑進來得到同一個 `wt-id` | D5 | T |
+| E31 | 不是 git repo、bare repo、detached HEAD | `init` 拒絕（`--is-inside-work-tree`、`--is-bare-repository`、`git symbolic-ref -q HEAD`） | V28 | T |
+| E32 | 在主 checkout（不是 linked worktree）執行 | 可以跑；`init` 印出警告「建議在獨立 worktree 執行」 | 無 | T |
+| E33 | 遠端 machine 上的 worktree | v1 不支援：`init` 執行 `herdr-app status` 失敗就拒絕（遠端沒有 App；本機 App 沒開也會被擋，訊息兩種都提） | V29 | T（假 `herdr-app`） |
+| E34 | 不在 Herdr 的 terminal 內執行 skill（沒有 `HC_TERMINAL_ID`） | `init` 拒絕 | `init` 的檢查 | T |
+| E35 | Planning 用的不是 claude 或 codex | `init` 拒絕（`unsupported_cli`） | 4.5 的白名單 | T |
+| E36 | Planning 的 argv 沒有 model | `init` 要求 `--model`、`--effort` 明確傳入 | 4.5 | T |
+| E37 | User 中途用 `/model` 換過 model | 無法偵測；`init` 印出將使用的 profile，由 skill 轉述給 user 確認 | 4.5（已知限制） | M |
+| E38 | UI 讀到寫到一半的檔案 | 不會：`state.json`、`index.json`、`config.json` 都是 tmp + rename；`JSON.parse` 失敗時 UI 保留上一份可用資料並等下一次變更（v1 `main.js` 的 try/catch 寫法保留） | D5 | T：model 收到壞 JSON → 回傳上一份 |
+| E39 | Run 中途改設定 | rework 上限在要加 `cycles` 之前才讀；逾時值在每次派發開始時讀（進行中的那次不變）；不合法的值沿用舊值並記事件；調低上限不回溯 | R-E | F |
+| E40 | UI 與 CLI 同時改 `config.json` | 後寫的贏（只有幾個獨立的數值）；UI 的 `expected` 過期會被拒絕並重讀 | D8 | T |
+| E41 | Secrets 進到 `state.json` / `events.jsonl` | argv 只留白名單旗標（V10）；不存環境變數、不存畫面；`my-orca/` 資料夾權限 `0700`、檔案 `0600` | D15 | T：`profile.argv` 不含 prompt；檔案權限 |
+| E42 | Secrets 進到 `handoff.md` | `init` 的樣式掃描命中就拒絕，只報行號。盡力而為，擋不住沒見過的格式 | D15 | T：放一個假的 `sk-…` |
+| E43 | Secrets 出現在 agent 的畫面上 | 只會進 `logs/<id>.txt`（失敗時才存、截 64 KiB、`0600`），不進 state 與 events | D15 | T |
+| E44 | opencode 的額度或 model 中途耗盡 | 有回報：`stopped_without_result`；沒回報：`timeout`；程式直接結束：`exit_without_result`。三者都是 `needs_user`。若已留下 commit，見 R-F 的 `--accept-head` | R-B、R-F | F：fake commit 一次後結束、不交結果 → `needs_user`；直接 Resume 仍停住；`--accept-head` 後重派 |
+| E45 | Tuning（claude / codex）的額度中途耗盡 | 同 E44；沒有 review 就不會有 `pass` | R-B、R-E | F |
+| E46 | Worker 交了結果之後還在改檔 | 看到 result 就先 kill 再驗收 | R-C 的順序 | F：fake 交結果後每秒寫一個檔 → 驗收時工作樹已靜止 |
+| E47 | Worker 交的 result 是別的 dispatch 的（上一次嘗試留下的） | 檔名與內容的 `dispatch` 都要等於目前的 id，否則當作沒有 | R-C | T |
+| E48 | Worker 自己 push、改別的 branch、動別的 worktree、寫 worktree 以外的檔案 | **擋不住也偵測不到**（全權限，決定 4）。指示檔明文禁止；Runner 能驗證的只有：本 worktree 的 branch、`HEAD` 的祖先關係、工作樹是否乾淨。被 git 忽略的檔案與 worktree 以外的一切都看不到 | D3（已知限制，README 寫明） | 無 |
+| E49 | Worker 自己再起子 agent | 指示檔禁止；worker 的 hc 子 terminal 會在 worker 被 kill 時一起結束（V21），除非它用了 `--no-parent`（偵測不到） | D3 | 無 |
+| E50 | opencode 的 background service 讓工具指令活在 terminal 之外 | 未驗證（U3）。若屬實而不處理，kill 之後檔案仍可能被改，「同時只有一個 worker」就不成立 → 所以 P1 必須測，並依結果加 `--standalone` | P1 | P1 |
+| E51 | 磁碟滿或狀態資料夾不可寫 | 暫存檔寫入失敗 → Runner 印錯誤後結束，原本的 `state.json` 不變；UI 顯示停住 | D5 | T：唯讀資料夾 |
+| E52 | User 刪掉狀態資料夾 | Runner 下一次寫入失敗而結束；worker 還活著的話，`my-orca status --all` 用 `hc ls --label orca.role=dev`（與 `tuning`、`runner`）列出沒有對應狀態的 terminal，由 user 決定，不自動 kill | R-G | T |
+| E53 | Herdr App 沒開 | Runner 不受影響（只用 core）；Planning tab 不關（`skipped:app_unavailable`） | 2.2 檢查 h | F（假 `herdr-app`） |
+| E54 | Herdr App 更新後重啟 | 視窗關閉不會結束 terminal（`herdr-app --skill`）；Runner 與 worker 繼續 | 無 | M |
+| E55 | `hc` 升級後 JSON 欄位改變 | Runner 啟動時記下 `hc --version`；用到的欄位缺少 → `needs_user`（`hc_incompatible`），不猜 | Runner 對每個 `hc` 回應檢查必要欄位 | T（假 `hc`） |
+| E56 | 同一個 worktree 開在兩個 space 或 tab | 兩邊的 UI 都用 `git-dir` 查到同一個 run，顯示相同 | `index.json` | M |
+| E57 | 從 worktree 的子資料夾執行 | 由 git 解析出 `toplevel` | V28 | T |
+| E58 | `my-orca stop` 在 worker 執行中 | kill Runner（加 `--workers` 才連 worker 一起 kill）；狀態維持 `working`、UI 顯示停住；Resume 時認養或對帳 | R-F | F |
+| E59 | acceptance 全部是 `manual` | `init` 拒絕（至少一條要有 `verify`） | D14 | T |
+| E60 | Tuning 直接修之後又留下未 commit 的檔案 | 工作樹不乾淨 → `needs_user`（`partial_changes`） | R-E | F |
 
 ## 6. 已驗證 vs UNVERIFIED（含探針）
 
