@@ -5,7 +5,7 @@
 // Opened by orca-tabs, orca-landing and orca-nav.
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window, shared, setShared } from "herdr";
+import { theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared } from "herdr";
 import { MODELS } from "./models.js";
 
 // Cache agents so the menu paints immediately on reopen; shared() needs another render (AGENTS.md rule 10).
@@ -44,7 +44,7 @@ const FIT = { list: 13, models: 11 };
 function shortcut(name) {
   const k = keys().find((b) => b.section === "global" && b.action === name);
   if (!k?.keys.trim()) return "";
-  const mac = window()?.platform === "macos";
+  const mac = appWindow()?.platform === "macos";
   const names = mac ? { ctrl: "⌃", alt: "⌥", shift: "⇧", cmd: "⌘", fn: "fn" } : { ctrl: "Ctrl", alt: "Alt", shift: "Shift", cmd: "Super", fn: "Fn" };
   const alias = { secondary: mac ? "cmd" : "ctrl", super: "cmd", win: "cmd" };
   return k.keys.trim().split(/\s+/).map((stroke) => {
@@ -301,21 +301,29 @@ export default class NewMenu extends View {
     });
   }
 
-  // Row's right edge and top, in window coordinates, so the flyout sits level with the row: the
+  // Row's left/right edges and top, in window coordinates, so the flyout sits level with the row: the
   // pointer is `position`, `local_position` is its offset inside the row, `bounds.width` the row's
   // width. Falls back to the pointer when no move over the row has been seen yet.
   trackRow(agent, e) {
     if (!e.local_position || !e.bounds) return;
-    this.rowEdge = {
-      key: agent.key,
-      x: e.position.x - e.local_position.x + e.bounds.width + FLYOUT_GAP,
-      y: e.position.y - e.local_position.y,
-    };
+    const left = e.position.x - e.local_position.x;
+    this.rowEdge = { key: agent.key, left, right: left + e.bounds.width, y: e.position.y - e.local_position.y };
   }
 
+  // Flip to the menu's left when the right side overflows the window (Orca does the same); y stays inside it.
+  // shortcut: 440 is a guessed flyout height (agent-config sets none); pass `height` to openOverlay if it is wrong.
   flyoutAt(agent) {
     const r = this.rowEdge;
-    return r?.key === agent.key ? { x: r.x, y: r.y } : "pointer";
+    if (r?.key !== agent.key) return "pointer";
+    const vp = typeof window !== "undefined" ? window.viewport_size() : null;
+    const rightX = r.right + FLYOUT_GAP;
+    if (!vp) return { x: rightX, y: r.y };
+    const W = 300, H = 440, M = 8;
+    const leftX = r.left - 4 - FLYOUT_GAP - W;
+    const x = rightX + W <= vp.width - M ? rightX
+      : leftX >= M ? leftX
+      : Math.max(M, Math.min(rightX, vp.width - W - M));
+    return { x, y: Math.max(M, Math.min(r.y, vp.height - H - M)) };
   }
 
   chevron(agent, t) {

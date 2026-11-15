@@ -394,6 +394,14 @@ export default class Tabs extends View {
     return true;
   }
 
+  // Orca's menu is `align="end"` under the `+` (tab-bar-surface.tsx:224-240). A popup defaults to the pointer, which
+  // near the right edge slides the menu up over the tab strip; anchor it under the button instead.
+  newMenuAt() {
+    const b = this.plusBounds, vp = typeof window !== "undefined" ? window.viewport_size() : null;
+    if (!b || !vp) return "pointer";
+    return { x: Math.max(8, Math.min(b.x + b.width - 288, vp.width - 288 - 8)), y: b.y + b.height + 4 };
+  }
+
   // The side panel is remembered per space: switching shows that space's choice
   // (closed if it never had one), and opening or closing it records it.
   // `AppWorkspaceShell.tsx:106` decides when Orca's landing shows:
@@ -761,7 +769,7 @@ export default class Tabs extends View {
     const tabNew = (action) => div().id("tab-new").ml(8).size(28).flex_none().flex().items_center().justify_center().rounded(8)
       .text_color(t.muted).hover(s => s.bg("#40404080").text_color(t.foreground))
       .role("button").accessibility_label("New tab").tooltip("New tab")
-      .on_mouse_down("left", stop).on_click(action)
+      .on_mouse_down("left", (e, cx) => { this.plusBounds = e.bounds; stop(e, cx); }).on_click(action)
       .child(svg("mods/orca-tabs/plus.svg").size(14).flex_none());
     const winBtn = (id, label, glyph, action, close) => div().id(id).w(46).h_full().flex_none().flex().items_center().justify_center()
       .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : t.hover).text_color(close ? "#ffffff" : t.foreground))
@@ -1059,7 +1067,7 @@ export default class Tabs extends View {
         )
       )
       // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-      .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 })))
+      .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: this.newMenuAt() })))
       .child(div().flex_1())
       // TitlebarMainStrip.tsx:58-69 — the single-tab case gets a `Minimize2`
       // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,
