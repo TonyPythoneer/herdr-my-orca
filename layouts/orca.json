@@ -61,6 +61,7 @@
             {
               "id": "nav",
               "type": "column",
+              "resizable": false,
               "children": [
                 {
                   "id": "nav-top",
@@ -69,7 +70,7 @@
                     "mod": "orca-nav"
                   },
                   "size": {
-                    "px": 108
+                    "px": 86
                   }
                 },
                 {
