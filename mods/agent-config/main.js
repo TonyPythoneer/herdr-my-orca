@@ -352,7 +352,6 @@ export default class AgentConfig extends View {
 
     // argv elements, not shell words: no quotes around the JSON or the prompt.
     run("tab.new", {
-      name: p.name,
       space: p.space,
       argv: [...p.argv, ...this.agent.argsFor(this.model, this.effort), ...extra],
     });

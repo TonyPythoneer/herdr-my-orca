@@ -214,7 +214,6 @@ export default class NewMenu extends View {
     const space = spaces().find((s) => s.active);
     const seed = MODELS[agent.key];
     run("tab.new", {
-      name: agent.name,
       space: space?.id,
       argv: seed && model ? [...agent.run, seed.flag, model] : agent.run,
     });
