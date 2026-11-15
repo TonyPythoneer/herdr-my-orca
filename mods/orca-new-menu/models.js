@@ -13,9 +13,10 @@
 // Named omissions, all deliberate:
 //  - cursor: Orca launches it with a model value composed from thinking/effort/fast flags
 //    (`agent-session-option-catalog-gemini-cursor.ts:105-119`), so a bare id is not what its CLI receives.
-//  - opencode, muse, codebuddy: Orca seeds no models and lists none without a live agent
-//    session (`agent-session-option-catalog-opencode.ts:5`, `agent-session-option-catalog-muse.ts:41`, `agent-session-option-catalog-codebuddy.ts:37`). They start with their own
-//    default.
+//  - muse, codebuddy: Orca seeds no models and lists none without a live agent session
+//    (`agent-session-option-catalog-muse.ts:41`, `agent-session-option-catalog-codebuddy.ts:37`). They start with their own default.
+//    opencode has a chevron flyout too (model/effort live in agent-config); its list is the
+//    live `/api/model` catalog, with an "Only free" switch (free by default).
 //  - Effort, fast mode, service tier and permission rows (`AgentLaunchSetupPanel.tsx:283-399`)
 //    are not ported: they need a session to apply them mid-run and a draft store to remember
 //    the pick. A launch choice here is the model only; permission flags live in programs.json's `run`.
@@ -70,6 +71,7 @@ export const MODELS = {
   // Model and effort lists live in agent-config/main.js; `flyout` only marks the row's chevron.
   claude: { flyout: true },
   codex: { flyout: true },
+  opencode: { flyout: true },
   gemini: {
     flag: "-m",
     models: [

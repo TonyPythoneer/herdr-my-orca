@@ -68,6 +68,7 @@ export default class NewMenu extends View {
     this.filter = "";
     this.handle = cx.focus_handle();
     this.handle.focus();
+    this.closeFlyout();
     this.input = InputState.new({ placeholder: "Search models…" });
     this.input.on("change", (_e, cx) => { this.filter = this.input.value(); this.at = 0; cx.notify(); });
     // The filter owns Enter while it is focused, so a model is chosen through submit.
@@ -227,17 +228,16 @@ export default class NewMenu extends View {
       cx.notify();
       return;
     }
-    const overlay = props()?.overlay;
     if (row.pick) {
       cx.spawn(async () => {
         const folder = await pickFolder({ prompt: "Choose a folder for the terminal" });
         if (!folder) return;
-        closeOverlay(overlay);
+        this.closeMenu();
         run("terminal.open", { folder });
       });
       return;
     }
-    closeOverlay(overlay);
+    this.closeMenu();
     row.run();
   }
 
@@ -266,38 +266,43 @@ export default class NewMenu extends View {
   }
 
   // Hovering a row's chevron opens that agent's setup flyout beside the pointer (Orca's AgentLaunchSetupSubmenu).
-  // The flyout is its own popup: shared "agent-config" holds its id, and it keeps itself open while hot.
-  hoverConfig(agent, hovered, cx) {
+  // The flyout is its own popup: shared "agent-config" holds its id. It is sticky, so leaving the
+  // chevron does not close it; only another agent's chevron swaps its content.
+  hoverConfig(agent, hovered) {
+    if (!hovered) return;
     const open = shared("agent-config");
-    if (hovered) {
-      if (open?.key === agent.key) return setShared("agent-config", { ...open, hot: true });
-      if (open) closeOverlay(open.id);
-      const id = openOverlay({
-        mod: "agent-config",
-        kind: "popup",
-        // A popup without a width is wider than the flyout; 300 is agent-config's content width.
-        // Height is left to the content, as the other width-only popups (orca-menu, orca-files) do.
-        width: 300,
-        at: this.flyoutAt(agent),
-        props: {
-          menu: props()?.overlay,
-          space: spaces().find((s) => s.active)?.id,
-          name: agent.name,
-          key: agent.key,
-          argv: agent.run,
-        },
-      });
-      return setShared("agent-config", { id, key: agent.key, hot: true });
-    }
-    if (open?.key !== agent.key) return;
-    setShared("agent-config", { ...open, hot: false });
-    // Grace: the pointer may be crossing into the flyout, which sets hot again.
-    cx.timer.after(150, () => {
-      const now = shared("agent-config");
-      if (now?.id !== open.id || now.hot) return;
-      setShared("agent-config", null);
-      closeOverlay(now.id);
+    if (open?.key === agent.key) return;
+    if (open) closeOverlay(open.id);
+    const id = openOverlay({
+      mod: "agent-config",
+      kind: "popup",
+      // A popup without a width is wider than the flyout; 300 is agent-config's content width.
+      // Height is left to the content, as the other width-only popups (orca-menu, orca-files) do.
+      width: 300,
+      at: this.flyoutAt(agent),
+      props: {
+        menu: props()?.overlay,
+        space: spaces().find((s) => s.active)?.id,
+        name: agent.name,
+        key: agent.key,
+        argv: agent.run,
+      },
     });
+    setShared("agent-config", { id, key: agent.key });
+  }
+
+  // A popup dismissed by the app (Esc, a click outside) leaves its id in shared state behind, and
+  // the flyout can outlive the menu. Close both so the next menu starts clean.
+  closeFlyout() {
+    const open = shared("agent-config");
+    if (!open) return;
+    if (open.id) closeOverlay(open.id);
+    setShared("agent-config", null);
+  }
+
+  closeMenu() {
+    this.closeFlyout();
+    closeOverlay(props()?.overlay);
   }
 
   // Row's left/right edges and top, in window coordinates, so the flyout sits level with the row: the
@@ -332,7 +337,7 @@ export default class NewMenu extends View {
       .p(2)
       .rounded(4)
       .hover((s) => s.bg(t.hover))
-      .on_hover((hovered, cx) => this.hoverConfig(agent, hovered, cx))
+      .on_hover((hovered) => this.hoverConfig(agent, hovered))
       .child(svg("mods/orca-new-menu/chevron-right.svg").size(14).text_color(t.muted));
   }
 
@@ -391,7 +396,7 @@ export default class NewMenu extends View {
         else if (e.key === "end") this.edge(true);
         else if (e.key === "enter" || e.key === "space") this.choose(this.at, cx);
         else if (e.key === "escape") {
-          if (!picking) return closeOverlay(props()?.overlay);
+          if (!picking) return this.closeMenu();
           this.back();
         } else return;
         cx.notify();
