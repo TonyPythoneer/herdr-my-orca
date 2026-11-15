@@ -1,4 +1,4 @@
-// Claude, Codex and opencode for the bar, from files on this computer (no network):
+// Codex and opencode for the bar, from files on this computer (no network):
 //   Codex     the last rate_limits in its newest session file
 //   opencode  no limits: the last 24 hours' tokens from its database
 // Same reading shape as usage.js; `text` is a chip with no percentage.
