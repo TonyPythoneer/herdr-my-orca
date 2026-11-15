@@ -1,6 +1,6 @@
 # Spec v2 收斂版（第二輪 CTO 收斂）
 
-進度：已完成 2、3、4、5、6；未完成 1、7、8
+進度：已完成 2、3、4、5、6、7；未完成 1、8
 
 日期：2026-11-16
 分支：`worktree-workflow-stages-panel`
@@ -42,7 +42,7 @@
 | f | `herdr-app ls` 裡該 tab 恰好只有這一個 terminal，且 `sub_agents` 是空的 | tab 有分割出來的其他 pane，或 Planning agent 自己起了子 agent | `skipped:other_work` |
 | g | 該 space 還有別的 tab | 關掉最後一個 tab 會連 space 一起關、還會跳確認框（`AGENTS.md:563`） | `skipped:last_tab` |
 | h | `herdr-app ls` 呼叫成功 | App 沒開，無法確認 f、g | `skipped:app_unavailable` |
-| i | `config.json` 的 `close_planning_tab` 不是 `false` | user 選擇永遠不關 | `skipped:disabled` |
+| i | `config.json` 的 `close_planning_tab` 是 `true` | user 選擇不關；或功能尚未啟用（M4：U5 探針與 AT-03 (a)、(b) 通過之前，預設值是 `false`；通過之後預設改為 `true`） | `skipped:disabled` |
 
 **怎麼關**：`herdr-app do tab.close --id <紀錄的 tab id>`（一定帶明確的 id，不用「目前聚焦的 tab」這個預設；不帶 `confirmed`）。之後 `hc get <address>` 應為 `finished` 或查無 → `planning.closed = "closed"`，寫一筆 `kill` 事件。指令失敗 → `skipped:close_failed`。
 
@@ -101,7 +101,7 @@ AT-22（「User-owned terminals … are preserved」）同步改寫為：「除�
 | D11 | 封存 | 完成的 run 留在原地；同一個 worktree 下次 `init` 時整包搬到 `archive/` | 永不刪除任何 run 的資料；`init` 遇到 `status` 是 `working` 或 `needs_user` 的既有 run 要拒絕 |
 | D12 | 單一 task 的嘗試次數 | 最多 2 次；第 2 次附上第 1 次的失敗輸出 | 沒有 user 介入不得有第 3 次；重派之前必須通過 4.4 R-D 的 git 檢查 |
 | D13 | 每輪 rework 新增的 task 數 | 上限 10 個，ID 由 Runner 指定為 `R<cycle>-<nn>` | 超過上限進 `needs_user`（`rework_too_large`），不得截斷後繼續 |
-| D14 | handoff 檢查的定義（AT-02） | `handoff.md` 含規格的 10 個章節標題；`tasks.json`：1 到 100 個 task，每個有唯一 `id`（`^[A-Z]+-\d+$`）、`title`、非空的 `test` 指令、`deps` 都指向存在的 id 且沒有循環；至少 1 條 acceptance，每條有 `verify` 指令或 `manual: true`，且至少 1 條有 `verify`（`ready_for_review` 不能只靠 AI 自己的判斷）；初始 task 的 id 不得以 `R<數字>-` 開頭（保留給 rework） | 檢查失敗時不得寫入任何狀態；錯誤訊息要指出是哪一個 task 或哪一個章節 |
+| D14 | handoff 檢查的定義（AT-02） | `handoff.md` 含規格的 10 個章節標題；`tasks.json`：1 到 100 個 task，每個有唯一 `id`（`^[A-Z]+-\d+$`）、`title`、非空的 `test` 指令、`deps` 都指向存在的 id 且沒有循環；至少 1 條 acceptance，每條有 `verify` 指令或 `manual: true`，且至少 1 條有 `verify`（`ready_for_review` 不能只靠 AI 自己的判斷）；初始 task 的 id 不得以 `R<數字>-` 開頭（保留給 rework） | 檢查失敗時不得寫入任何狀態；錯誤訊息要指出是哪一個 task 或哪一個章節。M2：skill 在呼叫 `init` 之前必須把 task 的 id、標題、`test` 指令與 acceptance 的 `verify` 指令列給 user 並取得同意；`init` 拒絕空測試（`true`、`:`、`exit 0`、單純的 `echo`） |
 | D15 | secrets | `init` 用幾個常見金鑰樣式（`sk-`、`AKIA`、`ghp_`、`-----BEGIN … PRIVATE KEY`）掃 `handoff.md`、`tasks.json`，命中就拒絕並只報行號 | `state.json`、`events.jsonl` 不得保存：完整 argv、環境變數、terminal 畫面；畫面只進 `logs/` 且截到 64 KiB；錯誤訊息不得印出命中的字串本身。這只是盡力而為的過濾，README 要寫明 |
 | D16 | Runner 的輸出 | Runner 的 stdout 每個轉移印一行（時間、事件、task id）；`hc read orca-r-<wt-id>` 就是 log | 不印 prompt 內容、不印測試輸出全文（只印 exit code 與 `logs/` 路徑） |
 
@@ -145,7 +145,7 @@ Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 R
 
 ### 4.4 Runner 的規則（取代規格的 20 條）
 
-**R-A 派發（防重派）**：先把 `dispatch{id, phase:"intent"}` 寫進 `state.json` → 寫 `dispatch/<id>.md` → `hc run --bg --no-parent --no-notify --json --name orca-d-<id> --label orca.run=<run_id> --label orca.dispatch=<id> --label orca.task=<task> --label orca.role=<dev|tuning> --cwd <toplevel> -- <CLI argv…> "<指標 prompt>"`（呼叫時拿掉 `HC_TERMINAL_ID`，V17）→ 把 address 寫回、`phase:"launched"` → 等 `results/<id>.ack`（上限 120 秒）→ `phase:"acked"`。名稱 `orca-d-<id>` 由 core 保證 live 期間唯一（V5），所以同一個 dispatch 不可能有兩個活的 worker；`name_taken` 視為「已經啟動過」，改走認養。派發前另外確認 `hc ls --json --label orca.run=<run_id> --label orca.role=dev`（以及 `tuning`）是空的，確保同時只有一個 worker。
+**R-A 派發（防重派）**：先把 `dispatch{id, phase:"intent"}` 寫進 `state.json` → 寫 `dispatch/<id>.md` → `hc run --bg --no-parent --no-notify --json --name orca-d-<id> --label orca.run=<run_id> --label orca.dispatch=<id> --label orca.task=<task> --label orca.role=<dev|tuning> --cwd <toplevel> -- <CLI argv…> "<指標 prompt>"`（呼叫時拿掉 `HC_TERMINAL_ID`，V17）→ 把 address 寫回、`phase:"launched"` → 等送達證據（上限 120 秒）→ `phase:"acked"`。送達證據三選一（M1）：`results/<id>.ack` 存在；以 `hc send` 送達時回傳 `started:true`；argv 啟動後 `hc get` 曾看到 `status.state == "working"`。名稱 `orca-d-<id>` 由 core 保證 live 期間唯一（V5），所以同一個 dispatch 不可能有兩個活的 worker；`name_taken` 視為「已經啟動過」，改走認養。派發前另外確認 `hc ls --json --label orca.run=<run_id> --label orca.role=dev`（以及 `tuning`）是空的，確保同時只有一個 worker。
 
 **R-B 等待**：每 10 秒做兩件事：看 result 檔在不在、`hc get <address> --json`。不用 `hc wait`（V14：idle 時立刻返回會空轉；V6：不回報時只有逾時）也不用 `hc events`。這讓完成判定完全不依賴 OSC 7501：
 
@@ -157,7 +157,7 @@ Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 R
 | 回報 `done` / `idle` / `error` 已超過 60 秒，仍沒有 result 檔（同上，只有會回報的 CLI） | `needs_user`（`stopped_without_result`），存畫面，terminal 留著。額度或 model 中途用完通常長這樣 |
 | result 檔存在但 JSON 解析失敗 | 可能還在寫：再等最多 3 次輪詢，仍失敗才記為 `rejected:bad_result` |
 | 超過硬上限（dev、tuning 預設各 60 分鐘） | `needs_user`（`timeout`），terminal 留著；不算失敗也不算成功 |
-| 120 秒內沒有 ack 檔 | `needs_user`（`undelivered`），存畫面；**不自動重送** |
+| 120 秒內沒有任何送達證據（見 R-A） | `needs_user`（`undelivered`），存畫面；**不自動重送** |
 | `hc` 呼叫本身失敗（core 重啟中） | 退避重試最多 5 分鐘，之後 Runner 結束、不改狀態（UI 顯示「已停住，可恢復」） |
 
 **R-C 驗收（只有 Runner 說了算）**：dev task 被接受的條件是全部成立：(1) result 檔是合法 JSON 且 `dispatch` 相符；(2) Runner **自己**在 worktree 重跑 `tasks.json` 裡該 task 的 `test` 指令，exit 0（上限 15 分鐘）；(3) `git status --porcelain` 是空的；(4) 目前 branch 沒變，且新的 `HEAD` 是上一個紀錄的 `head` 的後代（`git merge-base --is-ancestor`）。不成立 → 這次嘗試記為 `rejected:<原因>`；同一個 task 最多 2 次嘗試，第 2 次的指示檔附上第 1 次失敗的測試輸出（截到 16 KiB）；再失敗 → `needs_user`。
@@ -172,7 +172,7 @@ Dev 與 Tuning **沒有** skill 也**沒有** hc template：它們的指示是 R
 - **Tuning 直接修**（規格允許，第一輪建議砍掉，這輪改回保留）：Tuning 可以自己 commit 小修正。Runner 看到 Tuning 期間 `HEAD` 前進，就把那份 review 視為過期、`cycles += 1`、再起一個全新的 Tuning session 重新驗收。同一個計數器，所以不會無限循環。保留的理由：Tuning 有全權限，「它改了檔案」這個情況本來就必須處理，處理方式剛好就是規格要的 revalidate，AT-13 因此可測。
 - 上限在每次要 `cycles += 1` 之前才讀 `config.json`（1 到 9，預設 3，不合法就沿用舊值並記事件）。調低到小於目前 cycles 不會回溯判失敗，只是下一次 rework 請求會進 `needs_user`。計數器永不自動歸零。
 
-**R-F 單一 Runner 與恢復**：Runner 由 `my-orca start` 以 `hc run --bg --no-parent --no-notify --name orca-r-<wt-id> --label orca.run=<run_id> --label orca.role=runner -- node <my-orca> run <wt-id>` 啟動；名稱唯一（V5）就是鎖，Runner 死掉名稱自動釋出（V24），沒有殘留的 lock 檔。**絕不加 `--keep`**（keep 會在程式消失後補一個 shell 佔住名稱）。Runner 開機時若 `state.dispatch` 非空，先對帳再做事：
+**R-F 單一 Runner 與恢復**：Runner 由 `my-orca start` 以 `hc run --bg --no-parent --no-notify --name orca-r-<wt-id> --label orca.run=<run_id> --label orca.role=runner -- node <my-orca> run <wt-id>` 啟動；名稱唯一（V5）就是鎖，Runner 死掉名稱自動釋出（V24），沒有殘留的 lock 檔。**絕不加 `--keep`**（keep 會在程式消失後補一個 shell 佔住名稱）。兩道補強（M3）：`my-orca run` 啟動時確認 `hc get $HC_TERMINAL_ID` 的 `name` 就是 `orca-r-<wt-id>`，否則拒絕執行；每次寫 `state.json` 之前先讀磁碟上的 `updated`，與自己上次寫入的值不同就不寫、印錯誤、結束。Runner 開機時若 `state.dispatch` 非空，先對帳再做事：
 
 | `hc ls --all --json --label orca.dispatch=<id>` | result 檔 | git | 動作 |
 |---|---|---|---|
@@ -195,11 +195,11 @@ Runner 開機時另外掃一次 `hc ls --json --label orca.run=<run_id>`：dispa
 | Tuning（codex） | `codex --no-daemon -c disable_paste_burst=true --dangerously-bypass-approvals-and-sandbox -m <M> -c model_reasoning_effort=<E> "<指標 prompt>"` | V26、V27；`foreground.argv` 是否保留這些旗標見 U12 |
 | Dev（opencode） | `opencode --auto [--standalone] --prompt "<指標 prompt>"` | V25；`--prompt` 是否自動送出、是否需要 `--standalone` 由 P1 決定（U1 到 U4） |
 
-Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差別只在這張表（opencode 的旗標，以及送達方式是 `argv` 還是「啟動後 `hc send`」）。P1 兩種結果下的行為：
+Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差別只在這張表（opencode 的旗標，以及送達方式是 `argv` 還是「啟動後 `hc send`」）。P1 各種結果對應的送達方式，以及唯一會改變範圍的結果（M5），見第 7 節質疑 5 的表。P1 兩種結果下的行為：
 
 | | opencode 有回報 | opencode 沒回報 |
 |---|---|---|
-| 送達確認 | ack 檔 | ack 檔 |
+| 送達確認 | ack 檔，或曾回報 `working` | 只有 ack 檔 |
 | 完成判定 | result 檔（最慢 10 秒後發現） | 相同 |
 | 卡在提問或權限 | 立刻 `needs_user`（`blocked`） | 等到硬上限才 `needs_user`（`timeout`） |
 | inspector 的 agent 狀態 | `working / blocked / done` | 只有 `live / finished` |
@@ -426,7 +426,48 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 
 ## 7. 五個最強質疑與回應
 
-待補
+每一條的結論若是「承認」，對應的修改已經寫回第 2、3、4 節（標成 M1 到 M5）。
+
+### 質疑 1：「ack 檔、result 檔都是請 AI 寫的。opencode 換一個比較弱的 model、不照指示做，你的流程就每個 task 都卡住。fake agent 的測試證明不了這件事。」
+
+**部分承認，已修改（M1）。**
+- 安全面站得住：不照做的後果永遠是「停下來問人」，不會是「誤判成功」。成功需要 result 檔 + Runner 自己重跑的測試 + git 檢查，三者都不是 agent 說了算。
+- 可用性面確實有洞：ack 這個額外動作最容易被忽略，而它被忽略的代價是整個 task 被判 `undelivered`。
+- **M1**：送達的證據改成三選一：ack 檔；或以 `hc send` 送達時回傳 `started:true`（探針 H 的實際輸出有這個欄位）；或 argv 啟動後 terminal 曾回報 `working`。只有「不回報 7501 又不寫 ack」的組合才會被判沒送達。這是把狀態回報當作多一項證據，不是讓 Runner 分成兩種模式。
+- fake agent 測不出真 model 會不會照做，這點承認。所以唯一一次真 E2E 必須至少有 3 個 dev task，並把「每個 task 是否寫了 ack、result 是否合法」列進報告；E2E 的遵從率不到 3/3 就不能宣稱 AT-06、AT-07 通過。
+
+### 質疑 2：「Runner『獨立驗收』是假的。測試指令是 Planning 的 AI 寫的，它寫 `true` 就全過。」
+
+**承認，已修改（M2）。**
+- Runner 驗證的是「一致性」（agent 說做完的東西，照事先講好的指令跑確實過），不是「測試寫得好不好」。品質靠三層：Tuning 是不同 model、全新 session 的獨立審查；`ready_for_review` 至少一條 acceptance 要有機器可跑的 `verify`；最後還有你本人的 review（Ready for Review 不等於已合併）。
+- **M2**：(1) skill 在呼叫 `init` **之前**必須把 task 清單（id、標題、`test` 指令）與每條 acceptance 的 `verify` 指令列給 user，取得明確同意。Planning 本來就是你在場的互動階段（決定 3），而 tab 在 `init` 之後會被關掉，所以只能在之前看。(2) `init` 拒絕明顯的空測試（`true`、`:`、`exit 0`、單純的 `echo …`）。這只擋得住最懶的情況，README 會寫明 Runner 不判斷測試品質。
+
+### 質疑 3：「用 terminal 名稱當鎖，是把正確性綁在一個不是為此設計的功能上。直接執行 `node my-orca.mjs run` 就繞過了；kill 之後名稱釋出時，舊的 process 真的死了嗎？」
+
+**部分承認，已修改（M3）。**
+- 證據：名稱唯一由 core 強制（V5：第二個同名啟動得到 `name_taken`）；`hc kill` 回傳時 terminal 已是 `finished`（V7 的回傳內容含 `finished_ms`，指令說明是「Returns the observed result」）；`kill -9` 後 core 也立即觀察到結束（V20）；結束後名稱可重用（V24）。相比之下，pidfile 在當掉後會留下過期的鎖，要另外寫「pid 還活著嗎、是不是同一個程式」的判斷，洞更多。
+- 繞過的問題成立。**M3**：(1) `my-orca run` 啟動時檢查 `$HC_TERMINAL_ID` 存在，且 `hc get $HC_TERMINAL_ID` 的 `name` 等於 `orca-r-<wt-id>`，否則拒絕（S13 的測試）；(2) Runner 每次寫 `state.json` 之前先讀磁碟上的 `updated`，與自己上次寫的值不同就代表有第二個寫入者 → 不寫、印錯誤、結束。這等於把第一輪砍掉的 `revision` 檢查以最小形式加回來（一個欄位、三行），承認當初全砍是砍過頭。
+
+### 質疑 4：「關 Planning tab 是破壞性動作，卻建立在沒驗證過的東西上：`tab.close` 的實際行為你沒測，`herdr-app ls` 的 JSON 形狀沒有版本保證，`turn` 的計數方式是你推測的。」
+
+**承認，已修改（M4）。**
+- 已有的證據：`turn` 的定義來自 schema（「Goes up each time the status leaves `working`」），探針 D、H 觀察到 `turn` 在離開 `working` 時由 0 變 1；`herdr-app ls` 確實列出每個 tab 的 `terminals` 與 `sub_agents`（本輪實際輸出）。九條檢查的失敗方向全部是「不關」：狀態在一輪中間抖動（例如先 `blocked` 再回 `working`）只會讓 `turn` 多加、結果是 `skipped:in_use`，不會誤關。
+- 沒有的證據：`tab.close --id` 的實際效果（U5）。在沒測過的指令上預設開啟破壞性行為不對。
+- **M4**：`close_planning_tab` 在程式碼裡先以預設 `false` 合入；實作第 4 步跑完 U5 探針且 AT-03 (a)、(b) 全過之後，才把預設改成 `true`（符合決定 5）。另外，`herdr-app ls` 的回應缺少預期欄位時視為 `skipped:app_unavailable`。
+
+### 質疑 5：「你說『現在可以開工』，但唯一真正的 dev CLI 完全沒測過。P1 的四個未知數隨便一個結果不好，設計就得改。」
+
+**大部分站得住；有一個結果確實會改變範圍，已明列（M5）。**
+- Runner 本體不依賴 opencode 的任何行為：派發、等待、驗收、恢復全部可以用 `fake-agent.sh` 的兩種模式（回報、不回報）測完，這是本輪用探針 C、D、H 實際做過的事（V13 到 V19），不是推測。
+- **M5**：把 P1 各種結果的對應寫死在 4.5：
+
+| `--prompt` 會自動送出（U2） | 會回報 7501（U1） | 送達方式 |
+|---|---|---|
+| 是 | 不論 | argv（預設路徑） |
+| 否 | 是 | 啟動 → 等它回報 `idle`（上限 60 秒）→ `hc send` 指標 prompt（V15、V19 已證實這條路對會回報的程式可行） |
+| 否 | 否 | 啟動 → 畫面連續 3 次輪詢不變（上限 60 秒）→ `hc send`（V18：對不回報的程式也送得到）→ 以 ack 檔確認；沒有 ack 就 `needs_user`，不重送 |
+
+- **會改變範圍的唯一結果**：U3 顯示不論有沒有 `--standalone`，kill 之後 opencode 的工具指令都還在跑。那樣「同時只有一個 worker」與「kill 之後工作樹靜止」都無法保證，不能靠 prompt 補救。此時停下來回報 owner，備案是 dev 改用 `codex --no-daemon`（`hc --skill` 明載這個旗標讓指令留在 hc 內），這違反規格「Development must use OpenCode」，需要 owner 決定。
 
 ## 8. 最終行動項目（含卡關的前置測試）
 
