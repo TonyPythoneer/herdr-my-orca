@@ -560,3 +560,19 @@ changes and measured limits above do not substitute for those three outcomes.
   within each mounted row, and hand off at row boundaries with reveal-before-focus.
   Multiple controls per row, changing controls, boundary exit to neighboring mods,
   and actual Tab binding precedence remain gates; no production switch yet.
+
+### Multiple controls and removed pending target
+
+- Three native focus handles per Entity: row root and two nested controls. Scoped
+  actions use native focus_prev/next within a row and reveal-before-focus across
+  rows. Runtime assertions check the expected handle after every move.
+- Exact sequence passes backward 988:0 -> 987:2 -> 987:1 -> 987:0 -> 986:2,
+  continuing to 985:0, then forward back to 988:0 (19 checked positions).
+  `multi-control.js` and its exact log preserve the successful run.
+- Separate mutation run removes/releases row 986 while its boundary focus request
+  is pending. Cancellation keeps focus on 987:0; subsequent navigation reaches 985
+  and reverses through stable row keys without focusing the released Entity.
+  All 19 expected-handle assertions pass; `removed-target.*` records the run.
+- Both initial checks pass. This is native action dispatch with real focus handles,
+  not proof of physical Tab binding priority, actual card stop ordering or drag.
+  Production integration must also handle dynamic control removal inside a row.
