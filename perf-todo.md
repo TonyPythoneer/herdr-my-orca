@@ -576,3 +576,21 @@ changes and measured limits above do not substitute for those three outcomes.
 - Both initial checks pass. This is native action dispatch with real focus handles,
   not proof of physical Tab binding priority, actual card stop ordering or drag.
   Production integration must also handle dynamic control removal inside a row.
+
+### Real production-card virtualization candidate
+
+- Added scripts/perf-spaces-virtual.py, reusing the exclusive-create instrumented
+  builder and asserting every source substitution. It defers actual rowElements
+  until an existing child Entity is requested by native lazy list layout.
+- Mounted the generated 200-workspace/200-agent mod in the isolated app. Actual
+  project headers/cards/agents render, status errors is empty. First check hit an
+  interrupted script budget; immediate repeat passed. Neither run proves keyboard
+  acceptance. Durable frame, log and generated source hash are `real-cards*`.
+- Captured initial intervals 26 and 244 explicit factories; stable visible-list
+  renders add 10 factories. Script samples are 8-14ms in this run, with no paired
+  baseline: no speedup claim. Full native counts and frame trace remain absent.
+- Candidate uses a fixture-only 600px nested viewport, mouse-only lazy list, and
+  64px placeholders until Entity adoption. It is not production-ready and does
+  not handle status/host descriptor virtualization. Existing production untouched.
+- Next: replace that fixture layout with the measured variable-size virtual route
+  and scoped focus handoff, then validate actual card controls, grouping and drag.
