@@ -2,7 +2,7 @@
 //   Claude    Anthropic's oauth/usage (has per-model windows such as Fable; token from the macOS
 //             keychain, never written anywhere), kept 5 minutes in ~/.cache/herdr-usage/claude-oauth.json
 //   Codex     the last rate_limits in its newest session file
-//   opencode  no limits: the last 24 hours' tokens from its database
+//   opencode  no limits: free-model tokens (replies and compactions, cache included) since its daily reset
 // Same reading shape as usage.js; `text` is a chip with no percentage.
 import { clampUsedPercent } from './usage.js';
 
@@ -14,12 +14,24 @@ fi
 cat "$c" 2>/dev/null`;
 const CODEX = `f=$(ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | head -n 1); [ -n "$f" ] || exit 0
 grep '"primary":{' "$f" | tail -n 1 | jq -c '.. | objects | select(has("rate_limits")) | .rate_limits | select(.primary) | {primary, secondary}' 2>/dev/null`;
-// opencode's tokens since its last reset, which it says is about 8:47 AM; 9:00 local is ours.
+// opencode's free-model tokens (cache included, as Claude and Codex are billed) since its last
+// reset. A 429 carries the server's own reset (time + retryAfterMs): the newest one past is the
+// window start while under 24h old, else 9:00 local; the next reset is a future one, else
+// start + 24h. Inside that 24h it counts from 0 tokens; past it, with no use since, it is "inactive".
+// shortcut: the reset drifts ~30 min a day, so the next reset is an estimate.
 const OPENCODE_RESET_HOUR = 9;
 const OPENCODE = `sqlite3 -readonly "$HOME/.local/share/opencode/opencode.db" "
-with w(s) as (select strftime('%s', datetime('now','localtime','-${OPENCODE_RESET_HOUR} hours','start of day','+${OPENCODE_RESET_HOUR} hours','utc')))
-select coalesce(sum(json_extract(data,'$.tokens.input')+json_extract(data,'$.tokens.output')+json_extract(data,'$.tokens.reasoning')),0), s+86400
-from session_message, w where type='assistant' and time_created >= s*1000" 2>/dev/null`;
+with x(r) as (select time_created+json_extract(data,'$.error.retryAfterMs') from session_message
+    where type='assistant' and json_extract(data,'$.error.type')='provider.free-limit'),
+n(t) as (select strftime('%s','now')*1000),
+w(s) as (select coalesce((select max(r) from x where r<=(select t from n) and r>(select t from n)-86400000),
+    strftime('%s', datetime('now','localtime','-${OPENCODE_RESET_HOUR} hours','start of day','+${OPENCODE_RESET_HOUR} hours','utc'))*1000) from n)
+select coalesce(sum(json_extract(data,'$.tokens.input')+json_extract(data,'$.tokens.output')+json_extract(data,'$.tokens.reasoning')
+    +coalesce(json_extract(data,'$.tokens.cache.read'),0)+coalesce(json_extract(data,'$.tokens.cache.write'),0)),0),
+  coalesce((select min(r) from x where r>(select t from n)), s+86400000)/1000,
+  exists(select 1 from x where r<=(select t from n) and r>(select t from n)-86400000)
+from session_message, w where type in ('assistant','compaction') and time_created >= s
+  and json_extract(data,'$.model.providerID')='opencode' and json_extract(data,'$.model.id') like '%-free'" 2>/dev/null`;
 
 export const formatTokens = (n) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : `${n}`;
@@ -58,7 +70,7 @@ const extraClaude = (limits) => Object.entries(limits ?? {})
 export async function probeLocal(execFn) {
   const [c, x, o] = await Promise.all([CLAUDE, CODEX, OPENCODE].map((s) => sh(execFn, s)));
   const claude = json(c), codex = json(x);
-  const [tokens, resetAt] = o.split('|').map(Number);
+  const [tokens, resetAt, fresh] = o.split('|').map(Number);
   const out = [
     claude && Array.isArray(claude.limits) && claude.limits[0]?.kind && reading('claude', fromUsageApi(claude.limits)),
     claude && !claude.limits?.[0]?.kind && !claude.api && !claude.bedrock && reading('claude', [
@@ -70,7 +82,9 @@ export async function probeLocal(execFn) {
     codex && reading('codex', [codex.primary, codex.secondary].filter(Boolean)
       .map((w) => bucket(String(w.window_minutes), w.window_minutes, w.used_percent, w.resets_at, w.window_minutes === 300 ? '5h' : w.window_minutes === 10080 ? 'wk' : `${w.window_minutes}m`))),
     Number.isFinite(tokens) && Number.isFinite(resetAt) && {
-      provider: 'opencode', status: 'ok', label: '', buckets: [], text: `${formatTokens(tokens)} tokens`, resetTime: new Date(resetAt * 1000).toISOString()
+      provider: 'opencode', status: 'ok', label: '', buckets: [], ...(tokens || fresh
+        ? { text: `${formatTokens(tokens)} tokens`, resetTime: new Date(resetAt * 1000).toISOString() }
+        : { text: 'inactive', resetTime: null })
     }
   ];
   return out.filter(Boolean).map((r) => ({ ...r, detail: true }));
