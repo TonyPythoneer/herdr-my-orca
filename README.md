@@ -10,7 +10,6 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   `~/.cache/herdr-usage/`.
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
 
-<<<<<<< HEAD
 ## How the quota bar gets its numbers
 
 Same core as Orca desktop (MIT, Lovecast Inc.), read from its public source:
@@ -50,7 +49,7 @@ To enable the live Claude feed, point `statusLine` in `~/.claude/settings.json` 
 
 The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` from `PATH`, then
 `npx -y ccstatusline@latest`, so the status line you see does not change.
-=======
+
 ## Workflow (Planning → Development → Tuning → Ready)
 
 A small workflow runner sits beside the Orca UI. You plan in a normal agent tab, then a
@@ -136,7 +135,6 @@ Known limitations, on purpose:
   still workflow-owned and is killed at the end of its task.
 - There is no reduced-motion setting in this platform; the pulsing lamp is the only
   animation.
->>>>>>> c958d8e (workflow: implement spec v2 runner, planning skill and four-light UI)
 
 ## Setup
 
