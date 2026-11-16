@@ -821,6 +821,7 @@ async function settleAndKill(ctx, dispatch) {
   let prev = null;
   let stable = 0;
   let lastChanged = null;
+  let unsettled = false;
   while (ctx.clock() < deadline) {
     let term = null;
     try { term = dispatch.address ? ctx.hc.get(dispatch.address) : null; }
@@ -839,8 +840,8 @@ async function settleAndKill(ctx, dispatch) {
   const finalInfo = ctx.git.info(ctx.state.repo.toplevel);
   if (finalInfo.ok && prev !== `${finalInfo.head}|${finalInfo.dirty.join(",")}`) {
     lastChanged = finalInfo;
-    // keep moving: do not accept an unsettled tree
-    if (await needsUser(ctx, "unsettled", "HEAD or the working tree was still changing after the result appeared")) return { stop: true };
+    // M7 cap: still kill + sweep + check below; only then report unsettled
+    unsettled = true;
   }
   let canKill = false;
   if (dispatch.address) {
@@ -878,6 +879,7 @@ async function settleAndKill(ctx, dispatch) {
     await needsUser(ctx, "partial_changes", `working tree is not clean after killing the worker (${info.dirty.length} path(s))`);
     return { stop: true };
   }
+  if (unsettled) { await needsUser(ctx, "unsettled", "HEAD or the working tree was still changing after the result appeared"); return { stop: true }; }
   return { stop: false, info };
 }
 
