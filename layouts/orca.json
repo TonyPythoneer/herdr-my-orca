@@ -261,7 +261,7 @@
       "id": "status",
       "type": "block",
       "size": {
-        "px": 24
+        "px": 20
       },
       "content": {
         "mod": "orca-status"

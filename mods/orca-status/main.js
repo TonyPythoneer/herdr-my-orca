@@ -182,9 +182,9 @@ export default class OrcaStatus extends View {
           .when(pct != null, el => el.child(div().px(8).py(1).rounded_full().bg("#ffffff").text_color("#000000").child(pct)))
           .child(div().child(rest));
         return h_flex().gap(8).items_center().child(mark(reading.provider, 13))
-          .when(Boolean(first), el => el.child(h_flex().w(64).h(6).flex_none().gap(2)
-            .children([0, 1, 2, 3, 4].map(i => div().flex_1().h(6).rounded(2).bg(t.raised)
-              .child(div().h(6).rounded(2).bg(t.foreground).w(`${Math.min(100, Math.max(0, (first.usedPercent - i * 20) * 5))}%`))))))
+          .when(Boolean(first), el => el.child(h_flex().w(80).h(5).flex_none().gap(2)
+            .children([0, 1, 2, 3, 4].map(i => div().flex_1().h(5).rounded(2).bg(t.raised)
+              .child(div().h(5).rounded(2).bg(t.foreground).w(`${Math.min(100, Math.max(0, (first.usedPercent - i * 20) * 5))}%`))))))
           .child(h_flex().gap(6).items_center().text_color(t.foreground)
             .children(parts.flatMap((x, i) => i ? [div().text_color(t.muted).child("·"), part(x)] : [part(x)])));
       }
