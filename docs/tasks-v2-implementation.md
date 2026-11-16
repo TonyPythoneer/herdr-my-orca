@@ -45,7 +45,7 @@
 | F6 | `stage_head` 單一化（只寫紅燈測試） | PARTIAL | commit `6edda03`。`my-orca/f6.test.mjs` 標 `todo`（套件維持綠燈、exit 0），等 owner 決定重構。拿掉 `todo` 在舊程式跑：`✖ F6: pushCheck rejects a HEAD that is not a descendant of the last accepted HEAD`、`actual: true`、`expected: false`。**沒有動 `stage_head` 的任何用法。** **審查發現測試放錯層**：它把過期的 base（`state.repo.stage_head`）明確傳給 `pushCheck`，而 `pushCheck` 對給定的 base 判斷本來就正確，所以就算把呼叫點修對，這個測試也不會變綠。真正的錯在呼叫點（`rejectTask`、`acceptDev`、reconcile、`--accept-head` 傳 `ctx.state.repo.stage_head`）。重構時要一併改寫測試，見第 3 節 F6。 |
 | F7 | 開機掃描清殘留 worker | DONE | commit `5610e3f`。舊程式跑 `node --test my-orca/f7.test.mjs`：`✖ F7: a live worker from a finished attempt is killed, then removed`、實際 `[]`（沒 kill 也沒 rm）；第二個 case（dispatch 不在 state 的 worker：停下、不動它）舊程式就綠，當作回歸護欄。修後 `ℹ tests 2 / ℹ pass 2 / ℹ fail 0`。 |
 | F8 | hc 失敗退避（只寫紅燈測試） | PARTIAL | commit `ad1d67d`。`my-orca/f8.test.mjs` 標 `todo`，等 owner 決定退避策略。拿掉 `todo` 在現況跑：`✖ F8: a failing hc.list does not crash the Runner`、`AssertionError: Got unwanted rejection.`、`Actual message: "hc list failed"`。**沒有新增 helper。** 此時全套 `node --test my-orca`：`ℹ tests 46 / ℹ pass 44 / ℹ fail 0 / ℹ todo 2`（exit 0）；`node --test mods/orca-workflow`：`ℹ tests 8 / ℹ pass 8 / ℹ fail 0`。 |
-| F9 | 不自動改綁 core | **BLOCKED（規格衝突，未動程式）** | handoff F9 要求 core id 不符時一律拒絕；但 `docs/spec-v2-converged.md` §5 **E12** 寫「core id 與紀錄不同、沒有進行中的 dispatch → 更新 `core_id` 繼續」。M13 只規範「破壞性指令前的斷言」，並沒有禁止無 dispatch 時改綁。照 handoff 做會讓 Herdr 重啟後的舊 run 不能再 `start`／`run`，而且與 E12 相反。需 owner 二選一：照 E12（現況，保留）或照 handoff（拒絕，並同步改 E12）。 |
+| F9 | core 改綁 | DONE（照 E12） | owner 決定保留 E12。把 `start`／`run` 兩處重複的改綁邏輯收成 `rebindCore`，新增 `my-orca/e12.test.mjs`（3 個 case）。`node --test my-orca`：`ℹ tests 50 / ℹ pass 48 / ℹ fail 0 / ℹ todo 2`。不拒絕、不改 E12。 |
 | FIX-1 | 審查發現：`handleResult` 的 `const result` 被重新賦值（`cebc2dd` 造成） | DONE | commit `3298581`。`cebc2dd`（owner 在 Phase B 前的 commit）把 `let result` 改成 `const result`，但 bad-JSON 重讀迴圈仍賦值，結果檔寫到一半時 Runner 會 `TypeError` 崩潰，既有測試沒走到這條路。新增 `my-orca/badjson.test.mjs`：舊程式 `✖ …`、`Actual message: "Assignment to constant variable."`；修後 `node --test my-orca`：`ℹ tests 47 / ℹ pass 45 / ℹ fail 0 / ℹ todo 2`。 |
 | F10–F18 | Tuning 燈、缺圖示、錯碼、`--accept-head`、fake-e2e 禁用清單、UI 通知、死碼、SKILL checklist、真 git happy path | TODO（Phase C） | |
 
@@ -83,6 +83,6 @@ console.log("closePlanningTab ->", await orca.closePlanningTab(ctx, { app: () =>
 
 **F8（未套用）：hc 失敗退避。** 要決定：(a) `hc.list` 失敗時共用 `waitForResult` 的做法（`hcFailureSince` 計時、超過 `hc_retry_min` 才 `needs_user`，期間 `sleep(poll_s)` 重試）；(b) 一次失敗就 `needs_user("hc_unavailable")`。建議 (a)，與現有行為一致。
 
-**F9（被擋住）：** 與 §5 E12 衝突，見上表。二選一：(a) 保留 E12 與現況（無 dispatch 時自動改綁 core）；(b) 照 M13 原文拒絕，並同步修改 E12（Herdr 重啟後舊 run 不能再 `start`／`run`）。
+**F9：** 已決定照 E12，見上表。
 
 **F7 備註（不擋）：** `scanWorkers` 的 `created_ms` 來自列表本身，所以 `killOwned` 的 `created_ms` 檢查在這條路徑永遠通過；標籤檢查仍有效。`f7.test.mjs` 第二個 case 只斷言沒有 kill／rm，沒斷言 `needs_user.code === "unknown_worker"`，護欄偏弱。

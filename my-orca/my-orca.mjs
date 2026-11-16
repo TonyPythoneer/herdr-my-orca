@@ -510,6 +510,13 @@ export function dispatchCheck(state, info, { first = false } = {}) {
   return errors.length ? { ok: false, code: tree.length ? "tree_changed" : "unpushed", detail: errors.join("; ") } : { ok: true };
 }
 
+// E12: a new core with no dispatch in flight is adopted; with one in flight the old id stays and the hc guard refuses.
+export function rebindCore(state, currentCore) {
+  if (state.dispatch || state.core_id === currentCore) return false;
+  state.core_id = currentCore;
+  return true;
+}
+
 export function pushCheck(state, info, git, stageHead) {
   const errors = [];
   if (!info.ok) return { ok: false, code: "unpushed", detail: info.detail ?? info.error };
@@ -1943,10 +1950,7 @@ async function startRunner({ wtId, stateDir, out, err, env, acceptHead = false }
   const hc = makeHc({ env });
   const currentCore = hc.coreId();
   if (!currentCore) { print(err, "start: cannot read the Herd core id"); return EXIT.env; }
-  if (!state.dispatch && state.core_id !== currentCore) {
-    state.core_id = currentCore;
-    await writeState(stateDir, state, state.updated);
-  }
+  if (rebindCore(state, currentCore)) await writeState(stateDir, state, state.updated);
   try {
     const guard = makeHc({ env, expectCoreId: state.core_id });
     for (const t of hc.list({ "orca.run": state.run_id }, { all: true })) {
@@ -1992,10 +1996,8 @@ async function cmdRun(argv, io) {
   const term = rawHc.get(self);
   if (!term || term.name !== expected) { print(err, `run: refusing: terminal name is ${term?.name ?? "unknown"}, expected ${expected}`); return EXIT.reject; }
   const currentCore = rawHc.coreId();
-  if (state.core_id !== currentCore) {
-    if (!state.dispatch) { state.core_id = currentCore; await writeState(stateDir, state, state.updated); }
-    else { print(err, "run: core id changed with an active dispatch; resume will reconcile it"); }
-  }
+  if (rebindCore(state, currentCore)) await writeState(stateDir, state, state.updated);
+  else if (state.core_id !== currentCore) print(err, "run: core id changed with an active dispatch; resume will reconcile it");
   const forbidCoreIds = String(process.env.MY_ORCA_FORBID_CORE_IDS ?? "").split(",").filter(Boolean);
   const hc = makeHc({ env: process.env, expectCoreId: state.core_id, forbidCoreIds });
   const cfg = await readConfig(stateHome());
