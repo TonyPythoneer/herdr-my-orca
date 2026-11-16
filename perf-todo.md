@@ -460,3 +460,22 @@ changes and measured limits above do not substitute for those three outcomes.
   retained state；不是可直接替換卡片的方案。繼續研究其他有界配置設計。
 - 已向使用者提出目錄政策選項：保留全部並分頁、硬上限後手動移除、
   或允許自動移除非釘選專案。尚未收到政策回覆，不改變持久化格式。
+
+## 12. Lazy list plus child Entity runtime probe (2026-11-16)
+
+- New isolated home: `/tmp/orca-entity-list.vFfb4b`, using the existing test core;
+  no terminals created. Executable: `/tmp/orca-perf-a002/PerfHerdr.app/Contents/MacOS/Herdr`.
+- A deliberate throw in Row.render still passed `check`: it does not execute
+  deferred child renders. Initial checks alone cannot validate this route.
+- Mounted a personal `probe` layout in the actual app. The lazy renderer returns
+  `div().child(this.row)`; init creates the Entity, and Row.render registers an
+  on_click handler. The native frame shows the row text and status errors is empty.
+- Durable source and frame: `perf-evidence/2026-11-16/entity-list-probe/`.
+  Welcome remains overlaid, but the probe row is visible at the top left.
+- Correct the earlier broad conclusion: the ban on handlers inside a lazy renderer
+  does not prevent an existing child Entity rendering its own handlers. This is
+  a virtualization candidate, not production acceptance. Click delivery, variable
+  heights, long-list allocation, offscreen Tab order and drag remain unverified.
+- Next: extend to many rows and count child renders, then verify focus traversal
+  beyond the viewport before integrating retainedRows and descriptor planning.
+- Isolated app process is tracked by exec session 46422; inspect before reusing.
