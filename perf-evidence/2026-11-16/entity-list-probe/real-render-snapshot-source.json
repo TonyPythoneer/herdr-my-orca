@@ -1,9 +1,0 @@
-{
-  "base": "f7f3d9c",
-  "builder": "scripts/perf-spaces-virtual.py",
-  "main_sha256": "2e592098952d8d109603c7e7ce119cbe69cc73a3438ef31c4f1364de58c96d92",
-  "initial_checks": 3,
-  "focus_positions": 35,
-  "sidebar_width_logical_px": 300,
-  "supported_candidate_scope": "local project grouping"
-}

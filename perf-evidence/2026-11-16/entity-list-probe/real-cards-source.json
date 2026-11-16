@@ -1,8 +1,0 @@
-{
-  "base_commit": "73a58c3",
-  "builder": "scripts/perf-spaces-virtual.py",
-  "generated_main_sha256": "d809b4a722ab86f0cce5a0cdcfdb27b1e98746324761dcd5a9f81fec4c60ffb4",
-  "viewport_logical_px": 600,
-  "fixture_rows": 200,
-  "fixture_agents": 200
-}
