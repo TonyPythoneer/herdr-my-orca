@@ -7,8 +7,8 @@
 `my-orca` Runner、planning skill、四燈 UI 已實作（`c958d8e`），經 review 發現失敗路徑（reject、Resume、reconcile）有錯。修繕分階段進行：
 
 - **Phase A（F1 E47 無限重派、F2 Resume +2）：已完成並驗收**，commit `28efc93`、`e279a4e`。測試在 `my-orca/f1f2.test.mjs`。
-- **Phase B（F3、F4、F5）：下一步。**
-- **Phase C（F6–F18）：只有 owner 明說才做。**
+- **Phase B（F3、F4、F5）：已完成並自測**，commit `7be456d`、`1da6eb8`、`aa44f28`。測試在 `my-orca/f3.test.mjs`、`f4.test.mjs`、`f5.test.mjs`。待 owner 決定的兩件事（F4 之後 Resume 在 identity 停止後的行為、F5 紅燈原因的偏離）寫在台帳第 3 節。
+- **Phase C（F6–F18）：owner 已同意開始。** 已做：F6（只有 todo 紅燈測試）`6edda03`、F7 `5610e3f`、F8（只有 todo 紅燈測試）`ad1d67d`。**F9 被規格衝突擋住（見台帳），不要做。** 還沒做：F10–F18。
 
 規格以 `docs/spec-v2-converged.md` 為準（**§8.2 與 §4.9 M6–M15**）；本檔沒涵蓋的情況，停下回報，不要自己決定。進度與證據寫在 `docs/tasks-v2-implementation.md`。
 
