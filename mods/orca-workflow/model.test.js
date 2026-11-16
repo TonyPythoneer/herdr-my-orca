@@ -24,7 +24,7 @@ test("lights show counts and gate states", () => {
   assert.deepEqual(l.map((x) => [x.label, x.accepted, x.total, x.state]), [
     ["Plan", 1, 1, "complete"],
     ["Dev", 1, 2, "working"],
-    ["Tune", 0, 2, "working"],
+    ["Tune", 0, 2, "pending"],
     ["Ready", 0, 1, "pending"],
   ]);
   const done = state({ stage: "ready_for_review", status: "completed", reviews: [{ verdict: "pass", criteria: [{ id: "AC-1", pass: true }, { id: "AC-2", pass: true }] }] });

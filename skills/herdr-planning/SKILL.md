@@ -107,6 +107,18 @@ Rules the Runner enforces:
 Order tasks so the first task is the smallest thing that makes the baseline test suite
 go from red to green, and later tasks are independent where possible.
 
+## Constraints checklist
+
+Before calling `my-orca init`, go through these seven constraints (docs/spec-v2-converged.md §8.2.3) with the user **one by one** and get an explicit yes to each. Do not call `init` until all seven are confirmed.
+
+1. **網路**：cycle 內除 `git push` 外不連外網；需要的套件、文件、資料先備妥並 commit。
+2. **範圍**：只動本 worktree；不碰其他 branch、worktree、`$HOME`。
+3. **Git**：每個 task 至少一個 commit（訊息以 `orca(<task-id>): ` 開頭）加上不帶旗標的 `git push`；不 force、不 amend、不 rebase、不切 branch。
+4. **不起背景程序**（`nohup`、`&`、`setsid`、伺服器、watcher）、不起子 agent。
+5. **每個 `test`／`verify` 由 user 逐行看過並同意**（M2），且不是空測試。
+6. **測試產物必須在 `.gitignore` 內**（M6 的第二次 porcelain 檢查）。
+7. **Tuning 可直接小修**，但算一次 rework cycle。
+
 ## Step 4 — Show the user and wait
 
 Print a compact table, for example:

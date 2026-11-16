@@ -76,6 +76,7 @@ export default class Workflow extends View {
         try { config = parseJson(configText); } catch { config = null; }
         if (token !== this.loadToken) return;
         this.folder = folder;
+        if (wtId !== this.wtId) this.lastStatus = null;
         this.wtId = wtId;
         this.state = state ?? (stateError ? this.state : null);
         this.stateText = stateText;
@@ -175,7 +176,7 @@ export default class Workflow extends View {
     const color = row.pass === true ? t.done : row.pass === false ? t.blocked : t.dim;
     const icon = row.pass === true ? "circle-check" : row.pass === false ? "alert-circle" : "circle-help";
     return h_flex().gap(8).px(10).py(5).items_center()
-      .child(svg(ICON(icon)).size(11).text_color(color))
+      .child(row.pass === true || row.pass === false ? svg(ICON(icon)).size(11).text_color(color) : div().size(11).rounded_full().flex_none().border_1().border_color(color))
       .child(div().text_size(12).font_semibold().text_color(t.foreground).child(row.id))
       .child(div().flex_1().min_w(0).text_size(12).text_color(t.muted).child(row.text))
       .child(div().text_size(11).text_color(t.dim).child(row.manual ? "manual" : "verify"));

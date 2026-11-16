@@ -208,7 +208,6 @@ export function scanSecrets(text) {
 }
 
 const normalizeHeading = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function checkHandoff(handoffText) {
   const errors = [];
@@ -408,7 +407,7 @@ export function lights(state) {
   const devDone = ready || (tasks.length > 0 && accepted === tasks.length);
   const devState = devDone ? "complete" : (tasks.length ? "working" : "pending");
   const tuningState = state?.stage === "ready_for_review" || overall === "completed" ? "complete"
-    : (acceptance.length && passedAc === acceptance.length && latest ? "complete" : (state?.stage === "tuning" || tasks.length ? "working" : "pending"));
+    : (acceptance.length && passedAc === acceptance.length && latest ? "complete" : (state?.stage === "tuning" ? "working" : "pending"));
   const readyState = state?.stage === "ready_for_review" || overall === "completed" ? "complete" : "pending";
   const out = [
     at("planning", 1, 1, "complete"),
@@ -557,16 +556,6 @@ export function makeHc({ env = process.env, expectCoreId, forbidCoreIds = [], ex
     const r = spawnSync("hc", [...args], { env, encoding: "utf8", maxBuffer: 32 << 20 });
     return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
   });
-  const json = (args, { allowFail = false } = {}) => {
-    const r = rawExec([...args, "--json"]);
-    let value = null;
-    try { value = r.stdout.trim() ? JSON.parse(r.stdout) : null; } catch { value = null; }
-    if (!allowFail && (r.code !== 0 || r.error)) {
-      const kind = value?.error?.kind ?? null;
-      throw new HcError(`hc ${args.join(" ")} failed (${r.code}${kind ? `, ${kind}` : ""})`, { code: kind, json: value });
-    }
-    return { ...r, json: value, error: value?.error ?? null };
-  };
   const reads = (args) => {
     const r = rawExec([...args, "--json"]);
     let value = null;
@@ -600,7 +589,7 @@ export function makeHc({ env = process.env, expectCoreId, forbidCoreIds = [], ex
     return { ...r, json: value, error: value?.error ?? null };
   };
   return {
-    raw: rawExec, json, reads, get, list, coreId, guarded, run,
+    raw: rawExec, reads, get, list, coreId, guarded, run,
     kill: (address) => guarded ? guarded(["kill", address]) : rawExec(["kill", address]),
     rm: (address) => guarded ? guarded(["rm", address]) : rawExec(["rm", address]),
   };
@@ -645,7 +634,6 @@ export function runShell(cmd, { cwd, dispatchId, timeoutMs, env = process.env } 
 // ---------------------------------------------------------------------------
 // Runner
 
-export class RunnerExit extends Error {}
 
 const sleepReal = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -679,7 +667,7 @@ async function saveScreen(ctx, dispatch, label = "screen") {
 
 // Builds a runner context with injectable dependencies (unit tests use fakes).
 export function makeRunnerContext({ stateDir, state, hc, git, config, save, event, log = () => {}, sleep = sleepReal, clock = nowMs, env = process.env }) {
-  return { stateDir, state, hc, git, config, save, event, log, sleep, clock, env, exits: false };
+  return { stateDir, state, hc, git, config, save, event, log, sleep, clock, env };
 }
 
 async function saveState(ctx) {
@@ -827,7 +815,6 @@ async function settleAndKill(ctx, dispatch) {
   const deadline = ctx.clock() + 60_000;
   let prev = null;
   let stable = 0;
-  let lastChanged = null;
   let unsettled = false;
   while (ctx.clock() < deadline) {
     let term = null;
@@ -838,7 +825,7 @@ async function settleAndKill(ctx, dispatch) {
     }
     const info = ctx.git.info(ctx.state.repo.toplevel);
     const key = `${info.head}|${info.dirty.join(",")}`;
-    if (prev === key) stable++; else { stable = 0; lastChanged = info; }
+    if (prev === key) stable++; else stable = 0;
     prev = key;
     const notWorking = term && term.status?.state !== "working";
     if (notWorking || stable >= 2) break;
@@ -846,7 +833,6 @@ async function settleAndKill(ctx, dispatch) {
   }
   const finalInfo = ctx.git.info(ctx.state.repo.toplevel);
   if (finalInfo.ok && prev !== `${finalInfo.head}|${finalInfo.dirty.join(",")}`) {
-    lastChanged = finalInfo;
     // M7 cap: still kill + sweep + check below; only then report unsettled
     unsettled = true;
   }
@@ -1196,7 +1182,7 @@ async function runTuning(ctx) {
   };
   const before = ctx.git.info(ctx.state.repo.toplevel);
   const checked = dispatchCheck(ctx.state, before);
-  if (!checked.ok) return needsUser(ctx, "tree_changed", checked.detail);
+  if (!checked.ok) return needsUser(ctx, checked.code, checked.detail);
   ctx.state.dispatch = dispatch;
   ctx.state.stage_head = before.head;
   await saveState(ctx);
@@ -1936,6 +1922,8 @@ async function startRunner({ wtId, stateDir, out, err, env, acceptHead = false }
     await writeState(stateDir, state, state.updated);
   }
   if (acceptHead) {
+    // --accept-head rewrites state.json; a live Runner would overwrite or race it
+    if (makeHc({ env }).list({ "orca.run": state.run_id, "orca.role": "runner" }, { all: false }).length) { print(err, "start: stop the Runner first"); return EXIT.reject; }
     const clean = info.dirty.length === 0;
     const pushed = pushCheck(state, info, git, state.repo.stage_head);
     if (!clean || !pushed.ok) { print(err, `start --accept-head: ${pushed.detail || "working tree is dirty"}`); return EXIT.reject; }
@@ -2097,10 +2085,6 @@ async function cmdConfig(argv, io) {
   await writeAtomic(path.join(root, "config.json"), JSON.stringify(next, null, 2) + "\n");
   print(out, `${key} = ${next[key]}`);
   return EXIT.ok;
-}
-
-async function cmdInitCheck(argv, io) {
-  return cmdInit(argv, io);
 }
 
 export async function main(argv = process.argv.slice(2), io = { out: process.stdout, err: process.stderr }) {

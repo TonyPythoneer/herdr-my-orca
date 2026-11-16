@@ -76,7 +76,14 @@ async function main() {
   fs.rmSync(base, { recursive: true, force: true });
   for (const d of [base, path.join(base, "c"), path.join(base, "s"), path.join(base, "d"), stateHome]) fs.mkdirSync(d, { recursive: true });
 
+  // The owner's core is read WITHOUT HC_SESSION; the dedicated core must differ, and the Runner is told to refuse it.
+  const ownerEnv = { ...process.env }; delete ownerEnv.HC_SESSION;
+  const coreOf = (e) => { try { return JSON.parse(spawnSync("hc", ["server", "status", "--json"], { env: e, encoding: "utf8" }).stdout)?.core?.id ?? null; } catch { return null; } };
+  const ownerCore = coreOf(ownerEnv);
+  if (ownerCore) env.MY_ORCA_FORBID_CORE_IDS = ownerCore;
   step("dedicated core starts", hc(["server", "status"]).status === 0);
+  const ownCore = coreOf(env);
+  if (!step("dedicated core is not the owner's core", Boolean(ownCore) && ownCore !== ownerCore)) { fs.rmSync(base, { recursive: true, force: true }); return; } // no cleanup(): it would stop a core that may be the owner's
   step("bare remote and repo", git(["init", "--bare", remote], base).status === 0 && git(["init", "-b", "feat", repo], base).status === 0);
   git(["config", "user.email", "fake@example.com"]);
   git(["config", "user.name", "Fake"]);

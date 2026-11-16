@@ -32,7 +32,7 @@ export function lights(state) {
   out[1] = { ...out[1], accepted: doneTasks, total: tasks.length,
     state: ready || (tasks.length > 0 && doneTasks === tasks.length) ? "complete" : tasks.length ? "working" : "pending" };
   out[2] = { ...out[2], accepted: doneAc, total: acceptance.length,
-    state: ready || (latest && doneAc === acceptance.length) ? "complete" : (state?.stage === "tuning" || tasks.length) ? "working" : "pending" };
+    state: ready || (latest && doneAc === acceptance.length) ? "complete" : state?.stage === "tuning" ? "working" : "pending" };
   out[3] = { ...out[3], accepted: ready ? 1 : 0, total: 1, state: ready ? "complete" : "pending" };
   if (overall === "needs_user") {
     const idx = state?.stage === "tuning" ? 2 : state?.stage === "ready_for_review" ? 3 : 1;
