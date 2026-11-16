@@ -107,3 +107,13 @@ test('keyboard mode bypasses retention even beyond the initial focus pool', () =
   }
   assert.equal(owner.direct, 240);
 });
+
+ test('event signature refresh scans focus handles once for all rows', () => {
+  const { owner, draw } = fixture();
+  for (let i = 0; i < 80; i++) draw(String(i));
+  let scans = 0;
+  Object.defineProperty(owner, 'focused', { get() { scans++; return 'row:79'; } });
+  owner.refreshRetained();
+  assert.equal(scans, 1);
+  assert.equal(owner.retainedPending.get('79').signature, owner.rowSignature(owner.retainedPending.get('79'), 'row:79'));
+});

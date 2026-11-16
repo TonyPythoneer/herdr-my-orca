@@ -408,7 +408,7 @@ changes and measured limits above do not substitute for those three outcomes.
 
 ## 10. 暫停與續做入口（2026-11-16）
 
-**狀態：依使用者要求暫停，原始「全部做完」目標尚未完成。**
+**狀態：已依使用者要求恢復執行，原始「全部做完」目標尚未完成。**
 使用者因 token 不足要求先儲存狀態；本次只保存交接，不繼續實作。
 先前「能安全做的都做完」收尾過早，不能據此把其餘工作判定為無法完成。
 
@@ -441,3 +441,13 @@ changes and measured limits above do not substitute for those three outcomes.
   或仍可用，必須重新確認；不要覆寫使用者 live Herdr config。
 
 後續仍依原要求：每完成一個階段，更新本檔狀態並各自 commit。
+
+## 11. 恢復執行：焦點掃描（2026-11-16）
+
+- 每次 render 與事件簽章更新各讀取一次目前焦點，傳入各列簽章，避免
+  每列重複掃描焦點 handles。保留鍵盤模式直接繪製與 pool 補充行為。
+- 新 regression：80 列事件更新的焦點讀取由 80 次降為 1 次，並驗證末列
+  簽章包含正確焦點。這是操作次數檢查，沒有宣稱 frame-time 改善。
+- 驗證：spaces 28/28 tests、herdr-app check、git diff --check 通過。
+- 所有模式配置量上限、目錄容量政策、原生 frame 證據仍未完成；下一步
+  繼續研究初次／變更／鍵盤模式的有界建構與完整焦點順序。

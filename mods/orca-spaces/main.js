@@ -207,14 +207,14 @@ export default class Spaces extends View {
   }
 
   refreshRetained() {
-    for (const data of this.retainedPending.values()) data.signature = this.rowSignature(data);
+    const focused = onStop(this);
+    for (const data of this.retainedPending.values()) data.signature = this.rowSignature(data, focused);
     this.retainedSynced = null;
   }
 
-  rowSignature({ r, t, mine, groupBy }) {
+  rowSignature({ r, t, mine, groupBy }, focused = onStop(this)) {
     const key = r.w.id;
     const fold = foldKey(r);
-    const focused = onStop(this);
     // The plan already projects the sibling catalog into row/head/count changes.
     const { worktrees, ...git } = r.g ?? {};
     return JSON.stringify([
@@ -231,7 +231,7 @@ export default class Spaces extends View {
   retainedRow(r, t, ps, mine, groupBy) {
     const key = r.w.id;
     const data = { r, t, ps, mine, groupBy };
-    const signature = data.signature = this.rowSignature(data);
+    const signature = data.signature = this.rowSignature(data, this.retainedFocus);
     this.retainedPending.set(key, data);
     const held = this.retainedRows.get(key);
     // New or changed host data paints immediately; a task adopts the retained view afterwards.
@@ -1269,6 +1269,7 @@ export default class Spaces extends View {
     // collection's — an unopened worktree or a group with no rows still counts as a row.
     const rows = this.ordered();
     this.retainedPending = new Map();
+    this.retainedFocus = onStop(this);
     // The shipped mods (the Terminals picker) still color spaces from "space.colors": the same color, from the name.
     const colors = Object.fromEntries(sp.filter(p => p.name !== "~").map(p => [p.id, tint(p.name, false)]));
     if (JSON.stringify(colors) !== JSON.stringify(shared("space.colors") ?? {})) setShared("space.colors", colors);
