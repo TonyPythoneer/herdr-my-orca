@@ -1411,6 +1411,7 @@ export function reworkGate(newTasks, { cycle, existingIds }) {
 
 export async function closePlanningTab(ctx, { app = defaultApp, wait = true } = {}) {
   const p = ctx.state.planning;
+  if (p?.closed === "closed") return "closed";
   if (!p?.address) { ctx.state.planning = { ...(p ?? {}), closed: "skipped:gone" }; await saveState(ctx); return "skipped:gone"; }
   if (!ctx.config.close_planning_tab) {
     ctx.state.planning.closed = "skipped:disabled";
@@ -1730,9 +1731,11 @@ async function resolveWtId(root, arg) {
   return wtIdForGitDir(info.git_dir);
 }
 
-function planningFromTerminal(term) {
+// Exported for tests.
+export function planningFromTerminal(term, coreId) {
   return {
     address: term.address,
+    core_id: coreId,
     created_ms: term.created_ms,
     tab: term.labels?.["herdr.tab"] ?? null,
     space: term.labels?.["herdr.space"] ?? null,
@@ -1853,7 +1856,7 @@ async function cmdInit(argv, io) {
       first_commit_seen: false,
     },
     profile: { cli: profile.cli, model: profile.model, effort: profile.effort },
-    planning: planningFromTerminal(planningTerm),
+    planning: planningFromTerminal(planningTerm, coreId),
     stage: "development",
     status: "working",
     needs_user: null,
