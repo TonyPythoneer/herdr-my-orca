@@ -482,7 +482,7 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 | U10 | `watchFolder(<my-orca 目錄>)` 在外部以 tmp + rename 覆寫 `state.json` 時會觸發 | 同 U9 | 實作第 8 步時驗；不觸發就退回 5 秒 timer（v1 現有做法） |
 | U11 | claude 與 codex 在同一個 worktree 開新 session 時不會再跳信任對話框；`~/.agents/skills` 裡的 skill 兩者都看得到（codex 需另外複製到 `~/.codex/skills`） | 禁止啟動 claude、codex | 實作第 4 步由 owner 各開一次確認 `/herdr-planning` 出現 |
 | U12 | **已驗證（V53）**：claude 與 codex 的 `foreground.argv` 都保留 model 與 effort 旗標 | 這台目前沒有 live 的 codex terminal 可讀 | owner 開一個 codex tab 後 `hc get <addr> --json` 看 `foreground.argv` |
-| U13 | opencode 在 `--auto` 下遇到「明確 deny」的權限或提問時，會回報 `blocked`（`kind:question` 之類）而不是默默卡住或自己跳過 | P1 的 1.7B 模型沒有觸發任何權限詢問 | 拋棄式 repo 放 `opencode.json` 的 `permission` 設 deny 某個指令，prompt 要求執行它；看 `hc get` 的 `status` 與 `hc read` 畫面；沒回報就把 AT-21 的 `blocked` 分支對 opencode 標 NOT TESTED |
+| U13 | **已驗證（V72）**：opencode 卡在提問時回報 `blocked`（`kind:"question"`）。「明確 deny 權限」情境因不用沙盒而不再相關 | — | — |
 | U14 | 較大或不同的 model 下，opencode 仍照指示寫 ack、result、commit（遵從率） | P1 每項只跑一次、只用 1.7B | E2E 的 3 個 dev task 逐一記錄（第 7 節質疑 1）；另在 fake 之外加跑「模型不照做」的情境，確認結果永遠是 `needs_user` 而非誤判成功 |
 | U15 | `--standalone` 下 `hc kill` 是否殺乾淨「整棵」process tree。**已驗證（V42）**：`nohup &`（V35）與子 shell 背景化（V40）會被清掉，但**真正脫離 process group 的 daemon（`setsid` 加雙重 fork）在 kill 後存活**；用環境標記掃描可清（M14）。常駐伺服器未驗。`hc --skill` 明載「Unix 上 kill 不會清掉 detached 的程式」 | V32 只驗了前景；V35 加驗 `nohup &` | 讓 opencode 執行 `nohup sh -c 'sleep 60 && touch late2.txt' &` 與 `setsid` 版本，途中 kill，檢查 `late2.txt`；若會漏，R-C 的「kill 後工作樹靜止」不成立，要加驗收前的 process group 檢查或在 README 列為已知限制 |
 
@@ -599,6 +599,7 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 |---|---|
 | M7 上限 | result 出現後最多等 60 秒；到了照樣 kill → M14 掃描 → 完整 R-C。看到 `index.lock` 或工作樹髒 → `needs_user`（`partial_changes`），永不 reset、不清鎖。若 `HEAD` 或工作樹在上限時仍在變動 → `needs_user`（`unsettled`），不接受結果 |
 | `blocked` 的出口 | `status.state==blocked`、result 的 `status:"blocked"`、60 秒靜止，一律 `needs_user`，不算 `rejected`、不重試。U13 只在 E2E 量延遲，不是閘門 |
+| ack 缺失 | **不算失敗**：只要有其他送達證據（曾 `working`）且 result 合法就接受（V69）；Runner 不得要求 ack |
 | dev 的 model | opencode 設定檔的預設值；Runner 永不寫 `opencode.json`；E2E 把它 commit 進拋棄式 repo |
 | worker 環境變數 | 一律 `env -u HC_TERMINAL_ID -u HC_SCOPE -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME`；**永遠保留 `HC_SESSION`**（V60）；**加 `GIT_TERMINAL_PROMPT=0`**（V64：認證問題立刻失敗，不要掛住）；Tuning 另拿掉 `CLAUDE_CODE_*`（猜測只影響 transcript 是否保存，E2E 看一次） |
 | 失敗分類 | `environment／policy／model／runner／inconclusive`；撤回「換大 model 通過＝1.7B 是原因」 |
@@ -714,13 +715,19 @@ Runner 本體**不得**依「有沒有回報 7501」分支；兩種結果的差�
 | V65 | **`herdr-app ls` 的 JSON**：頂層 `{spaces, recent}`；`spaces[]` 有 `id`、`name`、`folder`、`machine`、`active`；`spaces[].tabs[]` 有 `id`、`name`、`active`、`settled`、`terminals[]`；`terminals[]` 有 `terminal`（address）、`pane`、`status`、`app`、`name`（目前都是 null）、`sub_agents[]`。**tab 層沒有 panes 或 mods 欄位，沒有 hc 的 terminal 名稱。**`herdr-app status` 的欄位是 `zoom`、`font_size`、`ui_font_size`、`space`、`tab`、`focused_pane`、`layout`、`agent`、`floats`、`overlays`、`errors`，**沒有 App 或 core 的連線狀態欄位**；App 沒開時 `status` 與 `ls` 都是 exit 2（`no Herdr window at <sock>`，以空的 `HERDR_APP_HOME` 模擬）。 | 2.2 的檢查 h 用 exit code；檢查 f 看得到 terminal 數與 `sub_agents`，**看不到 pane 結構**（owner 預設關閉，不處理）；`sub_agents[]` 元素的形狀未知 |
 | V66（U5，我自己的拋棄式 tab） | **非最後一個 tab 的 `tab.close`**：`herdr-app do tab.new --name u5-probe --argv '["sh"]'` 回傳 `space`、`tab`、`terminal`；`herdr-app do tab.close --id <tab>`（**不帶 `confirmed`**）回 `{"ok":true}`，tab 立刻消失，沒有對話框（`overlays:[]`、`errors:[]`），terminal 變成 `finished/killed`，其他 tab 全部不變。副作用：`tab.new` 插在中間，把你一個未命名的 tab 的顯示編號暫時從 `2` 變成 `3`，關閉後恢復。**未測**：最後一個 tab 的確認框、tab 內有多個 pane。 | U5 的核心已驗；`close_planning_tab` 仍維持預設 `false`，直到 AT-03 (b) 的五種情境（尤其是最後一個 tab）都測過 |
 | V67 | `tab.close` 的參數是 `id` 與 `confirmed`（都非必填）；文件說未帶 `confirmed` 會先詢問人，實測非最後 tab 沒有詢問。 | 2.2「不帶 `confirmed`」成立；最後一個 tab 由檢查 g 排除 |
+| V68（R-H 完整 dev 流程，真的 opencode 1.7B，連續 3 個 task，**絕對路徑**加**真實狀態資料夾路徑樣式** `~/.config/herdr-app/my-orca/probe-*/`，各一次） | **d1、d2、d3 全部通過 Runner 檢查 a 到 g**（結果 JSON 合法且 `dispatch` 相符、測試 exit 0、porcelain 空、`@{u}` 存在且領先 0、`is-ancestor` 通過且恰好 1 個新 commit、bare remote 的 HEAD 等於 worktree HEAD、`ORCA_DISPATCH` 掃描無殘留）。沒有任何檔案寫進 repo 或 worktree 之外，沒有 ack 被 `git add -A` 夾帶，`git push` 全是不帶參數的 plain push，沒有 amend、force、額外 commit。**V50 的偏差（把 ack 與 results 寫進 repo）確認是相對路徑造成，絕對路徑下沒有再發生。** 各 task 耗時約 35、29、180 秒（d3 用了約 33 個指令） | 派發檔一律絕對路徑（已定）；單 task 的時間預算 10 分鐘足夠 |
+| V69（ack 遵從率） | **d1 完全沒有建立 `d1.ack`**，卻完成了其餘全部步驟；d2、d3 有建。**ack 遵從 2/3。** | 驗證 M1 的設計：**缺 ack 不是失敗**；送達證據是 ack 或曾回報 `working`（d1 在 3.3 秒就 `working`）或 `hc send` 回 `started:true`，result 合法即接受 |
+| V70（worker 自述不可信） | d3 的最終畫面宣稱 `upper.sh` 是「reads stdin via cat」，實際內容只有 `tr a-z 'A-Z'`。 | 驗證既有原則：Runner 只看檔案、git 與自己重跑的測試，不看 worker 的回報 |
+| V71（狀態與時序） | **`hc get` 的 `status` 是物件**（`{"app":"opencode","state":"working",…}`），Runner 必須讀 `.status.state`；啟動時 `status` 為 `null`，約 3.3 秒後變 `working`；`turn` 在 working 期間為 0，**回到 `idle` 時才變成 1**。**三次中 result 檔出現時 status 都還是 `working`**；d3 要約 9.5 秒後才轉成 `idle`。M7 的「git 穩定」判準在三次都比「離開 working」先成立（約 6.4 秒，取樣間隔 3 秒，誤差約 ±3 秒） | M7 成立：只等 `idle` 會多等約 10 秒，result 一出現就 kill 則 worker 仍在寫最終回覆（git 與結果檔此時已完整） |
+| V72（U13，opencode 卡在提問，90 秒取樣，一次） | **opencode 會回報 `blocked`**：約 12 秒起一路到 90 秒，`status` 是 `{"app":"opencode","kind":"question","msg":"Input needs response","state":"blocked"}`，畫面是 `Do you prefer option A or option B? 1. A 2. B 3. Type your own answer`。 | **R-B 的 `blocked` 分支對 opencode 成立（AT-21 可測）**；Runner 用 `status.state=="blocked"` 加 `kind` 判斷，立即 `needs_user`（`blocked`），不必等逾時。U13 在「問問題」這個情境已驗；「明確 deny 權限」情境無沙盒決定後不再相關 |
+| V73（限制） | 單次小樣本、3 秒取樣（事件時間誤差約 ±3 秒）；d1 與 d2 的 `idle` 時間沒量到；d1 為什麼漏 ack 無從得知；d4 只取樣 90 秒，回答問題後的狀態沒測；沒有真實 remote、並行 worker、較大任務；第一次 d1 因 harness 腳本錯誤中止後重跑（數據取自第二次） | 不能當成穩定時序保證 |
 
 **未驗證**：真正沒有 pty 的 git 憑證行為；真實 App 被關閉時 `herdr-app` 的行為（只用空的 `HERDR_APP_HOME` 模擬）；`sub_agents[]` 元素形狀。
 
 #### 8.2.10 仍開著、但不擋路
 - U13 的延遲、1.7B 的遵從率 → E2E 量。
 - AT-03 (b) 的五種情境（尤其最後一個 tab 的確認框）→ 最後；`close_planning_tab` 維持預設關閉。
-- 完整 dev stage 的 R-H 流程（絕對路徑、真實狀態資料夾路徑、M7 時間線、卡在提問時的狀態）→ **已派 subagent 驗證，結果待補**。
+- ack 遵從率偏低（2/3）、d1 為何漏 ack、V73 的各項限制 → E2E 的 3 個 task 再量一次。
 - pre-push hook 失敗路徑；多個 worker 同時 push（v1 單 worker，不會發生）。
 - V58 的 linked worktree 信任繼承只有單次樣本。
 - 真正沒有 pty 的 git 憑證行為；U9／U10（`writeTextFile`、`watchFolder`）→ 實作時驗。
