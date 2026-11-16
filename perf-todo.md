@@ -545,3 +545,18 @@ changes and measured limits above do not substitute for those three outcomes.
   registration of first/last stop, owner scroll/pending focus lifecycle, measured
   row sizes, and tests for folding/removal while a focus request is pending.
   Keep virtualization off production until real Tab and nested controls pass.
+
+### Scoped action routing for virtual focus
+
+- Current API supports cx.bind_keys with a context predicate and on_action. Bind
+  Shift-Tab to probe.previous only under OrcaProbe; dispatch that same action along
+  the focused child Entity path. All nine moves 988 through 980 report focused=true.
+  This proves the action-to-owner route, not an injected physical key event.
+- Listeners/key_context must be on a plain div wrapper: the initial attempt on
+  v_virtual_list warned and did not wire them. Corrected wrapper passes check
+  without warnings and receives all eight action calls. Saved corrected source
+  and runtime excerpt: `entity-list-probe/action-focus.*`.
+- Integration should use scoped forward/backward actions, keep native traversal
+  within each mounted row, and hand off at row boundaries with reveal-before-focus.
+  Multiple controls per row, changing controls, boundary exit to neighboring mods,
+  and actual Tab binding precedence remain gates; no production switch yet.
