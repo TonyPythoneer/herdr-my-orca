@@ -21,6 +21,7 @@ const MARKS = {
   anthropic: { path: "claude.svg" },
   codex: { path: "codex.svg" },
   openai: { path: "codex.svg" },
+  opencode: { path: "opencode.svg" },
   cursor: { path: "cursor.png", image: true },
   // The second probe's own mark, for its pending chip: `omp usage` speaks for several
   // providers before any of them has answered.
