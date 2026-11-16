@@ -6,7 +6,7 @@ findings until measured in the Herdr runtime.
 
 ## Current continuation entry
 
-Latest continuation: section 18. Production checks pass; virtualization remains a
+Latest continuation: section 19. Production checks pass; virtualization remains a
 separately generated candidate. It now projects Project/Status/None and host
 headers with typed view keys, but its new grouping/native interaction acceptance
 is still pending. Full native frame/count evidence and lossless catalog bounds
@@ -778,3 +778,23 @@ changes and measured limits above do not substitute for those three outcomes.
 - Next consolidate native grouping/control tests, including event-to-paint latency:
   current queued preparation may delay changed visible rows behind unrelated rows.
   Visible/event priority must preserve fairness rather than starving other rows.
+
+## 19. Event priority with fair background preparation
+
+- Candidate renderer records visible virtual keys. Event notify refreshes current
+  visible data and prepares signatures before native adoption and root notification,
+  capped at 16. New focus requests explicitly enqueue their current snapshot.
+- Background batches rotate through up to eight visible/focus entries and keep
+  remaining slots for FIFO work; scrolling placeholders and visible sets larger
+  than a batch do not prevent old nonvisible work from progressing. Event batches
+  prefer visible entries up to the same total 16-signature cap.
+- Host signatures read live owner hover/fold/repair/machine state rather than
+  waiting for task projection to refresh descriptor metadata.
+- Luna added budget/priority, 24-visible-row rotation plus FIFO progress, current
+  visible-only invalidation, focus enqueue/one-notify, and live host-state tests.
+  Root reviewed the code and tests. Full suite 72/72, spaces check and diff check
+  pass; generated candidate inspected with no notification recursion found.
+- Structural event update coverage is not native paint-latency proof. Consolidated
+  native grouping/control acceptance is next. Native adoption still releases stale
+  Entities before adopting new ones: mass removal may delay visible replacements
+  and needs a fair adoption/cleanup policy before production promotion.

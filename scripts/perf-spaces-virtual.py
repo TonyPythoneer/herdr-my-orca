@@ -42,7 +42,9 @@ def build(destination):
     replace_once('.children(rows.length ? this.grouped(t, cx, rows) : [])', '''.child(v_virtual_list("virtual-workspaces", rows.length,
               rows.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64)), i => rows[i].w.id, range => {
               const visible = [];
+              this.virtualVisible = [];
               for (let i = range.start; i < range.end; i++) {
+                this.virtualVisible.push(rows[i].virtualKey);
                 const held = this.retainedRows.get(rows[i].w.id);
                 visible.push(held ? div().w_full().child(held.entity) : div().h(64));
               }
@@ -91,10 +93,12 @@ def build(destination):
   virtualRequest(key, direction, cx) {
     const index = this.virtualRows.findIndex(data => data.r.virtualKey === key);
     if (index < 0) { this.virtualFocusPending = null; return; }
+    const data = this.virtualCurrent.get(key);
+    if (data) this.virtualQueue.set(key, data);
     while (this.fs.free.length < 64) this.fs.free.push(cx.focus_handle());
     this.virtualFocusPending = { key, direction };
     this.virtualScroll.scroll_to_item(index);
-    cx.notify();
+    this.notify(cx);
   }
 
   virtualFocusTick(cx) {
@@ -150,13 +154,27 @@ def build(destination):
     replace_once("""    const focused = onStop(this);
     const keyboardMode = this.retainedKeyboardMode = Boolean(shared("t3-focus"));
     for (const data of this.retainedPending.values()) data.signature = this.rowSignature(data, focused, keyboardMode);
-    this.retainedSynced = null;""", """    for (const [key, data] of this.virtualCurrent) this.virtualQueue.set(key, data);""")
-    replace_once('  virtualIds({ r, groupBy }) {', """  prepareVirtualRows() {
+    this.retainedSynced = null;""", """    for (const key of this.virtualVisible ?? []) {
+      const data = this.virtualCurrent.get(key);
+      if (data) this.virtualQueue.set(key, data);
+    }""")
+    replace_once('  virtualIds({ r, groupBy }) {', """  prepareVirtualRows(preferVisible = false) {
     const batch = [], priority = this.virtualFocusPending?.key;
-    if (this.virtualQueue.has(priority)) batch.push([priority, this.virtualQueue.get(priority)]);
-    for (const entry of this.virtualQueue) {
+    const add = key => {
+      if (batch.length < 16 && this.virtualQueue.has(key) && !batch.some(entry => entry[0] === key)) batch.push([key, this.virtualQueue.get(key)]);
+    };
+    add(priority);
+    const visible = this.virtualVisible ?? [], visibleLimit = preferVisible ? 16 : 8;
+    const start = preferVisible ? 0 : (this.virtualVisibleCursor ?? 0);
+    let visited = 0;
+    while (visited < visible.length && batch.length < visibleLimit) {
+      add(visible[(start + visited) % visible.length]);
+      visited++;
+    }
+    if (!preferVisible && visible.length) this.virtualVisibleCursor = (start + visited) % visible.length;
+    for (const key of this.virtualQueue.keys()) {
       if (batch.length === 16) break;
-      if (entry[0] !== priority) batch.push(entry);
+      add(key);
     }
     const focused = onStop(this), keyboardMode = Boolean(shared("t3-focus"));
     for (const [key, data] of batch) {
@@ -179,7 +197,7 @@ def build(destination):
     this.virtualRows = [...this.virtualCurrent.values()];""", '')
     replace_once('rows.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64))', 'this.virtualItemSizes ?? []')
     replace_once('cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });', 'cx.timer.every(250, cx => { this.projectVirtualRows(cx); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });')
-    replace_once('  prepareVirtualRows() {', """  projectVirtualRows(cx) {
+    replace_once('  prepareVirtualRows(preferVisible = false) {', """  projectVirtualRows(cx) {
     const t = theme(), ps = panes(), rows = this.ordered();
     const groupBy = workspaceOptions().groupBy;
     const rowAgents = agentsByRow(rows, agents());
@@ -215,7 +233,7 @@ def build(destination):
     this.virtualItemSizes = this.virtualProjected.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64));
   }
 
-  prepareVirtualRows() {""")
+  prepareVirtualRows(preferVisible = false) {""")
     color_start = source.index('    const colors = Object.fromEntries(sp.filter(')
     color_end = source.index('\n', source.index('setShared("space.colors", colors);', color_start))
     colors = source[color_start:color_end]
@@ -246,12 +264,17 @@ def build(destination):
     }''')
     replace_once('      const next = this.virtualRows[index + direction];', '      let nextIndex = index + direction;\n      while (this.virtualRows[nextIndex] && !this.virtualIds(this.virtualRows[nextIndex]).length) nextIndex += direction;\n      const next = this.virtualRows[nextIndex];')
     replace_once('    const key = r.w.id;\n    const fold = foldKey(r);', '''    const key = r.w.id;
-    if (r.w.descriptor) return JSON.stringify([r.w, t, keyboardMode, this.fs.keyboard,
-      this.virtualIds({ r, groupBy }).includes(focused) ? focused : null]);
+    if (r.w.descriptor) {
+      const descriptor = r.w.descriptor, m = descriptor.machine;
+      return JSON.stringify([descriptor, t, keyboardMode, this.fs.keyboard,
+        descriptor.kind === "host" ? [this.hot, this.overMachine, this.folded.has(m), this.reconnecting[m], this.machines.find(machine => machine.name === m)] : null,
+        this.virtualIds({ r, groupBy }).includes(focused) ? focused : null]);
+    }
     const fold = foldKey(r);''')
     replace_once('  retainedRow(r, t, ps, mine, groupBy) {\n    const key = r.w.id;', '  retainedRow(r, t, ps, mine, groupBy) {\n    const key = r.virtualKey;')
     replace_once('i => rows[i].w.id', 'i => rows[i].virtualKey')
     replace_once('this.retainedRows.get(rows[i].w.id)', 'this.retainedRows.get(rows[i].virtualKey)')
+    replace_once('    this.refreshRetained();\n    this.syncRetained(this.ownerCx);', '    this.refreshRetained();\n    this.prepareVirtualRows(true);\n    this.syncRetained(this.ownerCx);')
     main.write_text(source)
 
 

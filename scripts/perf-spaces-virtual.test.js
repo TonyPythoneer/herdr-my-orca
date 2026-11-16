@@ -46,6 +46,99 @@ test('signature queue prioritizes focus, bounds batches, uses latest data and dr
   assert.equal(owner.retainedPending.size, 79);
 });
 
+test('event preparation prioritizes visible rows within the 16-signature cap and background stays FIFO', t => {
+  const owner = candidate(t);
+  const calls = [];
+  Object.assign(owner, {
+    virtualQueue:new Map(), virtualCurrent:new Map(), retainedPending:new Map(),
+    virtualVisible:Array.from({length:20}, (_,i)=>String(i+20)),
+    virtualFocusPending:{key:'5',direction:1}, fs:{keyboard:false},
+    rowSignature:data=>{calls.push(data.name);return data.name;},
+  });
+  for (let i=0;i<40;i++) {
+    const key=String(i), data={name:key};
+    owner.virtualQueue.set(key,data);
+    owner.virtualCurrent.set(key,data);
+  }
+  owner.prepareVirtualRows(true);
+  assert.equal(calls.length,16);
+  assert.deepEqual(calls,[ '5', ...Array.from({length:15},(_,i)=>String(i+20)) ]);
+  assert.equal(owner.virtualQueue.size,24);
+
+  const before=calls.length;
+  owner.prepareVirtualRows(false);
+  assert.equal(calls.length-before,16);
+  assert.deepEqual(calls.slice(before),[...Array.from({length:5},(_,i)=>String(i+35)),...Array.from({length:5},(_,i)=>String(i)),...Array.from({length:6},(_,i)=>String(i+6))]);
+  assert.equal(owner.virtualQueue.size,8);
+});
+
+test('background batches rotate through a large visible set while old FIFO work progresses', t => {
+  const owner=candidate(t);
+  const visible=Array.from({length:24},(_,i)=>`visible-${i}`);
+  const calls=[];
+  Object.assign(owner, {
+    virtualQueue:new Map(), virtualCurrent:new Map(), retainedPending:new Map(),
+    virtualVisible:visible, virtualVisibleCursor:0, virtualFocusPending:null, fs:{keyboard:false},
+    rowSignature:data=>{calls.push(data.name);return data.name;},
+  });
+  owner.virtualCurrent.set('old-nonvisible',{name:'old-nonvisible'});
+  owner.virtualQueue.set('old-nonvisible',owner.virtualCurrent.get('old-nonvisible'));
+  for(const key of visible){
+    const data={name:key};owner.virtualCurrent.set(key,data);owner.virtualQueue.set(key,data);
+  }
+  const progressed=new Set();
+  for(let batch=0;batch<4;batch++){
+    owner.refreshRetained();
+    const before=calls.length;
+    owner.prepareVirtualRows(false);
+    assert.ok(calls.length-before<=16);
+    for(const key of calls.slice(before)) progressed.add(key);
+  }
+  assert.ok(progressed.has('old-nonvisible'));
+  for(const key of visible) assert.ok(progressed.has(key),`background projection reached ${key}`);
+});
+
+test('refresh invalidates only visible current rows', t => {
+  const owner = candidate(t);
+  const keys=['row-2','row-17'];
+  const signed=[];
+  Object.assign(owner, {
+    virtualQueue:new Map(), virtualCurrent:new Map(), retainedPending:new Map(),
+    virtualVisible:keys, fs:{keyboard:false}, rowSignature:data=>{signed.push(data.name);return data.name;},
+  });
+  for (let i=0;i<30;i++) owner.virtualCurrent.set(`row-${i}`,{name:`row-${i}`});
+  owner.virtualQueue.set('row-2',{name:'stale'});
+  owner.refreshRetained();
+  assert.deepEqual(Array.from(owner.virtualQueue.keys()),keys);
+  assert.equal(owner.virtualQueue.get('row-2'),owner.virtualCurrent.get('row-2'));
+  owner.prepareVirtualRows(true);
+  assert.deepEqual(Array.from(owner.retainedPending.keys()),keys);
+  assert.deepEqual(signed,['row-2','row-17']);
+});
+
+test('new virtual focus request enqueues and prepares its row before notifying', t => {
+  const owner = candidate(t);
+  const key=JSON.stringify(['workspace','focus-target']);
+  const calls=[];
+  let rootNotifies=0;
+  let scrolled;
+  Object.assign(owner, {
+    virtualCurrent:new Map([[key,{name:'fresh'}]]), virtualQueue:new Map(),
+    retainedPending:new Map(), virtualVisible:[], virtualRows:[{r:{virtualKey:key}}],
+    virtualFocusPending:null, virtualScroll:{scroll_to_item(index){scrolled=index;}},
+    fs:{free:[],handles:new Map(),keyboard:false}, rowSignature:data=>{calls.push(data.name);return data.name;},
+    ownerCx:{notify(){rootNotifies++;}}, syncRetained:()=>false,
+  });
+  owner.virtualRequest(key,1,{focus_handle:()=>({})});
+  assert.equal(scrolled,0);
+  assert.deepEqual(calls,['fresh']);
+  assert.equal(owner.retainedPending.get(key).signature,'fresh');
+  assert.equal(owner.virtualQueue.has(key),false);
+  assert.equal(owner.virtualFocusPending.key,key);
+  assert.equal(owner.virtualFocusPending.direction,1);
+  assert.equal(rootNotifies,1);
+});
+
 test('focus waits for an unprepared existing row and cancels only when it is removed', t => {
   const owner = candidate(t);
   const request = {key:'pending', direction:1};
@@ -214,6 +307,12 @@ test('keyboard movement skips status descriptors and host focus controls invalid
     assert.notEqual(hostOwner.rowSignature(host, id, false), base, `focus on ${id} changes signature`);
   }
   assert.equal(hostOwner.rowSignature(host, 'space-unrelated', false), base);
+
+  hostOwner.hot='machine-add-remote';
+  const hotSignature=hostOwner.rowSignature(host, null, false);
+  assert.notEqual(hotSignature,base);
+  hostOwner.folded.add('remote');
+  assert.notEqual(hostOwner.rowSignature(host, null, false),hotSignature);
 
   const workspace = {r:{...rows[0],count:0,pos:0},t:{},ps:[],mine:[],groupBy:'repo'};
   assert.equal(owner.rowSignature(workspace, 'machine-remote', false), owner.rowSignature(workspace, null, false));
