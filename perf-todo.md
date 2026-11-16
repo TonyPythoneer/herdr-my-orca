@@ -4,6 +4,15 @@ Baseline: 2026-11-15. 41 mods, 18,456 LOC JS. Pure modules can be tested in
 Node; UI rendering runs inside Herdr/gpui. Treat UI hotspots as static-review
 findings until measured in the Herdr runtime.
 
+## Current continuation entry
+
+Latest continuation: section 18. Production checks pass; virtualization remains a
+separately generated candidate. It now projects Project/Status/None and host
+headers with typed view keys, but its new grouping/native interaction acceptance
+is still pending. Full native frame/count evidence and lossless catalog bounds
+remain open. Testing is delegated to Luna 6 medium; root owns implementation and
+review. Historical failed gates below are superseded only by explicit later evidence.
+
 ## 0. Measurement method
 
 - Pure modules: `node --test mods/<x>/*.test.js`, plus ad-hoc `node -e` micro-timing
@@ -747,3 +756,25 @@ changes and measured limits above do not substitute for those three outcomes.
   spaces check and diff check passing. No additional native probe cycle needed.
 - Read-only native tracing capability check: xcrun cannot find xctrace. No trace
   capture or installation attempted; full native frame/count requirement stays open.
+
+## 18. Shared host rendering and generalized candidate descriptors
+
+- Production grouped() delegates host construction to machineHead(item,t). The
+  original body, controls, callbacks and array return shape are preserved. Luna
+  reviewed the extraction before testing; this enables reuse without copied UI.
+- Candidate projection now uses actual planRenderRows for Project/Status/None and
+  local/remote host headings, including host folds and repair states. Status
+  headings are not focus stops; navigation skips them. Host root/connect/add
+  focus changes invalidate the corresponding descriptor signature only.
+- Added host scope to status keys and then separated all view identities by type:
+  workspace native w.id remains unchanged, while virtualKey names retained, queue,
+  size, render and list identities. An adversarial workspace id equal to a host
+  heading id keeps distinct snapshots and measured sizes.
+- Luna added/updated candidate tests for modes, folded group counts, host/status
+  rendering delegation, repeated status labels across hosts, repair/fold behavior,
+  focus signature specificity, status skip and typed namespace collision safety.
+  Root reviewed the implementation/tests; 68/68 suite, spaces check and diff check
+  pass. No production virtualization switch or native grouping acceptance claimed.
+- Next consolidate native grouping/control tests, including event-to-paint latency:
+  current queued preparation may delay changed visible rows behind unrelated rows.
+  Visible/event priority must preserve fairness rather than starving other rows.

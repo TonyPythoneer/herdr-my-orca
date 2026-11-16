@@ -741,68 +741,72 @@ export default class Spaces extends View {
     return this.renderPlan.flatMap((item) => {
       if (item.kind === "row") return draw(rows[item.index], item.position);
       if (item.kind === "status") return [this.statusHead(item.label, item.count, t)];
-      const m = item.machine;
-      const count = item.count;
-      const repair = this.reconnecting[m];
-      const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
-      const connected = !m || machine?.state === "connected";
-      const rebuilt = this.rebuilt(machine) || !!repair;
-      const folded = this.folded.has(m);
-      // Drawn as the agents list's group headers, each 8px below what's above it, the heading included: right under it,
-      // its + and chevron crowded the heading's buttons, a column of icons unevenly spaced.
-      // Its + and chevron stand under the heading's two buttons, in slots built as those are (26px, 2px apart, 10px from the edge), so any zoom rounds them alike.
-      const head = h_flex().id(`machine-${m ?? "local"}`).pt(8).h(30).flex_none().pl(8).pr(2).gap(4).items_center()
-        // `ProjectHeaderHostLabel.tsx:25`: `text-muted-foreground` (full #acacac, not `t.dim`).
-        .text_size(12).font_medium().text_color(t.muted)
-        .role("button").accessibility_label(`${folded ? "Expand" : "Collapse"} ${m ?? "This computer"}`)
-        .on_hover((on, cx) => {
-          // By the row's id: this computer's m is null, which a cleared field would equal.
-          if (on) this.overMachine = `machine-${m ?? "local"}`;
-          else if (this.overMachine === `machine-${m ?? "local"}`) this.overMachine = null;
-          this.notify(cx);
-        })
-        .on_click((_e, cx) => {
-          folded ? this.folded.delete(m) : this.folded.add(m);
-          localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
-          this.notify(cx);
-        })
-        // -1: the glyph's own inset, so its edge meets the heading and the spaces' marks.
-        .child(svg(`mods/orca-spaces/${m ? "server" : "monitor"}.svg`).size(14).ml(-1).flex_none())
-        // The dot describes the machine, so it follows its name, however short.
-        .child(h_flex().flex_1().min_w(0).gap(6).items_center()
-          .child(div().min_w(0).truncate().child(m ?? "This computer"))
-          .child(tipMark(this, t, `machine-state-${m ?? "local"}`, connected ? "Connected" : (machine?.state ?? "asleep").replace(/_/g, " ").replace(/^./, c => c.toUpperCase()), div().size(6).rounded_full().flex_none().bg(connected ? t.ansi2 : t.dim))))
-        // `HostSectionHeader.tsx:11-35,119`: the count badge is always drawn beside the label
-        // (its `count` is the host's workspace rows, folded groups included).
-        .child(div().flex_none().h(16).px(6).flex().items_center().justify_center().rounded_full().border_1().border_color(t.border).bg(t.hover).text_size(9).line_height("9px").text_color(t.muted).child(String(count)))
-        .when(!connected && !rebuilt, el => el.child(div().flex_none().child((machine?.state ?? "asleep").replace(/_/g, " "))))
-        .when(rebuilt, el => el.child(h_flex().flex_none().gap(3).items_center()
-          .child(div().max_w(140).truncate().child(repair?.error || "rebuilt ·"))
-          .child(tip(this.hot, t, `machine-connect-${m}`, `Connect ${m}`, stop(this, t, `machine-connect-${m}`, div().id(`machine-connect-${m}`).text_color(repair?.error ? t.blocked : t.muted)
-            .hover(s => s.text_color(t.foreground)).on_hover(this.glow(`machine-connect-${m}`))
-            .role("button").accessibility_label(`Connect ${m}`)
-            .on_click((_e, cx) => { cx.stop_propagation(); this.reconnect(machine, cx); })
-            .child(repair?.busy ? "Connecting…" : "Connect"), 4)))))
-        .child(h_flex().flex_none().gap(2).items_center()
-          .when(connected, el => el.child(tip(this.hot, t, `machine-add-${m ?? "local"}`, "New space here", stop(this, t, `machine-add-${m ?? "local"}`, div().id(`machine-add-${m ?? "local"}`).w(26).h(20).flex_none().flex().items_center().justify_center().rounded(4)
-            .text_color(this.hot === `machine-add-${m ?? "local"}` ? t.foreground : t.dim).on_hover(this.glow(`machine-add-${m ?? "local"}`))
-            .role("button").accessibility_label("New space here")
-            .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); }).child(svg("mods/orca-spaces/plus.svg").size(12)), 4),
-            // The key makes a space on the current space's machine: it names this + only on that one.
-            { action: (spaces().find(s => s.active)?.machine ?? null) === m ? "space.new" : null })))
-          // An indicator, not a button: the whole row folds, so it lights with the row and has no label of its own.
-          // `HostSectionHeader.tsx:121-125`: the chevron is `can-hover:opacity-0` until the
-          // header is hovered (`group-hover/host-header:opacity-100`), keeping its slot; and
-          // `SectionHeader.tsx:190-192` draws a collapse affordance only when there is something
-          // to collapse (`row.count > 0`).
-          .when(count > 0, el => el.child(div().id(`machine-fold-${m ?? "local"}`).w(26).flex_none().flex().items_center().justify_center()
-            .opacity(this.overMachine === `machine-${m ?? "local"}` ? 1 : 0)
-            .child(svg(`mods/orca-spaces/chevron-${folded ? "right" : "down"}.svg`).size(12).flex_none()))))
-      // `host-section-rows.ts:236-246`: a host header exists only for a host with rows, and a
-      // host with no rows draws no section — and no placeholder beneath it.
-      const heading = stop(this, t, `machine-${m ?? "local"}`, head, 8);
-      return [heading];
+      return [this.machineHead(item, t)];
     });
+  }
+
+  machineHead(item, t) {
+    const m = item.machine;
+    const count = item.count;
+    const repair = this.reconnecting[m];
+    const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
+    const connected = !m || machine?.state === "connected";
+    const rebuilt = this.rebuilt(machine) || !!repair;
+    const folded = this.folded.has(m);
+    // Drawn as the agents list's group headers, each 8px below what's above it, the heading included: right under it,
+    // its + and chevron crowded the heading's buttons, a column of icons unevenly spaced.
+    // Its + and chevron stand under the heading's two buttons, in slots built as those are (26px, 2px apart, 10px from the edge), so any zoom rounds them alike.
+    const head = h_flex().id(`machine-${m ?? "local"}`).pt(8).h(30).flex_none().pl(8).pr(2).gap(4).items_center()
+      // `ProjectHeaderHostLabel.tsx:25`: `text-muted-foreground` (full #acacac, not `t.dim`).
+      .text_size(12).font_medium().text_color(t.muted)
+      .role("button").accessibility_label(`${folded ? "Expand" : "Collapse"} ${m ?? "This computer"}`)
+      .on_hover((on, cx) => {
+        // By the row's id: this computer's m is null, which a cleared field would equal.
+        if (on) this.overMachine = `machine-${m ?? "local"}`;
+        else if (this.overMachine === `machine-${m ?? "local"}`) this.overMachine = null;
+        this.notify(cx);
+      })
+      .on_click((_e, cx) => {
+        folded ? this.folded.delete(m) : this.folded.add(m);
+        localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
+        this.notify(cx);
+      })
+      // -1: the glyph's own inset, so its edge meets the heading and the spaces' marks.
+      .child(svg(`mods/orca-spaces/${m ? "server" : "monitor"}.svg`).size(14).ml(-1).flex_none())
+      // The dot describes the machine, so it follows its name, however short.
+      .child(h_flex().flex_1().min_w(0).gap(6).items_center()
+        .child(div().min_w(0).truncate().child(m ?? "This computer"))
+        .child(tipMark(this, t, `machine-state-${m ?? "local"}`, connected ? "Connected" : (machine?.state ?? "asleep").replace(/_/g, " ").replace(/^./, c => c.toUpperCase()), div().size(6).rounded_full().flex_none().bg(connected ? t.ansi2 : t.dim))))
+      // `HostSectionHeader.tsx:11-35,119`: the count badge is always drawn beside the label
+      // (its `count` is the host's workspace rows, folded groups included).
+      .child(div().flex_none().h(16).px(6).flex().items_center().justify_center().rounded_full().border_1().border_color(t.border).bg(t.hover).text_size(9).line_height("9px").text_color(t.muted).child(String(count)))
+      .when(!connected && !rebuilt, el => el.child(div().flex_none().child((machine?.state ?? "asleep").replace(/_/g, " "))))
+      .when(rebuilt, el => el.child(h_flex().flex_none().gap(3).items_center()
+        .child(div().max_w(140).truncate().child(repair?.error || "rebuilt ·"))
+        .child(tip(this.hot, t, `machine-connect-${m}`, `Connect ${m}`, stop(this, t, `machine-connect-${m}`, div().id(`machine-connect-${m}`).text_color(repair?.error ? t.blocked : t.muted)
+          .hover(s => s.text_color(t.foreground)).on_hover(this.glow(`machine-connect-${m}`))
+          .role("button").accessibility_label(`Connect ${m}`)
+          .on_click((_e, cx) => { cx.stop_propagation(); this.reconnect(machine, cx); })
+          .child(repair?.busy ? "Connecting…" : "Connect"), 4)))))
+      .child(h_flex().flex_none().gap(2).items_center()
+        .when(connected, el => el.child(tip(this.hot, t, `machine-add-${m ?? "local"}`, "New space here", stop(this, t, `machine-add-${m ?? "local"}`, div().id(`machine-add-${m ?? "local"}`).w(26).h(20).flex_none().flex().items_center().justify_center().rounded(4)
+          .text_color(this.hot === `machine-add-${m ?? "local"}` ? t.foreground : t.dim).on_hover(this.glow(`machine-add-${m ?? "local"}`))
+          .role("button").accessibility_label("New space here")
+          .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); }).child(svg("mods/orca-spaces/plus.svg").size(12)), 4),
+          // The key makes a space on the current space's machine: it names this + only on that one.
+          { action: (spaces().find(s => s.active)?.machine ?? null) === m ? "space.new" : null })))
+        // An indicator, not a button: the whole row folds, so it lights with the row and has no label of its own.
+        // `HostSectionHeader.tsx:121-125`: the chevron is `can-hover:opacity-0` until the
+        // header is hovered (`group-hover/host-header:opacity-100`), keeping its slot; and
+        // `SectionHeader.tsx:190-192` draws a collapse affordance only when there is something
+        // to collapse (`row.count > 0`).
+        .when(count > 0, el => el.child(div().id(`machine-fold-${m ?? "local"}`).w(26).flex_none().flex().items_center().justify_center()
+          .opacity(this.overMachine === `machine-${m ?? "local"}` ? 1 : 0)
+          .child(svg(`mods/orca-spaces/chevron-${folded ? "right" : "down"}.svg`).size(12).flex_none()))))
+    // `host-section-rows.ts:236-246`: a host header exists only for a host with rows, and a
+    // host with no rows draws no section — and no placeholder beneath it.
+    const heading = stop(this, t, `machine-${m ?? "local"}`, head, 8);
+    return heading;
   }
 
   statusHead(label, count, t) {

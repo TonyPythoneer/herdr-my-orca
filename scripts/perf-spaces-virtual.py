@@ -40,7 +40,7 @@ def build(destination):
         this.virtualHeight = height; cx.notify();
       })''')
     replace_once('.children(rows.length ? this.grouped(t, cx, rows) : [])', '''.child(v_virtual_list("virtual-workspaces", rows.length,
-              rows.map(r => Math.max(1, this.virtualSizes.get(r.w.id) ?? 64)), i => rows[i].w.id, range => {
+              rows.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64)), i => rows[i].w.id, range => {
               const visible = [];
               for (let i = range.start; i < range.end; i++) {
                 const held = this.retainedRows.get(rows[i].w.id);
@@ -61,7 +61,7 @@ def build(destination):
       if (!this.virtualRows?.length || this.virtualFocusPending || smoke > 35) return;
       if (smoke === 0) {
         this.fs.keyboard = true; setShared("t3-focus", this.fs.me);
-        this.virtualRequest("fixture-198", -1, cx); smoke++;
+        this.virtualRequest(JSON.stringify(["workspace", "fixture-198"]), -1, cx); smoke++;
       } else {
         console.log("REAL focus", onStop(this));
         if (++smoke > 35) console.log("REAL focus-complete");
@@ -89,7 +89,7 @@ def build(destination):
   }
 
   virtualRequest(key, direction, cx) {
-    const index = this.virtualRows.findIndex(data => data.r.w.id === key);
+    const index = this.virtualRows.findIndex(data => data.r.virtualKey === key);
     if (index < 0) { this.virtualFocusPending = null; return; }
     while (this.fs.free.length < 64) this.fs.free.push(cx.focus_handle());
     this.virtualFocusPending = { key, direction };
@@ -104,7 +104,7 @@ def build(destination):
     const data = this.retainedPending.get(request.key);
     if (!data) return;
     if (this.virtualRendered.get(request.key) !== data.signature) {
-      this.virtualScroll.scroll_to_item(this.virtualRows.findIndex(row => row.r.w.id === request.key));
+      this.virtualScroll.scroll_to_item(this.virtualRows.findIndex(row => row.r.virtualKey === request.key));
       cx.notify();
       return;
     }
@@ -112,7 +112,7 @@ def build(destination):
     const id = request.direction > 0 ? ids[0] : ids.at(-1);
     const handle = this.fs.handles.get(id);
     if (!handle) {
-      this.virtualScroll.scroll_to_item(this.virtualRows.findIndex(row => row.r.w.id === request.key));
+      this.virtualScroll.scroll_to_item(this.virtualRows.findIndex(row => row.r.virtualKey === request.key));
       cx.notify();
       while (this.fs.free.length < 64) this.fs.free.push(cx.focus_handle());
       this.retainedRows.get(request.key)?.entity.set_props({ owner: this, key: request.key });
@@ -132,7 +132,7 @@ def build(destination):
       direction > 0 ? globalThis.window.focus_next() : globalThis.window.focus_prev();
     } else {
       const next = this.virtualRows[index + direction];
-      if (next) this.virtualRequest(next.r.w.id, direction, cx);
+      if (next) this.virtualRequest(next.r.virtualKey, direction, cx);
       else direction > 0 ? globalThis.window.focus_next() : globalThis.window.focus_prev();
     }
   }
@@ -177,22 +177,42 @@ def build(destination):
     this.retainedKeyboardMode = Boolean(shared("t3-focus"));""", '')
     replace_once("""    this.grouped(t, cx, rows);
     this.virtualRows = [...this.virtualCurrent.values()];""", '')
-    replace_once('rows.map(r => Math.max(1, this.virtualSizes.get(r.w.id) ?? 64))', 'this.virtualItemSizes ?? []')
+    replace_once('rows.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64))', 'this.virtualItemSizes ?? []')
     replace_once('cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });', 'cx.timer.every(250, cx => { this.projectVirtualRows(cx); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });')
     replace_once('  prepareVirtualRows() {', """  projectVirtualRows(cx) {
     const t = theme(), ps = panes(), rows = this.ordered();
     const groupBy = workspaceOptions().groupBy;
-    if (groupBy !== "repo" || rows.some(r => r.w.machine)) throw new Error("Virtual probe supports local project grouping only");
     const rowAgents = agentsByRow(rows, agents());
     const counts = new Map((this.plan?.groups ?? []).map(group => [group.key, group.rows.length]));
-    this.virtualProjected = rows.filter(r => r.head || !this.foldedRepos.has(foldKey(r)));
+    const repairing = new Set([...Object.keys(this.reconnecting), ...this.machines.filter(m => this.rebuilt(m)).map(m => m.name)]);
+    const hidden = new Set([...repairing].filter(m => {
+      const repair = this.reconnecting[m];
+      return this.rebuilt(this.machines.find(k => k.name === m) ?? repair?.machine) || !!repair;
+    }));
+    const descriptors = planRenderRows(rows, groupBy, repairing, this.folded, hidden);
+    this.virtualProjected = [];
     this.virtualCurrent = new Map();
-    for (let i = 0; i < this.virtualProjected.length; i++) {
-      const r = this.virtualProjected[i];
-      this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos: this.rowIndex?.get(r.w.id) ?? i }, t, ps, rowAgents.get(r), groupBy);
+    let host = null;
+    for (const item of descriptors) {
+      if (item.kind === "host") host = item.machine;
+      let r, mine = [];
+      if (item.kind === "row") {
+        r = rows[item.index];
+        mine = rowAgents.get(r) ?? [];
+        if (groupBy === "repo" && !r.head && this.foldedRepos.has(foldKey(r))) continue;
+      } else {
+        const machine = this.machines.find(m => m.name === item.machine);
+        r = {w:{id:`virtual-${item.kind}-${JSON.stringify([host, item.machine ?? item.label])}`, descriptor:item,
+          machineState:machine, repair:this.reconnecting[item.machine], folded:this.folded.has(item.machine),
+          hot:this.hot, overMachine:this.overMachine}};
+      }
+      r = { ...r, virtualKey: item.kind === "row" ? JSON.stringify(["workspace", r.w.id]) : JSON.stringify([item.kind, host, item.machine ?? item.label]) };
+      const i = this.virtualProjected.length;
+      this.virtualProjected.push(r);
+      this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos: this.rowIndex?.get(r.w.id) ?? i }, t, ps, mine, groupBy);
     }
     this.virtualRows = [...this.virtualCurrent.values()];
-    this.virtualItemSizes = this.virtualProjected.map(r => Math.max(1, this.virtualSizes.get(r.w.id) ?? 64));
+    this.virtualItemSizes = this.virtualProjected.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64));
   }
 
   prepareVirtualRows() {""")
@@ -208,7 +228,30 @@ def build(destination):
     replace_once('    const t = theme(), ps = panes(), rows = this.ordered();', '    const t = theme(), ps = panes(), rows = this.ordered(), sp = spaces();\n' + unread + '\n' + colors)
     avatar_loop = '    for (const g of Object.values(this.git)) if (g?.owner) ensureAvatar(g.owner, cx);'
     replace_once(avatar_loop, '')
-    replace_once('    const groupBy = workspaceOptions().groupBy;\n    if (groupBy !== "repo"', avatar_loop + '\n    const groupBy = workspaceOptions().groupBy;\n    if (groupBy !== "repo"')
+    replace_once('    const groupBy = workspaceOptions().groupBy;\n    const rowAgents =', avatar_loop + '\n    const groupBy = workspaceOptions().groupBy;\n    const rowAgents =')
+    replace_once('  rowElements({ r, t, ps, mine, groupBy }) {', '''  rowElements({ r, t, ps, mine, groupBy }) {
+    const descriptor = r.w.descriptor;
+    if (descriptor?.kind === "status") return [this.statusHead(descriptor.label, descriptor.count, t)];
+    if (descriptor?.kind === "host") return [this.machineHead(descriptor, t)];''')
+    replace_once('    const key = r.w.id, ids = [];', '''    const key = r.w.id, ids = [];
+    const descriptor = r.w.descriptor;
+    if (descriptor?.kind === "status") return ids;
+    if (descriptor?.kind === "host") {
+      const m = descriptor.machine, repair = this.reconnecting[m];
+      const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
+      ids.push(`machine-${m ?? "local"}`);
+      if (this.rebuilt(machine) || repair) ids.push(`machine-connect-${m}`);
+      if (!m || machine?.state === "connected") ids.push(`machine-add-${m ?? "local"}`);
+      return ids;
+    }''')
+    replace_once('      const next = this.virtualRows[index + direction];', '      let nextIndex = index + direction;\n      while (this.virtualRows[nextIndex] && !this.virtualIds(this.virtualRows[nextIndex]).length) nextIndex += direction;\n      const next = this.virtualRows[nextIndex];')
+    replace_once('    const key = r.w.id;\n    const fold = foldKey(r);', '''    const key = r.w.id;
+    if (r.w.descriptor) return JSON.stringify([r.w, t, keyboardMode, this.fs.keyboard,
+      this.virtualIds({ r, groupBy }).includes(focused) ? focused : null]);
+    const fold = foldKey(r);''')
+    replace_once('  retainedRow(r, t, ps, mine, groupBy) {\n    const key = r.w.id;', '  retainedRow(r, t, ps, mine, groupBy) {\n    const key = r.virtualKey;')
+    replace_once('i => rows[i].w.id', 'i => rows[i].virtualKey')
+    replace_once('this.retainedRows.get(rows[i].w.id)', 'this.retainedRows.get(rows[i].virtualKey)')
     main.write_text(source)
 
 
