@@ -2,11 +2,11 @@
 // Model, effort and hidden models are remembered in appHome()/agent-config.json, with the model
 // list cached there too: it is read again only when the CLI's --version changes.
 // The agent's permission flags stay in programs.json's `run`; this only adds the model and effort.
-// It stays open while the pointer is on the chevron or in it (shared "agent-config".hot).
+// The flyout is sticky: it stays after the pointer leaves and closes on launch.
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea } from "gpui-base";
-import { run, props, closeOverlay, theme, shared, setShared, exec, appHome, readTextFile, writeTextFile, settings } from "herdr";
+import { run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings } from "herdr";
 
 const AGENTS = {
   claude: {
@@ -47,12 +47,56 @@ const AGENTS = {
         }));
     },
     argsFor: (model, effort) => ["-m", model, "-c", `model_reasoning_effort=${effort}`]
+  },
+  opencode: {
+    command: "opencode",
+    // `opencode api GET /api/model` returns the live catalog. Keep the opencode provider and
+    // omlx (local MLX models); ollama is left out. Remember which opencode models are free:
+    // the catalog does not reflect payment, so an unpaid account still sees paid models.
+    list: async () => {
+      const { stdout } = await exec("zsh", ["-lic", "opencode api GET /api/model"], { timeout: 60000 });
+      const rows = JSON.parse(stdout.slice(stdout.indexOf("{"), stdout.lastIndexOf("}") + 1)).data ?? [];
+      return rows
+        .filter((m) => m.providerID === "opencode" || m.providerID === "omlx")
+        .map((m) => {
+          const cost = m.cost ?? [];
+          // A free model has no input or output cost on any tier (`big-pickle` is free without a
+          // `-free` suffix, so the name is not used).
+          const free = cost.length > 0 && cost.every((c) => (c.input ?? 0) === 0 && (c.output ?? 0) === 0);
+          return {
+            id: `${m.providerID}/${m.modelID ?? m.id}`,
+            label: m.name ?? m.modelID ?? m.id,
+            group: m.providerID === "omlx" ? "omlx" : free ? "free" : "paid",
+            efforts: (m.variants ?? []).map((v) => v.id),
+            fallbackEffort: "high",
+            free,
+          };
+        });
+    },
+    // The TUI takes no --model flag; launch() passes the model through the environment.
+    argsFor: () => []
   }
 };
 
+const AGENT_LABEL = { claude: "Claude", codex: "Codex", opencode: "OpenCode" };
 const EFFORT_LABEL = { low: "Low", medium: "Med", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra" };
 const ADVISOR_MODELS = ["opus", "haiku", "fable", "sonnet"];
 const DEFAULT_ADVISOR = "opus";
+// modelRow is 30px high and the list gap is 2px, so N rows take N * 30 + (N - 1) * 2 px. The
+// list is capped at MODEL_ROWS rows worth of height (MODEL_LIST_H below): beyond that the rest scroll.
+const MODEL_ROWS = 10;
+const rowsH = (n) => n * 30 + (n - 1) * 2;
+const MODEL_LIST_H = rowsH(MODEL_ROWS);
+// Bump when the cached model shape changes (opencode gained providers/groups).
+const CATALOG_SCHEMA = 2;
+// Reuse a cache for ten minutes; the CLI and the upstream list are checked again after that.
+const CATALOG_TTL_MS = 10 * 60_000;
+const OPENCODE_GROUPS = [
+  { id: "all", label: "All" },
+  { id: "free", label: "Free" },
+  { id: "paid", label: "Paid" },
+  { id: "omlx", label: "OMLX" },
+];
 
 const DEFAULT_AGENTS = {
   scout: {
@@ -129,6 +173,9 @@ export default class AgentConfig extends View {
     this.model = null;
     this.effort = null;
     this.hidden = new Set();
+    // opencode's model list starts on free, since a paid model just answers 402.
+    this.modelGroup = "free";
+    this.groupOpen = false;
     this.showHidden = false; // the "-- hidden --" section stays collapsed until clicked
     this.snapshot = null; // the settings file as read, for a safe write
 
@@ -170,20 +217,47 @@ export default class AgentConfig extends View {
         this.promptSaved = typeof preset.systemPrompt === "string" ? preset.systemPrompt : DEFAULT_PROMPT;
         this.promptInput.set_value(this.promptSaved);
         this.hidden = new Set(saved.hidden ?? []);
-        const version = await cliVersion(this.agent.command);
+        this.modelGroup = OPENCODE_GROUPS.some((g) => g.id === saved.group)
+          ? saved.group
+          : saved.onlyFree === false ? "all" : "free";
+        const pickSaved = () => {
+          if (!this.models?.length) return;
+          const pick = this.models.find((m) => m.id === saved.model) ?? this.models[0];
+          this.choose(pick, saved.effort);
+        };
+
         const cached = all.catalog?.[this.key];
-        if (cached?.version === version && cached.models?.length) {
-          this.models = cached.models;
-        } else {
-          this.models = await this.agent.list();
-          this.saveCatalog(version, this.models);
+        const cachedModels = cached?.schema === CATALOG_SCHEMA ? cached.models : null;
+        if (cachedModels?.length) {
+          // Paint the cached list before asking the CLI anything; a refresh must not show a spinner.
+          this.models = cachedModels;
+          pickSaved();
+          cx.notify();
         }
-        const pick = this.models.find((m) => m.id === saved.model) ?? this.models[0];
-        this.choose(pick, saved.effort);
+
+        const fresh = cachedModels && typeof cached.checkedAt === "number" && Date.now() - cached.checkedAt < CATALOG_TTL_MS;
+        if (fresh) return;
+
+        // Check both the CLI version and the upstream list: a model can be added without a version
+        // change. Both run in the background, so the cached list stays on screen meanwhile.
+        const [version, models] = await Promise.all([
+          cliVersion(this.agent.command).catch(() => cached?.version ?? null),
+          this.agent.list(),
+        ]);
+        if (!models.length) throw new Error("no models available");
+        if (JSON.stringify(models) !== JSON.stringify(cachedModels ?? [])) {
+          this.models = models;
+          const keep = models.find((m) => m.id === this.model);
+          if (keep) this.choose(keep, this.effort);
+          else pickSaved();
+          cx.notify();
+        }
+        this.saveCatalog(version, models);
       } catch (e) {
-        this.error = `Could not list models: ${e?.message ?? e}`;
+        // A failed refresh keeps the cached list; only show the error when there is nothing to show.
+        if (!this.models?.length) this.error = `Could not list models: ${e?.message ?? e}`;
+        cx.notify();
       }
-      cx.notify();
     });
   }
 
@@ -219,6 +293,15 @@ export default class AgentConfig extends View {
     const hidden = [...this.hidden];
     this.persist((all) => {
       all[key] = { ...all[key], model, effort, hidden };
+    });
+  }
+
+  // The opencode model group is a list preference, saved with the model and effort.
+  rememberGroup() {
+    const key = this.key;
+    const group = this.modelGroup;
+    this.persist((all) => {
+      all[key] = { ...all[key], group };
     });
   }
 
@@ -298,7 +381,7 @@ export default class AgentConfig extends View {
   saveCatalog(version, models) {
     const key = this.key;
     this.persist((all) => {
-      all.catalog = { ...all.catalog, [key]: { version, models } };
+      all.catalog = { ...all.catalog, [key]: { schema: CATALOG_SCHEMA, version, checkedAt: Date.now(), models } };
     });
   }
 
@@ -306,19 +389,6 @@ export default class AgentConfig extends View {
     if (this.hidden.has(id)) this.hidden.delete(id);
     else this.hidden.add(id);
     this.remember();
-  }
-
-  // Leaving closes after a short grace, unless the pointer came back to the chevron or into here.
-  hover(hovered, cx) {
-    const s = shared("agent-config");
-    if (s) setShared("agent-config", { ...s, hot: hovered });
-    if (hovered) return;
-    cx.timer.after(150, () => {
-      const now = shared("agent-config");
-      if (now?.hot || now?.id !== props().overlay) return;
-      setShared("agent-config", null);
-      closeOverlay(props().overlay);
-    });
   }
 
   launch(cx) {
@@ -351,13 +421,34 @@ export default class AgentConfig extends View {
     // Launch uses the live editor text and never writes it; both editors stay manual save.
 
     // argv elements, not shell words: no quotes around the JSON or the prompt.
-    run("tab.new", {
-      space: p.space,
-      argv: [...p.argv, ...this.agent.argsFor(this.model, this.effort), ...extra],
-    });
+    let argv = [...p.argv, ...this.agent.argsFor(this.model, this.effort), ...extra];
+    if (this.key === "opencode") {
+      // The TUI has no --model flag; the model goes in through its config env var. It must run its
+      // own server (--standalone): the background service keeps its own config, so a TUI that
+      // connects to it ignores OPENCODE_CONFIG_CONTENT and starts on the service's default model.
+      argv = ["env", `OPENCODE_CONFIG_CONTENT=${JSON.stringify({ model: this.model })}`, ...p.argv, "--standalone"];
+      // Best effort: the TUI keeps its effort in its own state file, not in the config.
+      this.rememberVariant();
+    }
+    run("tab.new", { space: p.space, argv });
     setShared("agent-config", null);
     closeOverlay(p.overlay);
     closeOverlay(p.menu);
+  }
+
+  // opencode keeps the chosen effort in ~/.local/state/opencode/model.json `variant`; write it
+  // before launch. Best effort only: a failure must not block the launch.
+  async rememberVariant() {
+    if (!this.effort) return;
+    const file = `${home()}/.local/state/opencode/model.json`;
+    try {
+      const current = await readTextFile(file).catch(() => null);
+      const all = current ? JSON.parse(current) : {};
+      const variant = all.variant && typeof all.variant === "object" ? all.variant : {};
+      variant[this.model] = this.effort;
+      all.variant = variant;
+      await writeTextFile(file, `${JSON.stringify(all, null, 2)}\n`, current);
+    } catch {}
   }
 
   modelRow(m, t) {
@@ -366,17 +457,18 @@ export default class AgentConfig extends View {
     return h_flex()
       .id(`model-${m.id}`)
       .h(30)
+      .flex_none()
       .mx(6)
       .px(10)
       .gap(8)
       .rounded(7)
       .items_center()
       .cursor_pointer()
-      .when(on, (el) => el.bg(t.selected))
-      .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
+      .hover((s) => s.bg(t.hover))
       .on_click((_e, cx) => {
         this.choose(m, this.effort);
         this.modelOpen = false;
+        this.groupOpen = false;
         this.remember();
         cx.notify();
       })
@@ -399,31 +491,116 @@ export default class AgentConfig extends View {
       );
   }
 
+  // opencode mixes cloud models (free/paid) and local omlx models; the list shows one group.
+  groupSelect(t) {
+    return h_flex()
+      .id("model-group")
+      .w(80)
+      .h(26)
+      .px(8)
+      .gap(6)
+      .items_center()
+      .justify_between()
+      .rounded(6)
+      .border_1()
+      .border_color(this.groupOpen ? t.ring : t.input)
+      .bg(t.raised)
+      .cursor_pointer()
+      .on_click((_e, cx) => {
+        this.groupOpen = !this.groupOpen;
+        cx.notify();
+      })
+      .child(div().text_size(11).text_color(t.foreground).child(OPENCODE_GROUPS.find((g) => g.id === this.modelGroup)?.label ?? this.modelGroup))
+      .child(div().text_size(10).text_color(t.muted).child("▾"));
+  }
+
   // Visible models, then the collapsed "-- hidden --" section: the list as the other agents show it.
   modelList(t) {
-    const all = this.models ?? [];
+    const all = this.key === "opencode"
+      ? (this.models ?? []).filter((m) => this.modelGroup === "all" || (m.group ?? (m.free ? "free" : "paid")) === this.modelGroup)
+      : this.models ?? [];
     const visible = all.filter((m) => !this.hidden.has(m.id));
     const hiddenModels = all.filter((m) => this.hidden.has(m.id));
+    // Rows actually rendered: visible plus (if expanded) hidden ones; the hidden heading counts
+    // as a row whenever anything is hidden, so a list of only hidden models cannot collapse to
+    // zero height and hide the way back. The box gets a definite height — gpui sizes a
+    // content-based flex item to its content and does not clamp it to max-height, so max_h(..)
+    // alone lets every model render with no scrollbar. Fewer than MODEL_ROWS rows set the box
+    // to their exact height (nothing blank below them); more cap and the rest scroll.
+    const shownRows = visible.length
+      + (hiddenModels.length > 0 ? 1 : 0)
+      + (this.showHidden ? hiddenModels.length : 0);
+    const listH = shownRows === 0 ? 0 : Math.min(rowsH(shownRows), MODEL_LIST_H);
     return v_flex()
       .gap(2)
-      .children(visible.map((m) => this.modelRow(m, t)))
-      .when(hiddenModels.length > 0, (el) =>
-        el
-          .child(
-            div()
-              .id("hidden-section")
-              .px(14)
-              .pt(6)
-              .text_size(11)
-              .text_color(t.dim)
-              .cursor_pointer()
-              .on_click((_e, cx) => {
-                this.showHidden = !this.showHidden;
-                cx.notify();
-              })
-              .child("-- hidden --"),
-          )
-          .when(this.showHidden, (inner) => inner.children(hiddenModels.map((m) => this.modelRow(m, t)))),
+      .when(this.key === "opencode", (el) => el
+        .child(
+          h_flex()
+            .mx(6)
+            .mb(2)
+            .h(28)
+            .px(4)
+            .gap(8)
+            .items_center()
+            .child(div().flex_1().text_size(11).text_color(t.muted).child("SHOW"))
+            .child(this.groupSelect(t)),
+        )
+        .when(this.groupOpen, (inner) => inner.child(
+          v_flex()
+            .mx(6)
+            .mb(2)
+            .py(2)
+            .rounded(6)
+            .border_1()
+            .border_color(t.border)
+            .bg(t.popover)
+            .children(OPENCODE_GROUPS.map((g) =>
+              h_flex()
+                .id(`group-${g.id}`)
+                .h(26)
+                .px(10)
+                .gap(8)
+                .items_center()
+                .cursor_pointer()
+                .hover((s) => s.bg(t.hover))
+                .on_click((_e, cx) => {
+                  this.modelGroup = g.id;
+                  this.groupOpen = false;
+                  this.rememberGroup();
+                  cx.notify();
+                })
+                .child(div().flex_1().text_size(12).text_color(t.foreground).child(g.label))
+                .when(this.modelGroup === g.id, (row) => row.child(div().text_color(t.accent).child("✓"))),
+            )),
+        )),
+      )
+      .child(
+        v_flex()
+          .id("agent-config-models")
+          .h(listH)
+          .min_h(0)
+          .flex_shrink(1)
+          .overflow_y_scroll()
+          .gap(2)
+          .children(visible.map((m) => this.modelRow(m, t)))
+          .when(hiddenModels.length > 0, (el) =>
+            el
+              .child(
+                div()
+                  .id("hidden-section")
+                  .px(14)
+                  .pt(6)
+                  .text_size(11)
+                  .text_color(t.dim)
+                  .cursor_pointer()
+                  .on_click((_e, cx) => {
+                    this.showHidden = !this.showHidden;
+                    cx.notify();
+                  })
+                  .child("-- hidden --"),
+              )
+              .when(this.showHidden, (inner) => inner.children(hiddenModels.map((m) => this.modelRow(m, t)))),
+          ),
       );
   }
 
@@ -439,8 +616,7 @@ export default class AgentConfig extends View {
           .items_center()
           .rounded(6)
           .cursor_pointer()
-          .when(this.effort === e, (el) => el.bg(t.selected))
-          .when(this.effort !== e, (el) => el.hover((s) => s.bg(t.hover)))
+          .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => {
             this.effort = e;
             this.effortOpen = false;
@@ -481,6 +657,7 @@ export default class AgentConfig extends View {
   // Model and effort side by side as selects; one list open at a time, inline below.
   pickerRow(t) {
     const box = (list) => v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(list);
+    const hasEfforts = (this.current()?.efforts ?? []).length > 0;
     return v_flex()
       .gap(4)
       .child(
@@ -490,22 +667,25 @@ export default class AgentConfig extends View {
           .child(
             this.selectBox("model-select", "MODEL", this.current()?.label ?? "…", this.modelOpen, (cx) => {
               this.modelOpen = !this.modelOpen;
+              this.groupOpen = false;
               this.effortOpen = false;
               this.advisorOpen = false;
               cx.notify();
             }, t),
           )
-          .child(
+          // A model without effort variants has nothing to pick: no effort select.
+          .when(hasEfforts, (el) => el.child(
             this.selectBox("effort-select", "EFFORT", EFFORT_LABEL[this.effort] ?? this.effort ?? "…", this.effortOpen, (cx) => {
               this.effortOpen = !this.effortOpen;
               this.modelOpen = false;
+              this.groupOpen = false;
               this.advisorOpen = false;
               cx.notify();
             }, t),
-          ),
+          )),
       )
       .when(this.modelOpen, (el) => el.child(box(this.modelList(t))))
-      .when(this.effortOpen, (el) => el.child(box(this.effortList(t))));
+      .when(hasEfforts && this.effortOpen, (el) => el.child(box(this.effortList(t))));
   }
 
   header(t) {
@@ -515,21 +695,7 @@ export default class AgentConfig extends View {
       .mb(2)
       .gap(8)
       .items_center()
-      .child(div().text_size(13).font_medium().text_color(t.foreground).child(this.key === "claude" ? "Claude" : "Codex"))
-      .when(this.key === "claude", (el) => el.child(
-        h_flex()
-          .items_center()
-          .justify_center()
-          .px(7)
-          .h(18)
-          .rounded(9)
-          .border_1()
-          .border_color("#3b82f633")
-          .bg("#3b82f612")
-          .text_size(9)
-          .text_color(t.accent)
-          .child("PRESET"),
-      ))
+      .child(div().text_size(13).font_medium().text_color(t.foreground).child(AGENT_LABEL[this.key] ?? this.key))
       .child(div().flex_1())
       .when(this.key === "claude", (el) => el.child(
         h_flex()
@@ -620,6 +786,7 @@ export default class AgentConfig extends View {
                     this.advisorOpen = !this.advisorOpen;
                     this.modelOpen = false;
                     this.effortOpen = false;
+                    this.groupOpen = false;
                     cx.notify();
                   })
                   .child(div().text_size(12).text_color(t.foreground).child(this.advisorModel))
@@ -780,7 +947,6 @@ export default class AgentConfig extends View {
     const t = theme();
     return v_flex()
       .id("agent-config")
-      .on_hover((hovered, cx) => this.hover(hovered, cx))
       // Fills the popup; its width is set where orca-new-menu opens it.
       .w_full()
       .p(6)

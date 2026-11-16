@@ -6,7 +6,7 @@
 // visibility-menu trigger last.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { machines, updates, theme, run, exec, home, shared, keys } from "herdr";
+import { machines, updates, theme, run, exec, home, shared, keys, watchFolder, nextCommand } from "herdr";
 import { probeLocal } from "./local-usage.js";
 import { probeAllProviders, getTightestUsageBucket, formatBucketChipLabel } from "./usage.js";
 
@@ -21,6 +21,7 @@ const MARKS = {
   anthropic: { path: "claude.svg" },
   codex: { path: "codex.svg" },
   openai: { path: "codex.svg" },
+  opencode: { path: "opencode.svg" },
   cursor: { path: "cursor.png", image: true },
   // The second probe's own mark, for its pending chip: `omp usage` speaks for several
   // providers before any of them has answered.
@@ -46,20 +47,63 @@ const resetIn = (iso) => {
 };
 const letterFor = (provider) => (provider.trim()[0] ?? "?").toUpperCase();
 
+// The three sources are files the CLIs write on every turn. A mod cannot hear a process
+// directly, but it can wait on the folder that process writes into (herdr.d.ts:411-421), which
+// is Herdr's push channel. A missing folder ends that watch and leaves the timer below.
+const WATCHED_DIRS = (h) => [
+  `${h}/.cache/herdr-usage`,      // Claude's statusLine feed and the OAuth fallback snapshot
+  `${h}/.codex/sessions`,         // Codex appends token_count/rate_limits to the newest rollout
+  `${h}/.local/share/opencode`,   // opencode's SQLite (and WAL) writes
+];
+// A stream of session events should not spawn an exec per event; events inside this floor are
+// covered by the next event or the timer.
+const MIN_REFRESH_MS = 2000;
+const FALLBACK_MS = 300000;
+
 export default class OrcaStatus extends View {
 
   init(_props, cx) {
     // Null is "not read yet", distinct from "read, and nothing is signed in".
     this.readings = null;
     this.isRefreshing = false;
+    this.lastRefresh = 0;
     this.refreshUsage(cx);
-    // Orca's 120s polling interval (service-polling.ts:24-32, DEFAULT_POLL_MS)
-    cx.timer.every(120000, (cx) => this.refreshUsage(cx));
+    this.watch(cx);
+    // A direct push from the agent's own event: Claude Code's statusLine script writes the
+    // live windows and then runs `herdr-app do orca-status.refresh`, which lands here as a
+    // command — no file watch, no timer, just the CLI event reaching the mod (run() delivers
+    // "<mod>.<command>" to nextCommand(), herdr.d.ts:79).
+    cx.spawn(async (cx) => {
+      for (;;) {
+        if (await nextCommand() === "refresh") this.refreshUsage(cx, true);
+      }
+    });
+    // Orca keeps a 15-minute poll because live statusline posts carry the updates between
+    // polls (service.ts DEFAULT_POLL_MS). Here the watches carry them; this timer is the
+    // fallback (a folder missing, a watch rejected) and the idle OAuth refresh.
+    cx.timer.every(FALLBACK_MS, (cx) => this.refreshUsage(cx));
   }
 
-  refreshUsage(cx) {
+  watch(cx) {
+    for (const dir of WATCHED_DIRS(home())) {
+      cx.spawn(async (cx) => {
+        try {
+          for (;;) {
+            await watchFolder(dir);
+            this.refreshUsage(cx);
+          }
+        } catch {
+          // No such folder yet (or a tree too large to watch): the timer still reads it.
+        }
+      });
+    }
+  }
+
+  refreshUsage(cx, force = false) {
     if (this.isRefreshing) return;
+    if (!force && Date.now() - this.lastRefresh < MIN_REFRESH_MS) return;
     this.isRefreshing = true;
+    this.lastRefresh = Date.now();
     cx.notify();
 
     cx.spawn(async (cx) => {
@@ -138,9 +182,9 @@ export default class OrcaStatus extends View {
           .when(pct != null, el => el.child(div().px(8).py(1).rounded_full().bg("#ffffff").text_color("#000000").child(pct)))
           .child(div().child(rest));
         return h_flex().gap(8).items_center().child(mark(reading.provider, 13))
-          .when(Boolean(first), el => el.child(h_flex().w(64).h(6).flex_none().gap(2)
-            .children([0, 1, 2, 3, 4].map(i => div().flex_1().h(6).rounded(2).bg(t.raised)
-              .child(div().h(6).rounded(2).bg(t.foreground).w(`${Math.min(100, Math.max(0, (first.usedPercent - i * 20) * 5))}%`))))))
+          .when(Boolean(first), el => el.child(h_flex().w(80).h(5).flex_none().gap(2)
+            .children([0, 1, 2, 3, 4].map(i => div().flex_1().h(5).rounded(2).bg(t.raised)
+              .child(div().h(5).rounded(2).bg(t.foreground).w(`${Math.min(100, Math.max(0, (first.usedPercent - i * 20) * 5))}%`))))))
           .child(h_flex().gap(6).items_center().text_color(t.foreground)
             .children(parts.flatMap((x, i) => i ? [div().text_color(t.muted).child("·"), part(x)] : [part(x)])));
       }
@@ -190,7 +234,7 @@ export default class OrcaStatus extends View {
             h_flex().px(3).py(3).rounded(4).items_center().justify_center()
               .role("button").accessibility_label("Refresh rate limits").tooltip("Refresh usage data")
               .cursor_pointer().hover(s => s.bg("#404040b3"))
-              .on_click((_e, cx) => this.refreshUsage(cx))
+              .on_click((_e, cx) => this.refreshUsage(cx, true))
               .child(
                 svg("mods/orca-status/refresh-cw.svg").size(11).flex_none()
                   .text_color(t.muted)
