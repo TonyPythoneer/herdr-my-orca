@@ -493,3 +493,21 @@ changes and measured limits above do not substitute for those three outcomes.
 - Initial rendering was deferred while the window was inactive; taking a native
   shot woke layout. Empty earlier timer samples are not zero-cost render samples.
 - No production changes in this phase. Existing keyboard fallback is preserved.
+
+### Variable-size virtual list follow-up
+
+- `v_virtual_list` accepts a per-row size array and existing child Entities. The
+  1,000-row fixture alternates 40/80 heights and successfully reveals row 999
+  using VirtualListScrollHandle. Actual native frame shows rows 987 through 999;
+  the saved log confirms those 13 child render calls. Check passes without the
+  lazy-list track_scroll warning. Source/log/frame saved as `variable-virtual*`.
+- This removes the programmatic-navigation obstacle for the variable-size route.
+  Production card sizes must be measured and updated on expansion/resizing; the
+  fixture's known heights are not a valid substitute. Focus traversal and nested
+  input delivery still need runtime acceptance before switching production.
+- Existing init still creates 1,000 entities and sizes; native item_sizes handling
+  may copy the full array. No claim of input-independent allocation in all modes.
+- Telemetry today.json contains usage/startup aggregates, not frame traces or total
+  native element counts. gpui-fps exports HUD controls only in current declarations.
+- Next: calibrate heights via child on_size_change and test native focus movement
+  beyond visible rows, then integrate only after those interaction gates pass.

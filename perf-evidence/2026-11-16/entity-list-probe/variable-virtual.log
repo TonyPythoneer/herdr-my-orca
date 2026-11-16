@@ -1,0 +1,23 @@
+2026-11-16T04:57:28.891274Z  INFO gpui_shell::script: PROBE child 987
+2026-11-16T04:57:28.891453Z  INFO gpui_shell::script: PROBE child 988
+2026-11-16T04:57:28.891538Z  INFO gpui_shell::script: PROBE child 989
+2026-11-16T04:57:28.891613Z  INFO gpui_shell::script: PROBE child 990
+2026-11-16T04:57:28.891684Z  INFO gpui_shell::script: PROBE child 991
+2026-11-16T04:57:28.891769Z  INFO gpui_shell::script: PROBE child 992
+2026-11-16T04:57:28.891837Z  INFO gpui_shell::script: PROBE child 993
+2026-11-16T04:57:28.891905Z  INFO gpui_shell::script: PROBE child 994
+2026-11-16T04:57:28.891977Z  INFO gpui_shell::script: PROBE child 995
+2026-11-16T04:57:28.892046Z  INFO gpui_shell::script: PROBE child 996
+2026-11-16T04:57:28.892113Z  INFO gpui_shell::script: PROBE child 997
+2026-11-16T04:57:28.892178Z  INFO gpui_shell::script: PROBE child 998
+2026-11-16T04:57:28.892244Z  INFO gpui_shell::script: PROBE child 999
+2026-11-16T04:57:29.719630Z  INFO gpui_shell::script: PROBE interval 11 [987,988,989,990,991,992,993,994,995,996,997,998,999]
+2026-11-16T04:57:30.785751Z  INFO gpui_shell::script: PROBE interval 12 []
+2026-11-16T04:57:31.845982Z  INFO gpui_shell::script: PROBE interval 13 []
+2026-11-16T04:57:32.911137Z  INFO gpui_shell::script: PROBE interval 14 []
+2026-11-16T04:57:33.975937Z  INFO gpui_shell::script: PROBE interval 15 []
+2026-11-16T04:57:35.043045Z  INFO gpui_shell::script: PROBE interval 16 []
+2026-11-16T04:57:36.109807Z  INFO gpui_shell::script: PROBE interval 17 []
+2026-11-16T04:57:37.178395Z  INFO gpui_shell::script: PROBE interval 18 []
+2026-11-16T04:57:38.242664Z  INFO gpui_shell::script: PROBE interval 19 []
+2026-11-16T04:57:39.309322Z  INFO gpui_shell::script: PROBE interval 20 []
