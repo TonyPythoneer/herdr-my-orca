@@ -139,6 +139,93 @@ test('new virtual focus request enqueues and prepares its row before notifying',
   assert.equal(rootNotifies,1);
 });
 
+function nativeOps() {
+  const ops=[];
+  return {
+    ops,
+    cx:{new(_type,props){
+      ops.push({type:'create',key:props.key});
+      return {
+        set_props(next){ops.push({type:'update',key:next.key});},
+        release(){ops.push({type:'release',key:props.key});},
+      };
+    }},
+  };
+}
+
+test('candidate adoption prioritizes focus and visible rows, shares 16 native ops with cleanup, and releases once', t => {
+  const owner=candidate(t,{WorkspaceRow:class {}});
+  const {ops,cx}=nativeOps();
+  const visible=Array.from({length:5},(_,i)=>'visible-'+i);
+  Object.assign(owner,{
+    retainedRows:new Map(),retainedPending:new Map(),virtualVisible:visible,virtualFocusPending:{key:'focus-row'},
+    virtualAdoptCursor:0,
+  });
+  for(let i=0;i<100;i++){
+    const key='retired-'+i;
+    owner.retainedRows.set(key,{signature:'old',entity:{release(){ops.push({type:'release',key});}}});
+  }
+  for(let i=0;i<40;i++) owner.retainedPending.set('pending-'+i,{signature:'pending-'+i});
+  owner.retainedPending.set('focus-row',{signature:'focus-0'});
+  for(let i=0;i<visible.length;i++) owner.retainedPending.set(visible[i],{signature:'visible-'+i+'-0'});
+
+  let start=ops.length;
+  assert.equal(owner.syncRetained(cx),true);
+  const first=ops.slice(start);
+  assert.equal(first.length,16);
+  assert.deepEqual(first.slice(0,8).map(op=>op.key),[
+    'focus-row','visible-0','visible-1','visible-2','pending-0','pending-1','pending-2','pending-3',
+  ]);
+  assert.deepEqual(first.slice(8).map(op=>op.type),Array(8).fill('release'));
+
+  let pass=1;
+  let previousRetired=Array.from(owner.retainedRows.keys()).filter(key=>key.startsWith('retired-')).length;
+  while(previousRetired){
+    for(let i=0;i<visible.length;i++) owner.retainedPending.get(visible[i]).signature='visible-'+i+'-'+pass;
+    start=ops.length;
+    owner.syncRetained(cx);
+    const batch=ops.slice(start);
+    assert.ok(batch.length<=16);
+    if(pass===1) assert.deepEqual(batch.slice(0,4).map(op=>[op.type,op.key]),[
+      ['create','visible-3'],['create','visible-4'],['update','visible-0'],['update','visible-1'],
+    ]);
+    const retired=Array.from(owner.retainedRows.keys()).filter(key=>key.startsWith('retired-')).length;
+    assert.ok(retired<previousRetired,'stale cleanup progresses while visible rows keep changing');
+    previousRetired=retired;
+    const released=ops.filter(op=>op.type==='release').map(op=>op.key);
+    assert.equal(new Set(released).size,released.length,'no entity is released twice');
+    pass++;
+  }
+  assert.equal(ops.filter(op=>op.type==='release').length,100);
+  assert.equal(new Set(ops.filter(op=>op.type==='release').map(op=>op.key)).size,100);
+  assert.ok(ops.filter(op=>op.type==='create').every(op=>!op.key.startsWith('retired-')));
+  assert.equal(owner.retainedRows.has('retired-0'),false);
+  start=ops.length;
+  assert.equal(owner.syncRetained(cx),false);
+  assert.equal(ops.length,start,'a settled snapshot does not resurrect retired rows');
+});
+
+test('candidate adoption keeps nonvisible FIFO rows progressing when nothing is retired', t => {
+  const owner=candidate(t,{WorkspaceRow:class {}});
+  const {ops,cx}=nativeOps();
+  Object.assign(owner,{
+    retainedRows:new Map(),retainedPending:new Map(),virtualVisible:['visible'],virtualFocusPending:null,virtualAdoptCursor:0,
+  });
+  for(let i=0;i<30;i++) owner.retainedPending.set('queued-'+i,{signature:'queued-'+i});
+  owner.retainedPending.set('visible',{signature:'visible'});
+  assert.equal(owner.syncRetained(cx),true);
+  assert.equal(ops.length,16);
+  assert.deepEqual(ops.slice(0,3).map(op=>op.key),['visible','queued-0','queued-1']);
+  assert.deepEqual(ops.filter(op=>op.type==='create').map(op=>op.key).slice(1),Array.from({length:15},(_,i)=>'queued-'+i));
+  assert.equal(owner.retainedRows.size,16);
+
+  const start=ops.length;
+  assert.equal(owner.syncRetained(cx),true);
+  assert.ok(ops.length-start<=16);
+  assert.deepEqual(ops.slice(start).map(op=>op.key),Array.from({length:15},(_,i)=>'queued-'+(i+15)));
+  assert.equal(owner.retainedRows.size,31);
+});
+
 test('focus waits for an unprepared existing row and cancels only when it is removed', t => {
   const owner = candidate(t);
   const request = {key:'pending', direction:1};

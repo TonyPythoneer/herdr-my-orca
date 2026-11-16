@@ -6,7 +6,7 @@ findings until measured in the Herdr runtime.
 
 ## Current continuation entry
 
-Latest continuation: section 19. Production checks pass; virtualization remains a
+Latest continuation: section 20. Production checks pass; virtualization remains a
 separately generated candidate. It now projects Project/Status/None and host
 headers with typed view keys, but its new grouping/native interaction acceptance
 is still pending. Full native frame/count evidence and lossless catalog bounds
@@ -798,3 +798,20 @@ changes and measured limits above do not substitute for those three outcomes.
   native grouping/control acceptance is next. Native adoption still releases stale
   Entities before adopting new ones: mass removal may delay visible replacements
   and needs a fair adoption/cleanup policy before production promotion.
+
+## 20. Fair native adoption and retired-entity cleanup
+
+- Candidate native adoption now runs before stale cleanup. With retired Entities,
+  up to eight create/update operations share the batch with cleanup; otherwise
+  adoption can use all 16. Focus/rotating visible priority uses half the adoption
+  allowance and FIFO gets the rest. Cleanup fills the remaining total 16 slots.
+- No snapshot-synced shortcut hides unfinished cleanup. Removed entries are deleted
+  immediately after release, avoiding repeated release or stale resurrection.
+  This policy is still candidate-only; production batching is unchanged.
+- Luna tests cover 100 retired entries plus focused/visible/FIFO replacements,
+  immediate first-batch visible adoption, cleanup while visible signatures keep
+  changing, cursor rotation, total native-call budget and exactly-once release.
+  A no-retired case verifies ordinary FIFO adoption progress too.
+- Root reviewed the helper and tests. Full suite 74/74, production spaces check
+  and diff check pass. This is native-operation scheduling coverage, not observed
+  event-to-frame latency. Consolidated native candidate acceptance remains next.

@@ -275,6 +275,44 @@ def build(destination):
     replace_once('i => rows[i].w.id', 'i => rows[i].virtualKey')
     replace_once('this.retainedRows.get(rows[i].w.id)', 'this.retainedRows.get(rows[i].virtualKey)')
     replace_once('    this.refreshRetained();\n    this.syncRetained(this.ownerCx);', '    this.refreshRetained();\n    this.prepareVirtualRows(true);\n    this.syncRetained(this.ownerCx);')
+    sync_start = source.index('  syncRetained(cx) {')
+    # Locate the next class method rather than an indented body line.
+    sync_end = source.index('\n  }', sync_start) + len('\n  }')
+    source = source[:sync_start] + '''  syncRetained(cx) {
+    let operations = 0, retired = false;
+    for (const key of this.retainedRows.keys()) if (!this.retainedPending.has(key)) { retired = true; break; }
+    const adoptLimit = retired ? 8 : 16;
+    const adopt = key => {
+      if (operations === adoptLimit) return;
+      const data = this.retainedPending.get(key);
+      if (!data) return;
+      const held = this.retainedRows.get(key);
+      if (!held) {
+        this.retainedRows.set(key, {signature:data.signature, entity:cx.new(WorkspaceRow,{owner:this,key})});
+        operations++;
+      } else if (held.signature !== data.signature) {
+        held.entity.set_props({owner:this,key}); held.signature=data.signature;
+        operations++;
+      }
+    };
+    adopt(this.virtualFocusPending?.key);
+    const visible = this.virtualVisible ?? [], start = this.virtualAdoptCursor ?? 0;
+    let visited = 0;
+    while (visited < visible.length && operations < adoptLimit / 2) {
+      adopt(visible[(start + visited) % visible.length]); visited++;
+    }
+    if (visible.length) this.virtualAdoptCursor = (start + visited) % visible.length;
+    for (const key of this.retainedPending.keys()) {
+      if (operations === adoptLimit) break;
+      adopt(key);
+    }
+    for (const [key, held] of this.retainedRows) {
+      if (operations === 16) break;
+      if (this.retainedPending.has(key)) continue;
+      held.entity.release(); this.retainedRows.delete(key); operations++;
+    }
+    return operations > 0;
+  }''' + source[sync_end:]
     main.write_text(source)
 
 
