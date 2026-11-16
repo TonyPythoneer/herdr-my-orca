@@ -594,3 +594,22 @@ changes and measured limits above do not substitute for those three outcomes.
   not handle status/host descriptor virtualization. Existing production untouched.
 - Next: replace that fixture layout with the measured variable-size virtual route
   and scoped focus handoff, then validate actual card controls, grouping and drag.
+
+### Real-card measured virtual sizes
+
+- Candidate builder now uses v_virtual_list with VirtualListScrollHandle and
+  per-row sizes measured by each actual WorkspaceRow.on_size_change. Root size
+  updates viewport height; 600px is only the pre-layout estimate, not a fixed
+  constraint. Changed measurements notify the owner outside render.
+- Mounted actual 200-row card code reports 116px for measured rows 0-13, replacing
+  64px estimates. Native frame and status inspected (errors empty). Source hash,
+  native frame and labeled log excerpt saved as `real-measured*`.
+- One initial check hit interrupted script budget again; repeat passed. This
+  repeated initial-check reliability issue remains open; do not hide it behind
+  the successful repeat. Script samples in the saved excerpt are 9-15ms; no paired
+  speedup claim. Adoption interval counted 1,126 explicit factories.
+- Fresh temporary build matches the mounted main.js byte-for-byte. A second build
+  rejects the existing destination and preserves its main.js bytes.
+- Still a candidate: size-array projection/signatures and Entity population scale
+  with N, placeholders can shift on calibration, and actual keyboard/group/drag
+  integration remains. Next wire real card stop order and scoped focus handoff.

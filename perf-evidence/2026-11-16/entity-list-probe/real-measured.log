@@ -1,0 +1,23 @@
+Excerpt: row measurements, script samples and adoption interval from exec session 46422.
+2026-11-16T05:12:08.821136Z  INFO gpui_shell::script: PERF working-tree 9 ms 4 explicit-factories
+2026-11-16T05:12:08.832612Z  INFO gpui_shell::script: PERF working-tree 10 ms 4 explicit-factories
+2026-11-16T05:12:09.176146Z  INFO gpui_shell::script: PERF working-tree 9 ms 4 explicit-factories
+2026-11-16T05:12:09.184529Z  INFO gpui_shell::script: PERF row-height fixture-0 116
+2026-11-16T05:12:09.184574Z  INFO gpui_shell::script: PERF row-height fixture-1 116
+2026-11-16T05:12:09.184598Z  INFO gpui_shell::script: PERF row-height fixture-2 116
+2026-11-16T05:12:09.184620Z  INFO gpui_shell::script: PERF row-height fixture-3 116
+2026-11-16T05:12:09.184642Z  INFO gpui_shell::script: PERF row-height fixture-4 116
+2026-11-16T05:12:09.184665Z  INFO gpui_shell::script: PERF row-height fixture-5 116
+2026-11-16T05:12:09.184687Z  INFO gpui_shell::script: PERF row-height fixture-6 116
+2026-11-16T05:12:09.184712Z  INFO gpui_shell::script: PERF row-height fixture-7 116
+2026-11-16T05:12:09.184735Z  INFO gpui_shell::script: PERF row-height fixture-8 116
+2026-11-16T05:12:09.184757Z  INFO gpui_shell::script: PERF row-height fixture-9 116
+2026-11-16T05:12:09.184779Z  INFO gpui_shell::script: PERF row-height fixture-10 116
+2026-11-16T05:12:09.184802Z  INFO gpui_shell::script: PERF row-height fixture-11 116
+2026-11-16T05:12:09.184824Z  INFO gpui_shell::script: PERF row-height fixture-12 116
+2026-11-16T05:12:09.184846Z  INFO gpui_shell::script: PERF row-height fixture-13 116
+2026-11-16T05:12:09.213520Z  INFO gpui_shell::script: PERF interval 1126
+2026-11-16T05:12:09.534658Z  INFO gpui_shell::script: PERF working-tree 9 ms 4 explicit-factories
+2026-11-16T05:12:09.882584Z  INFO gpui_shell::script: PERF working-tree 9 ms 4 explicit-factories
+2026-11-16T05:12:10.263959Z  INFO gpui_shell::script: PERF working-tree 13 ms 4 explicit-factories
+2026-11-16T05:12:10.642881Z  INFO gpui_shell::script: PERF working-tree 15 ms 4 explicit-factories
