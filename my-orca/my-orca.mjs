@@ -992,11 +992,12 @@ async function handleResult(ctx, task, dispatch) {
   const settled = await settleAndKill(ctx, dispatch);
   if (settled.stop) return { stop: true };
 
-  const result = await readResultFile(path.join(ctx.stateDir, "results", `${dispatch.id}.json`));
+  const resultFile = path.join(ctx.stateDir, "results", `${dispatch.id}.json`);
+  let result = await readResultFile(resultFile);
   if (result.exists && (result.badJson || result.tooLarge)) {
     for (let i = 0; i < 3 && result.exists && result.badJson; i++) {
       await ctx.sleep(ctx.config.poll_s * 1000);
-      result = await readResultFile(path.join(ctx.stateDir, "results", `${dispatch.id}.json`));
+      result = await readResultFile(resultFile);
     }
     if (result.badJson || result.tooLarge) return rejectTask(ctx, task, dispatch, "bad_result");
   }
