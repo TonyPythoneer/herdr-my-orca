@@ -982,15 +982,16 @@ async function handleResult(ctx, task, dispatch) {
   await saveScreen(ctx, dispatch, "screen");
   const settled = await settleAndKill(ctx, dispatch);
   if (settled.stop) return { stop: true };
-  const resultFile = path.join(ctx.stateDir, "results", `${dispatch.id}.json`);
-  let result = await readResultFile(resultFile);
+
+  const result = await readResultFile(path.join(ctx.stateDir, "results", `${dispatch.id}.json`));
   if (result.exists && (result.badJson || result.tooLarge)) {
     for (let i = 0; i < 3 && result.exists && result.badJson; i++) {
       await ctx.sleep(ctx.config.poll_s * 1000);
-      result = await readResultFile(resultFile);
+      result = await readResultFile(path.join(ctx.stateDir, "results", `${dispatch.id}.json`));
     }
     if (result.badJson || result.tooLarge) return rejectTask(ctx, task, dispatch, "bad_result");
   }
+
   if (!result.exists) {
     const info = ctx.git.info(ctx.state.repo.toplevel);
     if (info.head !== ctx.state.repo.head || info.dirty.length) return needsUser(ctx, "partial_changes", "the worker finished without a result and left changes");
@@ -999,13 +1000,16 @@ async function handleResult(ctx, task, dispatch) {
     await saveState(ctx);
     return { retry: true, noResult: true };
   }
+
   if (!isObject(result.json) || result.json.dispatch !== dispatch.id) {
     return needsUser(ctx, "exit_without_result", "the result file is for a different dispatch (E47)");
   }
+
   if (result.json.status !== "done") {
     const r = await rejectTask(ctx, task, dispatch, "agent_blocked");
     return r;
   }
+
   const accepted = await acceptDev(ctx, task, dispatch, result);
   if (accepted.ok) return { accepted: true };
   if (accepted.needsUser) { await needsUser(ctx, accepted.needsUser[0], accepted.needsUser[1]); return { stop: true }; }
@@ -1612,8 +1616,11 @@ async function resumeState(ctx) {
       if (e instanceof CoreGuardError) { await needsUser(ctx, "core_mismatch", e.message); return { ok: true }; }
     }
   }
-  const task = (ctx.state.tasks ?? []).find((t) => t.state === "dispatched") ?? (ctx.state.tasks ?? []).find((t) => t.id === ctx.state.dispatch?.task)
-    ?? (ctx.state.tasks ?? []).find((t) => t.state !== "accepted" && (t.attempts?.length ?? 0) >= 2 + Number(t.resume_extra ?? 0));
+  const tasks = ctx.state.tasks ?? [];
+  const task =
+    tasks.find((t) => t.state === "dispatched")
+    ?? tasks.find((t) => t.id === ctx.state.dispatch?.task)
+    ?? tasks.find((t) => t.state !== "accepted" && (t.attempts?.length ?? 0) >= 2 + Number(t.resume_extra ?? 0));
   if (task) {
     task.state = "pending";
     task.resume_extra = Number(task.resume_extra ?? 0) + 2;
