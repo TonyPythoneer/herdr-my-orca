@@ -399,7 +399,45 @@ must be revalidated before reuse. Do not overwrite the user's live Herdr config.
 ### Unfulfilled requirements
 
 The checklist is intentionally not all checked. A hard total git/project bound
-cannot preserve an arbitrary number of user projects; full input-independent
-allocation would regress current controls/focus without runtime support; and full
-native counts/traces are not exposed by the inspected API. The safe completed
+cannot preserve an arbitrary number of user projects without a retention/storage
+policy; input-independent allocation in every mode remains an open design problem,
+not a proven runtime impossibility; and full native counts/traces are not exposed
+by the inspected API. The safe completed
 changes and measured limits above do not substitute for those three outcomes.
+
+
+## 10. 暫停與續做入口（2026-11-16）
+
+**狀態：依使用者要求暫停，原始「全部做完」目標尚未完成。**
+使用者因 token 不足要求先儲存狀態；本次只保存交接，不繼續實作。
+先前「能安全做的都做完」收尾過早，不能據此把其餘工作判定為無法完成。
+
+- 工作目錄：`/Users/tonyyang/git/herdr-my-orca.worktrees/perf-todo`，分支 `perf-todo`。
+  本次保存前 HEAD 為 `ab98444`，工作目錄乾淨。
+- 已提交：`d237eae` 離線快取修正、`168bdd5` retained rows 與 probe、
+  `ab98444` smoke／review／證據校正。驗證與限制詳見第 9 節；程式最後驗證
+  為 52/52 Node tests、四個 mod checks 通過，獨立 review 無剩餘程式阻擋問題。
+- **下一步優先處理所有模式的配置量上限**：仍可繼續設計、實作，不能直接
+  推定必須等待 Herdr 改版。先讀 `mods/orca-spaces/main.js` 的 `render`、
+  `retainedRow`、`rowSignature`、`syncRetained` 與 `focus.js`。目前穩定滑鼠模式
+  重用 Entity，但初次／變更／鍵盤模式仍直接建立整列，資料投影與簽章仍為 O(n)。
+  先定義要約束的是 JS 陣列、元件建立量或總常駐量，再評估把工作移到事件／task、
+  分批處理或保留完整焦點順序的設計；保留 nested controls、變動高度與拖曳。
+- 既有修正不可退回：不要快取已消耗的 NativeElement；不要在 render 中
+  `cx.new`／`set_props`；簽章不能重複序列化整份 `g.worktrees`；鍵盤模式的
+  64-handle pool 補充與完整 Tab 順序必須保留。現有 regression 在
+  `mods/orca-spaces/retained-row.test.js`。
+- 目錄硬上限尚缺保留／清除或儲存政策。`git.cache.v2` 同時支援離線／未開啟
+  專案發現，`projects.saved.v1` 為使用者管理清單；不得直接 LRU 刪除專案。
+  若考慮 paged catalog，需連同 spaces、nav、agents 的讀取與 migration 設計。
+- 完整原生元素數／frame trace 尚未取得。35→8 ms 僅為已保存 log 的穩定
+  script render 中位數；7,604→4 是 explicit factories，不是全部原生元素。
+  先前兩張基準／最終 HUD 匯出圖相同且為零值，已刪除並撤回比較主張；不得沿用。
+- 續做前先檢查 Git 狀態及第 8 節未勾選項；有程式變更後才重跑相關驗證。
+  Probe 為 `scripts/perf-spaces.py <全新 mod 目錄> [git-ref]`，只接受不存在的
+  目錄。第 8 節有測試命令，第 9 節連結 durable evidence。
+- 沒有本次仍在運行的 worker、app 或測試 relay；本次建立的終端與隔離遠端 core
+  已結束。既有 test core／終端未動。`/tmp/orca-perf-a002` 等舊 fixture 不保證存在
+  或仍可用，必須重新確認；不要覆寫使用者 live Herdr config。
+
+後續仍依原要求：每完成一個階段，更新本檔狀態並各自 commit。
