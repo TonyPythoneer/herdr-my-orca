@@ -686,3 +686,27 @@ changes and measured limits above do not substitute for those three outcomes.
   structural descriptor/signature inputs, color projections and size arrays; task
   projection and total retained handles remain input-sized. Production virtualization
   and its remaining interaction/measurement gates are still open.
+
+## 15. Prepared render snapshots in local-project candidate
+
+- Candidate projectVirtualRows now prepares row membership/data maps, agent/count
+  lookup, folded-row filtering, colors/unread state and measured size arrays in
+  the task. Render consumes those snapshots without projecting the entire list
+  or traversing the git catalog; avatar catalog scans also moved out of render.
+- Added guarded render test: 1 and 10,000 prepared rows produce the same explicit
+  factory count; row map/filter/iteration and git catalog enumeration throw if
+  render attempts them, and the exact prepared size-array reference is passed on.
+  This tests script-side construction, not native serialization or resident memory.
+- Added task projection regression for folded headers, stable keys, group counts,
+  measured/default sizes and old-snapshot preservation. Candidate explicitly rejects
+  remote/status/none grouping until their descriptors are implemented; no silent
+  unsupported rendering. This restriction belongs to the isolated probe only.
+- Current suite 61/61 passes. Candidate initial check passes three times. At a
+  representative 300px sidebar, native focus again matches all 35 expected positions
+  and status errors is empty. Frame inspected and source hash/log/frame saved as
+  real-render-snapshot*. No production virtualization switch in this phase.
+- Remaining allocation sources include expanded agent content inside each card,
+  task-side full data projection and host-side size-array materialization. Native
+  total counts/frame trace, other grouping modes, physical Tab and drag gates
+  remain unfulfilled. Next inspect per-card hidden agent tree construction before
+  claiming that even the local candidate has input-independent construction.

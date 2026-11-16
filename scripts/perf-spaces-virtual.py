@@ -172,6 +172,43 @@ def build(destination):
   virtualIds({ r, groupBy }) {""")
     replace_once('    const rows = this.ordered();', '    const rows = this.virtualProjected ?? [];')
     replace_once('cx.timer.every(250, cx => { this.prepareVirtualRows(); if (this.syncRetained(cx)) cx.notify(); });', 'cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });')
+    replace_once("""    this.virtualCurrent = new Map();
+    this.retainedFocus = onStop(this);
+    this.retainedKeyboardMode = Boolean(shared("t3-focus"));""", '')
+    replace_once("""    this.grouped(t, cx, rows);
+    this.virtualRows = [...this.virtualCurrent.values()];""", '')
+    replace_once('rows.map(r => Math.max(1, this.virtualSizes.get(r.w.id) ?? 64))', 'this.virtualItemSizes ?? []')
+    replace_once('cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });', 'cx.timer.every(250, cx => { this.projectVirtualRows(cx); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });')
+    replace_once('  prepareVirtualRows() {', """  projectVirtualRows(cx) {
+    const t = theme(), ps = panes(), rows = this.ordered();
+    const groupBy = workspaceOptions().groupBy;
+    if (groupBy !== "repo" || rows.some(r => r.w.machine)) throw new Error("Virtual probe supports local project grouping only");
+    const rowAgents = agentsByRow(rows, agents());
+    const counts = new Map((this.plan?.groups ?? []).map(group => [group.key, group.rows.length]));
+    this.virtualProjected = rows.filter(r => r.head || !this.foldedRepos.has(foldKey(r)));
+    this.virtualCurrent = new Map();
+    for (let i = 0; i < this.virtualProjected.length; i++) {
+      const r = this.virtualProjected[i];
+      this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos: this.rowIndex?.get(r.w.id) ?? i }, t, ps, rowAgents.get(r), groupBy);
+    }
+    this.virtualRows = [...this.virtualCurrent.values()];
+    this.virtualItemSizes = this.virtualProjected.map(r => Math.max(1, this.virtualSizes.get(r.w.id) ?? 64));
+  }
+
+  prepareVirtualRows() {""")
+    color_start = source.index('    const colors = Object.fromEntries(sp.filter(')
+    color_end = source.index('\n', source.index('setShared("space.colors", colors);', color_start))
+    colors = source[color_start:color_end]
+    source = source[:color_start] + source[color_end:]
+    replace_once('    const sp = spaces();\n    // Unread workspace state', '    // Unread workspace state')
+    unread_start = source.index('    const shUnread = shared("spaces.unread.v1");', source.index('  render(cx) {'))
+    unread_end = source.index('\n    // `WorktreeList.tsx', unread_start)
+    unread = source[unread_start:unread_end]
+    source = source[:unread_start] + source[unread_end:]
+    replace_once('    const t = theme(), ps = panes(), rows = this.ordered();', '    const t = theme(), ps = panes(), rows = this.ordered(), sp = spaces();\n' + unread + '\n' + colors)
+    avatar_loop = '    for (const g of Object.values(this.git)) if (g?.owner) ensureAvatar(g.owner, cx);'
+    replace_once(avatar_loop, '')
+    replace_once('    const groupBy = workspaceOptions().groupBy;\n    if (groupBy !== "repo"', avatar_loop + '\n    const groupBy = workspaceOptions().groupBy;\n    if (groupBy !== "repo"')
     main.write_text(source)
 
 

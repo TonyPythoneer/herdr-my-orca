@@ -1,0 +1,54 @@
+Excerpt: 300px sidebar focus events and final ten script render samples.
+2026-11-16T05:32:07.870592Z  INFO gpui_shell::script: REAL handed space-fixture-198 true
+2026-11-16T05:32:07.870625Z  INFO gpui_shell::script: REAL focus space-fixture-198
+2026-11-16T05:32:07.976658Z  INFO gpui_shell::script: REAL focus space-new-fixture-198
+2026-11-16T05:32:08.083511Z  INFO gpui_shell::script: REAL focus space-more-fixture-198
+2026-11-16T05:32:08.207377Z  INFO gpui_shell::script: REAL focus space-fold-fixture-198
+2026-11-16T05:32:08.311489Z  INFO gpui_shell::script: REAL focus space-head-fixture-198
+2026-11-16T05:32:08.624311Z  INFO gpui_shell::script: REAL handed space-fixture-197 true
+2026-11-16T05:32:08.624424Z  INFO gpui_shell::script: REAL focus space-fixture-197
+2026-11-16T05:32:08.731430Z  INFO gpui_shell::script: REAL focus space-new-fixture-197
+2026-11-16T05:32:08.841614Z  INFO gpui_shell::script: REAL focus space-more-fixture-197
+2026-11-16T05:32:08.949643Z  INFO gpui_shell::script: REAL focus space-fold-fixture-197
+2026-11-16T05:32:09.058021Z  INFO gpui_shell::script: REAL focus space-head-fixture-197
+2026-11-16T05:32:09.379075Z  INFO gpui_shell::script: REAL handed space-fixture-196 true
+2026-11-16T05:32:09.379303Z  INFO gpui_shell::script: REAL focus space-fixture-196
+2026-11-16T05:32:09.486309Z  INFO gpui_shell::script: REAL focus space-new-fixture-196
+2026-11-16T05:32:09.596533Z  INFO gpui_shell::script: REAL focus space-more-fixture-196
+2026-11-16T05:32:09.703655Z  INFO gpui_shell::script: REAL focus space-fold-fixture-196
+2026-11-16T05:32:09.829253Z  INFO gpui_shell::script: REAL focus space-head-fixture-196
+2026-11-16T05:32:10.389661Z  INFO gpui_shell::script: REAL handed space-fixture-195 true
+2026-11-16T05:32:10.389721Z  INFO gpui_shell::script: REAL focus space-fixture-195
+2026-11-16T05:32:10.497230Z  INFO gpui_shell::script: REAL focus space-new-fixture-195
+2026-11-16T05:32:10.606050Z  INFO gpui_shell::script: REAL focus space-more-fixture-195
+2026-11-16T05:32:10.881320Z  INFO gpui_shell::script: REAL focus space-new-fixture-195
+2026-11-16T05:32:10.985728Z  INFO gpui_shell::script: REAL focus space-fixture-195
+2026-11-16T05:32:11.092871Z  INFO gpui_shell::script: REAL handed space-head-fixture-196 true
+2026-11-16T05:32:11.092981Z  INFO gpui_shell::script: REAL focus space-head-fixture-196
+2026-11-16T05:32:11.394373Z  INFO gpui_shell::script: REAL focus space-fold-fixture-196
+2026-11-16T05:32:11.500203Z  INFO gpui_shell::script: REAL focus space-more-fixture-196
+2026-11-16T05:32:11.602585Z  INFO gpui_shell::script: REAL focus space-new-fixture-196
+2026-11-16T05:32:11.710306Z  INFO gpui_shell::script: REAL focus space-fixture-196
+2026-11-16T05:32:11.816781Z  INFO gpui_shell::script: REAL handed space-head-fixture-197 true
+2026-11-16T05:32:11.816883Z  INFO gpui_shell::script: REAL focus space-head-fixture-197
+2026-11-16T05:32:11.926155Z  INFO gpui_shell::script: REAL focus space-fold-fixture-197
+2026-11-16T05:32:12.033317Z  INFO gpui_shell::script: REAL focus space-more-fixture-197
+2026-11-16T05:32:12.143493Z  INFO gpui_shell::script: REAL focus space-new-fixture-197
+2026-11-16T05:32:12.245261Z  INFO gpui_shell::script: REAL focus space-fixture-197
+2026-11-16T05:32:12.353272Z  INFO gpui_shell::script: REAL handed space-head-fixture-198 true
+2026-11-16T05:32:12.353439Z  INFO gpui_shell::script: REAL focus space-head-fixture-198
+2026-11-16T05:32:12.466311Z  INFO gpui_shell::script: REAL focus space-fold-fixture-198
+2026-11-16T05:32:12.570466Z  INFO gpui_shell::script: REAL focus space-more-fixture-198
+2026-11-16T05:32:12.677124Z  INFO gpui_shell::script: REAL focus space-new-fixture-198
+2026-11-16T05:32:12.786118Z  INFO gpui_shell::script: REAL focus space-fixture-198
+2026-11-16T05:32:12.786177Z  INFO gpui_shell::script: REAL focus-complete
+2026-11-16T05:32:25.083701Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T05:32:25.443273Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T05:32:25.804212Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T05:32:26.160010Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T05:32:26.518719Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T05:32:26.876259Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T05:32:27.218800Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T05:32:27.571367Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T05:32:27.910376Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T05:32:28.249912Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
