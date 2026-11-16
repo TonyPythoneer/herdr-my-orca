@@ -1,0 +1,27 @@
+2026-11-16T04:56:23.301506Z  INFO gpui_shell::script: PROBE interval 5 []
+2026-11-16T04:56:24.342951Z  INFO gpui_shell::script: PROBE interval 6 []
+2026-11-16T04:56:25.403408Z  INFO gpui_shell::script: PROBE interval 7 []
+2026-11-16T04:56:26.462652Z  INFO gpui_shell::script: PROBE interval 8 []
+2026-11-16T04:56:27.402793Z  WARN gpui_shell::materialize::components::list: track_scroll is ignored on a list: its scroll position is GPUI's own, filed under the id it was built with, which is where a Scrollbar of that name finds it
+2026-11-16T04:56:27.402922Z  INFO gpui_shell::script: PROBE child 0
+2026-11-16T04:56:27.402991Z  INFO gpui_shell::script: PROBE child 1
+2026-11-16T04:56:27.403033Z  INFO gpui_shell::script: PROBE child 2
+2026-11-16T04:56:27.403072Z  INFO gpui_shell::script: PROBE child 3
+2026-11-16T04:56:27.403112Z  INFO gpui_shell::script: PROBE child 4
+2026-11-16T04:56:27.403152Z  INFO gpui_shell::script: PROBE child 5
+2026-11-16T04:56:27.403192Z  INFO gpui_shell::script: PROBE child 6
+2026-11-16T04:56:27.403229Z  INFO gpui_shell::script: PROBE child 7
+2026-11-16T04:56:27.403265Z  INFO gpui_shell::script: PROBE child 8
+2026-11-16T04:56:27.403303Z  INFO gpui_shell::script: PROBE child 9
+2026-11-16T04:56:27.403339Z  INFO gpui_shell::script: PROBE child 10
+2026-11-16T04:56:27.403376Z  INFO gpui_shell::script: PROBE child 11
+2026-11-16T04:56:27.403418Z  INFO gpui_shell::script: PROBE child 12
+2026-11-16T04:56:27.403453Z  INFO gpui_shell::script: PROBE child 13
+2026-11-16T04:56:27.403489Z  INFO gpui_shell::script: PROBE child 14
+2026-11-16T04:56:27.403525Z  INFO gpui_shell::script: PROBE child 15
+2026-11-16T04:56:27.405143Z  WARN gpui_shell::materialize::components::list: track_scroll is ignored on a list: its scroll position is GPUI's own, filed under the id it was built with, which is where a Scrollbar of that name finds it
+2026-11-16T04:56:27.526718Z  INFO gpui_shell::script: PROBE interval 9 [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+2026-11-16T04:56:28.577607Z  INFO gpui_shell::script: PROBE interval 10 []
+2026-11-16T04:56:29.628628Z  INFO gpui_shell::script: PROBE interval 11 []
+2026-11-16T04:56:30.677668Z  INFO gpui_shell::script: PROBE interval 12 []
+2026-11-16T04:56:31.743055Z  INFO gpui_shell::script: PROBE interval 13 []

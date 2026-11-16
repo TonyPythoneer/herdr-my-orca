@@ -479,3 +479,17 @@ changes and measured limits above do not substitute for those three outcomes.
 - Next: extend to many rows and count child renders, then verify focus traversal
   beyond the viewport before integrating retainedRows and descriptor planning.
 - Isolated app process is tracked by exec session 46422; inspect before reusing.
+
+### Long-list follow-up
+
+- `long-list.js` creates 1,000 Entities in init, with alternating 40/80 logical
+  pixel heights. Actual runtime entered child renders 0 through 15 only in the
+  captured interval; owner-side counters agree. Source, unedited log and native
+  frame are saved beside the one-row probe. This bounds visible UI construction
+  in this fixture, not total resident Entity count or data arrays.
+- Runtime warns that `track_scroll` is ignored on `list`. The request to reveal
+  row 999 therefore did not work. Do not claim offscreen focus traversal passed.
+  A compatible navigation design is still needed before production integration.
+- Initial rendering was deferred while the window was inactive; taking a native
+  shot woke layout. Empty earlier timer samples are not zero-cost render samples.
+- No production changes in this phase. Existing keyboard fallback is preserved.
