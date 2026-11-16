@@ -1,0 +1,109 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+
+function fixture() {
+  const source = readFileSync(new URL('./main.js', import.meta.url), 'utf8')
+    .replace(/^import .*;$/gm, '').replace('export default class Spaces', 'class Spaces');
+  const scope = {
+    View: class {}, foldKey: r => `space:${r.w.id}`, shared: () => null,
+    onStop: v => v.focused, avatarFile: () => null,
+  };
+  vm.runInNewContext(source + '\nglobalThis.Spaces = Spaces;', scope);
+  const owner = new scope.Spaces();
+  Object.assign(owner, {
+    retainedRows: new Map(), retainedPending: new Map(), foldedRepos: new Set(),
+    expandedAgents: new Set(), unread: new Set(), fs: { keyboard: false },
+    rowIndex: new Map(), reviewOf: () => null, direct: 0,
+    rowElements(data) { this.direct++; return [data.r]; },
+  });
+  const calls = { creates: 0, updates: 0, releases: 0 };
+  const cx = { new() {
+    calls.creates++;
+    return { set_props() { calls.updates++; }, release() { calls.releases++; } };
+  } };
+  const draw = (id, name = id, pos = 0) => owner.retainedRow({ w: { id, name }, pos }, {}, [], [], 'repo');
+  return { owner, calls, cx, draw, keyboard(on) { scope.shared = () => on ? 'keyboard' : null; } };
+}
+
+test('changed rows paint fresh immediately, then retain; stable rows avoid element construction', () => {
+  const { owner, calls, cx, draw } = fixture();
+  draw('a'); draw('b');
+  assert.equal(owner.direct, 2);
+  assert.equal(owner.syncRetained(cx), true);
+  assert.equal(calls.creates, 2);
+  owner.retainedPending = new Map();
+  assert.equal(draw('a')[0], owner.retainedRows.get('a').entity);
+  assert.equal(draw('b')[0], owner.retainedRows.get('b').entity);
+  assert.equal(owner.direct, 2);
+  assert.equal(owner.syncRetained(cx), false);
+  owner.retainedPending = new Map();
+  assert.equal(draw('a', 'renamed', 1)[0].w.name, 'renamed');
+  assert.equal(draw('b')[0], owner.retainedRows.get('b').entity);
+  assert.equal(owner.syncRetained(cx), true);
+  assert.equal(calls.updates, 1);
+  assert.equal(owner.direct, 3);
+});
+
+test('hover affects one row; removed entities release and remount fresh', () => {
+  const { owner, calls, cx, draw } = fixture();
+  draw('a'); draw('b'); owner.syncRetained(cx);
+  owner.retainedPending = new Map();
+  owner.laneHot = 'a';
+  assert.equal(draw('a')[0].w.id, 'a');
+  assert.equal(draw('b')[0], owner.retainedRows.get('b').entity);
+  owner.syncRetained(cx);
+  assert.equal(calls.updates, 1);
+  owner.retainedPending = new Map(); draw('a'); owner.syncRetained(cx);
+  assert.equal(calls.releases, 1);
+  assert.equal(owner.retainedRows.has('b'), false);
+  owner.retainedPending = new Map(); draw('a'); draw('b'); owner.syncRetained(cx);
+  assert.equal(calls.creates, 3);
+  owner.close();
+  assert.equal(calls.releases, 3);
+});
+
+test('owner events update affected retained children before parent renders, retaining focus paths', () => {
+  const { owner, calls, cx, draw } = fixture();
+  draw('a'); draw('b'); owner.syncRetained(cx);
+  let rootNotifications = 0;
+  owner.ownerCx = { ...cx, notify() { rootNotifications++; } };
+  owner.hoveredRepo = 'space:a';
+  owner.notify({ notify() { throw new Error('must notify owner'); } });
+  assert.equal(rootNotifications, 1);
+  assert.equal(calls.updates, 1);
+  owner.retainedPending = new Map();
+  assert.equal(draw('a')[0], owner.retainedRows.get('a').entity);
+  assert.equal(draw('b')[0], owner.retainedRows.get('b').entity);
+  assert.equal(owner.direct, 2);
+});
+
+
+test('a row signature excludes the sibling catalog already projected into rows', () => {
+  const { owner } = fixture();
+  const row = { w: { id: 'a', name: 'a', tabs: [] }, g: { repo: 'repo', top: '/a', worktrees: [] }, also: [{ w: { id: 'merged', tabs: [] }, g: { worktrees: [] } }], head: true, count: 2, pos: 0 };
+  const data = { r: row, t: {}, ps: [], mine: [], groupBy: 'repo' };
+  const before = owner.rowSignature(data);
+  row.g.worktrees = Array.from({ length: 2000 }, (_,i)=>({path:`/sibling-${i}`}));
+  row.also[0].g.worktrees = row.g.worktrees;
+  assert.equal(owner.rowSignature(data), before);
+  row.count++;
+  assert.notEqual(owner.rowSignature(data), before);
+});
+
+
+test('keyboard mode bypasses retention even beyond the initial focus pool', () => {
+  const { owner, cx, draw, keyboard } = fixture();
+  for (let i = 0; i < 80; i++) draw(String(i));
+  owner.syncRetained(cx);
+  owner.retainedPending = new Map();
+  for (let i = 0; i < 80; i++) draw(String(i));
+  assert.equal(owner.direct, 80);
+  keyboard(true);
+  for (let pass = 0; pass < 2; pass++) {
+    owner.retainedPending = new Map();
+    for (let i = 0; i < 80; i++) assert.equal(draw(String(i))[0].w.id, String(i));
+  }
+  assert.equal(owner.direct, 240);
+});

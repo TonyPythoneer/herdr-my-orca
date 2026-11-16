@@ -8,11 +8,11 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar } from "gpui-base";
 import { spaces, machines, panes, agents, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, props, nextCommand } from "herdr";
-import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar } from "./project.js";
+import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar, avatarFile } from "./project.js";
 import { statusMark, agentStateMark } from "./status.js";
 import { getFolderWorkspaceRowGeometry, getFlushWorktreeCardPaddingLeft, getProjectGroupHeaderPaddingLeft, WORKTREE_CARD_SURFACE_MARGIN, LEGACY_STATUS_LANE_WIDTH } from "./indentation.js";
 import { tip, tipMark } from "./tip.js";
-import { stopsInit, stop, focusRoot, enter, within } from "./focus.js";
+import { stopsInit, stop, focusRoot, enter, within, onStop } from "./focus.js";
 import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, activeReviewKeys, planRenderRows, STATUS_RANK } from "./worktree-plan.js";
 import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUPS, BRANCH_PR_LOOKUP_PAGE_SIZE } from "./review-store.js";
 
@@ -70,6 +70,9 @@ function workspaceOptions() {
 export default class Spaces extends View {
   init(_props, cx) {
     stopsInit(this, cx, "entry");
+    this.retainedRows = new Map();
+    this.retainedPending = new Map();
+    this.ownerCx = cx;
     // pane.go onto this list (mod.json's "focusable"): the keyboard starts at the heading's button.
     cx.spawn(async (cx) => {
       for (;;) {
@@ -96,11 +99,11 @@ export default class Spaces extends View {
             this.foldedRepos.clear();
           }
           localStorage.setItem("repos.folded", JSON.stringify([...this.foldedRepos]));
-          cx.notify();
+          this.notify(cx);
         }
         // The options menu writes "workspace.options.v1" and pings this loop; ordered() re-reads
         // the key on the next render. setShared alone does not wake another mod (AGENTS.md rule 10).
-        else if (cmd === "options-changed") cx.notify();
+        else if (cmd === "options-changed") this.notify(cx);
       }
     });
     // where() -> { name, branch, owner, repo, linked }, null: not a repo.
@@ -168,6 +171,81 @@ export default class Spaces extends View {
     cx.timer.every(250, (cx) => this.checkNew(cx));
   }
 
+  notify(_cx) {
+    this.refreshRetained();
+    this.syncRetained(this.ownerCx);
+    this.ownerCx.notify();
+  }
+
+  syncRetained(cx) {
+    if (this.retainedSynced === this.retainedPending) return false;
+    this.retainedSynced = this.retainedPending;
+    let changed = false;
+    for (const [key, held] of this.retainedRows) {
+      if (!this.retainedPending.has(key)) {
+        held.entity.release();
+        this.retainedRows.delete(key);
+        changed = true;
+      }
+    }
+    for (const [key, data] of this.retainedPending) {
+      const held = this.retainedRows.get(key);
+      if (!held) {
+        this.retainedRows.set(key, { signature: data.signature, entity: cx.new(WorkspaceRow, { owner: this, key }) });
+        changed = true;
+      } else if (held.signature !== data.signature) {
+        held.entity.set_props({ owner: this, key });
+        held.signature = data.signature;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  rowElements({ r, t, ps, mine, groupBy }) {
+    return groupBy === "repo" ? this.row(r, t, ps, mine) : [this.card(r, t, ps, mine)];
+  }
+
+  refreshRetained() {
+    for (const data of this.retainedPending.values()) data.signature = this.rowSignature(data);
+    this.retainedSynced = null;
+  }
+
+  rowSignature({ r, t, mine, groupBy }) {
+    const key = r.w.id;
+    const fold = foldKey(r);
+    const focused = onStop(this);
+    // The plan already projects the sibling catalog into row/head/count changes.
+    const { worktrees, ...git } = r.g ?? {};
+    return JSON.stringify([
+      r.w, Boolean(r.g), git, r.also?.map(row => row.w), r.head, r.count, r.unopened, r.pos,
+      t, mine, groupBy, this.reviewOf(r.g), avatarFile(r.g?.owner),
+      this.foldedRepos.has(fold), this.expandedAgents.has(key), this.unread.has(key),
+      this.hot?.endsWith(key) ? this.hot : null, this.hoveredRepo === fold, this.menuKey === fold,
+      this.laneHot === key, this.pressed === key, this.over === key,
+      this.over === key ? [this.pressed, this.rowIndex?.get(this.pressed)] : null,
+      Boolean(shared("t3-focus")), this.fs.keyboard, focused?.endsWith(key) ? focused : null,
+    ]);
+  }
+
+  retainedRow(r, t, ps, mine, groupBy) {
+    const key = r.w.id;
+    const data = { r, t, ps, mine, groupBy };
+    const signature = data.signature = this.rowSignature(data);
+    this.retainedPending.set(key, data);
+    const held = this.retainedRows.get(key);
+    // New or changed host data paints immediately; a task adopts the retained view afterwards.
+    // shortcut: keyboard mode draws directly to preserve focus-pool refill and full Tab order.
+    return !shared("t3-focus") && held?.signature === signature
+      ? [held.entity]
+      : this.rowElements(data);
+  }
+
+  close() {
+    for (const { entity } of this.retainedRows.values()) entity.release();
+    this.retainedRows.clear();
+  }
+
   // A saved folder can be moved or deleted between runs. Orca keeps a project whose
   // worktree list is gone until the person removes it, so the row says "missing" and
   // the remove control is the only way it disappears.
@@ -185,7 +263,7 @@ export default class Spaces extends View {
         changed = true;
       }
     }
-    if (changed) cx.notify();
+    if (changed) this.notify(cx);
   }
 
   checkNew(cx) {
@@ -195,7 +273,7 @@ export default class Spaces extends View {
     if (due.size) this.refreshGit(due, cx);
     else if (!this.loaded && !this.refreshing) {
       this.loaded = true;
-      cx.notify();
+      this.notify(cx);
     }
     // The row order git implies is committed here, in the task phase, not from `render`.
     this.settleRows(cx);
@@ -212,7 +290,9 @@ export default class Spaces extends View {
     // A git pass writes `this.git` one place at a time; painting mid-pass shows a half-filled
     // list, which is the sidebar's visible jitter. The pass notifies once when it commits, so
     // the status change can wait for it.
-    if (changed && !this.refreshing) cx.notify();
+    if (changed && !this.refreshing) this.notify(cx);
+    // Adopt new host snapshots discovered during render without mutating retained views there.
+    if (this.syncRetained(cx)) cx.notify();
   }
 
   // Places whose git could have changed: new ones (a new space, a cd), where a
@@ -258,7 +338,7 @@ export default class Spaces extends View {
   refreshMachines(cx) {
     cx.spawn(async cx => {
       try { const r = await hc(["machine", "ls", "--json"]); if (r.code === 0) this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => !m.temporary); } catch {}
-      cx.notify();
+      this.notify(cx);
     });
   }
 
@@ -275,7 +355,7 @@ export default class Spaces extends View {
     state.busy = true;
     state.error = null;
     localStorage.setItem("machines.reconnecting", JSON.stringify(this.reconnecting));
-    cx.notify();
+    this.notify(cx);
     cx.spawn(async cx => {
       try {
         const ask = async args => {
@@ -307,7 +387,7 @@ export default class Spaces extends View {
       }
       localStorage.setItem("machines.reconnecting", JSON.stringify(this.reconnecting));
       this.refreshMachines(cx);
-      cx.notify();
+      this.notify(cx);
     });
   }
 
@@ -330,7 +410,7 @@ export default class Spaces extends View {
       // The refresh is the only writer, so one write per completed pass is enough.
       pruneGitCache(this.git, spaces(), this.checked);
       localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
-      cx.notify();
+      this.notify(cx);
     });
   }
 
@@ -498,7 +578,7 @@ export default class Spaces extends View {
         this.setPr(key, null);
       } finally {
         this.prAsking.delete(key);
-        cx.notify();
+        this.notify(cx);
       }
     });
   }
@@ -597,7 +677,7 @@ export default class Spaces extends View {
   toggleAgents(id, cx) {
     this.expandedAgents.has(id) ? this.expandedAgents.delete(id) : this.expandedAgents.add(id);
     localStorage.setItem("agents.expanded", JSON.stringify([...this.expandedAgents]));
-    cx.notify();
+    this.notify(cx);
   }
 
   // `WorktreeCardStatusSlot.tsx:230-252`'s click flips the worktree's read/unread. Mod-owned
@@ -608,14 +688,14 @@ export default class Spaces extends View {
     const updated = [...this.unread];
     localStorage.setItem("spaces.unread.v1", JSON.stringify(updated));
     setShared("spaces.unread.v1", updated);
-    cx.notify();
+    this.notify(cx);
   }
 
   toggleRepo(repo, cx) {
     this.foldedRepos.has(repo) ? this.foldedRepos.delete(repo) : this.foldedRepos.add(repo);
     localStorage.setItem("repos.folded", JSON.stringify([...this.foldedRepos]));
     // `cx` is absent for a keyboard Enter from `stop` (`focus.js`), which has no render cx.
-    cx?.notify();
+    this.notify(cx);
   }
 
   // The rows, under a header per machine once one isn't this computer.
@@ -624,7 +704,7 @@ export default class Spaces extends View {
     return (on, cx) => {
       if (on) this.hot = id;
       else if (this.hot === id) this.hot = null;
-      cx.notify();
+      this.notify(cx);
     };
   }
 
@@ -639,9 +719,7 @@ export default class Spaces extends View {
     const groupBy = workspaceOptions().groupBy;
     const draw = (r, i) => {
       const pos = this.rowIndex?.get(r.w.id) ?? i;
-      return groupBy === "repo"
-        ? this.row({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps, rowAgents.get(r))
-        : this.card({ ...r, pos }, t, ps, rowAgents.get(r));
+      return this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps, rowAgents.get(r), groupBy);
     };
     // The descriptors reference row positions, so equal signatures can reuse them with fresh row data.
     const repairing = new Set([...Object.keys(this.reconnecting), ...this.machines.filter(m => this.rebuilt(m)).map(m => m.name)]);
@@ -675,12 +753,12 @@ export default class Spaces extends View {
           // By the row's id: this computer's m is null, which a cleared field would equal.
           if (on) this.overMachine = `machine-${m ?? "local"}`;
           else if (this.overMachine === `machine-${m ?? "local"}`) this.overMachine = null;
-          cx.notify();
+          this.notify(cx);
         })
         .on_click((_e, cx) => {
           folded ? this.folded.delete(m) : this.folded.add(m);
           localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
-          cx.notify();
+          this.notify(cx);
         })
         // -1: the glyph's own inset, so its edge meets the heading and the spaces' marks.
         .child(svg(`mods/orca-spaces/${m ? "server" : "monitor"}.svg`).size(14).ml(-1).flex_none())
@@ -781,7 +859,7 @@ export default class Spaces extends View {
       .on_hover((on, cx) => {
         if (on) this.hoveredRepo = key;
         else if (this.hoveredRepo === key) this.hoveredRepo = null;
-        cx.notify();
+        this.notify(cx);
       })
       // Orca's RepoIconGlyph uses the repo's own image or Folder (`SectionHeader.tsx:327-342`,
       // `repo-icon.tsx:145-186`).
@@ -823,7 +901,7 @@ export default class Spaces extends View {
               // RepoHeaderProjectActionsMenu's DropdownMenuContent has no width class, so Orca's
               // dropdown-menu.tsx:80 `min-w-[11rem]` (176) applies.
               openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 220, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null } } });
-              cx.notify();
+              this.notify(cx);
             })
             .child(svg("mods/orca-spaces/ellipsis.svg").size(14).flex_none()),
           6, { enter: () => { this.menuKey = key; openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 220, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null } } }); } }))
@@ -1070,11 +1148,11 @@ export default class Spaces extends View {
         const over = source && (source.machine ?? null) === (w.machine ?? null) ? w.id : null;
         if (this.pressed !== null && this.over !== over) {
           this.over = over;
-          cx.notify();
+          this.notify(cx);
         }
       })
       .on_mouse_up("left", (e, cx) => {
-        if (unopened) { run("space.new", { folder: g.top, machine: w.machine ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); cx.notify(); return; }
+        if (unopened) { run("space.new", { folder: g.top, machine: w.machine ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); this.notify(cx); return; }
         // Orca's card double-click opens the rename editor: `worktree-card-surface.tsx:98`
         // `onDoubleClick={...handleDoubleClick}` -> `use-worktree-card-activation-actions.ts`
         // `openModal('edit-meta', ...)` with `currentDisplayName`. Herdr's equivalent is
@@ -1085,7 +1163,7 @@ export default class Spaces extends View {
           this.pressed = null;
           this.over = null;
           run("space.rename", { id: w.id });
-          cx.notify();
+          this.notify(cx);
           return;
         }
         const from = this.pressed;
@@ -1096,7 +1174,7 @@ export default class Spaces extends View {
           const index = spaces().findIndex(s => s.id === w.id);
           if (index !== -1) run("space.move", { id: from, index: index + 1 });
         } else if (from === w.id) { run("space.select", { id: w.id }); run("layout.select", { stack: "main", child: "main-terminals" }); }
-        cx.notify();
+        this.notify(cx);
       })
       .on_mouse_down("right", () => this.menu(w, g))
       // Card root (worktree-card-surface.tsx): ml-1, py-2 for a title-only card, rounded-lg, and a
@@ -1126,7 +1204,7 @@ export default class Spaces extends View {
             .on_hover((on, cx) => {
               if (on === (this.laneHot === w.id)) return;
               this.laneHot = on ? w.id : null;
-              cx.notify();
+              this.notify(cx);
             })
             // `onClick={onToggleUnread}` and `onPointerDown` both stop before the card's own
             // handlers (`WorktreeCardStatusSlot.tsx:242-244`); the card selects on mouse-up, so
@@ -1190,6 +1268,7 @@ export default class Spaces extends View {
     // `WorktreeList.tsx:285-287`: the empty state is the row plan's emptiness, not the raw
     // collection's — an unopened worktree or a group with no rows still counts as a row.
     const rows = this.ordered();
+    this.retainedPending = new Map();
     // The shipped mods (the Terminals picker) still color spaces from "space.colors": the same color, from the name.
     const colors = Object.fromEntries(sp.filter(p => p.name !== "~").map(p => [p.id, tint(p.name, false)]));
     if (JSON.stringify(colors) !== JSON.stringify(shared("space.colors") ?? {})) setShared("space.colors", colors);
@@ -1262,7 +1341,7 @@ export default class Spaces extends View {
               const existing = stored("projects.saved.v1", []);
               const filtered = existing.filter(f => f !== folder);
               localStorage.setItem("projects.saved.v1", JSON.stringify(filtered));
-              cx.notify();
+              this.notify(cx);
             })
             .child(svg("mods/orca-spaces/trash.svg").size(10)));
       });
@@ -1276,13 +1355,13 @@ export default class Spaces extends View {
       // inset on the content, keeps rows clear of the thumb.
       .child(div().w_full().flex_1().min_h(0).relative()
         .child(v_flex().id("space-list").absolute().inset_0().overflow_y_scroll()
-          .on_mouse_up("left", (_e, cx) => { this.pressed = this.over = null; cx.notify(); })
+          .on_mouse_up("left", (_e, cx) => { this.pressed = this.over = null; this.notify(cx); })
           // Herdr reports no release outside the sidebar, so leaving ends a drag, as in the inbox.
           .on_hover((on, cx) => {
-            if (this.listHover !== on) { this.listHover = on; cx.notify(); }
+            if (this.listHover !== on) { this.listHover = on; this.notify(cx); }
             if (on || this.pressed === null) return;
             this.pressed = this.over = null;
-            cx.notify();
+            this.notify(cx);
           })
           .child(v_flex().id("space-content").w_full().flex_none().pr(12).pb(8)
             // StartupWorktreeRefreshStatus.tsx:22-29 status row with mx-3 mb-2 gap-2 text-xs text-muted-foreground.
@@ -1306,5 +1385,14 @@ export default class Spaces extends View {
         // The list's `.on_hover` flips the bar to `always`; Orca reveals on the sidebar's hover
         // (`main.css:781-800`), and the bar's own `hover` mode only sees the bar itself.
         .child(Scrollbar.vertical("space-list").mode(this.listHover ? "always" : "hover").absolute().inset_0())));
+  }
+}
+
+class WorkspaceRow extends View {
+  init(props) { this.update(props); }
+  update(props) { this.owner = props.owner; this.key = props.key; }
+  render() {
+    const data = this.owner.retainedPending.get(this.key);
+    return data ? v_flex().w_full().flex_none().children(this.owner.rowElements(data)) : div();
   }
 }

@@ -7,6 +7,7 @@ import { div } from "gpui-kit";
 import { shared, setShared } from "herdr";
 
 const MODE = "t3-focus";
+const notify = (view, cx) => view.notify ? view.notify(cx) : cx.notify();
 // A handle can't be made in render (the kit throws), and rows appear there.
 const POOL = 64;
 // Tab is the shell's action: a mod hears only its release, and only where it landed. Leaving by anything else, nobody tells it.
@@ -44,14 +45,14 @@ function watch(view, cx) {
   let lost = 0, seen = onStop(view);
   s.watch = cx.timer.every(TICK, (cx) => {
     const id = onStop(view);
-    if (id !== seen) { seen = id; cx.notify(); }
+    if (id !== seen) { seen = id; notify(view, cx); }
     if (id || s.hold?.()) { lost = 0; s.last = id ?? s.last; return; }
     if (++lost < LOST_TICKS) return;
     s.watch.cancel();
     s.watch = null;
     s.keyboard = false;
     if (shared(MODE) === s.me) setShared(MODE, null);
-    cx.notify();
+    notify(view, cx);
   });
 }
 
@@ -64,7 +65,7 @@ export function enter(view, cx, first) {
   setShared(MODE, s.me);
   h?.focus();
   watch(view, cx);
-  cx.notify();
+  notify(view, cx);
 }
 
 // The mod's root: hears Tab land here and a press end the ring, and takes back the handles when the mode ends.
@@ -85,9 +86,9 @@ export function focusRoot(view, el) {
       while (s.free.length < POOL / 4) s.free.push(cx.focus_handle());
       if (!s.modal) setShared(MODE, s.me);
       watch(view, cx);
-      cx.notify();
+      notify(view, cx);
     })
-    .on_mouse_down("left", (_e, cx) => { s.keyboard = false; cx.notify(); });
+    .on_mouse_down("left", (_e, cx) => { s.keyboard = false; notify(view, cx); });
 }
 
 // Makes `el` a tab stop with T3's ring (focus-visible:ring-2 ring-inset ring-ring: its ring is the primary, here `accent`), drawn
@@ -106,7 +107,7 @@ export function stop(view, t, id, el, radius = 6, { enter: act, handle } = {}) {
       if ((k.keystroke !== "enter" && k.keystroke !== "space") || !h.is_focused()) return;
       cx.stop_propagation();
       act();
-      cx.notify();
+      notify(view, cx);
     }))
     .when(s.keyboard && h.is_focused(), (e) => e.relative().child(div().absolute().inset_0().rounded(radius).border(2).border_color(t.accent)));
 }

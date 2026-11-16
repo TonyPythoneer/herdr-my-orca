@@ -1,0 +1,119 @@
+{
+  "baseline": {
+    "samples": [
+      {
+        "ms": 34,
+        "factories": 7604
+      },
+      {
+        "ms": 34,
+        "factories": 7604
+      },
+      {
+        "ms": 35,
+        "factories": 7604
+      },
+      {
+        "ms": 35,
+        "factories": 7604
+      },
+      {
+        "ms": 35,
+        "factories": 7604
+      },
+      {
+        "ms": 35,
+        "factories": 7604
+      },
+      {
+        "ms": 48,
+        "factories": 7604
+      },
+      {
+        "ms": 42,
+        "factories": 7604
+      },
+      {
+        "ms": 41,
+        "factories": 7604
+      },
+      {
+        "ms": 34,
+        "factories": 7604
+      }
+    ],
+    "median_ms": 35.0,
+    "min_ms": 34,
+    "max_ms": 48,
+    "factories": 7604
+  },
+  "final": {
+    "samples": [
+      {
+        "ms": 8,
+        "factories": 4
+      },
+      {
+        "ms": 8,
+        "factories": 4
+      },
+      {
+        "ms": 8,
+        "factories": 4
+      },
+      {
+        "ms": 8,
+        "factories": 4
+      },
+      {
+        "ms": 8,
+        "factories": 4
+      },
+      {
+        "ms": 9,
+        "factories": 4
+      },
+      {
+        "ms": 8,
+        "factories": 4
+      },
+      {
+        "ms": 8,
+        "factories": 4
+      },
+      {
+        "ms": 10,
+        "factories": 4
+      },
+      {
+        "ms": 8,
+        "factories": 4
+      }
+    ],
+    "median_ms": 8.0,
+    "min_ms": 8,
+    "max_ms": 10,
+    "factories": 4
+  },
+  "source": {
+    "mods/orca-spaces/main.js": "860b4cfb90c853e69a0da2745944e3f0262b4a2c303b33f8482066c5c51a1ad6",
+    "mods/orca-spaces/focus.js": "73385b926a7722ac96452778340a956ccd5220863e8dd94d4da6aa6f9c088fa5",
+    "scripts/perf-spaces.py": "408a27c215641e24cc10ed92de71b761135976ecbf3ca05d6061db2e90ce7b8d"
+  },
+  "environment": {
+    "app": "Herdr 0.1.16",
+    "initial_check_app": "Herdr 0.1.15",
+    "core": "0.1.21",
+    "os": "macOS 27.2",
+    "cpu": "Apple M1 Max",
+    "spaces": 200,
+    "agents": 200,
+    "sidebar_width_logical_px": 300,
+    "notify_interval_ms": 200,
+    "warmup_matching_samples": 2,
+    "measured_matching_samples": 10,
+    "scroll_pages": 40,
+    "counter": "explicit JS factories across local helpers; includes deferred child renders in interval logs; excludes native internal elements",
+    "native_hud": "Fresh processes; embedded gpui-fps; FRAME/P95 snapshots, not an exported frame trace or a controlled distribution comparison"
+  }
+}

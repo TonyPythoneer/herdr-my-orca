@@ -306,14 +306,62 @@ must be revalidated before reuse. Do not overwrite the user's live Herdr config.
   and after is unchanged for known repositories; only inactive negative entries
   are removed by the existing pruning policy.
 
-### Phase 2 — allocation design and repeatable runtime probe: in progress
+### Phase 2 — retained rows and repeatable probe: complete within stated limits
 
-- Lazy lists prohibit per-row handlers on Herdr 0.1.15; current cards need several
-  independently clickable controls, keyboard focus, hover and drag handlers.
-- Retained child `Entity` views are a possible alternative to caching consumed
-  native elements. They require explicit parent/child invalidation and cleanup;
-  lazy mounting and interaction behavior must be proven before adoption.
-- Full frame timing and total native-element counts remain unproved. Existing
-  script-only render timing does not establish either result.
+- Reuse native child `Entity` views for unchanged workspace rows. Native elements
+  are never cached or reused across render descriptions. The existing overflow
+  list stays immediate, so nested buttons, hover, drag, variable heights and Tab
+  traversal keep their original layout and handlers.
+- Synchronize child creation/props/release outside render using the owner's
+  persistent async context and existing 250 ms task. Events update affected child
+  props before notifying the owner. New/changed host snapshots paint directly
+  until adopted, avoiding stale rows. Removed rows release their entity handles.
+- Keyboard mode deliberately uses the original direct path: retaining rows would
+  suppress focus-pool refill for controls beyond the first 64 handles. This
+  fallback preserves accessibility and is covered with 80 rows. Initial mounting,
+  changed rows and keyboard mode still construct input-sized trees; pure row
+  planning/signature arrays remain O(n). This is not full virtualization or a
+  proof of the strict input-independent allocation invariant in section 1.
+- Independent review caught repeated sibling-catalog serialization in signatures;
+  signatures now exclude `g.worktrees` and merged rows' unused git metadata.
+  A regression adds 2,000 sibling records without increasing a row's signature.
+- Added `scripts/perf-spaces.py`: it exclusively creates a new instrumented mod,
+  resolves optional Git revisions to commits, asserts its source transformations,
+  and counts explicit constructors in all local helpers. Interval logs include
+  deferred child constructors. Native-internal elements/text are not counted.
+- Same 200-folder/200-agent fixture, 300 logical px sidebar, 200 ms notifications,
+  Apple M1 Max / macOS 27.2 / Herdr 0.1.16 / core 0.1.21. Baseline is `65719ed`.
+  Drop two matching warmups, take the next ten matching samples: baseline script
+  render median **35 ms** (34–48), final stable render **8 ms** (8–10).
+  Explicit factory calls per stable render/interval are **7,604 → 4**. Initial
+  retained adoption costs about two full trees; the first interval counted 15,408
+  factories, so startup is not claimed faster. These are script and constructor
+  measurements, not end-to-end frame latency.
+- Fresh-process embedded `gpui-fps` HUD screenshots also show FRAME/P95 readings.
+  They are sampled snapshots under synthetic timer-driven rerenders and scrolling,
+  not exported per-frame traces or a controlled distribution comparison. The
+  root-owned `show_fps_monitor()` path was rejected because Herdr's window root is
+  not a ShellRoot. No API for total native-element counts was found. Full native
+  count/trace claims remain unproved; zero startup HUD values were not treated as
+  zero-cost frames.
+- Durable evidence: [samples and source hashes](perf-evidence/2026-11-16/measurements.json),
+  [baseline log](perf-evidence/2026-11-16/baseline.log),
+  [final log](perf-evidence/2026-11-16/final.log),
+  [baseline HUD](perf-evidence/2026-11-16/baseline.png),
+  [final HUD](perf-evidence/2026-11-16/final.png).
+- Checks: 52/52 Node tests pass; spaces initial check passes on Herdr 0.1.15.
+  Fresh-context native review found no remaining correctness blocker after the
+  catalog-signature and focus-refill fixes. This is independent context, not a
+  claim of reviewer model/provider diversity.
 
-### Phase 3 — final smoke, tests and exact-source review: pending
+### Phase 3 — final smoke and closeout: in progress
+
+- Final source passed project and local/remote host fold/unfold, same-host reorder,
+  cross-host drag rejection, agent expansion/collapse, unread toggling and basic
+  keyboard traversal. Tabs select/reorder passed in a layout with Orca's `main`
+  stack. The 200-row final fixture scrolled to workspace 199.
+- Missing saved folder remained visible with `missing`, using the unchanged 15 s
+  production polling interval. Smoke adapters supplied three synthetic agents;
+  workspace commands, local and loopback remote hosts were real isolated cores.
+- A controllable loopback connection now verifies offline/rebuilt-host behavior;
+  final record reconciliation and exact-source closeout review remain.
