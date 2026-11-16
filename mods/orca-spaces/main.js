@@ -1044,7 +1044,12 @@ export default class Spaces extends View {
     const cluster = (group) => {
       // Herdr has no agent-type; the program table's icon fills Orca's `size-4` identity
       // circle, and is dropped when the table has none — the dot and `+N` still draw.
-      const icons = group.agents.map((a) => agentIcon(a, 13)).filter(Boolean).slice(0, 3);
+      const icons = [];
+      for (const agent of group.agents) {
+        const icon = agentIcon(agent, 13);
+        if (icon) icons.push(icon);
+        if (icons.length === 3) break;
+      }
       const hidden = group.agents.length - icons.length;
       return h_flex().flex_none().items_center().gap(2).rounded(2).px(4).py(2).bg("#2a2a2ab3")
         .child(agentStateMark(group.state))
@@ -1057,8 +1062,7 @@ export default class Spaces extends View {
     // `WorktreeCardAgents.tsx:371-416`: the summary exists only for MORE THAN ONE agent
     // (`shouldUseSummaryRow = summaryAgents.length > 1`); a single agent is just its row. The
     // list starts collapsed (`worktree-card-agents-expansion-state.ts:12-16`).
-    const agentList = v_flex().min_w(0).mt(4).gap(2).children(mine.map(agentRow));
-    const agentSummary = v_flex().min_w(0).mt(4).gap(2)
+    const agentBlock = mine.length > 1 ? v_flex().min_w(0).mt(4).gap(2)
       .child(h_flex().id(toggleId).h(24).w_full().min_w(0).px(4).gap(4).items_center().rounded(2)
         .text_size(11).line_height("11px").text_color(t.muted).cursor_pointer()
         .role("button")
@@ -1080,8 +1084,8 @@ export default class Spaces extends View {
           .children(visibleGroups.map(cluster))
           .when(hiddenGroupCount > 0, (s) => s.child(div().flex_none().text_size(10).text_color(t.dim).child(`+${hiddenGroupCount}`)))))
         .child(svg(`mods/orca-spaces/chevron-${expanded ? "down" : "right"}.svg`).size(12).flex_none()))
-      .when(expanded, el => el.child(v_flex().min_w(0).gap(2).pt(2).children(mine.map(agentRow))));
-    const agentBlock = mine.length > 1 ? agentSummary : agentList;
+      .when(expanded, el => el.child(v_flex().min_w(0).gap(2).pt(2).children(mine.map(agentRow))))
+      : v_flex().min_w(0).mt(4).gap(2).children(mine.map(agentRow));
     // Orca's frame geometry (folder-row.tsx:89): every row here is lineage depth 0 (no tree
     // indent, no wrapper), `experimentalNewWorktreeCardStyle` is false so the lane is the
     // LEGACY one, and a folder workspace is a folder-group child at groupDepth 1 — both paths

@@ -710,3 +710,23 @@ changes and measured limits above do not substitute for those three outcomes.
   total counts/frame trace, other grouping modes, physical Tab and drag gates
   remain unfulfilled. Next inspect per-card hidden agent tree construction before
   claiming that even the local candidate has input-independent construction.
+
+## 16. Delegated testing and hidden agent construction
+
+- User requested Luna 6 medium for testing; root now directs implementation and
+  reviews results, with gpt-6-luna medium handling focused/full checks. Avoid
+  repeating small native probe cycles when one grouped acceptance run suffices.
+- Production card now constructs either the single-agent list or multi-agent
+  summary, not both. Collapsed clusters construct only the first three valid
+  icons, preserving missing-icon selection and the existing hidden count.
+- Luna added card-agents.test.js: 10 versus 1,000 collapsed agents have the same
+  factory/image counts; missing icons still select the first three valid icons;
+  single-agent rendering and all expanded rows are preserved. Root reviewed the
+  final code and tests. The permanent tests do not depend on git HEAD history.
+- Luna's one-shot VM comparison against pre-change 10c11ec: 1,000 collapsed agents,
+  2,023 mocked div/flex/svg factory calls and 2,000 image calls before; 22 and 3
+  after. Mocked status helpers are not included in those factory counts. This is
+  script construction evidence, not full native counts or a frame speedup.
+- Full named suite 64/64 passes; production spaces check and diff check pass.
+  Expanded agent rows and summary grouping arrays remain input-sized; full goal
+  and virtualization/measurement/storage acceptance requirements remain open.
