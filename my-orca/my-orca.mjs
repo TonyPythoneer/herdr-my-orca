@@ -522,7 +522,7 @@ export function pushCheck(state, info, git, stageHead) {
   if (info.dirty.length) errors.push(`working tree is dirty (${info.dirty.length} path${info.dirty.length === 1 ? "" : "s"})`);
   if (!info.upstream) errors.push("branch has no upstream");
   else if (info.ahead !== 0) errors.push(`branch is ${info.ahead} commit(s) ahead of upstream`);
-  const base = stageHead || state.repo.stage_head || state.repo.head;
+  const base = stageHead || state.repo.head;
   if (base && !git.isAncestor(base, info.head, info.toplevel)) errors.push(`HEAD is not a descendant of the stage base ${base}`);
   return errors.length ? { ok: false, code: "unpushed", detail: errors.join("; ") } : { ok: true };
 }
@@ -578,6 +578,7 @@ export function makeHc({ env = process.env, expectCoreId, forbidCoreIds = [], ex
     if (all) args.push("--all");
     for (const [k, v] of Object.entries(labels)) args.push("--label", `${k}=${v}`);
     const r = reads(args);
+    if (r.code !== 0) throw new HcError(`hc ${args.join(" ")} failed (${r.code})`);
     const addresses = (r.json?.terminals ?? []).map((t) => t.address).filter(Boolean);
     return addresses.map(get).filter(Boolean);
   };
@@ -927,7 +928,7 @@ async function acceptDev(ctx, task, dispatch, result) {
   }
   const commits = ctx.git.commitsSince(ctx.state.repo.head, after.toplevel);
   if (commits === null || commits < 1) return { needsUser: ["unpushed", "the task produced no new commit"] };
-  const pushed = pushCheck(ctx.state, after, ctx.git, ctx.state.repo.stage_head);
+  const pushed = pushCheck(ctx.state, after, ctx.git, ctx.state.repo.head);
   if (!pushed.ok) return { needsUser: [pushed.code, pushed.detail] };
 
   task.attempts = Array.isArray(task.attempts) ? task.attempts : [];
@@ -955,7 +956,7 @@ async function rejectTask(ctx, task, dispatch, reason, extra = {}) {
   // the second attempt does not fail R-D for a HEAD that this Runner itself accepted into history.
   const info = ctx.git.info(ctx.state.repo.toplevel);
   if (info.ok && info.head !== ctx.state.repo.head && info.dirty.length === 0) {
-    const pushed = pushCheck(ctx.state, info, ctx.git, ctx.state.repo.stage_head);
+    const pushed = pushCheck(ctx.state, info, ctx.git, ctx.state.repo.head);
     ctx.state.dispatch = null;
     if (!pushed.ok) {
       await saveState(ctx);
@@ -1063,6 +1064,20 @@ async function waitForResult(ctx, task, dispatch) {
   return { timeout: true };
 }
 
+// A failing hc call is retried like waitForResult does: poll_s apart, until hc_retry_min has passed.
+// { gaveUp } means the caller stops without touching state, so the next start tries again.
+async function hcRetry(ctx, fn) {
+  const since = ctx.clock();
+  for (;;) {
+    try { return { value: fn() }; }
+    catch (e) {
+      if (!(e instanceof HcError)) throw e;
+      if (ctx.clock() - since >= ctx.config.hc_retry_min * 60_000) return { gaveUp: e.message };
+      await ctx.sleep(ctx.config.poll_s * 1000);
+    }
+  }
+}
+
 async function dispatchTask(ctx, task) {
   await refreshConfig(ctx);
   const first = !ctx.state.repo.first_commit_seen;
@@ -1074,8 +1089,12 @@ async function dispatchTask(ctx, task) {
   }
   let workers, tuningWorkers;
   try {
-    workers = ctx.hc.list({ "orca.run": ctx.state.run_id, "orca.role": "dev" }, { all: false });
-    tuningWorkers = ctx.hc.list({ "orca.run": ctx.state.run_id, "orca.role": "tuning" }, { all: false });
+    const got = await hcRetry(ctx, () => [
+      ctx.hc.list({ "orca.run": ctx.state.run_id, "orca.role": "dev" }, { all: false }),
+      ctx.hc.list({ "orca.run": ctx.state.run_id, "orca.role": "tuning" }, { all: false }),
+    ]);
+    if (got.gaveUp) return { stop: true, noStateChange: true };
+    [workers, tuningWorkers] = got.value;
   } catch (e) {
     if (e instanceof CoreGuardError) return needsUser(ctx, "core_mismatch", e.message);
     throw e;
@@ -1088,7 +1107,7 @@ async function dispatchTask(ctx, task) {
   const dispatch = {
     id, kind: "dev", task: task.id, name: `orca-d-${id}`,
     address: null, phase: "intent", started_at: wallIso(), started_clock_ms: ctx.clock(),
-    stage_head: ctx.state.repo.head, created_ms: null,
+    created_ms: null,
   };
   task.state = "dispatched";
   task.last_dispatch = id;
@@ -1178,7 +1197,7 @@ async function runTuning(ctx) {
   const dispatch = {
     id, kind: "tuning", task: "TUNING", name: `orca-d-${id}`,
     address: null, phase: "intent", started_at: wallIso(), started_clock_ms: ctx.clock(),
-    stage_head: ctx.state.repo.head, created_ms: null,
+    created_ms: null,
   };
   const before = ctx.git.info(ctx.state.repo.toplevel);
   const checked = dispatchCheck(ctx.state, before);
@@ -1482,8 +1501,11 @@ export function defaultApp(args) {
 
 async function scanWorkers(ctx) {
   let workers;
-  try { workers = ctx.hc.list({ "orca.run": ctx.state.run_id }, { all: true }); }
-  catch (e) {
+  try {
+    const got = await hcRetry(ctx, () => ctx.hc.list({ "orca.run": ctx.state.run_id }, { all: true }));
+    if (got.gaveUp) return { stop: true, noStateChange: true };
+    workers = got.value;
+  } catch (e) {
     if (e instanceof CoreGuardError) return needsUser(ctx, "core_mismatch", e.message);
     throw e;
   }
@@ -1508,8 +1530,11 @@ async function reconcile(ctx) {
   const d = ctx.state.dispatch;
   if (!d) return { ok: true };
   let terminals;
-  try { terminals = ctx.hc.list({ "orca.dispatch": d.id }, { all: true }); }
-  catch (e) {
+  try {
+    const got = await hcRetry(ctx, () => ctx.hc.list({ "orca.dispatch": d.id }, { all: true }));
+    if (got.gaveUp) return { stop: true, noStateChange: true };
+    terminals = got.value;
+  } catch (e) {
     if (e instanceof CoreGuardError) return needsUser(ctx, "core_mismatch", e.message);
     throw e;
   }
@@ -1561,7 +1586,7 @@ async function reconcile(ctx) {
     return { ok: true };
   }
   if (info.head !== ctx.state.repo.head) {
-    const pushed = pushCheck(ctx.state, info, ctx.git, ctx.state.repo.stage_head);
+    const pushed = pushCheck(ctx.state, info, ctx.git, ctx.state.repo.head);
     if (!pushed.ok) return needsUser(ctx, pushed.code, pushed.detail);
     ctx.state.repo.head = info.head;
     ctx.state.stage_head = info.head;
@@ -1851,7 +1876,7 @@ async function cmdInit(argv, io) {
     core_id: coreId,
     repo: {
       git_dir: info.git_dir, common_dir: info.common_dir, toplevel: info.toplevel,
-      branch: info.branch, base_head: head, head, stage_head: head,
+      branch: info.branch, base_head: head, head,
       dirty_at_start: info.dirty.map((l) => l.slice(3).trim()).filter(Boolean),
       first_commit_seen: false,
     },
@@ -1925,10 +1950,9 @@ async function startRunner({ wtId, stateDir, out, err, env, acceptHead = false }
     // --accept-head rewrites state.json; a live Runner would overwrite or race it
     if (makeHc({ env }).list({ "orca.run": state.run_id, "orca.role": "runner" }, { all: false }).length) { print(err, "start: stop the Runner first"); return EXIT.reject; }
     const clean = info.dirty.length === 0;
-    const pushed = pushCheck(state, info, git, state.repo.stage_head);
+    const pushed = pushCheck(state, info, git, state.repo.head);
     if (!clean || !pushed.ok) { print(err, `start --accept-head: ${pushed.detail || "working tree is dirty"}`); return EXIT.reject; }
     state.repo.head = info.head;
-    state.repo.stage_head = info.head;
     state.dispatch = null;
     state.status = "working";
     state.needs_user = null;

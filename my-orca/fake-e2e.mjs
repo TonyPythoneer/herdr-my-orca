@@ -55,7 +55,11 @@ async function waitFor(fn, ms = 60_000, every = 250) {
   return null;
 }
 
+// Set only once the dedicated core is proven to differ from the owner's; until then cleanup() must not touch hc.
+let ownCoreVerified = false;
+
 function cleanup() {
+  if (!ownCoreVerified) { try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best effort */ } return; }
   try {
     hc(["kill", `orca-r-${wtId()}`, "--json"]);
     for (const role of ["dev", "tuning", "runner"]) {
@@ -83,7 +87,8 @@ async function main() {
   if (ownerCore) env.MY_ORCA_FORBID_CORE_IDS = ownerCore;
   step("dedicated core starts", hc(["server", "status"]).status === 0);
   const ownCore = coreOf(env);
-  if (!step("dedicated core is not the owner's core", Boolean(ownCore) && ownCore !== ownerCore)) { fs.rmSync(base, { recursive: true, force: true }); return; } // no cleanup(): it would stop a core that may be the owner's
+  if (!step("dedicated core is not the owner's core", Boolean(ownCore) && ownCore !== ownerCore)) return;
+  ownCoreVerified = true;
   step("bare remote and repo", git(["init", "--bare", remote], base).status === 0 && git(["init", "-b", "feat", repo], base).status === 0);
   git(["config", "user.email", "fake@example.com"]);
   git(["config", "user.name", "Fake"]);
