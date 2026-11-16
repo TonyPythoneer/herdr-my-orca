@@ -1000,10 +1000,7 @@ async function handleResult(ctx, task, dispatch) {
     return { retry: true, noResult: true };
   }
   if (!isObject(result.json) || result.json.dispatch !== dispatch.id) {
-    ctx.state.dispatch = null;
-    task.state = "pending";
-    await saveState(ctx);
-    return { retry: true, noResult: true };
+    return needsUser(ctx, "exit_without_result", "the result file is for a different dispatch (E47)");
   }
   if (result.json.status !== "done") {
     const r = await rejectTask(ctx, task, dispatch, "agent_blocked");
@@ -1615,7 +1612,8 @@ async function resumeState(ctx) {
       if (e instanceof CoreGuardError) { await needsUser(ctx, "core_mismatch", e.message); return { ok: true }; }
     }
   }
-  const task = (ctx.state.tasks ?? []).find((t) => t.state === "dispatched") ?? (ctx.state.tasks ?? []).find((t) => t.id === ctx.state.dispatch?.task);
+  const task = (ctx.state.tasks ?? []).find((t) => t.state === "dispatched") ?? (ctx.state.tasks ?? []).find((t) => t.id === ctx.state.dispatch?.task)
+    ?? (ctx.state.tasks ?? []).find((t) => t.state !== "accepted" && (t.attempts?.length ?? 0) >= 2 + Number(t.resume_extra ?? 0));
   if (task) {
     task.state = "pending";
     task.resume_extra = Number(task.resume_extra ?? 0) + 2;
