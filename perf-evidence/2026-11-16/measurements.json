@@ -93,7 +93,11 @@
     "median_ms": 8.0,
     "min_ms": 8,
     "max_ms": 10,
-    "factories": 4
+    "factories": 4,
+    "startup_interval_factories": [
+      30416,
+      7812
+    ]
   },
   "source": {
     "mods/orca-spaces/main.js": "860b4cfb90c853e69a0da2745944e3f0262b4a2c303b33f8482066c5c51a1ad6",
@@ -114,6 +118,6 @@
     "measured_matching_samples": 10,
     "scroll_pages": 40,
     "counter": "explicit JS factories across local helpers; includes deferred child renders in interval logs; excludes native internal elements",
-    "native_hud": "Fresh processes; embedded gpui-fps; FRAME/P95 snapshots, not an exported frame trace or a controlled distribution comparison"
+    "native_hud": "CUA displayed nonzero FRAME/P95 during experiments, but exported baseline/final PNGs were identical zero-value frames and have been withdrawn. No accepted paired native timing evidence or full trace."
   }
 }

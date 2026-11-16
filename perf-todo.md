@@ -60,7 +60,7 @@ findings until measured in the Herdr runtime.
 - [x] Step 4: verify virtualization in orca-spaces/orca-files/orca-tabs lists.
 - [x] Step 5: micro-bench diffRows/usage parse with large inputs; optimize only if justified.
 - [x] Step 6: check whether Herdr allows a shared `stored()` module.
-- [ ] Step 7: re-run all node tests + manual Herdr smoke.
+- [x] Step 7: re-run all node tests + isolated Herdr smoke (52 tests; section 9).
 
 ## 6. Done
 
@@ -208,7 +208,7 @@ are committed separately, with status recorded in section 9.
   bounded projection and virtualized visible rows; the changes list is capped but
   built directly; the tabs strip renders directly. Model probes/catalog parsing
   happen during probe/initialization, not per displayed row. See section 6.
-- [x] Run the current Node suite: 39 tests pass. Initial `herdr-app check` passes
+- [x] Run the initial Node suite: 39 tests passed (the final suite has 52; section 9). Initial `herdr-app check` passes
   for spaces, tabs, menu and changes. An isolated Herdr session verified 200-row
   scrolling, local and loopback-remote machine folds, project folding, same-host
   drag reorder and cross-host drag behavior. Missing-folder indicator was checked
@@ -232,30 +232,33 @@ are committed separately, with status recorded in section 9.
   eviction orders stale, unprotected entries by refresh timestamp, while `at`
   also controls freshness. Keep both store copies synchronized and preserve TTL
   pacing, including more than 200 active or fresh branches and cross-mod writes.
-- [ ] Address the long-list allocation invariant. The 200-workspace fixture still
-  constructs at least 6,004 elements in the spaces module per render, with no
-  demonstrated material render improvement. Herdr's lazy lists prohibit row
-  handlers, while these variable-height cards have nested controls and drag
-  handlers. Establish a design that preserves all interactions before applying
-  conditional virtualization; do not assume fixed height or cache native elements.
-- [ ] Obtain full frame timing and total native-element counts, if the runtime
-  exposes them; the existing `Date.now()` probe measures script render time and
-  counts only constructors called directly in `main.js`. Repeat baseline and final
-  measurements with the same fixture and record the environment and limitations.
-- [ ] Re-run end-to-end smoke on the **final** source: scroll 200 rows; fold and
+- [ ] Satisfy the strict input-independent allocation invariant in every mode.
+  Retained child views now reduce stable mouse-mode explicit construction from
+  7,604 to 4 factories in the 200-row fixture, with measured script improvement.
+  Initial/changed/keyboard rows and data projection remain input-sized. Full
+  virtualization still needs a native row-handler lifecycle and compatible
+  offscreen keyboard-focus traversal; the current lazy list lacks these. Do not
+  remove nested controls, assume fixed heights, or cache consumed native elements.
+- [ ] Obtain an exported full frame trace and total native-element counts.
+  Native gpui-fps FRAME/P95 readings were observed, but duplicate zero-value
+  exports were withdrawn; no reliable paired capture or full trace is accepted.
+  No total-element or trace export API was found in
+  Herdr 0.1.15/0.1.16. Explicit factory counters include local helpers and deferred
+  children, but exclude native internals. No full-count/trace claim is made.
+- [x] Re-run end-to-end smoke on the **final** source (section 9): scroll 200 rows; fold and
   unfold projects and local/remote hosts; reorder within a host; check cross-host
   drag; expand agent lists with variable card heights; test a missing saved folder
   and an offline/rebuilt machine. The last tab-selection attempt returned a
   ScreenCaptureKit error, and its minimal test layout lacked Orca's `main` stack.
   Repeat tab selection/reorder in a representative layout rather than treating
   that fixture warning as a product failure or a passing check.
-- [ ] Re-run all tests, initial mod checks, and an independent review against the
+- [x] Re-run all tests, initial mod checks, and an independent review against the
   final exact source. The last review's source identity is stale after fixes.
   Include cache races, more-than-200 behavior, external writes and the interaction
   and measurement gaps; resolve findings before considering the work complete.
   `agent-config` needs its required overlay props for a meaningful runtime check;
   standalone `herdr-app check` failed with null props and does not prove a defect.
-- [ ] Reconcile this checklist and the original steps without marking a hard cap,
+- [x] Reconcile this checklist and the original steps without marking a hard cap,
   full frame measurement, virtualization, or final review done until evidenced.
 
 Useful verification commands (run from the repository root):
@@ -334,27 +337,26 @@ must be revalidated before reuse. Do not overwrite the user's live Herdr config.
   Drop two matching warmups, take the next ten matching samples: baseline script
   render median **35 ms** (34–48), final stable render **8 ms** (8–10).
   Explicit factory calls per stable render/interval are **7,604 → 4**. Initial
-  retained adoption costs about two full trees; the first interval counted 15,408
-  factories, so startup is not claimed faster. These are script and constructor
+  adoption can construct several full trees before stabilizing: the recorded first
+  two intervals counted 30,416 and 7,812 factories. Startup is not claimed faster.
+  These are script and constructor
   measurements, not end-to-end frame latency.
-- Fresh-process embedded `gpui-fps` HUD screenshots also show FRAME/P95 readings.
-  They are sampled snapshots under synthetic timer-driven rerenders and scrolling,
-  not exported per-frame traces or a controlled distribution comparison. The
-  root-owned `show_fps_monitor()` path was rejected because Herdr's window root is
-  not a ShellRoot. No API for total native-element counts was found. Full native
-  count/trace claims remain unproved; zero startup HUD values were not treated as
-  zero-cost frames.
+- CUA displayed nonzero embedded `gpui-fps` FRAME/P95 readings during the
+  experiments. Final review found the exported baseline/final PNGs were identical
+  zero-value frames, so both files and their paired-snapshot claim were withdrawn.
+  No accepted comparative native-frame evidence remains. The root-owned
+  `show_fps_monitor()` path was rejected because Herdr's window root is not a
+  ShellRoot. No API for total native-element counts or a frame trace export was
+  found. No full native-count/trace or application-frame speedup is claimed.
 - Durable evidence: [samples and source hashes](perf-evidence/2026-11-16/measurements.json),
   [baseline log](perf-evidence/2026-11-16/baseline.log),
-  [final log](perf-evidence/2026-11-16/final.log),
-  [baseline HUD](perf-evidence/2026-11-16/baseline.png),
-  [final HUD](perf-evidence/2026-11-16/final.png).
+  [final log](perf-evidence/2026-11-16/final.log).
 - Checks: 52/52 Node tests pass; spaces initial check passes on Herdr 0.1.15.
   Fresh-context native review found no remaining correctness blocker after the
   catalog-signature and focus-refill fixes. This is independent context, not a
   claim of reviewer model/provider diversity.
 
-### Phase 3 — final smoke and closeout: in progress
+### Phase 3 — verification and closeout: complete; three outcomes remain unfulfilled
 
 - Final source passed project and local/remote host fold/unfold, same-host reorder,
   cross-host drag rejection, agent expansion/collapse, unread toggling and basic
@@ -363,5 +365,41 @@ must be revalidated before reuse. Do not overwrite the user's live Herdr config.
 - Missing saved folder remained visible with `missing`, using the unchanged 15 s
   production polling interval. Smoke adapters supplied three synthetic agents;
   workspace commands, local and loopback remote hosts were real isolated cores.
-- A controllable loopback connection now verifies offline/rebuilt-host behavior;
-  final record reconciliation and exact-source closeout review remain.
+- A controllable real loopback connection was disconnected after its git catalog
+  was populated. The sidebar retained the repository and marked the host
+  unreachable ([offline](perf-evidence/2026-11-16/offline.png)). Switching the
+  relay to a different isolated core reproduced `a different core answers there`;
+  the sidebar showed `rebuilt · Connect`
+  ([rebuilt](perf-evidence/2026-11-16/rebuilt.png)). A fixture timer invoked the
+  unchanged `reconnect(machine, cx)` method used by that button; it re-registered
+  the new core, cleared the error and kept the cached project discoverable
+  ([reconnected](perf-evidence/2026-11-16/reconnected.png)). This checks the actual
+  repair method and cores; the last Connect invocation was not a native click.
+  CUA later reported `noWindowsAvailable`, so final host-state inspection used
+  Herdr's own frame capture and CLI state, rather than treating cached CUA images
+  as current observations.
+- Final 52/52 Node tests and all four initial mod checks pass; `git diff --check`
+  passes. Probe generation also rejects an existing destination without changing
+  its marker file. `agent-config` received static inspection only; a null-props
+  standalone check is not meaningful for its required overlay contract.
+- All changes and tests remain in the `perf-todo` worktree. No user live Herdr
+  config was overwritten. Task-created local/remote terminals were ended, relay
+  machines removed, new isolated remote cores stopped, and the task-owned app
+  process quit. The pre-existing test core and terminals were preserved.
+- Exact-source fresh-context review accepted production commit `168bdd5` and the
+  corrected closeout records within the stated limits. It independently verified
+  52/52 tests, identical review-store copies, source hashes and sample medians.
+  Both evidence findings (duplicate native screenshots and pilot startup counts)
+  were corrected before acceptance. No code changed after that review.
+- Phase commits: `d237eae` (cache/offline preservation), `168bdd5` (retained rows
+  and probe), followed by this verification/evidence closeout commit. Work remains
+  explicitly incomplete for the three requirements below; completing the safe
+  implementation/review phases does not mark those requirements complete.
+
+### Unfulfilled requirements
+
+The checklist is intentionally not all checked. A hard total git/project bound
+cannot preserve an arbitrary number of user projects; full input-independent
+allocation would regress current controls/focus without runtime support; and full
+native counts/traces are not exposed by the inspected API. The safe completed
+changes and measured limits above do not substitute for those three outcomes.
