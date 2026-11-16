@@ -8,7 +8,7 @@
   "titlebar": "none",
   "traffic_lights": [
     12,
-    7.5
+    3
   ],
   "background": "canvas",
   "terminal_padding": [
@@ -46,6 +46,7 @@
           "min": 220,
           "max": 500,
           "background": "chrome",
+          "resizable": false,
           "children": [
             {
               "id": "brand",
@@ -103,6 +104,7 @@
         {
           "id": "work",
           "type": "column",
+          "resizable": false,
           "children": [
             {
               "id": "tabs",
