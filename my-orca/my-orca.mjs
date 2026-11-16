@@ -843,6 +843,28 @@ async function settleAndKill(ctx, dispatch) {
     // M7 cap: still kill + sweep + check below; only then report unsettled
     unsettled = true;
   }
+  const k = await killOwned(ctx, dispatch);
+  if (k.stop) return { stop: true };
+  const swept = await sweep(dispatch.id);
+  await ctx.event("sweep", { dispatch: dispatch.id, detail: { clean: swept.clean, killed: swept.killed.length, remaining: swept.remaining.length } });
+  if (!swept.clean) {
+    await needsUser(ctx, "sweep_incomplete", `processes tagged ORCA_DISPATCH=${dispatch.id} survived the sweep`);
+    return { stop: true };
+  }
+  const info = ctx.git.info(ctx.state.repo.toplevel);
+  const locks = [info.git_dir, info.common_dir].filter(Boolean).map((d) => path.join(d, "index.lock"));
+  let lock = null;
+  for (const f of locks) { if (await readTextMaybe(f).catch(() => null) !== null) { lock = f; break; } }
+  if (info.dirty.length || lock) {
+    await needsUser(ctx, "partial_changes", `working tree is not clean after killing the worker (${info.dirty.length} path(s))`);
+    return { stop: true };
+  }
+  if (unsettled) { await needsUser(ctx, "unsettled", "HEAD or the working tree was still changing after the result appeared"); return { stop: true }; }
+  return { stop: false, info };
+}
+
+async function killOwned(ctx, dispatch) {
+  // returns { stop: true } when the caller must stop (identity / core mismatch); otherwise { killed }
   let canKill = false;
   if (dispatch.address) {
     let term = null;
@@ -865,22 +887,7 @@ async function settleAndKill(ctx, dispatch) {
     }
     await ctx.event("kill", { dispatch: dispatch.id, detail: { address: dispatch.address, created_ms: dispatch.created_ms ?? null } });
   }
-  const swept = await sweep(dispatch.id);
-  await ctx.event("sweep", { dispatch: dispatch.id, detail: { clean: swept.clean, killed: swept.killed.length, remaining: swept.remaining.length } });
-  if (!swept.clean) {
-    await needsUser(ctx, "sweep_incomplete", `processes tagged ORCA_DISPATCH=${dispatch.id} survived the sweep`);
-    return { stop: true };
-  }
-  const info = ctx.git.info(ctx.state.repo.toplevel);
-  const locks = [info.git_dir, info.common_dir].filter(Boolean).map((d) => path.join(d, "index.lock"));
-  let lock = null;
-  for (const f of locks) { if (await readTextMaybe(f).catch(() => null) !== null) { lock = f; break; } }
-  if (info.dirty.length || lock) {
-    await needsUser(ctx, "partial_changes", `working tree is not clean after killing the worker (${info.dirty.length} path(s))`);
-    return { stop: true };
-  }
-  if (unsettled) { await needsUser(ctx, "unsettled", "HEAD or the working tree was still changing after the result appeared"); return { stop: true }; }
-  return { stop: false, info };
+  return { killed: canKill };
 }
 
 async function removeWorker(ctx, dispatch) {
@@ -1613,10 +1620,8 @@ async function resumeState(ctx) {
         return handleResult(ctx, task, d);
       }
     }
-    try { if (d.address) ctx.hc.kill(d.address); }
-    catch (e) {
-      if (e instanceof CoreGuardError) { await needsUser(ctx, "core_mismatch", e.message); return { ok: true }; }
-    }
+    const k = await killOwned(ctx, d);
+    if (k.stop) return { ok: true };
   }
   const tasks = ctx.state.tasks ?? [];
   const task =
