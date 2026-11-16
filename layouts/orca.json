@@ -87,6 +87,19 @@
               ]
             },
             {
+              "id": "workflow-strip",
+              "type": "block",
+              "size": {
+                "px": 28
+              },
+              "content": {
+                "mod": "orca-workflow",
+                "props": {
+                  "strip": true
+                }
+              }
+            },
+            {
               "id": "sidebar-footer",
               "type": "block",
               "size": {

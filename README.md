@@ -10,6 +10,7 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   `~/.cache/herdr-usage/`.
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
 
+<<<<<<< HEAD
 ## How the quota bar gets its numbers
 
 Same core as Orca desktop (MIT, Lovecast Inc.), read from its public source:
@@ -49,6 +50,93 @@ To enable the live Claude feed, point `statusLine` in `~/.claude/settings.json` 
 
 The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` from `PATH`, then
 `npx -y ccstatusline@latest`, so the status line you see does not change.
+=======
+## Workflow (Planning → Development → Tuning → Ready)
+
+A small workflow runner sits beside the Orca UI. You plan in a normal agent tab, then a
+background Runner drives the tasks one at a time and shows progress as four lights in the
+sidebar.
+
+- `my-orca/my-orca.mjs` — one zero-dependency Node file: `init`, `start`, `run`, `stop`,
+  `status`, `config set`. The Runner never commits or pushes; each dev/Tuning stage does
+  its own commit and plain `git push`.
+- `skills/herdr-planning/SKILL.md` — `/herdr-planning`. It writes `handoff.md` and
+  `tasks.json`, shows you every task and `test` command, waits for your approval, then
+  calls `my-orca init` in the Planning tab.
+- `mods/orca-workflow/` — the four-light strip (28px above the sidebar footer) and the
+  inspector dialog: task states, acceptance, Peek, Resume/Stop, and the rework limit.
+- `layouts/orca.json` — the `workflow-strip` block that mounts the strip.
+
+Install the CLI and skill, then copy the mod and layout as usual:
+
+```sh
+sh skills/herdr-planning/install.sh
+cp -R mods/orca-workflow ~/.config/herdr-app/mods/
+cp layouts/orca.json ~/.config/herdr-app/layouts/
+```
+
+The install script writes only `~/.agents/skills/herdr-planning`, a copy under
+`~/.codex/skills`, and a symlink at `~/.local/bin/my-orca`. It does not touch
+`programs.json`, `settings.json`, `keys.json` or the Herdr core.
+
+Start a run from the Planning tab (so `HC_TERMINAL_ID` is set):
+
+```
+/herdr-planning
+my-orca init --handoff handoff.md --tasks tasks.json
+my-orca status          # progress
+my-orca stop            # stop the Runner (add --workers to stop workers too)
+my-orca start           # Resume after needs_user
+```
+
+State lives in `~/.config/herdr-app/my-orca/`:
+
+```
+config.json                 # max_rework_cycles, close_planning_tab, timeouts
+index.json                  # absolute git-dir -> wt-id
+<wt-id>/state.json          # the only execution state
+<wt-id>/events.jsonl        # append-only transitions
+<wt-id>/{handoff.md,tasks.json,dispatch/,results/,reviews/,logs/}
+archive/                    # old runs, never deleted
+```
+
+`init` refuses a detached HEAD, a bare repo, an upstream that is the repository's default
+branch (for example `main`), a missing section/task/acceptance, obvious empty tests, a
+dependency cycle, and common secret patterns in the two files. If the branch has no
+upstream it runs `git push -u origin <branch>`; it then requires `git push --dry-run` to
+succeed. A dirty worktree is allowed and recorded as `dirty_at_start`; the first stage
+commits and pushes those files.
+
+The four lights use fixed stage colours (`#7E66CC`, `#367CE9`, `#C38B35`, `#139D78`) and
+the same colours in light and dark themes. State is not colour-only: complete is a check,
+working pulses, pending is a hollow ring, `needs_user` is a warning triangle, failed is an
+error circle. Counts are accepted/total; Planning is the `1/1` gate; Ready is `0/1` or
+`1/1`.
+
+Known limitations, on purpose:
+
+- The Runner verifies only this worktree's branch, `HEAD` ancestry, a clean tree and that
+  the stage's commit reached `@{u}`. It cannot see behind the local ref, a remote rewritten
+  by someone else, ignored files, other branches/worktrees, or anything outside the
+  worktree. A full-permission agent can do those things; the dispatch file forbids them.
+- User edits while a worker is running are not reliably detectable; work in an isolated
+  worktree.
+- Moving the whole repository changes the git-dir and therefore the `wt-id`; old state is
+  left behind. Moving a linked worktree is handled.
+- `/model` changed mid-session is not observable; `init` prints the Tuning profile it will
+  use, so read that line.
+- The Planning tab is kept by default (`close_planning_tab=false`). When enabled, it is
+  closed only after the nine checks in the spec; the last tab in a space and tabs with
+  other work are always kept.
+- Secrets scanning is best effort; `state.json` and `events.jsonl` never store the full
+  argv, environment or terminal screen, and screens go only to `logs/` (64 KiB, `0600`).
+- Tests are not judged for quality. Planning must get your approval for every command,
+  and at least one acceptance criterion must have a machine-runnable `verify`.
+- Peek shows a background worker without a tab. If you use keep-as-tab on a worker, it is
+  still workflow-owned and is killed at the end of its task.
+- There is no reduced-motion setting in this platform; the pulsing lamp is the only
+  animation.
+>>>>>>> c958d8e (workflow: implement spec v2 runner, planning skill and four-light UI)
 
 ## Setup
 

@@ -1,0 +1,7 @@
+#!/bin/sh
+d=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ "${ORCA_FAKE_PLANNING_SHELL:-}" = 1 ]; then
+  while IFS= read -r line; do eval "$line"; done
+  exit 0
+fi
+exec "$d/../fake-agent.sh" "$@"
