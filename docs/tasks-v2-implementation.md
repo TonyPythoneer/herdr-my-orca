@@ -17,7 +17,7 @@
 |---|---|---|---|
 | I-02 | `my-orca` 純邏輯：state/config 原子寫入、防雙寫、handoff/tasks 驗證、profile 白名單、secrets 掃描 | DONE | 單元測試 |
 | I-03 | `my-orca init`：環境檢查、upstream 自動建立、`push --dry-run`、預設分支拒絕 | DONE | review 對照 8.2.2 為 OK |
-| I-04 | Runner R-A..R-H：派發、等待、M7、kill + M14、驗收、Tuning/rework、恢復對帳 | PARTIAL | F1–F5、F7 完成；F6、F8 只有紅燈測試；F9 被規格衝突擋住。Resume 在 identity 停止後的行為待 owner 決定，見下方「待 owner 決定」 |
+| I-04 | Runner R-A..R-H：派發、等待、M7、kill + M14、驗收、Tuning/rework、恢復對帳 | PARTIAL | F1–F9 完成（F9 照 E12）。Resume 在 identity 停止後的行為待 owner 決定，見下方「待 owner 決定」 |
 | I-05 | `start / run / stop / status / config set`、M13 core 斷言 | PARTIAL | 自動改綁 core 待 F9 |
 | I-06 | Planning tab 關閉，預設 `close_planning_tab=false` | PARTIAL | F5 完成：init 記 `core_id`、已關閉不重關。真 tab.close 行為未驗證（I-16 OWNER GATED），仍不要在真 repo 啟用 |
 | I-07 | `fake-agent.sh` 與整合測試（`fake-e2e.mjs` 8 種模式） | DONE（未獨立驗證） | 實作者自述 8 種全 PASS；review 沒有跑它 |
@@ -42,12 +42,21 @@
 | F3 | M7：上限到了也先 kill、掃描，才回 `unsettled` | DONE | commit `7be456d`。舊程式（`e279a4e`）跑 `node --test my-orca/f3.test.mjs`：`✖ F3: wait cap with a still-moving HEAD kills the worker, then reports unsettled`、`AssertionError: worker must be killed before unsettled (kills: 0)`、`ℹ tests 1 / ℹ pass 0 / ℹ fail 1`。修後同檔 `ℹ pass 1 / ℹ fail 0`；全套見下方 F5 列。測試的假 git 在 worker 啟動前 HEAD 與 run 相符（否則 run 先因 `tree_changed` 停在派發前，測不到 kill）。 |
 | F4 | 每次 kill 先核對標籤並寫 `kill` 事件（`killOwned`） | DONE | commit `1da6eb8`。舊程式跑 `node --test my-orca/f4.test.mjs` 前兩個 case：`✖ F4: Resume does not kill a terminal whose dispatch label is someone else's`（`actual: 1, expected: 0`，舊程式在標籤不符時照樣 kill）、`✖ F4: Resume kills a terminal whose labels match, and records a kill event`（`actual: undefined, expected: true`，沒有 kill 事件）。修後兩者綠。`grep -n "hc.kill(" my-orca/my-orca.mjs` 只剩 `killOwned` 內一處（`883`）。`grep -n unsettled` 另有 `awaitWorker` 內的 `"unexpected wait state"` 一行，不在 `settleAndKill`，與 F3 無關。 |
 | F5 | 記 `planning.core_id`；已關閉的 Planning tab 不重關 | DONE | commit `aa44f28`。**紅燈原因與 handoff 描述不同**：handoff 的 fixture 自己填了 `core_id`，case 1 在舊程式會是綠的，所以測試改成用 `planningFromTerminal` 的輸出餵 `closePlanningTab`，並為此把 `planningFromTerminal` 加上 `export`（`cmdInit` 會呼叫真的 hc，單元測試碰不到）。舊程式：`TypeError: orca.planningFromTerminal is not a function`（2 個 case）、`✖ F5: an already-closed Planning tab is not closed again`（`actual: 2, expected: 0`）。另用探針確認舊 init 的 planning 形狀（無 `core_id`）餵 `closePlanningTab` → `closePlanningTab -> skipped:gone`（handoff 描述的原因；探針見下方）。**這與驗收第 3 項字面要求（紅燈原因是 `skipped:gone`）不同，請 owner 決定是否接受。**修後 `node --test my-orca`：`ℹ tests 42 / ℹ pass 42 / ℹ fail 0`；`node --test mods/orca-workflow`：`ℹ tests 8 / ℹ pass 8 / ℹ fail 0`（`aa44f28` 上）。 |
-| F6 | `stage_head` 單一化（只寫紅燈測試） | PARTIAL | commit `6edda03`。`my-orca/f6.test.mjs` 標 `todo`（套件維持綠燈、exit 0），等 owner 決定重構。拿掉 `todo` 在舊程式跑：`✖ F6: pushCheck rejects a HEAD that is not a descendant of the last accepted HEAD`、`actual: true`、`expected: false`。**沒有動 `stage_head` 的任何用法。** **審查發現測試放錯層**：它把過期的 base（`state.repo.stage_head`）明確傳給 `pushCheck`，而 `pushCheck` 對給定的 base 判斷本來就正確，所以就算把呼叫點修對，這個測試也不會變綠。真正的錯在呼叫點（`rejectTask`、`acceptDev`、reconcile、`--accept-head` 傳 `ctx.state.repo.stage_head`）。重構時要一併改寫測試，見第 3 節 F6。 |
+| F6 | `stage_head` 單一化 | DONE | owner 授權後由我完成。單一來源 = `state.repo.head`（最後一次接受的 head）：`acceptDev`、`rejectTask`、reconcile、`--accept-head` 不再傳過期的 `repo.stage_head`；`pushCheck` 拿掉該 fallback；`repo.stage_head` 與 `dispatch.stage_head` 的寫入已刪（舊 state.json 裡的欄位無害）。`state.stage_head`（Tuning 的 review 比對）保留。**`--accept-head` 取嚴格版**：base 為 `repo.head`，使用者 amend 過最後一個被接受的 commit 就接受不了（符合 V48）。測試改寫為 `pushCheck(state, info, git)` 不帶第 4 參數，舊程式（有 `repo.stage_head` fallback）下 `actual: true / expected: false`；修後綠。 |
 | F7 | 開機掃描清殘留 worker | DONE | commit `5610e3f`。舊程式跑 `node --test my-orca/f7.test.mjs`：`✖ F7: a live worker from a finished attempt is killed, then removed`、實際 `[]`（沒 kill 也沒 rm）；第二個 case（dispatch 不在 state 的 worker：停下、不動它）舊程式就綠，當作回歸護欄。修後 `ℹ tests 2 / ℹ pass 2 / ℹ fail 0`。 |
-| F8 | hc 失敗退避（只寫紅燈測試） | PARTIAL | commit `ad1d67d`。`my-orca/f8.test.mjs` 標 `todo`，等 owner 決定退避策略。拿掉 `todo` 在現況跑：`✖ F8: a failing hc.list does not crash the Runner`、`AssertionError: Got unwanted rejection.`、`Actual message: "hc list failed"`。**沒有新增 helper。** 此時全套 `node --test my-orca`：`ℹ tests 46 / ℹ pass 44 / ℹ fail 0 / ℹ todo 2`（exit 0）；`node --test mods/orca-workflow`：`ℹ tests 8 / ℹ pass 8 / ℹ fail 0`。 |
+| F8 | hc 失敗退避 | DONE | owner 授權後由我完成，採台帳建議 (a)：新增 `hcRetry`（沿用 `waitForResult` 的做法，每 `poll_s` 重試、滿 `hc_retry_min` 後 `{ stop, noStateChange }` 安靜停下，不改 state、再 start 即重試），用在 `dispatchTask`、`scanWorkers`、reconcile 的 `hc.list`。`f8.test.mjs` 去掉 `todo` 並用假時鐘改寫成 2 個 case（一直失敗不崩潰且 state 不變；失敗兩次後恢復並走到派發）。舊程式（`6c5cc7d`）兩個都 `✖`；修後 `ℹ pass 2 / ℹ fail 0`。 |
 | F9 | core 改綁 | DONE（照 E12） | owner 決定保留 E12。把 `start`／`run` 兩處重複的改綁邏輯收成 `rebindCore`，新增 `my-orca/e12.test.mjs`（3 個 case）。`node --test my-orca`：`ℹ tests 50 / ℹ pass 48 / ℹ fail 0 / ℹ todo 2`。不拒絕、不改 E12。 |
 | FIX-1 | 審查發現：`handleResult` 的 `const result` 被重新賦值（`cebc2dd` 造成） | DONE | commit `3298581`。`cebc2dd`（owner 在 Phase B 前的 commit）把 `let result` 改成 `const result`，但 bad-JSON 重讀迴圈仍賦值，結果檔寫到一半時 Runner 會 `TypeError` 崩潰，既有測試沒走到這條路。新增 `my-orca/badjson.test.mjs`：舊程式 `✖ …`、`Actual message: "Assignment to constant variable."`；修後 `node --test my-orca`：`ℹ tests 47 / ℹ pass 45 / ℹ fail 0 / ℹ todo 2`。 |
-| F10–F18 | Tuning 燈、缺圖示、錯碼、`--accept-head`、fake-e2e 禁用清單、UI 通知、死碼、SKILL checklist、真 git happy path | TODO（Phase C） | |
+| FIX-2 | 審查（checker）發現：真的 `hc.list` 在 `hc ls` 失敗時回 `[]` | DONE | `makeHc` 的 `list` 不看 exit code，所以 F8 的 `hcRetry` 在正式環境永遠不會觸發，而且 core 連不上時 reconcile 會把 worker 當成已消失（記一次 `exit_without_result`、清掉 dispatch、留下孤兒 worker），`--accept-head` 的「先停 Runner」檢查也會悄悄放行。修：`hc ls` 非 0 就丟 `HcError`。新增 `my-orca/hclist.test.mjs`：舊程式 `✖ hc.list throws HcError when \`hc ls\` fails`；修後 `ℹ tests 55 / ℹ pass 55 / ℹ fail 0 / ℹ todo 0`。**未處理的小項**：`runTuning` 沒有 `delivered.hcFailure` 分支（`awaitWorker` 有）；目前真的 `hc.get` 不會丟，所以走不到。 |
+| F10 | Tuning 燈 development 期間不亮 | DONE | commit `6c5cc7d`。`model.js` 與 `my-orca.mjs` 的 `lights` 兩份都改成 `state?.stage === "tuning"`；`model.test.js` 該 case 期望改為 `pending`（handoff 唯一允許）。`node --test mods/orca-workflow`：`ℹ pass 8 / ℹ fail 0`。 |
+| F11 | 缺圖示 | DONE | 同 commit。待驗收列改畫空心圈。`herdr-app check mods/orca-workflow`：`check passed: mods/orca-workflow`（該指令會產生 `gpui-kit.d.ts`、`jsconfig.json`，已刪除未提交）。**畫面未看過，I-17 仍 DEFERRED。** |
+| F12 | `runTuning` 錯碼 | DONE | 同 commit。改用 `checked.code`。沒有單獨的測試（一行改動，`dispatchCheck` 的碼本身已有測試）。 |
+| F13 | `--accept-head` 不可在 Runner 運行中 | DONE | 同 commit。`startRunner` 先查 `orca.role=runner` 的 live terminal，有就拒絕。`startRunner` 未 export，沒有單元測試。 |
+| F14 | `fake-e2e.mjs` 禁用清單 | DONE（未執行） | 同 commit。開頭用不帶 `HC_SESSION` 的 env 讀 owner core id，放進 `MY_ORCA_FORBID_CORE_IDS`；專屬 core 與它相同就 abort。**`cleanup()` 在確認專屬 core 不同於 owner 的 core 之前不碰 hc**（`ownCoreVerified`；abort 後 `.finally` 仍會呼叫 `cleanup()`，它會 `hc rm` 與 `hc server stop`，可能動到 owner 的 core）。只跑了 `node --check`，**沒有執行**。 |
+| F15 | UI 跨 worktree 誤通知 | DONE | 同 commit。`load()` 在 `this.wtId = wtId` 之前換 worktree 就重設 `lastStatus`。無測試（UI）。 |
+| F16 | 死碼 | DONE | 同 commit。刪 `escapeRe`、`RunnerExit`、`cmdInitCheck`、`lastChanged`、`hc.json`、`makeRunnerContext` 的 `exits`；刪前 `grep -rn` 確認無其他引用；`node --check` 通過，全套綠。 |
+| F17 | SKILL.md Constraints checklist | DONE | 同 commit。Step 4 之前加一節，§8.2.3 七條原文照抄，要求逐條確認後才可 `init`。 |
+| F18 | 真 git happy path | DONE | commit `0756e1f`。`my-orca/f18.test.mjs`：臨時 repo + bare upstream，假 worker 真的 commit／push；push 的 → `accepted` 且 `repo.head` 為新 HEAD；只 commit 不 push → `needs_user(unpushed)`。`ℹ pass 2 / ℹ fail 0`。 |
 
 ## 3. 待 owner 決定
 
@@ -79,9 +88,7 @@ console.log("closePlanningTab ->", await orca.closePlanningTab(ctx, { app: () =>
 
 **範圍注意**：驗收第 1 項的 `e279a4e..HEAD` 另含三個不屬於 Phase B 的 commit（`cebc2dd` 動 `my-orca.mjs`、`3375f09` 動 docs、`dd71296` 動 `layouts/orca.json`）。Phase B 實際範圍是 `dd71296..HEAD`。
 
-**F6（未套用）：要不要真的做 `stage_head` 單一化？** 現況三份（`state.repo.stage_head`、`state.stage_head`、`dispatch.stage_head`）。派發當下 `state.stage_head == state.repo.head`（`dispatchCheck` 要求相符），而 `repo.head` 每次接受都會更新，所以單一來源可以用 `state.repo.head`。重構要做的：`rejectTask`、`acceptDev`、reconcile 不再傳 `ctx.state.repo.stage_head`；`pushCheck` 拿掉 `state.repo.stage_head` 的 fallback。**要 owner 回答的一件事**：`--accept-head` 的 base 用什麼？用 `repo.head`（嚴格：使用者 amend 過最後一個被接受的 commit 就接受不了）還是保留 init head（寬鬆，維持現狀）。測試要一併改寫：`pushCheck(state, info, git)` 不帶第 4 個參數、`repo.head="h2"`、`repo.stage_head="h0"`，HEAD 只是 h0 的後代 → 應 `ok:false`。
-
-**F8（未套用）：hc 失敗退避。** 要決定：(a) `hc.list` 失敗時共用 `waitForResult` 的做法（`hcFailureSince` 計時、超過 `hc_retry_min` 才 `needs_user`，期間 `sleep(poll_s)` 重試）；(b) 一次失敗就 `needs_user("hc_unavailable")`。建議 (a)，與現有行為一致。
+**F6、F8：** 已由我完成並採用建議值，見上表（`--accept-head` 取嚴格版；退避取 (a)）。若要改成寬鬆版／立即 `needs_user`，是小改動。
 
 **F9：** 已決定照 E12，見上表。
 
