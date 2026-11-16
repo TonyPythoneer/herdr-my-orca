@@ -27,3 +27,22 @@ test('failed tab color persistence does not mutate the cached fallback', async (
   view.setTabColor('new', 'red');
   assert.deepEqual(view.stored('tab.colors.v1', {}), { old: 'blue' });
 });
+
+
+test('stored reads and workspace options invalidate when another mod writes', async () => {
+  const source = await readFile(new URL('./main.js', import.meta.url), 'utf8');
+  const helper = source.slice(source.indexOf('const _storedCache ='), source.indexOf('export default class Spaces'));
+  const values = new Map();
+  const view = new Function('localStorage', `${helper}\nreturn { stored, workspaceOptions };`)({ getItem: key => values.get(key) ?? null });
+  const initial = view.workspaceOptions();
+  assert.equal(view.workspaceOptions(), initial);
+  values.set('workspace.options.v1', '{"groupBy":"none"}');
+  assert.equal(view.workspaceOptions().groupBy, 'none');
+  assert.notEqual(view.workspaceOptions(), initial);
+  values.set('projects.saved.v1', '["/one"]');
+  assert.deepEqual(view.stored('projects.saved.v1', []), ['/one']);
+  values.set('projects.saved.v1', '["/two"]');
+  assert.deepEqual(view.stored('projects.saved.v1', []), ['/two']);
+  values.delete('workspace.options.v1');
+  assert.equal(view.workspaceOptions().groupBy, 'repo');
+});

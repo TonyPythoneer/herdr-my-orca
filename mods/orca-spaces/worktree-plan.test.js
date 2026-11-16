@@ -89,3 +89,25 @@ test('active review keys cover each visible local branch once', async () => {
   ];
   assert.deepEqual(activeReviewKeys(rows), ['/repo/.git::main', '/repo/.git::feature']);
 });
+
+
+test('catalog pruning preserves unopened and disconnected projects across restart', async () => {
+  const { pruneGitCache } = await import('./worktree-plan.js');
+  const local = { folder: '/local' };
+  const remote = { machine: 'offline', folder: '/remote/linked' };
+  const git = Object.fromEntries([local, remote].map(w => [where(w), {
+    repo: JSON.stringify([w.machine ?? null, `${w.folder}/.git`]),
+    top: w.folder, name: w.folder, linked: false,
+    worktrees: [{ path: w.folder }, { path: `${w.folder}/sibling`, branch: 'feature' }],
+  }]));
+  git[where({ folder: '/old-negative' })] = null;
+  const checked = Object.fromEntries(Object.keys(git).map(k => [k, 1]));
+  pruneGitCache(git, [], checked);
+  const restarted = JSON.parse(JSON.stringify(git));
+  assert.equal(Object.keys(restarted).length, 2);
+  assert.deepEqual(Object.keys(checked), Object.keys(restarted));
+  const plan = projectWorktreePlan({ spaces: [], gitState: restarted, loaded: true });
+  assert.deepEqual(new Set(plan.visibleRows.map(r => r.w.folder)), new Set([
+    '/local', '/local/sibling', '/remote/linked', '/remote/linked/sibling',
+  ]));
+});

@@ -345,8 +345,8 @@ export default class Spaces extends View {
       const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch"], { cwd, on });
       if (r.code !== 0) {
         // Only git's own "no" is remembered as no repo; anything else is asked again.
-        if (!/not a git repository/i.test(r.stderr)) this.unsure.add(key);
-        this.git[key] = null;
+        if (/not a git repository/i.test(r.stderr)) this.git[key] = null;
+        else this.unsure.add(key);
         return;
       }
       // The repo's own .git folder names it; a worktree's top differs from it.
@@ -354,6 +354,7 @@ export default class Spaces extends View {
       const topDir = top.stdout.trim();
       const common = await exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, on });
       const repo = common.stdout.trim();
+      if (top.code !== 0 || common.code !== 0 || !topDir || !repo) throw new Error("Incomplete git identity");
       const name = repo.endsWith("/.git") ? base(repo.slice(0, -5)) : base(repo).replace(/\.git$/, "");
       // Orca queries PRs by base repo and origin head (`pr-branch-lookup.ts:41-48`,
       // `github-api-repository.ts:127-133`); repo icons use Orca's owner avatar fallback
@@ -396,17 +397,18 @@ export default class Spaces extends View {
       for (const line of r.stdout.split("\n")) {
         if (line.startsWith("# branch.head ")) info.branch = line.slice(14);
       }
-      this.git[key] = info;
-      // The review is NOT part of the worktree row. Orca's `buildWorkspaceReviewFacts` looks
-      // each worktree's own branch up in a persisted PR cache; the row never carries a PR to
-      // be inherited by other worktrees. Ask for this exact branch, and only on this machine.
-      if (!on && info.branch) this.lookupPRByBranch(`${repo}::${info.branch}`, info.base, info.head, info.branch, cwd, cx);
       // Orca's rows are the repo's worktrees (`listRepoWorktrees`), not its open sessions. A
       // repo is one group whether the open space is the main checkout or a linked worktree —
       // `git worktree list` answers for both — so read it every time. Without this, a repo
       // opened only on linked worktrees could never show its main checkout or its siblings.
       const wt = await exec("git", ["worktree", "list", "--porcelain"], { cwd, on });
-      info.worktrees = wt.code === 0 ? parseWorktreeList(wt.stdout) : [];
+      if (wt.code !== 0) throw new Error("Couldn't list git worktrees");
+      info.worktrees = parseWorktreeList(wt.stdout);
+      this.git[key] = info;
+      // The review is NOT part of the worktree row. Orca's `buildWorkspaceReviewFacts` looks
+      // each worktree's own branch up in a persisted PR cache; the row never carries a PR to
+      // be inherited by other worktrees. Ask for this exact branch, and only on this machine.
+      if (!on && info.branch) this.lookupPRByBranch(`${repo}::${info.branch}`, info.base, info.head, info.branch, cwd, cx);
       if (!on) this.watch(repo, cx);
     } catch (err) {
       // Couldn't ask (the machine is away): keep what it showed, look again later.

@@ -180,9 +180,10 @@ Goal: reduce per-frame DOM allocation for long lists without changing visuals.
 
 ## 8. Subtasks and handoff (2026-11-15)
 
-The implementation is in the working tree and is **not finished**. Other
-uncommitted changes in this checkout belong to separate work; inspect the diff
-and preserve them. No phase commits have been made.
+The earlier implementation was committed as `ee1069e`. This checkout was clean
+at the start of the 2026-11-16 continuation. Work remains incomplete until the
+unproved runtime and allocation items below have evidence. Continuation phases
+are committed separately, with status recorded in section 9.
 
 ### Completed and checked
 
@@ -227,7 +228,7 @@ and preserve them. No phase commits have been made.
   consumers in `orca-spaces`, `orca-nav` and `orca-agents`, migration/restart and
   disconnected-host behavior before changing the stored format. Do not silently
   evict user-managed projects. Decide whether a paged catalog is warranted.
-- [ ] Decide whether a true persistent LRU is needed for review entries: current
+- [x] Decide whether a true persistent LRU is needed for review entries: current
   eviction orders stale, unprotected entries by refresh timestamp, while `at`
   also controls freshness. Keep both store copies synchronized and preserve TTL
   pacing, including more than 200 active or fresh branches and cross-mod writes.
@@ -272,3 +273,47 @@ git diff --check
 preserve pre-existing or concurrently created files. An isolated test fixture and
 probe were built under `/tmp/orca-perf-a002`; temporary paths are not durable and
 must be revalidated before reuse. Do not overwrite the user's live Herdr config.
+
+
+## 9. Continuation status (2026-11-16)
+
+### Phase 1 — cache policy and offline preservation: complete
+
+- Keep review eviction ordered by refresh timestamp, with a soft target of 200.
+  A separate persistent access timestamp/LRU is not justified by the measured
+  workload; it would add read-side writes and must not change the freshness TTLs.
+  Both store copies remain identical. Existing tests cover more than 200 active
+  and fresh entries, stale eviction, invalidation and concurrent completions.
+- `git.cache.v2` is also the catalog consumed by spaces (unopened main/sibling
+  worktrees), nav (project filter choices), and agents (repository session scope).
+  `projects.saved.v1` is explicitly user-managed; only its remove action deletes
+  entries. JSON formats and restart behavior remain unchanged. A hard total bound
+  cannot retain an arbitrary number of projects losslessly; pagination bounds
+  loaded/rendered data, not total durable storage. Do not silently evict projects.
+  A paged catalog is not warranted without evidence of catalog-size pressure and
+  a host API to load pages; no new storage format or migration was added. The
+  original hard-cap request stays unfulfilled, rather than claiming a cap exists.
+- Fixed a catalog preservation defect found during this trace: nonzero git status
+  results from temporary failures no longer clear known snapshots. Failed or empty
+  repo identity probes and failed worktree listings keep the previous complete
+  snapshot and mark it for retry; only an explicit `not a git repository` result
+  clears it. Publish a refreshed snapshot only after its worktree list succeeds.
+- Checks: four new failure regressions failed before the fix and passed after;
+  all 22 spaces tests pass, including offline/unopened catalog JSON round-trip,
+  external storage invalidation and the existing review pacing/race checks.
+  `herdr-app check mods/orca-spaces` passes on Herdr 0.1.15.
+- No performance speedup claimed for this correctness change. Catalog size before
+  and after is unchanged for known repositories; only inactive negative entries
+  are removed by the existing pruning policy.
+
+### Phase 2 — allocation design and repeatable runtime probe: in progress
+
+- Lazy lists prohibit per-row handlers on Herdr 0.1.15; current cards need several
+  independently clickable controls, keyboard focus, hover and drag handlers.
+- Retained child `Entity` views are a possible alternative to caching consumed
+  native elements. They require explicit parent/child invalidation and cleanup;
+  lazy mounting and interaction behavior must be proven before adoption.
+- Full frame timing and total native-element counts remain unproved. Existing
+  script-only render timing does not establish either result.
+
+### Phase 3 — final smoke, tests and exact-source review: pending
