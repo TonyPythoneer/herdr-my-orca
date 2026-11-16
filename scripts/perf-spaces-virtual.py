@@ -58,14 +58,14 @@ def build(destination):
     let smoke = 0;
     cx.timer.every(100, cx => {
       this.virtualFocusTick(cx);
-      if (!this.virtualRows?.length || this.virtualFocusPending || smoke > 18) return;
+      if (!this.virtualRows?.length || this.virtualFocusPending || smoke > 35) return;
       if (smoke === 0) {
         this.fs.keyboard = true; setShared("t3-focus", this.fs.me);
         this.virtualRequest("fixture-198", -1, cx); smoke++;
       } else {
         console.log("REAL focus", onStop(this));
-        if (++smoke > 18) console.log("REAL focus-complete");
-        else globalThis.window.dispatch_action("orca.virtual.previous");
+        if (++smoke > 35) console.log("REAL focus-complete");
+        else globalThis.window.dispatch_action(smoke <= 18 ? "orca.virtual.previous" : "orca.virtual.next");
       }
     });""")
     replace_once('    this.grouped(t, cx, rows);', '    this.grouped(t, cx, rows);\n    this.virtualRows = [...this.retainedPending.values()];')
@@ -137,11 +137,6 @@ def build(destination):
   }
 
   rowElements({ r, t, ps, mine, groupBy }) {""")
-    replace_once('    this.retainedSynced = this.retainedPending;\n    let changed = false;', '    let operations = 0;\n    let changed = false;')
-    replace_once('        held.entity.release();', '        if (++operations > 16) return changed;\n        held.entity.release();')
-    replace_once('      if (!held) {\n        this.retainedRows.set', '      if (!held) {\n        if (++operations > 16) return changed;\n        this.retainedRows.set')
-    replace_once('      } else if (held.signature !== data.signature) {', '      } else if (held.signature !== data.signature) {\n        if (++operations > 16) return changed;')
-    replace_once('    return changed;\n  }', '    this.retainedSynced = this.retainedPending;\n    return changed;\n  }')
     main.write_text(source)
 
 

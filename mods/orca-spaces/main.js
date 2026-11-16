@@ -179,10 +179,11 @@ export default class Spaces extends View {
 
   syncRetained(cx) {
     if (this.retainedSynced === this.retainedPending) return false;
-    this.retainedSynced = this.retainedPending;
+    let operations = 0;
     let changed = false;
     for (const [key, held] of this.retainedRows) {
       if (!this.retainedPending.has(key)) {
+        if (++operations > 16) return changed;
         held.entity.release();
         this.retainedRows.delete(key);
         changed = true;
@@ -191,14 +192,17 @@ export default class Spaces extends View {
     for (const [key, data] of this.retainedPending) {
       const held = this.retainedRows.get(key);
       if (!held) {
+        if (++operations > 16) return changed;
         this.retainedRows.set(key, { signature: data.signature, entity: cx.new(WorkspaceRow, { owner: this, key }) });
         changed = true;
       } else if (held.signature !== data.signature) {
+        if (++operations > 16) return changed;
         held.entity.set_props({ owner: this, key });
         held.signature = data.signature;
         changed = true;
       }
     }
+    this.retainedSynced = this.retainedPending;
     return changed;
   }
 

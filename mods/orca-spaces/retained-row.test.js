@@ -96,7 +96,7 @@ test('a row signature excludes the sibling catalog already projected into rows',
 test('keyboard mode bypasses retention even beyond the initial focus pool', () => {
   const { owner, cx, draw, keyboard } = fixture();
   for (let i = 0; i < 80; i++) draw(String(i));
-  owner.syncRetained(cx);
+  while (owner.syncRetained(cx)) {}
   owner.retainedPending = new Map();
   for (let i = 0; i < 80; i++) draw(String(i));
   assert.equal(owner.direct, 80);
@@ -129,4 +129,45 @@ test('render signature batches reuse one focus snapshot, including no focused st
       assert.equal(data.signature, owner.rowSignature(data, focused));
     }
   }
+});
+
+test('retained adoption stays bounded and progresses across fresh render snapshots', () => {
+  const { owner, calls, cx, draw } = fixture();
+  const render = name => {
+    owner.retainedPending = new Map();
+    for (let i = 0; i < 80; i++) draw(String(i), `${name}-${i}`);
+  };
+  for (const phase of ['initial', 'renamed']) {
+    for (let batch = 0; batch < 5; batch++) {
+      render(phase);
+      const before = calls.creates + calls.updates + calls.releases;
+      assert.equal(owner.syncRetained(cx), true);
+      assert.equal(calls.creates + calls.updates + calls.releases - before, 16);
+    }
+    assert.equal(owner.syncRetained(cx), false);
+  }
+  assert.equal(calls.creates, 80);
+  assert.equal(calls.updates, 80);
+  owner.retainedPending = new Map();
+  for (let batch = 0; batch < 5; batch++) {
+    const before = calls.releases;
+    assert.equal(owner.syncRetained(cx), true);
+    assert.equal(calls.releases - before, 16);
+  }
+  assert.equal(owner.syncRetained(cx), false);
+  assert.equal(owner.retainedRows.size, 0);
+});
+
+test('replacement rows share the same native operation budget with removals', () => {
+  const { owner, calls, cx, draw } = fixture();
+  for (let i = 0; i < 10; i++) draw(`old-${i}`);
+  owner.syncRetained(cx);
+  owner.retainedPending = new Map();
+  for (let i = 0; i < 10; i++) draw(`new-${i}`);
+  owner.syncRetained(cx);
+  assert.equal(calls.releases, 10);
+  assert.equal(calls.creates, 16);
+  owner.syncRetained(cx);
+  assert.equal(calls.creates, 20);
+  assert.equal(owner.retainedRows.size, 10);
 });
