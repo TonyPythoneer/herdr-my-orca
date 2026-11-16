@@ -511,3 +511,19 @@ changes and measured limits above do not substitute for those three outcomes.
   native element counts. gpui-fps exports HUD controls only in current declarations.
 - Next: calibrate heights via child on_size_change and test native focus movement
   beyond visible rows, then integrate only after those interaction gates pass.
+
+### Measured heights and native focus follow-up
+
+- Expanded row 999 from 80 to 160 at runtime through Entity.set_props. Its own
+  on_size_change reports 160; a coalescing owner timer updates the virtual size
+  array outside render. Actual frame shows the expanded last row. Native focus
+  handle 999 reports true after revealing it. Status errors remains empty.
+- Native window.focus_prev from 988 reaches 987 after the expansion. This checks
+  one native focus step, including a previously rendered row now above the visible
+  range; it does not prove traversal to a never-rendered row (986 and earlier).
+- Source, exact log and expanded native frame saved as `measured-*`. The expanded
+  frame comes from the height/focus version before the extra focus_prev step;
+  measured-focus.js and its log additionally cover that step.
+- Next: test traversal across never-rendered rows using window.focus_next/prev,
+  then implement navigation/prefetch as required. Production controls and drag
+  remain unchanged pending these gates. Init/resident arrays still scale with N.

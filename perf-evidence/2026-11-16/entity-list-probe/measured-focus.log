@@ -1,0 +1,3 @@
+2026-11-16T05:00:26.678179Z  INFO gpui_shell::script: CALIBRATE 999 80 160
+2026-11-16T05:00:27.494074Z  INFO gpui_shell::script: CALIBRATE final 160 true
+2026-11-16T05:00:29.096419Z  INFO gpui_shell::script: CALIBRATE previous [987]
