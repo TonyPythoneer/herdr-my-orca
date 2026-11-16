@@ -613,3 +613,26 @@ changes and measured limits above do not substitute for those three outcomes.
 - Still a candidate: size-array projection/signatures and Entity population scale
   with N, placeholders can shift on calibration, and actual keyboard/group/drag
   integration remains. Next wire real card stop order and scoped focus handoff.
+
+### Actual card focus integration in candidate
+
+- Candidate now installs scoped forward/backward actions, models existing card
+  stop order, and reveals the next row before handing off first/last focus.
+  Pending requests hold keyboard mode; missing rows cancel the request. When a
+  pool is exhausted, it is replenished outside render and the target is redrawn.
+- Real cards exposed calibration drift: after measured sizes change, a one-shot
+  scroll can leave the target offscreen. Pending requests now re-request reveal
+  until the current signature is painted and its target handle exists.
+- First integration also hit a nested operation interrupted error. Candidate
+  syncRetained now caps native create/update/release operations at 16 per call,
+  marking a snapshot synchronized only after every operation finishes. JS scans,
+  signatures and arrays still scale with N; not the strict full allocation bound.
+- Clean regenerated final candidate passes check. Native action dispatch produces
+  all 18 expected focus positions: card/new/more/fold/head for 198, 197 and 196,
+  followed by card/new/more for 195. Exact log sequence was asserted against that
+  expected order. Final status errors is empty. Source hash and labeled focus log
+  saved as real-focus*. No diagnostic patch remains in the accepted generated mod.
+- Still not production acceptance: actual Tab key priority, forward real-card
+  traversal, PR/hidden controls, fold/removal during pending focus, host/status
+  headers, drag, sidebar-width layout and cross-mod boundary exit remain open.
+  The candidate is generated separately; production main.js is unchanged.

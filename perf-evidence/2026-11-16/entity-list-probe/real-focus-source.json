@@ -1,0 +1,7 @@
+{
+  "production_base": "e7327d1",
+  "builder": "scripts/perf-spaces-virtual.py",
+  "generated_main_sha256": "96ca6b1d73b9df733ac18a5e299f5358731e539ec2ddf9f98ff0756e7563a766",
+  "checked_focus_positions": 18,
+  "runtime": "Herdr 0.1.16, isolated home /tmp/orca-entity-list.vFfb4b"
+}

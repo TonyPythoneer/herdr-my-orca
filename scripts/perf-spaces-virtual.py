@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a mouse-only virtualization experiment from the real spaces card code.
+"""Build a virtualization and scoped-focus experiment from the real spaces card code.
 
 Usage: python3 scripts/perf-spaces-virtual.py <new-mod-directory>
 The viewport follows the root size (600px before first layout). Not a production mod or keyboard acceptance.
@@ -48,6 +48,100 @@ def build(destination):
               }
               return visible;
             }).track_scroll(this.virtualScroll).h(this.virtualHeight ?? 600))''')
+    replace_once('    this.virtualSizes = new Map();', """    this.virtualSizes = new Map();
+    this.virtualRendered = new Map();
+    this.fs.hold = () => Boolean(this.virtualFocusPending);
+    cx.bind_keys([
+      { keystroke: "tab", action: "orca.virtual.next", context: "OrcaSpacesVirtual" },
+      { keystroke: "shift-tab", action: "orca.virtual.previous", context: "OrcaSpacesVirtual" },
+    ]);
+    let smoke = 0;
+    cx.timer.every(100, cx => {
+      this.virtualFocusTick(cx);
+      if (!this.virtualRows?.length || this.virtualFocusPending || smoke > 18) return;
+      if (smoke === 0) {
+        this.fs.keyboard = true; setShared("t3-focus", this.fs.me);
+        this.virtualRequest("fixture-198", -1, cx); smoke++;
+      } else {
+        console.log("REAL focus", onStop(this));
+        if (++smoke > 18) console.log("REAL focus-complete");
+        else globalThis.window.dispatch_action("orca.virtual.previous");
+      }
+    });""")
+    replace_once('    this.grouped(t, cx, rows);', '    this.grouped(t, cx, rows);\n    this.virtualRows = [...this.retainedPending.values()];')
+    replace_once('    const data = this.owner.retainedPending.get(this.key);', '    const data = this.owner.retainedPending.get(this.key);\n    if (data) this.owner.virtualRendered.set(this.key, data.signature);')
+    replace_once('      .on_size_change((size, cx) => {', """      .key_context("OrcaSpacesVirtual")
+      .on_action("orca.virtual.next", (_e, cx) => { cx.stop_propagation(); this.virtualMove(1, cx); })
+      .on_action("orca.virtual.previous", (_e, cx) => { cx.stop_propagation(); this.virtualMove(-1, cx); })
+      .on_size_change((size, cx) => {""")
+    replace_once('  rowElements({ r, t, ps, mine, groupBy }) {', """  virtualIds({ r, groupBy }) {
+    const key = r.w.id, ids = [];
+    if (groupBy === "repo" && r.head) {
+      ids.push(`space-head-${key}`);
+      if (r.count > 0) ids.push(`space-fold-${key}`);
+      ids.push(`space-more-${key}`, `space-new-${key}`);
+    }
+    if (groupBy !== "repo" || !this.foldedRepos.has(foldKey(r))) {
+      ids.push(`space-${key}`);
+      if (this.reviewOf(r.g)) ids.push(`pr-${key}`);
+    }
+    return ids;
+  }
+
+  virtualRequest(key, direction, cx) {
+    const index = this.virtualRows.findIndex(data => data.r.w.id === key);
+    if (index < 0) { this.virtualFocusPending = null; return; }
+    while (this.fs.free.length < 64) this.fs.free.push(cx.focus_handle());
+    this.virtualFocusPending = { key, direction };
+    this.virtualScroll.scroll_to_item(index);
+    cx.notify();
+  }
+
+  virtualFocusTick(cx) {
+    const request = this.virtualFocusPending;
+    if (!request) return;
+    const data = this.retainedPending.get(request.key);
+    if (!data) { this.virtualFocusPending = null; return; }
+    if (this.virtualRendered.get(request.key) !== data.signature) {
+      this.virtualScroll.scroll_to_item(this.virtualRows.findIndex(row => row.r.w.id === request.key));
+      cx.notify();
+      return;
+    }
+    const ids = this.virtualIds(data);
+    const id = request.direction > 0 ? ids[0] : ids.at(-1);
+    const handle = this.fs.handles.get(id);
+    if (!handle) {
+      this.virtualScroll.scroll_to_item(this.virtualRows.findIndex(row => row.r.w.id === request.key));
+      cx.notify();
+      while (this.fs.free.length < 64) this.fs.free.push(cx.focus_handle());
+      this.retainedRows.get(request.key)?.entity.set_props({ owner: this, key: request.key });
+      return;
+    }
+    handle.focus();
+    this.virtualFocusPending = null;
+    console.log("REAL handed", id, handle.is_focused());
+  }
+
+  virtualMove(direction, cx) {
+    const focused = onStop(this);
+    const index = this.virtualRows.findIndex(data => this.virtualIds(data).includes(focused));
+    if (index < 0) return;
+    const ids = this.virtualIds(this.virtualRows[index]), at = ids.indexOf(focused);
+    if (at + direction >= 0 && at + direction < ids.length) {
+      direction > 0 ? globalThis.window.focus_next() : globalThis.window.focus_prev();
+    } else {
+      const next = this.virtualRows[index + direction];
+      if (next) this.virtualRequest(next.r.w.id, direction, cx);
+      else direction > 0 ? globalThis.window.focus_next() : globalThis.window.focus_prev();
+    }
+  }
+
+  rowElements({ r, t, ps, mine, groupBy }) {""")
+    replace_once('    this.retainedSynced = this.retainedPending;\n    let changed = false;', '    let operations = 0;\n    let changed = false;')
+    replace_once('        held.entity.release();', '        if (++operations > 16) return changed;\n        held.entity.release();')
+    replace_once('      if (!held) {\n        this.retainedRows.set', '      if (!held) {\n        if (++operations > 16) return changed;\n        this.retainedRows.set')
+    replace_once('      } else if (held.signature !== data.signature) {', '      } else if (held.signature !== data.signature) {\n        if (++operations > 16) return changed;')
+    replace_once('    return changed;\n  }', '    this.retainedSynced = this.retainedPending;\n    return changed;\n  }')
     main.write_text(source)
 
 
