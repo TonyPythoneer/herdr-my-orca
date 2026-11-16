@@ -451,3 +451,12 @@ changes and measured limits above do not substitute for those three outcomes.
 - 驗證：spaces 28/28 tests、herdr-app check、git diff --check 通過。
 - 所有模式配置量上限、目錄容量政策、原生 frame 證據仍未完成；下一步
   繼續研究初次／變更／鍵盤模式的有界建構與完整焦點順序。
+
+### 焦點批次驗收補充
+
+- 新增 render 批次 regression，80 列分別在無焦點與末列有焦點時，
+  禁止逐列讀取焦點並核對全部簽章。完整 Node suite 54/54 通過。
+- 本次生成的 gpui-kit 宣告仍明確禁止 lazy list renderer 的 handlers／
+  retained state；不是可直接替換卡片的方案。繼續研究其他有界配置設計。
+- 已向使用者提出目錄政策選項：保留全部並分頁、硬上限後手動移除、
+  或允許自動移除非釘選專案。尚未收到政策回覆，不改變持久化格式。

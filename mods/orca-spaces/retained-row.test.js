@@ -108,7 +108,7 @@ test('keyboard mode bypasses retention even beyond the initial focus pool', () =
   assert.equal(owner.direct, 240);
 });
 
- test('event signature refresh scans focus handles once for all rows', () => {
+test('event signature refresh scans focus handles once for all rows', () => {
   const { owner, draw } = fixture();
   for (let i = 0; i < 80; i++) draw(String(i));
   let scans = 0;
@@ -116,4 +116,17 @@ test('keyboard mode bypasses retention even beyond the initial focus pool', () =
   owner.refreshRetained();
   assert.equal(scans, 1);
   assert.equal(owner.retainedPending.get('79').signature, owner.rowSignature(owner.retainedPending.get('79'), 'row:79'));
+});
+
+test('render signature batches reuse one focus snapshot, including no focused stop', () => {
+  const { owner, draw } = fixture();
+  Object.defineProperty(owner, 'focused', { get() { throw new Error('per-row focus scan'); } });
+  for (const focused of [null, 'row:79']) {
+    owner.retainedFocus = focused;
+    owner.retainedPending = new Map();
+    for (let i = 0; i < 80; i++) draw(String(i));
+    for (const data of owner.retainedPending.values()) {
+      assert.equal(data.signature, owner.rowSignature(data, focused));
+    }
+  }
 });
