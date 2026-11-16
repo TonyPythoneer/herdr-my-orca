@@ -29,7 +29,7 @@ def build(destination):
         this.owner.virtualSizes.set(this.key, size.height);
         this.owner.ownerCx.notify();
       }) : div();''')
-    replace_once('''    return !shared("t3-focus") && held?.signature === signature
+    replace_once('''    return !keyboardMode && held?.signature === signature
       ? [held.entity]
       : this.rowElements(data);''', '    return [];')
     replace_once('    const result = focusRoot(this, v_flex().size_full()', '''    this.grouped(t, cx, rows);
@@ -100,8 +100,9 @@ def build(destination):
   virtualFocusTick(cx) {
     const request = this.virtualFocusPending;
     if (!request) return;
+    if (!this.virtualCurrent.has(request.key)) { this.virtualFocusPending = null; return; }
     const data = this.retainedPending.get(request.key);
-    if (!data) { this.virtualFocusPending = null; return; }
+    if (!data) return;
     if (this.virtualRendered.get(request.key) !== data.signature) {
       this.virtualScroll.scroll_to_item(this.virtualRows.findIndex(row => row.r.w.id === request.key));
       cx.notify();
@@ -137,6 +138,40 @@ def build(destination):
   }
 
   rowElements({ r, t, ps, mine, groupBy }) {""")
+    replace_once('    this.virtualSizes = new Map();', '    this.virtualSizes = new Map();\n    this.virtualQueue = new Map();\n    this.virtualCurrent = new Map();')
+    replace_once('    this.retainedPending = new Map();\n    this.retainedFocus = onStop(this);', '    this.virtualCurrent = new Map();\n    this.retainedFocus = onStop(this);')
+    replace_once("""    const keyboardMode = this.retainedKeyboardMode ?? Boolean(shared("t3-focus"));
+    const signature = data.signature = this.rowSignature(data, this.retainedFocus, keyboardMode);
+    this.retainedPending.set(key, data);
+    const held = this.retainedRows.get(key);""", """    this.virtualCurrent.set(key, data);
+    this.virtualQueue.set(key, data);""")
+    replace_once('    this.virtualRows = [...this.retainedPending.values()];', '    this.virtualRows = [...this.virtualCurrent.values()];')
+    replace_once('cx.timer.every(250, cx => { if (this.syncRetained(cx)) cx.notify(); });', 'cx.timer.every(250, cx => { this.prepareVirtualRows(); if (this.syncRetained(cx)) cx.notify(); });')
+    replace_once("""    const focused = onStop(this);
+    const keyboardMode = this.retainedKeyboardMode = Boolean(shared("t3-focus"));
+    for (const data of this.retainedPending.values()) data.signature = this.rowSignature(data, focused, keyboardMode);
+    this.retainedSynced = null;""", """    for (const [key, data] of this.virtualCurrent) this.virtualQueue.set(key, data);""")
+    replace_once('  virtualIds({ r, groupBy }) {', """  prepareVirtualRows() {
+    const batch = [], priority = this.virtualFocusPending?.key;
+    if (this.virtualQueue.has(priority)) batch.push([priority, this.virtualQueue.get(priority)]);
+    for (const entry of this.virtualQueue) {
+      if (batch.length === 16) break;
+      if (entry[0] !== priority) batch.push(entry);
+    }
+    const focused = onStop(this), keyboardMode = Boolean(shared("t3-focus"));
+    for (const [key, data] of batch) {
+      this.virtualQueue.delete(key);
+      if (!this.virtualCurrent.has(key)) continue;
+      data.signature = this.rowSignature(data, focused, keyboardMode);
+      this.retainedPending.set(key, data);
+    }
+    for (const key of this.retainedPending.keys()) if (!this.virtualCurrent.has(key)) this.retainedPending.delete(key);
+    this.retainedSynced = null;
+  }
+
+  virtualIds({ r, groupBy }) {""")
+    replace_once('    const rows = this.ordered();', '    const rows = this.virtualProjected ?? [];')
+    replace_once('cx.timer.every(250, cx => { this.prepareVirtualRows(); if (this.syncRetained(cx)) cx.notify(); });', 'cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });')
     main.write_text(source)
 
 

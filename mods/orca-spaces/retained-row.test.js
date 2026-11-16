@@ -6,8 +6,9 @@ import vm from 'node:vm';
 function fixture() {
   const source = readFileSync(new URL('./main.js', import.meta.url), 'utf8')
     .replace(/^import .*;$/gm, '').replace('export default class Spaces', 'class Spaces');
+  let sharedReads = 0;
   const scope = {
-    View: class {}, foldKey: r => `space:${r.w.id}`, shared: () => null,
+    View: class {}, foldKey: r => `space:${r.w.id}`, shared: () => { sharedReads++; return null; },
     onStop: v => v.focused, avatarFile: () => null,
   };
   vm.runInNewContext(source + '\nglobalThis.Spaces = Spaces;', scope);
@@ -24,7 +25,7 @@ function fixture() {
     return { set_props() { calls.updates++; }, release() { calls.releases++; } };
   } };
   const draw = (id, name = id, pos = 0) => owner.retainedRow({ w: { id, name }, pos }, {}, [], [], 'repo');
-  return { owner, calls, cx, draw, keyboard(on) { scope.shared = () => on ? 'keyboard' : null; } };
+  return { owner, calls, cx, draw, sharedReads: () => sharedReads, keyboard(on) { scope.shared = () => { sharedReads++; return on ? 'keyboard' : null; }; } };
 }
 
 test('changed rows paint fresh immediately, then retain; stable rows avoid element construction', () => {
@@ -170,4 +171,23 @@ test('replacement rows share the same native operation budget with removals', ()
   owner.syncRetained(cx);
   assert.equal(calls.creates, 20);
   assert.equal(owner.retainedRows.size, 10);
+});
+
+test('row batches reuse one keyboard-mode snapshot and invalidate on mode changes', () => {
+  const { owner, draw, keyboard, sharedReads } = fixture();
+  owner.retainedKeyboardMode = false;
+  for (let i = 0; i < 80; i++) draw(String(i));
+  assert.equal(sharedReads(), 0);
+  const before = owner.retainedPending.get('0').signature;
+  keyboard(true);
+  owner.refreshRetained();
+  assert.equal(sharedReads(), 1);
+  assert.equal(owner.retainedKeyboardMode, true);
+  assert.notEqual(owner.retainedPending.get('0').signature, before);
+  for (let i = 0; i < 80; i++) draw(String(i));
+  assert.equal(sharedReads(), 1);
+  keyboard(false);
+  owner.refreshRetained();
+  assert.equal(sharedReads(), 2);
+  assert.equal(owner.retainedPending.get('0').signature, before);
 });

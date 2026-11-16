@@ -658,3 +658,31 @@ changes and measured limits above do not substitute for those three outcomes.
   outside render. Batching native adoption did not fix this separate JS deadline.
 - No strict input-independent allocation or production virtualization claim. Direct
   initial/changed/keyboard rendering and input-sized projections remain open.
+
+## 14. Keyboard mode snapshot and prepared candidate rows
+
+- Production snapshots t3-focus once per render/event signature batch, reusing it
+  for signatures and the retained/direct branch. Regression covers 80 rows with
+  no per-row shared reads, one read per event batch, and true/false invalidation.
+  This removes about 400 duplicate native shared reads for a 200-row render, but
+  did not alone eliminate cold-check interruption. Production checks still pass.
+- Candidate now queues the latest data per row; task batches compute at most 16
+  signatures, prioritizing a pending focus request. Ready snapshots remain separate
+  from fresh render input. Removed rows are pruned and queued obsolete data ignored.
+- First queue run exposed premature focus cancellation for existing but unprepared
+  rows. Fixed: only removal from current rows cancels; missing ready data waits.
+  Added two generated-source VM tests for batching/priority/latest data/removal,
+  and unprepared-versus-removed focus. Full suite 59/59 passes (57 production + 2
+  candidate tests). Diff and production spaces check pass.
+- A subsequent cold check failed earlier in ordered/projectWorktreePlan. Candidate
+  projection now also runs in the existing 250ms task, not render. Latest generated
+  source passes three consecutive initial checks; mounted native run again matches
+  all 35 reverse/forward focus positions, asserted against the expected sequence.
+  Status errors is empty. Source hash and log excerpt saved as real-prepared*.
+- Last ten script renders in that run are 2-5ms. Work moved to tasks; this is not
+  an end-to-end speedup or total frame cost claim. Candidate task cadence now also
+  notifies the owner every 250ms, so older timing runs are not paired comparisons.
+- Strict allocation bound remains unfulfilled: render still builds current maps,
+  structural descriptor/signature inputs, color projections and size arrays; task
+  projection and total retained handles remain input-sized. Production virtualization
+  and its remaining interaction/measurement gates are still open.

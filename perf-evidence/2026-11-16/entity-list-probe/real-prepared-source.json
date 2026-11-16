@@ -1,0 +1,8 @@
+{
+  "production_base": "0ed2ed0",
+  "builder": "scripts/perf-spaces-virtual.py",
+  "generated_main_sha256": "131793eebbf41bb9adc314db9ab40e59f423d3f4e9d42d61816903060a754dc0",
+  "initial_checks_passed": 3,
+  "focus_positions_verified": 35,
+  "signature_batch_limit": 16
+}

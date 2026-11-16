@@ -212,11 +212,12 @@ export default class Spaces extends View {
 
   refreshRetained() {
     const focused = onStop(this);
-    for (const data of this.retainedPending.values()) data.signature = this.rowSignature(data, focused);
+    const keyboardMode = this.retainedKeyboardMode = Boolean(shared("t3-focus"));
+    for (const data of this.retainedPending.values()) data.signature = this.rowSignature(data, focused, keyboardMode);
     this.retainedSynced = null;
   }
 
-  rowSignature({ r, t, mine, groupBy }, focused = onStop(this)) {
+  rowSignature({ r, t, mine, groupBy }, focused = onStop(this), keyboardMode = Boolean(shared("t3-focus"))) {
     const key = r.w.id;
     const fold = foldKey(r);
     // The plan already projects the sibling catalog into row/head/count changes.
@@ -228,19 +229,20 @@ export default class Spaces extends View {
       this.hot?.endsWith(key) ? this.hot : null, this.hoveredRepo === fold, this.menuKey === fold,
       this.laneHot === key, this.pressed === key, this.over === key,
       this.over === key ? [this.pressed, this.rowIndex?.get(this.pressed)] : null,
-      Boolean(shared("t3-focus")), this.fs.keyboard, focused?.endsWith(key) ? focused : null,
+      keyboardMode, this.fs.keyboard, focused?.endsWith(key) ? focused : null,
     ]);
   }
 
   retainedRow(r, t, ps, mine, groupBy) {
     const key = r.w.id;
     const data = { r, t, ps, mine, groupBy };
-    const signature = data.signature = this.rowSignature(data, this.retainedFocus);
+    const keyboardMode = this.retainedKeyboardMode ?? Boolean(shared("t3-focus"));
+    const signature = data.signature = this.rowSignature(data, this.retainedFocus, keyboardMode);
     this.retainedPending.set(key, data);
     const held = this.retainedRows.get(key);
     // New or changed host data paints immediately; a task adopts the retained view afterwards.
     // shortcut: keyboard mode draws directly to preserve focus-pool refill and full Tab order.
-    return !shared("t3-focus") && held?.signature === signature
+    return !keyboardMode && held?.signature === signature
       ? [held.entity]
       : this.rowElements(data);
   }
@@ -1274,6 +1276,7 @@ export default class Spaces extends View {
     const rows = this.ordered();
     this.retainedPending = new Map();
     this.retainedFocus = onStop(this);
+    this.retainedKeyboardMode = Boolean(shared("t3-focus"));
     // The shipped mods (the Terminals picker) still color spaces from "space.colors": the same color, from the name.
     const colors = Object.fromEntries(sp.filter(p => p.name !== "~").map(p => [p.id, tint(p.name, false)]));
     if (JSON.stringify(colors) !== JSON.stringify(shared("space.colors") ?? {})) setShared("space.colors", colors);
