@@ -4,43 +4,43 @@
 
 ## 現況
 
-`my-orca` Runner、planning skill、四燈 UI 已實作（`c958d8e`），經 review 發現失敗路徑（reject、Resume、reconcile）有錯。修繕分階段進行：
+`my-orca` Runner、planning skill、四燈 UI 已實作，經 review 發現失敗路徑有錯，修繕分階段進行（證據都在台帳，不在本檔）：
 
-- **Phase A（F1 E47 無限重派、F2 Resume +2）：已完成並驗收**，commit `28efc93`、`e279a4e`。測試在 `my-orca/f1f2.test.mjs`。
-- **Phase B（F3、F4、F5）：已完成並自測**，commit `7be456d`、`1da6eb8`、`aa44f28`。測試在 `my-orca/f3.test.mjs`、`f4.test.mjs`、`f5.test.mjs`。待 owner 決定的兩件事（F4 之後 Resume 在 identity 停止後的行為、F5 紅燈原因的偏離）寫在台帳第 3 節。
-- **Phase C（F6–F18）：owner 已同意開始。** 已做：F6（只有 todo 紅燈測試）`6edda03`、F7 `5610e3f`、F8（只有 todo 紅燈測試）`ad1d67d`。**F9 被規格衝突擋住（見台帳），不要做。** 還沒做：F10–F18。
+- **Phase A（F1、F2）、Phase B（F3、F4、F5）：已完成並驗收。**
+- **Phase C：** F6、F8 只有紅燈測試（`todo`，等 owner 決定）；F7 完成；**F9 被規格 E12 擋住，等 owner 二選一，不要做**；另有審查修補 FIX-1（`3298581`）。**還沒做：F10–F18。**
+- 基準：`node --test my-orca` 為 47 tests / 45 pass / 2 todo / 0 fail；`node --test mods/orca-workflow` 為 8 pass。
 
-規格以 `docs/spec-v2-converged.md` 為準（**§8.2 與 §4.9 M6–M15**）；本檔沒涵蓋的情況，停下回報，不要自己決定。進度與證據寫在 `docs/tasks-v2-implementation.md`。
+規格以 `docs/spec-v2-converged.md` 為準（**§8.2 與 §4.9 M6–M15**）；本檔沒涵蓋的情況，停下回報，不要自己決定。進度與證據寫在 `docs/tasks-v2-implementation.md`，待 owner 決定的事在該檔第 3 節。
 
 ## 給 owner：怎麼推進
+
+**待你回答的事**（執行 model 不能代答）：F9 二選一（保留 E12／照 M13 拒絕並改 E12）；F5 紅燈原因偏離是否接受；F6、F8 要不要現在做（選項見台帳第 3 節）。
 
 **派工**（原樣貼給執行的 model）：
 
 ```
 工作目錄：/Users/tonyyang/git/herdr-my-orca/.claude/worktrees/workflow-stages-panel
-請完整讀 docs/handoff.md，然後只做 Phase B：F3、F4、F5。
+請完整讀 docs/handoff.md，然後只做 F10、F11、F12、F13、F14、F15、F16、F17、F18（不含 F9、F6、F8）。
 每項一個 commit，照第 2 節的固定流程，台帳貼指令的實際輸出。
-F5 的測試若紅燈原因與 handoff 描述不同，請停下回報，不要自己改測試條件。
-三項都完成後停止，不要進 Phase C，回報摘要給我。
+遇到本檔沒寫的情況停下回報。全部完成後停止，回報摘要給我。
 ```
 
 **驗收**（對方回報完成後，逐項看；驗收時不要改程式，要改就請對方改）：
 
-1. 範圍：`git log --oneline e279a4e..HEAD` 應為 3 個功能 commit（F3、F4、F5）；`git diff --name-only e279a4e..HEAD` 只能出現 `my-orca/my-orca.mjs`、`my-orca/f3.test.mjs`、`my-orca/f4.test.mjs`、`my-orca/f5.test.mjs`、`docs/tasks-v2-implementation.md`。出現 `README.md`、`mods/orca-status/*`、`.agentflow`、`AGENTS.md`、`fake-e2e.mjs` 就是不及格。
-2. 全套綠：`node --test my-orca && node --test mods/orca-workflow`（預期 my-orca 36 + 新增測試數、workflow 8，0 fail）。
-3. 新測試必須在舊程式上是紅的（以 `e279a4e` 為舊程式；`f3`、`f4`、`f5` 各跑一次）：
+1. 範圍：`git log --oneline 3298581..HEAD` 只有 F10–F18 各一個 commit（加台帳 commit）；`git diff --name-only 3298581..HEAD` 只能出現各 F 允許的檔案與 `docs/tasks-v2-implementation.md`。出現 `README.md`、`mods/orca-status/*`、`.agentflow`、`AGENTS.md` 就是不及格。（`fake-e2e.mjs` 只有 F14 可以改。）
+2. 全套綠：`node --test my-orca && node --test mods/orca-workflow`，0 fail（`my-orca` 預期 47 + 新增測試數，另有 2 個 todo；workflow 8）。
+3. 新測試在舊程式上是紅的（以 `3298581` 為舊程式，每個有測試的 F 各跑一次）：
    ```
-   T=$(mktemp -d) && git archive e279a4e my-orca | tar -x -C "$T" \
-     && cp my-orca/f3.test.mjs "$T/my-orca/" \
-     && (cd "$T" && node --test my-orca/f3.test.mjs 2>&1 | grep -E "✖|ℹ (pass|fail)")
+   T=$(mktemp -d) && git archive 3298581 my-orca | tar -x -C "$T" \
+     && cp my-orca/fN.test.mjs "$T/my-orca/" \
+     && (cd "$T" && node --test my-orca/fN.test.mjs 2>&1 | grep -E "✖|ℹ (pass|fail)")
    ```
-   F5 的紅燈原因必須是 `core_id` 為 undefined 導致 `skipped:gone`。
-4. 程式檢查：`grep -n "hc.kill(" my-orca/my-orca.mjs` 只應出現在 `killOwned` 內；`grep -n "unsettled" my-orca/my-orca.mjs` 應看到 `let unsettled`、`unsettled = true;`，以及函式最後的 `if (unsettled) {…}`，且不再有 kill 之前的 unsettled 回傳；`grep -n 'closed === "closed"' my-orca/my-orca.mjs` 應有結果。
+4. 程式檢查：F16 之後 `grep -rn "RunnerExit\|cmdInitCheck\|escapeRe" my-orca mods` 無結果；`node --check my-orca/my-orca.mjs` 通過；F11 若無 `herdr-app check` 就要標 `UNVERIFIED`。
 5. 台帳每項有實際輸出（紅、綠各一份），不是「測試通過」之類的描述。
 
 **判定**：全部符合 → 通過；只有台帳或 commit 範圍有問題 → 請對方只修那項；程式偏離 → 請對方還原重做，再偏離就換更強的 model；對方做了本檔沒寫的事或謊報結果 → 停用，改由更強的 model 接手。
 
-Phase C 的決策點：**F9** 照規格 M13 是對的，但 Herdr 重啟後 core id 會變，舊 run 就不能再 `start`／`run`，先確認你接受；**F6、F8** 只寫紅燈測試，之後要不要真的重構、退避要有人決定；F10–F17 是小修；真 E2E、AT-03(b)、畫面驗證要 owner 在場。
+**F6、F8、F9 的決策點**在台帳第 3 節；F10–F17 是小修；真 E2E、AT-03(b)、畫面驗證要 owner 在場。
 
 ## 1. 規則（違反任何一條，停手並回報）
 
@@ -71,80 +71,21 @@ Phase C 的決策點：**F9** 照規格 M13 是對的，但 Herdr 重啟後 core
 - **步驟 4 出現任何預期以外的紅燈** → 還原該 F 動過的檔案：`git restore <那些檔案>`（新增的檔案用 `rm`）；台帳該列寫 `FAILED` 與失敗輸出；**跳過依賴它的項目**（F7 依賴 F4）；然後繼續下一個與它無關的 F；沒有無關的 F 就停止並回報。
 - **步驟 2 紅燈寫不出來**（程式其實已正確）→ 台帳寫 `NOT REPRODUCED` 與你試過什麼，**不要改程式**，下一項。
 
-## 3. Phase B（現在要做的）
+## 3. Phase A、B
 
-### F3　M7：上限到了，也要先 kill、掃描，才回 `unsettled`
+已完成並驗收，細節與證據見台帳 F1–F5。
 
-允許檔案：`my-orca/my-orca.mjs`、`my-orca/f3.test.mjs`（新增）。
+## 4. Phase C
 
-背景：`settleAndKill` 在等待迴圈之後，若 HEAD 或工作樹「還在變」就立刻 `needsUser("unsettled")` 並 return——**在 kill 之前**，worker 被留著繼續改檔。規格 §4.9 M7 上限：照樣 kill → M14 sweep → 完整檢查；最後仍在變才 `unsettled`。
+先決條件：`node --test my-orca && node --test mods/orca-workflow` 全綠。**F6–F9 的狀態見「現況」與台帳，這裡的說明只作背景；F6、F8、F9 沒有 owner 決定前不要動。**
 
-**修法**：在 `settleAndKill` 內
+**F6（已做：只有紅燈測試；重構等 owner）　`stage_head` 單一化。** 注意：現有測試放錯層，重構時要一併改寫（台帳第 3 節）。 現況：`state.repo.stage_head`（init 後從不更新）、`state.stage_head`、`dispatch.stage_head`（無人讀）三份。已知後果：reconcile 的 is-ancestor 退化成「init head 的後代」，退回到中間 commit 再 force push 會漏抓。**只**寫一個測試：「HEAD 是 init head 的後代、但不是最後一次 accepted head 的後代」→ `pushCheck`（有 export）應判 `ok:false`。現況上若紅不起來 → 台帳寫 `NOT REPRODUCED`。若紅了 → 台帳寫「紅燈測試已寫好、等待 owner 決定重構」，**停**。不要動 `stage_head` 的任何用法。
 
-1. 在函式開頭 `let lastChanged = null;` 那行下面加 `let unsettled = false;`。
-2. 把
-   ```js
-       lastChanged = finalInfo;
-       // keep moving: do not accept an unsettled tree
-       if (await needsUser(ctx, "unsettled", "HEAD or the working tree was still changing after the result appeared")) return { stop: true };
-   ```
-   換成 `unsettled = true;`。外層 `if (finalInfo.ok && prev !== …) { … }` 與緊鄰的 `lastChanged = finalInfo;` 這一行**都保留不動**。
-3. 在函式最後 `return { stop: false, info };` 的**前一行**加：
-   ```js
-     if (unsettled) { await needsUser(ctx, "unsettled", "HEAD or the working tree was still changing after the result appeared"); return { stop: true }; }
-   ```
+**F7（已完成）　開機掃描清殘留 worker。** `scanWorkers`：dispatch id 屬於某個已結束 attempt、且不等於 `state.dispatch.id` 的 live worker，先 `killOwned` 再 `ctx.hc.rm`（現況只標 `unknown_worker` 卻不 kill）。測試：`hc.list` 回一個 live、id 在 `task.attempts[].dispatch` 裡的 terminal；斷言有 kill 與 rm。允許檔案：`my-orca/my-orca.mjs`、`my-orca/f7.test.mjs`。
 
-**測試**（`my-orca/f3.test.mjs`）：沿用 `my-orca/f1f2.test.mjs` 的 `world()` 與 `setup()`（整段複製到新檔頂部），改兩處：`git.info` 每次回傳不同的 `head`（用計數器），`hc.get` 讓 terminal 永遠 `status.state === "working"`，`clock` 每次呼叫 +31000 ms。斷言：`hc.kill` 至少被呼叫 1 次，且 `state.needs_user.code === "unsettled"`。（寫法以 `world()` 為準：`kill` 是 `hc` 物件上的函式，把它換成會計數的函式。）
+**F8（已做：只有紅燈測試；退避等 owner）　hc 失敗退避。** `waitForResult` 對 `HcError` 有退避，但 `dispatchTask`、`scanWorkers`、reconcile 的 `hc.list` 丟 `HcError` 會讓 Runner 直接崩。**只**寫測試：假 `hc.list` 丟 `HcError`，斷言 `await runLoop(ctx)` 不會 throw（用 `assert.doesNotReject`）。確認現況紅 → 台帳寫「紅燈測試已寫好、等待 owner 決定退避策略」，**停**。不要新增 helper。（設定值 `hc_retry_min` 已存在於 `DEFAULT_CONFIG`，預設 5。）
 
-### F4　每一次 kill 都先核對標籤、並寫 `kill` 事件（R-G）
-
-允許檔案：`my-orca/my-orca.mjs`、`my-orca/f4.test.mjs`（新增）。
-
-背景：`settleAndKill` 的 kill 區段正確（先 `hc.get` 核對 `orca.run`/`orca.dispatch`/`orca.role`/`created_ms`，通過才 kill，並寫 `kill` 事件）；但 `resumeState` 內有一處 `try { if (d.address) ctx.hc.kill(d.address); } catch …` **直接 kill、沒核對、沒事件**。
-
-**修法**：
-
-1. 新增函式（放在 `removeWorker` 之前），內容是把 `settleAndKill` 中從 `let canKill = false;` 到 `await ctx.event("kill", …)` 的整段搬進來：
-   ```js
-   async function killOwned(ctx, dispatch) {
-     // returns { stop: true } when the caller must stop (identity / core mismatch); otherwise { killed }
-     … (搬過來的程式碼；原本的 `return { stop: true }` 保持不變；結尾 `return { killed: canKill };`)
-   }
-   ```
-2. `settleAndKill` 中被搬走的位置改成：`const k = await killOwned(ctx, dispatch); if (k.stop) return { stop: true };`
-3. `resumeState` 中把那個 `try { if (d.address) ctx.hc.kill(d.address); } catch (e) { … }` 整塊換成：`const k = await killOwned(ctx, d); if (k.stop) return { ok: true };`（原本核心不符時也是 `return { ok: true }`）。
-
-**測試**（`my-orca/f4.test.mjs`）：用 `world()` 的形式，兩個 case：(a) `hc.get` 回傳的 terminal，`labels["orca.dispatch"]` 是別的值 → 斷言 `hc.kill` **沒被呼叫**、`needs_user.code === "identity"`；(b) 標籤相符 → 斷言 `hc.kill` 被呼叫，且事件收集陣列裡有一筆 `kill` 事件含 `address`。（事件用 `makeRunnerContext` 的 `event` 參數收集：`event: async (name, e) => events.push([name, e])`。）
-
-### F5　`planning.core_id` 要被記下來
-
-允許檔案：`my-orca/my-orca.mjs`、`my-orca/f5.test.mjs`（新增）。
-
-背景：`closePlanningTab` 比對 `p.core_id`，但 `planningFromTerminal` 從不寫入它 → `close_planning_tab=true` 時一律 `skipped:gone`，功能不會動。
-
-**修法**：
-
-1. `planningFromTerminal(term)` 改簽名 `planningFromTerminal(term, coreId)`，回傳物件裡 `closed: null,` 之前加 `core_id: coreId,`。
-2. `cmdInit` 裡 `planning: planningFromTerminal(planningTerm),` 改成 `planning: planningFromTerminal(planningTerm, coreId),`（`coreId` 在同一函式內已存在，同一個物件的 `core_id: coreId,` 就在附近）。
-3. `closePlanningTab` 開頭，`const p = ctx.state.planning;` 下一行加：`if (p?.closed === "closed") return "closed";`（**只**跳過已關閉的；不要擴大成「任何 closed 值」，否則事後把 `close_planning_tab` 改成 true 就永遠不會關）。
-
-**測試**（`my-orca/f5.test.mjs`）：`closePlanningTab` 有 export。造 `ctx`（`makeRunnerContext`）：`state.planning = { address:"t1", core_id:"c1", tab:"tab9", closed:null, created_ms:1, turn:0 }`，`config.close_planning_tab = true`，`hc.coreId = () => "c1"`，`hc.get` 回一個 `state:"live"`、`status:{state:"idle"}`、`created_ms:1` 的 terminal，`app` 參數傳會記錄呼叫的假函式（`closePlanningTab(ctx, { app: fake, wait: false })`）。斷言：回傳 `"closed"`、`fake` 收到的 args 含 `"tab.close"`。再一個 case：`planning.closed = "closed"` → `fake` 一次都沒被呼叫。**先在現況上跑，確認紅的原因是 `core_id` 為 undefined → `skipped:gone`**；紅燈原因不同就停手回報（`closePlanningTab` 後半段的條件可能比這裡寫的多，以實際程式為準）。
-
-### Phase B 結束：停
-
-把 F1–F5 的結果（每項的紅/綠輸出、commit hash）寫進台帳，向 owner 回報一段摘要，**然後停止**。等 owner 說「繼續」才進 Phase C。
-
-## 4. Phase C（只有 owner 明說繼續才做）
-
-先決條件：Phase A、B 都已 commit，`node --test my-orca && node --test mods/orca-workflow` 全綠。
-
-**F6　`stage_head` 單一化 — 只寫紅燈測試就停，不要重構。** 現況：`state.repo.stage_head`（init 後從不更新）、`state.stage_head`、`dispatch.stage_head`（無人讀）三份。已知後果：reconcile 的 is-ancestor 退化成「init head 的後代」，退回到中間 commit 再 force push 會漏抓。**只**寫一個測試：「HEAD 是 init head 的後代、但不是最後一次 accepted head 的後代」→ `pushCheck`（有 export）應判 `ok:false`。現況上若紅不起來 → 台帳寫 `NOT REPRODUCED`。若紅了 → 台帳寫「紅燈測試已寫好、等待 owner 決定重構」，**停**。不要動 `stage_head` 的任何用法。
-
-**F7　開機掃描清殘留 worker（依賴 F4；F4 若 FAILED 就跳過）。** `scanWorkers`：dispatch id 屬於某個已結束 attempt、且不等於 `state.dispatch.id` 的 live worker，先 `killOwned` 再 `ctx.hc.rm`（現況只標 `unknown_worker` 卻不 kill）。測試：`hc.list` 回一個 live、id 在 `task.attempts[].dispatch` 裡的 terminal；斷言有 kill 與 rm。允許檔案：`my-orca/my-orca.mjs`、`my-orca/f7.test.mjs`。
-
-**F8　hc 失敗退避 — 只寫紅燈測試就停。** `waitForResult` 對 `HcError` 有退避，但 `dispatchTask`、`scanWorkers`、reconcile 的 `hc.list` 丟 `HcError` 會讓 Runner 直接崩。**只**寫測試：假 `hc.list` 丟 `HcError`，斷言 `await runLoop(ctx)` 不會 throw（用 `assert.doesNotReject`）。確認現況紅 → 台帳寫「紅燈測試已寫好、等待 owner 決定退避策略」，**停**。不要新增 helper。（設定值 `hc_retry_min` 已存在於 `DEFAULT_CONFIG`，預設 5。）
-
-**F9　不自動改綁 core（owner 已決定：照 M13 原文，拒絕）。** 在 `startRunner`：`if (!state.dispatch && state.core_id !== currentCore) { state.core_id = currentCore; await writeState(...) }`；在 `cmdRun`：`if (state.core_id !== currentCore) { if (!state.dispatch) { state.core_id = currentCore; … } else … }`。兩處都刪掉改寫，改成 `print(err, \`start: run belongs to core ${state.core_id}; set HC_SESSION\`); return EXIT.reject;`（`cmdRun` 的前綴用 `run:`）。`EXIT.reject` 已存在（`const EXIT = { ok:0, reject:1, usage:2, env:3 }`）。新增純函式 `export function coreMatches(state, id) { return state.core_id === id; }`，並用它判斷，加一個單元測試。副作用要告訴 owner：Herdr 重啟後 core id 會變，舊 run 就不能再 start/run，需要使用者自己處理。
+**F9　core 改綁（被擋住，等 owner）。** 原本的想法：`startRunner`／`cmdRun` 在 core id 不符時拒絕（`print(err, ...); return EXIT.reject;`，新增 `export function coreMatches(state, id)`）。但規格 §5 **E12** 寫「core id 不同、沒有進行中的 dispatch → 更新 `core_id` 繼續」，兩者相反。owner 二選一：(a) 保留 E12 與現況；(b) 拒絕，並同步改 E12（副作用：Herdr 重啟後 core id 會變，舊 run 不能再 start／run）。選 (b) 才照上面做，並補單元測試。
 
 **F10　Tuning 燈：development 期間不該亮。** `lamp()` 已確認：`pending` 畫成空心圈（`border_1().border_color(l.color)`），所以 `"pending"` 就是規格要的「未開始」。在 `mods/orca-workflow/model.js` 的 `lights` 與 `my-orca/my-orca.mjs` 的 `lights`（兩份重複，都要改），把 Tuning 狀態裡的 `(state?.stage === "tuning" || tasks.length)` 改成 `state?.stage === "tuning"`。唯一可改的既有測試期望：`mods/orca-workflow/model.test.js` 的 `"lights show counts and gate states"` 裡 `["Tune", 0, 2, "working"]` 改成 `["Tune", 0, 2, "pending"]`。`my-orca/my-orca.test.mjs` 的 lights 測試只比數量，不用改。
 
@@ -178,7 +119,7 @@ Phase C 的決策點：**F9** 照規格 M13 是對的，但 Herdr 重啟後 core
 
 1. F1–F5 各有一個 commit，每項的台帳列都貼了紅/綠實際輸出。`node --test my-orca && node --test mods/orca-workflow` 全綠。
 2. Phase C 若執行：同上；F6、F8 只有紅燈測試、無程式改動。
-3. `docs/tasks-v2-implementation.md`：Phase B 完成後，把 I-04、I-06、I-09 改成「部分完成」並指向對應的 F；A8／A9 保持「未經獨立驗證」。
+3. `docs/tasks-v2-implementation.md`：I-04、I-06、I-09 保持「部分完成」並指向對應的 F；A8／A9 保持「未經獨立驗證」。
 4. `git log --stat` 檢查：所有 commit 只含該 F 允許的檔案與台帳；沒有 `README.md`、`mods/orca-status/*`、`.agentflow`、`AGENTS.md`。
 
 **風險提醒**：F1–F5 完成前，不要在真 repo 啟用 `close_planning_tab`，也不要依賴 Resume 的第二次機會。
