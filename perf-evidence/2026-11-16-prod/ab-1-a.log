@@ -1,0 +1,172 @@
+2026-11-16T11:30:27.126869Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 48 ms 7604 explicit-factories
+2026-11-16T11:30:27.176338Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:27.387876Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:27.594794Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:27.807714Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:28.014677Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:28.116193Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 42 ms 7604 explicit-factories
+2026-11-16T11:30:28.227326Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:28.428926Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:28.629420Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:28.841945Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:29.055402Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:29.108806Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 39 ms 7604 explicit-factories
+2026-11-16T11:30:29.265261Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:29.470276Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:29.683284Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:29.894376Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:30.114194Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:30.162724Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:30.368490Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:30.581798Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:30.795014Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:31.000976Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:31.110425Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:31.213248Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:31.418878Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:31.632323Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:31.845666Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:32.047345Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:32.114294Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:32.249691Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:32.458776Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:32.665258Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:32.875661Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:33.113750Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:33.163974Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:33.365268Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:33.577440Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:33.784920Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:33.988769Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:34.114280Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:34.198025Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:34.402537Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:34.620092Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:34.821845Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:35.021982Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:35.109446Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 39 ms 7604 explicit-factories
+2026-11-16T11:30:35.230589Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:35.442291Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:35.652363Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:35.865240Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:36.065462Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:36.114701Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:36.273362Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:36.484901Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:36.694701Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:36.901579Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:37.114851Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:37.163789Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:37.365262Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:37.571955Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:37.775161Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:37.988298Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:38.113125Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 41 ms 7604 explicit-factories
+2026-11-16T11:30:38.201176Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:38.412657Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:38.625395Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:38.832037Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:39.044332Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:39.115381Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 41 ms 7604 explicit-factories
+2026-11-16T11:30:39.255898Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:39.465263Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:39.673655Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:39.879669Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:40.112904Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:40.161704Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:40.366662Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:40.571561Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:40.776975Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:40.980455Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:41.115997Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:41.189798Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:41.401277Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:41.604506Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:41.814589Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:42.021922Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:42.114825Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:42.235301Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:42.444419Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:42.647140Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:42.852451Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:43.065253Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:43.114149Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:43.265462Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:43.475076Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:43.686381Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:43.898290Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:44.115018Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 41 ms 7604 explicit-factories
+2026-11-16T11:30:44.164515Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:44.372873Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:44.581454Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:44.790756Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:45.003173Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:45.109343Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:45.214915Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:45.421909Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:45.634701Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:45.843930Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:46.052973Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:46.112465Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:46.265273Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:46.467553Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:46.676156Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:46.877370Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:47.109050Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:47.158057Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:47.364365Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:47.574581Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:47.784492Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:47.985954Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:48.115415Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 42 ms 7604 explicit-factories
+2026-11-16T11:30:48.198540Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:48.405148Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:48.612384Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:48.824074Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:49.026015Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:49.115022Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 41 ms 7604 explicit-factories
+2026-11-16T11:30:49.235056Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:49.440801Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:49.647215Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:49.858117Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:50.069608Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:50.113414Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:50.270919Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:50.482696Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:50.690016Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:50.891615Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:51.115786Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:51.164558Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:51.377723Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:51.586187Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:51.789937Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:52.001083Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:52.114574Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 41 ms 7604 explicit-factories
+2026-11-16T11:30:52.201465Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:52.414060Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:52.616020Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:52.829525Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:53.033455Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:53.115172Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 41 ms 7604 explicit-factories
+2026-11-16T11:30:53.234452Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:53.440531Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:53.644730Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:53.845690Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:54.055707Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:54.111736Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 40 ms 7604 explicit-factories
+2026-11-16T11:30:54.265504Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:54.467283Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:54.667593Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:54.867841Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:55.110007Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 41 ms 7604 explicit-factories
+2026-11-16T11:30:55.159632Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:55.368293Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:55.574466Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:55.783634Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:55.991263Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:56.113967Z  INFO gpui_shell::script: PERF d38d04533ae7de2614268c5fd1a29274f9a76dc4 39 ms 7604 explicit-factories
+2026-11-16T11:30:56.194531Z  INFO gpui_shell::script: PERF interval 7604
+2026-11-16T11:30:56.404401Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:56.616336Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:56.825519Z  INFO gpui_shell::script: PERF interval 0
+2026-11-16T11:30:57.035314Z  INFO gpui_shell::script: PERF interval 0

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "repo",
+    "top": "/private/tmp/orca-ui-9xvlgprd/linked",
+    "branch": "smoke-restored",
+    "owner": null,
+    "base": null,
+    "head": null,
+    "repo": "[null,\"/private/tmp/orca-ui-9xvlgprd/repo/.git\"]",
+    "linked": true,
+    "worktrees": [
+      {
+        "path": "/private/tmp/orca-ui-9xvlgprd/repo",
+        "branch": "main"
+      },
+      {
+        "path": "/private/tmp/orca-ui-9xvlgprd/linked",
+        "branch": "smoke-restored"
+      }
+    ]
+  }
+]

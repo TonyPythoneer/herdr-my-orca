@@ -8,6 +8,31 @@ import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
 import { planRenderRows, agentsByRow, foldKey } from '../mods/orca-spaces/worktree-plan.js';
 
+test('performance fixture does not drive focus or add unconditional polling notifications', t => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-virtual-test-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const destination = join(root, 'candidate');
+  execFileSync('python3', [fileURLToPath(new URL('./perf-spaces-virtual.py', import.meta.url)), destination]);
+  const source = readFileSync(join(destination, 'main.js'), 'utf8');
+  assert.doesNotMatch(source, /fixture-198|dispatch_action\(smoke/);
+  assert.match(source, /this\.virtualFocusTick\(cx\)/);
+  assert.match(source, /this\.projectVirtualRows\(cx\); this\.prepareVirtualRows\(\); if \(this\.syncRetained\(cx\)\) cx\.notify\(\)/);
+});
+
+test('both fixtures use fixed spaces, agents, panes and machines', t => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-fixture-test-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const script of ['perf-spaces.py', 'perf-spaces-virtual.py']) {
+    const destination = join(root, script);
+    execFileSync('python3', [fileURLToPath(new URL(`./${script}`, import.meta.url)), destination]);
+    const source = readFileSync(join(destination, 'main.js'), 'utf8');
+    assert.match(source, /spaces as hostSpaces, machines as hostMachines, panes as hostPanes, agents as hostAgents/);
+    for (const name of ['spaces', 'agents', 'panes', 'machines']) {
+      assert.match(source, new RegExp(`const ${name} = \\(\\) => `));
+    }
+  }
+});
+
 function candidate(t, extras = {}) {
   const root = mkdtempSync(join(tmpdir(), 'orca-virtual-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));

@@ -1,0 +1,21 @@
+{
+  "head": "74d89aef047807c043bace277ee2bdb1cc18dd35",
+  "baseline_ref": "main",
+  "baseline_commit": "d38d04533ae7de2614268c5fd1a29274f9a76dc4",
+  "working_tree_sha256": {
+    "scripts/perf-spaces.py": "4921b0d813ac28b2600a9f15fea89fdf55ecb3d0db15f608bfdf32c2f55c3b6c",
+    "mods/orca-spaces/main.js": "db3c70b3c2bd49ef7f909da916fc2a85f815eb5ae455568babefecc025474637",
+    "mods/orca-spaces/focus.js": "73385b926a7722ac96452778340a956ccd5220863e8dd94d4da6aa6f9c088fa5"
+  },
+  "generated_main_sha256": {
+    "base": "4e2b68038557b54f4c38b4a9a1e5becef9b72935e4b4e48890506f57e8d1acc5",
+    "base2": "4e2b68038557b54f4c38b4a9a1e5becef9b72935e4b4e48890506f57e8d1acc5",
+    "branch": "1930ac980dca54df84e65f6810a4567dffb75d5b310d92b5cd685f7abfc40a72"
+  },
+  "app": "herdr-app 0.1.16",
+  "fixture": "200 synthetic spaces/agents; empty panes/machines/git/saved; isolated app home and core",
+  "protocol": "8 s warmup, 30 one-second shot requests; 200 ms probe on both; generated timer limit 400; Date.now root timings plus monotonic shot command times",
+  "limitation": "display inactive; screenshot triggers render and includes screenshot and IPC cost; per-render logs enabled",
+  "samples": "AA: 24 and 30 observed render samples; AB/BA/AB: 30/30, 30/29, 30/30",
+  "note": "shot requests cause render while display inactive, but not every request produced one; no event-to-paint or instrumentation-off comparison"
+}

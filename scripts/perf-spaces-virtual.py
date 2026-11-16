@@ -57,18 +57,8 @@ def build(destination):
       { keystroke: "tab", action: "orca.virtual.next", context: "OrcaSpacesVirtual" },
       { keystroke: "shift-tab", action: "orca.virtual.previous", context: "OrcaSpacesVirtual" },
     ]);
-    let smoke = 0;
     cx.timer.every(100, cx => {
       this.virtualFocusTick(cx);
-      if (!this.virtualRows?.length || this.virtualFocusPending || smoke > 35) return;
-      if (smoke === 0) {
-        this.fs.keyboard = true; setShared("t3-focus", this.fs.me);
-        this.virtualRequest(JSON.stringify(["workspace", "fixture-198"]), -1, cx); smoke++;
-      } else {
-        console.log("REAL focus", onStop(this));
-        if (++smoke > 35) console.log("REAL focus-complete");
-        else globalThis.window.dispatch_action(smoke <= 18 ? "orca.virtual.previous" : "orca.virtual.next");
-      }
     });""")
     replace_once('    this.grouped(t, cx, rows);', '    this.grouped(t, cx, rows);\n    this.virtualRows = [...this.retainedPending.values()];')
     replace_once('    const data = this.owner.retainedPending.get(this.key);', '    const data = this.owner.retainedPending.get(this.key);\n    if (data) this.owner.virtualRendered.set(this.key, data.signature);')
@@ -196,7 +186,7 @@ def build(destination):
     replace_once("""    this.grouped(t, cx, rows);
     this.virtualRows = [...this.virtualCurrent.values()];""", '')
     replace_once('rows.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64))', 'this.virtualItemSizes ?? []')
-    replace_once('cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });', 'cx.timer.every(250, cx => { this.projectVirtualRows(cx); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });')
+    replace_once('cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });', 'cx.timer.every(250, cx => { this.projectVirtualRows(cx); this.prepareVirtualRows(); if (this.syncRetained(cx)) cx.notify(); });')
     replace_once('  prepareVirtualRows(preferVisible = false) {', """  projectVirtualRows(cx) {
     const t = theme(), ps = panes(), rows = this.ordered();
     const groupBy = workspaceOptions().groupBy;
@@ -313,6 +303,19 @@ def build(destination):
     }
     return operations > 0;
   }''' + source[sync_end:]
+    replace_once('v_flex().id("space-list").absolute().inset_0().overflow_y_scroll()', 'v_flex().id("space-list-host").absolute().inset_0().overflow_hidden()')
+    replace_once('v_virtual_list("virtual-workspaces",', 'v_virtual_list("space-list",')
+    replace_once('    const rows = this.virtualProjected ?? [];', '''    const rows = this.virtualProjected ?? [];
+    const listHeight = rows.length
+      ? Math.max(0, (this.virtualHeight ?? 600) - (this.loaded ? 0 : (this.virtualLoadingHeight ?? 24)))
+      : 0;''')
+    replace_once('.track_scroll(this.virtualScroll).h(this.virtualHeight ?? 600)', '.track_scroll(this.virtualScroll).h(listHeight)')
+    replace_once('.child(h_flex().flex_none().mx(12).mb(8).gap(8).items_center()', '''.child(h_flex().flex_none().mx(12).mb(8).gap(8).items_center()
+              .on_size_change((size, cx) => {
+                const height = size.height + 8;
+                if (this.virtualLoadingHeight === height) return;
+                this.virtualLoadingHeight = height; cx.notify();
+              })''')
     main.write_text(source)
 
 

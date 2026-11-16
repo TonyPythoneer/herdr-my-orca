@@ -1,0 +1,22 @@
+{
+  "head": "74d89aef047807c043bace277ee2bdb1cc18dd35",
+  "sources": {
+    "mods/orca-spaces/main.js": "db3c70b3c2bd49ef7f909da916fc2a85f815eb5ae455568babefecc025474637",
+    "mods/orca-spaces/focus.js": "73385b926a7722ac96452778340a956ccd5220863e8dd94d4da6aa6f9c088fa5",
+    "scripts/perf-spaces.py": "4921b0d813ac28b2600a9f15fea89fdf55ecb3d0db15f608bfdf32c2f55c3b6c",
+    "scripts/perf-spaces-virtual.py": "15d9f524455648dd2b4d15714044c668e3b0dd799b25f0efeb94cbedf8b09a1b",
+    "scripts/perf-spaces-virtual.test.js": "216ac01a853c7fff20049e9e6350ef1d2b56454c1c3d7774688bc21d3303800a"
+  },
+  "generated_main": {
+    "perf-a": "1930ac980dca54df84e65f6810a4567dffb75d5b310d92b5cd685f7abfc40a72",
+    "perf-a2": "1930ac980dca54df84e65f6810a4567dffb75d5b310d92b5cd685f7abfc40a72",
+    "perf-b": "8eace17f5c9d22ca167943f96a3558a0fd44c8d98ee53f4cfc755c5b02ce171b"
+  },
+  "fixture": "200 spaces/agents; empty panes/machines/git/saved; shared isolated app home",
+  "note": "generated timer limit changed 150 to 400 for 30 s steady-state after warmup; same change in all variants",
+  "platform": "macOS-27.2-arm64-arm-64bit",
+  "app": "herdr-app 0.1.16",
+  "visible_run": "First-run overlay disabled; 8 s warmup, 30 s per sample; run.py switches layouts with 1 s pauses. Display sleep interrupted rendering; incomplete samples are invalid.",
+  "clock": "render: Date.now (1 ms wall clock); log timestamps UTC",
+  "instrumentation": "per-render and per-interval console logging; no instrumentation-off comparison"
+}

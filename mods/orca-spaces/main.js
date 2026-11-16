@@ -309,7 +309,7 @@ export default class Spaces extends View {
     const at = {};
     for (const s of sp) at[s.id] = where(s, ps);
     const keys = new Set(Object.values(at).filter((k) => readPair(k)[1]));
-    const due = new Set([...keys].filter((k) => !(k in this.git) || this.git[k]?.owner === undefined));
+    const due = new Set([...keys].filter((k) => !(k in this.git) || (this.git[k] !== null && this.git[k]?.owner === undefined)));
     for (const [id, k] of Object.entries(at)) if (this.at[id] && this.at[id] !== k && keys.has(k)) due.add(k);
     this.at = at;
     const spaceOf = {};
@@ -328,7 +328,7 @@ export default class Spaces extends View {
     }
     if (window()?.active) {
       for (const k of keys) {
-        const asks = this.git[k] || this.unsure.has(k);
+        const asks = k in this.git || this.unsure.has(k);
         if (asks && !this.folded.has(readPair(k)[0]) && now - (this.checked[k] ?? 0) > FALLBACK) due.add(k);
       }
     }
@@ -432,7 +432,7 @@ export default class Spaces extends View {
       if (r.code !== 0) {
         // Only git's own "no" is remembered as no repo; anything else is asked again.
         if (/not a git repository/i.test(r.stderr)) this.git[key] = null;
-        else this.unsure.add(key);
+        else { this.git[key] ??= null; this.unsure.add(key); }
         return;
       }
       // The repo's own .git folder names it; a worktree's top differs from it.

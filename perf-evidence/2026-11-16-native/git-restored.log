@@ -1,0 +1,7 @@
+sandbox_extension_issue_file_to_process failed for /tmp/orca-ui-9xvlgprd/OrcaPerfUI.app: 1 (Operation not permitted)
+2026-11-16T11:50:21.462678Z  INFO gpui_shell::script: GIT_CHECK [null,"/tmp/orca-ui-9xvlgprd/two"]
+2026-11-16T11:50:21.462769Z  INFO gpui_shell::script: GIT_CHECK [null,"/tmp/orca-ui-9xvlgprd/three"]
+2026-11-16T11:50:21.462803Z  INFO gpui_shell::script: GIT_CHECK [null,"/tmp/orca-ui-9xvlgprd/one"]
+2026-11-16T11:50:21.462834Z  INFO gpui_shell::script: GIT_CHECK [null,"/tmp/orca-ui-9xvlgprd/linked"]
+2026-11-16T11:50:32.495643Z  INFO gpui_shell::script: GIT_CHECK [null,"/tmp/orca-ui-9xvlgprd/linked"]
+2026-11-16 19:50:38.686 Herdr[78244:21938712] error messaging the mach port for IMKCFRunLoopWakeUpReliable

@@ -1,0 +1,288 @@
+2026-11-16T11:16:48.684296Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:48.693840Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:48.887900Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:48.921149Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:16:49.096234Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:49.111898Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:49.301028Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:49.311140Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:16:49.508843Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:49.518441Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:49.713226Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:49.727426Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:49.925188Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:49.935716Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:50.132821Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:50.144072Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:16:50.333661Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:50.342225Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:50.546021Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:50.560453Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:50.758322Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:50.769499Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:50.965816Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:50.977436Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:51.180125Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:51.192931Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:51.391946Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:51.402420Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:51.596205Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:51.610765Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:51.802959Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:51.810020Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:16:52.012843Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:52.026645Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:52.225230Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:52.235741Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:52.435050Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:52.443123Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:52.646966Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:52.664621Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:52.859015Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:52.868853Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:53.071069Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:53.085752Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:53.279576Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:53.294143Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:53.491880Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:53.502215Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:53.697717Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:53.710773Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:53.903897Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:53.909827Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:54.112930Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:54.127460Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:54.320264Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:54.326627Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:54.535493Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:54.543665Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:54.746605Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:54.759537Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:54.956351Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:54.969167Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:55.162731Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:55.177472Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:55.366510Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:55.377458Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:55.579427Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:55.592598Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:55.792100Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:55.802194Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:56.000283Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:56.010809Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:56.212914Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:56.227379Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:56.421641Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:56.435782Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:56.624509Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:56.635820Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:56.829928Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:56.844128Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:57.042115Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:57.052425Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:57.248169Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:57.260803Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:57.460407Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:57.477503Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:57.662761Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:57.677491Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:57.875256Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:57.885795Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:58.086656Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:58.102420Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:58.288420Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:58.300699Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:58.496563Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:58.510798Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:58.704426Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:58.719160Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:58.912760Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:58.927507Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:59.125421Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:59.135772Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:59.336993Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:59.343284Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:59.546253Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:59.560777Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:59.758573Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:59.769175Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:16:59.971719Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:16:59.985723Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:00.181689Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:00.194175Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:00.392071Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:00.402466Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:00.605105Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:00.619184Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:00.818753Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:00.826935Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:01.029433Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:01.044195Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:01.241911Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:01.252480Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:01.446635Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:01.458986Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:01.658727Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:01.669137Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:01.870266Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:01.876654Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:02.070422Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:02.076573Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:02.285231Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:02.292968Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:02.496606Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:02.510842Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:02.708584Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:02.719146Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:02.908812Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:02.919093Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:03.112742Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:03.125875Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:03.325455Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:03.335265Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:03.533066Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:03.543875Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:03.750423Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:03.761173Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:03.963538Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:03.976841Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:04.176046Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:04.193443Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:04.390578Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:04.407570Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:04.596794Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:04.611552Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:04.808874Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:04.820367Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:05.026513Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:05.035542Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:05.239659Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:05.255320Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:05.449050Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:05.461331Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:05.663253Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:05.682048Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:05.875346Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:05.886455Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:06.088787Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:06.103070Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:06.294830Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:06.312498Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:06.496742Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:06.513011Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:06.708639Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:06.719209Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:06.913577Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:06.927956Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:07.125527Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:07.147162Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:07.328550Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:07.335434Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:07.532740Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:07.544162Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:07.746178Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:07.760854Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:07.954977Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:07.969179Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:08.168300Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:08.176550Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:08.379444Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:08.393228Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:08.591962Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:08.610848Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:08.802409Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:08.810521Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:09.012834Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:09.028221Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:09.224728Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:09.237041Z  INFO gpui_shell::script: PERF working-tree 1 ms 4 explicit-factories
+2026-11-16T11:17:09.432768Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:09.443304Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:09.646142Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:09.659183Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:09.858663Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:09.869163Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:10.065006Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:10.077130Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:10.275305Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:10.283896Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:10.481403Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:10.496882Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:10.688337Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:10.701911Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:10.896147Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:10.909331Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:11.108646Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:11.119237Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:11.312828Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:11.327573Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:11.525297Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:11.535884Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:11.731034Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:11.743952Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:11.944081Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:11.951992Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:12.153023Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:12.158871Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:12.362802Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:12.377515Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:12.575293Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:12.585833Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:12.788251Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:12.802420Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:13.000442Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:13.010849Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:13.213492Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:13.227565Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:13.420333Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:13.435806Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:13.627503Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:13.635311Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:13.829496Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:13.844243Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:14.042002Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:14.052544Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:14.246197Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:14.260912Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:14.458650Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:14.468250Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:14.662823Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:14.675994Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:14.875016Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:14.885900Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:15.079484Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:15.092192Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:15.292544Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:15.302428Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:15.504464Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:15.519207Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:15.704557Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:15.719229Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:15.904750Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:15.919228Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:16.113382Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:16.127593Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:16.325317Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:16.336640Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:16.530985Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:16.544184Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:16.737822Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:16.752563Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:16.946171Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:16.960358Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:17.155090Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:17.169142Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:17.362856Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:17.377389Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:17.568152Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:17.577277Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:17.779506Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:17.792645Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:17.980366Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:17.993373Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:18.192047Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:18.201182Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:18.404026Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:18.419192Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories
+2026-11-16T11:17:18.618344Z  INFO gpui_shell::script: PERF interval 13
+2026-11-16T11:17:18.627163Z  INFO gpui_shell::script: PERF working-tree 0 ms 4 explicit-factories

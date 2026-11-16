@@ -61,12 +61,14 @@ def build(destination, revision=None):
         assert source.count(old) == 1, f'Probe needs updating: {old!r}'
         source = source.replace(old, new)
 
-    replace_once('spaces, machines, panes, agents,', 'spaces as hostSpaces, machines, panes, agents as hostAgents,')
+    replace_once('spaces, machines, panes, agents,', 'spaces as hostSpaces, machines as hostMachines, panes as hostPanes, agents as hostAgents,')
     fixture = '''
 const fixtureSpaces = Array.from({length:200},(_,i)=>({id:`fixture-${i}`,name:`Workspace ${i}`,folder:`/tmp/fixture-${i}`,tabs:[{id:`tab-${i}`}],active:i===0,status:"idle"}));
 const fixtureAgents = fixtureSpaces.map((s,i)=>({tab:s.tabs[0].id,address:`agent-${i}`,status:"idle",title:`Agent ${i}`}));
 const spaces = () => fixtureSpaces;
 const agents = () => fixtureAgents;
+const panes = () => [];
+const machines = () => [];
 '''
     replace_once('export default class Spaces extends View {', fixture + '\nexport default class Spaces extends View {')
     replace_once('this.loaded = Object.keys(this.git).length > 0;', 'this.loaded = true;')
