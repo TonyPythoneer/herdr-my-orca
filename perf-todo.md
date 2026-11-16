@@ -527,3 +527,21 @@ changes and measured limits above do not substitute for those three outcomes.
 - Next: test traversal across never-rendered rows using window.focus_next/prev,
   then implement navigation/prefetch as required. Production controls and drag
   remain unchanged pending these gates. Init/resident arrays still scale with N.
+
+### Never-rendered focus boundary and prefetch
+
+- Native backward traversal from 988 produces 987, then leaves the probe's row
+  handles (-1), eventually wrapping to 999. It skips never-rendered 986 entirely.
+  `native-traversal.js` and exact final log preserve this failed acceptance case.
+- A separate task-driven prefetch prototype requests scroll_to_item(target), waits
+  until that child render is observed, then focuses its native handle. It passes
+  all nine moves 988 down to 980, including never-rendered rows 986 through 980.
+  Source and exact output saved as `prefetch-focus.*`. A frame-capture loop wakes
+  the inactive isolated window; these are correctness checks, not frame timings.
+- This is a candidate mechanism, not completed Tab support: production must hook
+  the boundary while retaining each row's nested control order and reverse order.
+  Existing focus.js mode/pool behavior must not be removed without replacement.
+- Next integration scope: spaces focus.js boundary notification, retained row
+  registration of first/last stop, owner scroll/pending focus lifecycle, measured
+  row sizes, and tests for folding/removal while a focus request is pending.
+  Keep virtualization off production until real Tab and nested controls pass.
