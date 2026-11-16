@@ -4,11 +4,11 @@
 
 ## 現況
 
-修繕 F1–F18 **全部完成**（證據在 `docs/tasks-v2-implementation.md`，每項有紅／綠輸出與 commit）。基準：`node --test my-orca` 53 pass / 0 fail / 0 todo；`node --test mods/orca-workflow` 8 pass。
+修繕 F1–F18 **全部完成**（證據在 `docs/tasks-v2-implementation.md`，每項有紅／綠輸出與 commit）。基準：`node --test my-orca` 56 pass / 0 fail / 0 todo；`node --test mods/orca-workflow` 8 pass。
 
 已定案的決定：F9 照規格 E12（沒有進行中 dispatch 時自動改綁 core）；F6 單一來源為 `state.repo.head`、`--accept-head` 取嚴格版；F8 退避沿用 `waitForResult`（`hc_retry_min`，到了安靜停下不改 state）。
 
-**還沒做、需要 owner 在場**（第 4 節）：真 E2E、AT-03 (a)(b)、畫面驗證（I-17 DEFERRED）、重跑 `fake-e2e.mjs`。F5 紅燈原因與當初描述不同，見台帳 F5，等 owner 接受。
+**還沒做、需要 owner 在場**（第 4 節）：真 E2E、AT-03 (a)(b)、畫面驗證（I-17 DEFERRED）、重跑 `fake-e2e.mjs`。F5 紅燈原因與當初描述不同，owner 已接受。
 
 規格以 `docs/spec-v2-converged.md` 為準（§8.2 與 §4.9 M6–M15）；本檔沒涵蓋的情況，停下回報，不要自己決定。
 

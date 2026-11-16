@@ -1225,6 +1225,7 @@ async function runTuning(ctx) {
   await ctx.event("launched", { task: "TUNING", dispatch: id, detail: { address: dispatch.address, adopted: Boolean(launched.adopted) } });
 
   const delivered = await waitDelivery(ctx, dispatch);
+  if (delivered.hcFailure) return { stop: true, noStateChange: true };
   if (!delivered.ok) {
     await saveScreen(ctx, dispatch, "undelivered");
     return needsUser(ctx, delivered.code, `no delivery evidence within ${ctx.config.ack_timeout_s}s`);
