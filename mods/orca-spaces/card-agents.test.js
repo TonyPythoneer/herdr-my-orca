@@ -28,7 +28,7 @@ function fixture() {
     spaces: () => [], agents: () => [], run() {}, openOverlay() {}, exec() {}, hc() {},
     theme: () => ({}), shared: () => null, setShared() {}, watchFolder() {}, window() {}, props: () => ({}), nextCommand() {},
     repoMark: () => null, tint: () => null, parseRemote: () => null, avatarUrlFor: () => null, ensureAvatar() {}, avatarFile: () => null,
-    statusMark: () => Node.create('status'), agentStateMark: () => Node.create('agent-status'),
+    statusMark: status => Node.create('status', status), agentStateMark: status => Node.create('agent-status', status),
     getFolderWorkspaceRowGeometry: () => ({ surfaceInset: 0, cardContentIndent: 0 }),
     getFlushWorktreeCardPaddingLeft: () => 0, getProjectGroupHeaderPaddingLeft: () => 0,
     WORKTREE_CARD_SURFACE_MARGIN: 0, LEGACY_STATUS_LANE_WIDTH: 16,
@@ -65,6 +65,12 @@ function strings(node, result = []) {
   return result;
 }
 
+function nodesOfKind(node, kind, result = []) {
+  if (node?.kind === kind) result.push(node);
+  if (node && typeof node === 'object') for (const child of node.nodes ?? []) nodesOfKind(child, kind, result);
+  return result;
+}
+
 test('collapsed cards bound work by visible icons, even for large agent groups', () => {
   const { render } = fixture();
   const ten = render(Array.from({ length: 10 }, (_, i) => agent(i, 'unknown', `icon-${i}.png`)));
@@ -81,6 +87,37 @@ test('collapsed clusters choose the first three valid icons and skip agents with
     agent(4, 'unknown', 'second.svg'), agent(5, 'unknown', 'third.svg'), agent(6, 'unknown', 'fourth.svg'),
   ]);
   assert.deepEqual(result.images, ['first.svg', 'second.svg', 'third.svg']);
+});
+
+test('mixed-state summary keeps state order, bounds each icon cluster, and counts hidden states without filtering mine', () => {
+  const { render } = fixture();
+  const mine = [
+    agent(0, 'unknown', 'b1.png'), agent(1, 'unknown', 'b2.png'), agent(2, 'unknown', 'b3.png'), agent(3, 'unknown', 'b4.png'),
+    agent(4, 'unknown', 'w0.png'), agent(5, 'unknown', 'w1.png'), agent(6, 'unknown', 'w2.png'), agent(7, 'unknown', 'w3.png'),
+    agent(8, 'unknown', 'd0.png'), agent(9, 'unknown', 'd1.png'), agent(10, 'unknown', 'd2.png'), agent(11, 'unknown', 'd3.png'),
+    agent(12, 'unknown', 'i0.png'), agent(13, 'unknown', 'i1.png'), agent(14, 'unknown', 'i2.png'), agent(15, 'unknown', 'i3.png'),
+    agent(16, 'unknown', 'x0.png'), agent(17, 'unknown', 'x1.png'),
+  ];
+  for (let i = 0; i < 4; i++) mine[i].status = 'blocked';
+  for (let i = 4; i < 8; i++) mine[i].status = 'working';
+  for (let i = 8; i < 12; i++) mine[i].status = 'done';
+  for (let i = 12; i < 16; i++) mine[i].status = 'idle';
+  for (let i = 16; i < 18; i++) mine[i].status = 'queued';
+  const noFilterMine = new Proxy(mine, {
+    get(target, key) {
+      if (key === 'filter' || key === 'map') throw new Error('collapsed summary must not map or filter the full agent list');
+      const value = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  const result = render(noFilterMine);
+  assert.deepEqual(result.images, [
+    'b1.png', 'b2.png', 'b3.png',
+    'w0.png', 'w1.png', 'w2.png',
+    'd0.png', 'd1.png', 'd2.png',
+  ]);
+  assert.deepEqual(nodesOfKind(result.node, 'agent-status').map(node => node.value), ['blocked', 'working', 'done']);
+  assert.deepEqual(strings(result.node).filter(text => /^\+\d+$/.test(text)), ['+1', '+1', '+1', '+4']);
 });
 
 test('single agent uses its row and expanded summary includes every agent row', () => {

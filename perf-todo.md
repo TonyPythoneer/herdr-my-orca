@@ -730,3 +730,20 @@ changes and measured limits above do not substitute for those three outcomes.
 - Full named suite 64/64 passes; production spaces check and diff check pass.
   Expanded agent rows and summary grouping arrays remain input-sized; full goal
   and virtualization/measurement/storage acceptance requirements remain open.
+
+## 17. Bounded collapsed summary records
+
+- Production agent summary stores four fixed-size status/count records rather than
+  four filtered agent arrays (up to N copied references in total). Icon selection
+  scans the original list, skips other states and stops at three valid icons.
+  Counts still scan input; no CPU or frame speedup is claimed for this change.
+- Preserve the existing first-three nonempty group behavior; corrected the stale
+  last-three comment without changing the rendered order.
+- Luna 6 medium added mixed-state coverage: blocked/working/done order, first three
+  icons per state, cluster +1 labels, hidden idle +4 count and ignored unknown
+  statuses. A Proxy rejects both full-list filter and map during collapsed render.
+  Existing missing-icon, single-agent and expanded-content regressions still pass.
+- Root reviewed the final code/tests. Luna reports 65/65 full suite, production
+  spaces check and diff check passing. No additional native probe cycle needed.
+- Read-only native tracing capability check: xcrun cannot find xctrace. No trace
+  capture or installation attempted; full native frame/count requirement stays open.

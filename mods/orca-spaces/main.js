@@ -1033,24 +1033,25 @@ export default class Spaces extends View {
     // draws per-state clusters — `AgentStateDot` + up to 3 overlapping `size-4` agent-type
     // avatars + `+N` (`:158-176`) — and the text label is the EXPANDED header only (`:153-157`).
     // Groups follow `buildSummaryAgentGroups` (`worktree-card-agent-summary.ts:201-216`) and
-    // SUMMARY_STATE_ORDER (`:12-26`), restricted to Herdr's four words; the last 3 groups show
+    // SUMMARY_STATE_ORDER (`:12-26`), restricted to Herdr's four words; the first 3 groups show
     // and the rest count (`worktree-card-compact-agents.tsx:78-84`).
     const summaryOrder = ["blocked", "working", "done", "idle"];
     const groups = summaryOrder
-      .map((state) => ({ state, agents: mine.filter((a) => a.status === state) }))
-      .filter((group) => group.agents.length > 0);
+      .map((state) => ({ state, count: mine.reduce((n, a) => n + (a.status === state ? 1 : 0), 0) }))
+      .filter((group) => group.count > 0);
     const visibleGroups = groups.slice(0, 3);
-    const hiddenGroupCount = groups.slice(3).reduce((n, g) => n + g.agents.length, 0);
+    const hiddenGroupCount = groups.slice(3).reduce((n, g) => n + g.count, 0);
     const cluster = (group) => {
       // Herdr has no agent-type; the program table's icon fills Orca's `size-4` identity
       // circle, and is dropped when the table has none — the dot and `+N` still draw.
       const icons = [];
-      for (const agent of group.agents) {
+      for (const agent of mine) {
+        if (agent.status !== group.state) continue;
         const icon = agentIcon(agent, 13);
         if (icon) icons.push(icon);
         if (icons.length === 3) break;
       }
-      const hidden = group.agents.length - icons.length;
+      const hidden = group.count - icons.length;
       return h_flex().flex_none().items_center().gap(2).rounded(2).px(4).py(2).bg("#2a2a2ab3")
         .child(agentStateMark(group.state))
         .child(h_flex().flex_none().items_center().pl(2)
