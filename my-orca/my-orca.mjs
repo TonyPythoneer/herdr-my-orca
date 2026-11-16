@@ -1500,6 +1500,12 @@ async function scanWorkers(ctx) {
     const id = w.labels?.["orca.dispatch"];
     if (!id || w.state !== "live") continue;
     if (!known.has(id)) return needsUser(ctx, "unknown_worker", `live terminal ${w.address} has dispatch ${id} that is not in state`);
+    if (id === ctx.state.dispatch?.id) continue;
+    // left over from a finished attempt: same verified kill as everywhere else, then remove it
+    const left = { id, address: w.address, created_ms: w.created_ms, kind: w.labels?.["orca.role"] === "tuning" ? "tuning" : "dev" };
+    const k = await killOwned(ctx, left);
+    if (k.stop) return { stop: true, code: ctx.state.needs_user?.code };
+    await removeWorker(ctx, left);
   }
   return { ok: true };
 }
