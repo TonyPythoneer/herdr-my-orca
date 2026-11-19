@@ -553,7 +553,8 @@ export default class Files extends View {
     const context = this.context, root = this.root, on = this.on;
     cx.spawn(async cx => {
       try {
-        const text = await readTextFile(`${root}/${path}`, { on });
+        const full = path.startsWith("/") ? path : `${root}/${path}`; // an absolute file prop opens outside the worktree
+        const text = await readTextFile(full, { on });
         if (this.file !== path || !this.current(context)) return;
         if (text === null) { this.fileError = "This file is no longer available"; return; }
         if (text.includes("\0")) { this.fileError = "Binary file · no text preview"; return; }
@@ -568,7 +569,7 @@ export default class Files extends View {
         this.code = make(!editable);
         if (editable && this.code.value() !== text) { this.code.release(); this.code = make(true); editable = false; }
         if (editable) {
-          const doc = this.doc = { full: `${root}/${path}`, disk: text, status: "", ver: 0 };
+          const doc = this.doc = { full, disk: text, status: "", ver: 0 };
           this.code.on("change", (_e, cx) => this.edited(doc, cx));
         }
       } catch { if (this.file === path && this.current(context)) this.fileError = "Cannot preview this file (binary, too large, or unreadable)"; }

@@ -5,7 +5,7 @@
 // The flyout is sticky: it stays after the pointer leaves and closes on launch.
 
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, TextareaState, Textarea } from "gpui-base";
+import { v_flex, h_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
 import { run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings } from "herdr";
 
 const AGENTS = {
@@ -81,7 +81,12 @@ const AGENTS = {
 const AGENT_LABEL = { claude: "Claude", codex: "Codex", opencode: "OpenCode" };
 const EFFORT_LABEL = { low: "Low", medium: "Med", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra" };
 const ADVISOR_MODELS = ["opus", "haiku", "fable", "sonnet"];
+const ADVISOR_OPTIONS = ["none", ...ADVISOR_MODELS]; // none: no --advisor argument
 const DEFAULT_ADVISOR = "opus";
+const BUILTIN_STYLES = ["default", "Explanatory", "Learning"];
+const NEW_STYLE = "+ New style…";
+const styleDir = () => `${home()}/.claude/output-styles`;
+const styleTemplate = (name) => `---\nname: ${name}\ndescription: Describe this output style\n---\n\nYou are an interactive CLI tool that helps users with software engineering tasks.\n`;
 // modelRow is 30px high and the list gap is 2px, so N rows take N * 30 + (N - 1) * 2 px. The
 // list is capped at MODEL_ROWS rows worth of height (MODEL_LIST_H below): beyond that the rest scroll.
 const MODEL_ROWS = 10;
@@ -179,9 +184,20 @@ export default class AgentConfig extends View {
     this.showHidden = false; // the "-- hidden --" section stays collapsed until clicked
     this.snapshot = null; // the settings file as read, for a safe write
 
-    this.advisorOn = true;
     this.advisorModel = DEFAULT_ADVISOR;
     this.advisorOpen = false;
+    this.outputStyle = "default";
+    this.styles = BUILTIN_STYLES;
+    this.styleOpen = false;
+    this.naming = false; // "+ New style…" shows a name input until Enter
+    this.styleInput = InputState.new({ placeholder: "style name" });
+    this.nameFocused = false; // blur only cancels once the input really had focus
+    this.nameError = false;
+    this.styleInput.on("submit", (_e, cx) => this.createStyle(cx));
+    this.styleInput.on("change", (_e, cx) => { this.nameError = false; cx.notify(); });
+    this.styleInput.on("focus", () => { this.nameFocused = true; });
+    // Any click elsewhere blurs the input, which covers other selects, Reset and Launch.
+    this.styleInput.on("blur", (_e, cx) => { if (this.nameFocused) this.cancelNaming(cx); });
     this.modelOpen = false; // model/effort are selects whose lists open inline
     this.effortOpen = false;
     this.agentsSaved = DEFAULT_AGENTS_TEXT;
@@ -210,8 +226,10 @@ export default class AgentConfig extends View {
         const all = JSON.parse(this.snapshot ?? "{}");
         const saved = all[this.key] ?? {};
         const preset = saved.preset ?? {};
-        this.advisorOn = preset.advisor !== false;
-        this.advisorModel = ADVISOR_MODELS.includes(preset.advisorModel) ? preset.advisorModel : DEFAULT_ADVISOR;
+        // The old on/off switch saved advisor: false; that is now "none".
+        this.advisorModel = preset.advisor === false ? "none" : ADVISOR_OPTIONS.includes(preset.advisorModel) ? preset.advisorModel : DEFAULT_ADVISOR;
+        if (typeof preset.outputStyle === "string") this.outputStyle = preset.outputStyle;
+        this.loadStyles(cx);
         this.agentsSaved = typeof preset.agents === "string" ? normalizeAgents(preset.agents) : DEFAULT_AGENTS_TEXT;
         this.agentsInput.set_value(this.agentsSaved);
         this.promptSaved = typeof preset.systemPrompt === "string" ? preset.systemPrompt : DEFAULT_PROMPT;
@@ -316,10 +334,10 @@ export default class AgentConfig extends View {
 
   presetValues() {
     return {
-      advisor: this.advisorOn,
       advisorModel: this.advisorModel,
       agents: this.agentsSaved,
       systemPrompt: this.promptSaved,
+      outputStyle: this.outputStyle,
     };
   }
 
@@ -338,9 +356,62 @@ export default class AgentConfig extends View {
     cx.notify();
   }
 
-  setAdvisor(on, cx) {
-    this.advisorOn = on;
-    this.rememberPreset();
+  // Custom styles are the .md files in ~/.claude/output-styles; a missing folder just means none.
+  loadStyles(cx) {
+    cx.spawn(async (cx) => {
+      const { stdout } = await exec("ls", [styleDir()]).catch(() => ({ stdout: "" }));
+      const custom = stdout.split("\n").filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3));
+      this.styles = [...BUILTIN_STYLES, ...custom.filter((n) => !BUILTIN_STYLES.includes(n))];
+      cx.notify();
+    });
+  }
+
+  openStyleFile(name) {
+    run("tab.new", { mod: "orca-files", props: { file: `${styleDir()}/${name}.md` } });
+  }
+
+  setStyle(name, cx) {
+    this.styleOpen = false;
+    if (name === NEW_STYLE) {
+      this.naming = true;
+      this.nameFocused = false;
+      this.nameError = false;
+      cx.timer.after(30, () => this.styleInput.focus()); // the input is mounted by the next frame
+    } else {
+      this.outputStyle = name;
+      this.rememberPreset();
+    }
+    cx.notify();
+  }
+
+  cancelNaming(cx) {
+    if (!this.naming) return;
+    this.naming = false;
+    this.nameFocused = false;
+    this.nameError = false;
+    this.styleInput.set_value("");
+    cx.notify();
+  }
+
+  // A named style with no file gets a default one, then opens in an editor tab.
+  createStyle(cx) {
+    const name = this.styleInput.value().trim();
+    if (!name) return this.cancelNaming(cx);
+    if (!/^[\w-]+$/.test(name)) { this.nameError = true; cx.notify(); return; } // the name becomes a file name
+    this.naming = false;
+    this.nameFocused = false;
+    this.styleInput.set_value("");
+    cx.spawn(async (cx) => {
+      const file = `${styleDir()}/${name}.md`;
+      if ((await readTextFile(file).catch(() => null)) === null) {
+        await exec("mkdir", ["-p", styleDir()]);
+        await writeTextFile(file, styleTemplate(name), null);
+      }
+      this.outputStyle = name;
+      this.rememberPreset();
+      this.loadStyles(cx);
+      this.openStyleFile(name);
+    });
     cx.notify();
   }
 
@@ -368,9 +439,9 @@ export default class AgentConfig extends View {
   }
 
   resetPreset(cx) {
-    this.advisorOn = true;
     this.advisorModel = DEFAULT_ADVISOR;
     this.advisorOpen = false;
+    this.outputStyle = "default";
     this.agentsInput.set_value(DEFAULT_AGENTS_TEXT);
     this.agentsSaved = DEFAULT_AGENTS_TEXT;
     this.agentsDirty = false;
@@ -379,10 +450,10 @@ export default class AgentConfig extends View {
     this.promptSaved = DEFAULT_PROMPT;
     this.promptDirty = false;
     this.rememberPreset({
-      advisor: true,
       advisorModel: DEFAULT_ADVISOR,
       agents: DEFAULT_AGENTS_TEXT,
       systemPrompt: DEFAULT_PROMPT,
+      outputStyle: "default",
     });
     cx.notify();
   }
@@ -421,7 +492,8 @@ export default class AgentConfig extends View {
       }
 
       const prompt = this.promptInput.value();
-      if (this.advisorOn) extra.push("--advisor", this.advisorModel);
+      if (this.advisorModel !== "none") extra.push("--advisor", this.advisorModel);
+      if (this.outputStyle !== "default") extra.push("--settings", JSON.stringify({ outputStyle: this.outputStyle }));
       if (agents.trim()) extra.push("--agents", agents);
       if (prompt.trim()) extra.push("--append-system-prompt", prompt);
     }
@@ -638,7 +710,7 @@ export default class AgentConfig extends View {
     );
   }
 
-  selectBox(id, label, value, open, onToggle, t) {
+  selectBox(id, label, value, open, onToggle, t, valueEl = null, borderColor = null) {
     return h_flex()
       .id(id)
       .flex_1()
@@ -650,7 +722,7 @@ export default class AgentConfig extends View {
       .justify_between()
       .rounded(7)
       .border_1()
-      .border_color(open ? t.ring : t.input)
+      .border_color(borderColor ?? (open ? t.ring : t.input))
       .bg(t.raised)
       .cursor_pointer()
       .on_click((_e, cx) => onToggle(cx))
@@ -658,7 +730,7 @@ export default class AgentConfig extends View {
         v_flex()
           .min_w(0)
           .child(div().text_size(9).text_color(t.dim).child(label))
-          .child(div().text_size(12).text_color(t.foreground).truncate().child(value)),
+          .child(valueEl ?? div().text_size(12).text_color(t.foreground).truncate().child(value)),
       )
       .child(div().flex_none().text_size(11).text_color(t.muted).child("▾"));
   }
@@ -722,27 +794,28 @@ export default class AgentConfig extends View {
       ));
   }
 
-  switchRow(id, on, onToggle, t) {
-    return h_flex()
-      .id(id)
-      .w(34)
-      .h(20)
-      .flex_none()
-      .rounded(10)
-      .px(2)
-      .items_center()
-      .cursor_pointer()
-      .bg(on ? t.accent : t.hover)
-      .when(on, (el) => el.justify_end())
-      .when(!on, (el) => el.justify_start())
-      .on_click((_e, cx) => {
-        cx.stop_propagation();
-        onToggle(cx);
-      })
-      .child(div().w(16).h(16).rounded(8).bg(t.accent_foreground));
+  optionList(id, options, current, onPick, t) {
+    return v_flex().children(
+      options.map((name) =>
+        h_flex()
+          .id(`${id}-${name}`)
+          .h(28)
+          .mx(6)
+          .px(10)
+          .gap(8)
+          .items_center()
+          .rounded(6)
+          .cursor_pointer()
+          .hover((s) => s.bg(t.hover))
+          .on_click((_e, cx) => onPick(name, cx))
+          .child(div().flex_1().child(name))
+          .when(name === current, (el) => el.child(div().text_color(t.accent).child("✓"))),
+      ),
+    );
   }
 
   presetSection(t) {
+    const box = (list) => v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(list);
     const mono = settings()?.font_family ?? "JetBrains Mono";
     const danger = settings()?.dark ? "#ef4444" : "#dc2626";
     const badge = this.agentsError
@@ -755,77 +828,38 @@ export default class AgentConfig extends View {
       .w_full()
       .gap(4)
       .child(div().mx(6).pt(2).text_size(10).font_medium().text_color(t.dim).child("ADVANCED ARGUMENTS"))
-      // Advisor master row
+      // Advisor and output style: selects like model and effort, lists open inline below
       .child(
-        v_flex()
+        h_flex()
           .mx(6)
-          .p(8)
-          .gap(4)
-          .rounded(8)
-          .border_1()
-          .border_color(t.border)
+          .gap(8)
           .child(
-            h_flex()
-              .gap(10)
-              .items_center()
-              .child(this.switchRow("advisor-switch", this.advisorOn, (cx) => this.setAdvisor(!this.advisorOn, cx), t))
-              .child(
-                v_flex()
-                  .flex_1()
-                  .min_w(0)
-                  .child(div().text_size(12).font_medium().text_color(t.foreground).child("Advisor"))
-                  .child(div().text_size(10).text_color(t.muted).child("Pass --advisor to the Claude CLI")),
-              )
-              .child(
-                h_flex()
-                  .id("advisor-select")
-                  .w(84)
-                  .h(32)
-                  .px(10)
-                  .gap(8)
-                  .items_center()
-                  .justify_between()
-                  .rounded(7)
-                  .border_1()
-                  .border_color(t.input)
-                  .bg(t.raised)
-                  .cursor_pointer()
-                  .on_click((_e, cx) => {
-                    this.advisorOpen = !this.advisorOpen;
-                    this.modelOpen = false;
-                    this.effortOpen = false;
-                    this.groupOpen = false;
-                    cx.notify();
-                  })
-                  .child(div().text_size(12).text_color(t.foreground).child(this.advisorModel))
-                  .child(div().text_size(11).text_color(t.muted).child("▾")),
-              ),
+            this.selectBox("advisor-select", "ADVISOR", this.advisorModel, this.advisorOpen, (cx) => {
+              this.advisorOpen = !this.advisorOpen;
+              this.styleOpen = false;
+              this.modelOpen = false;
+              this.effortOpen = false;
+              this.groupOpen = false;
+              cx.notify();
+            }, t),
           )
-          .when(this.advisorOpen, (el) =>
-            el.child(
-              v_flex()
-                .rounded(6)
-                .border_1()
-                .border_color(t.border)
-                .bg(t.popover)
-                .children(
-                  ADVISOR_MODELS.map((model) =>
-                    h_flex()
-                      .id(`advisor-${model}`)
-                      .h(26)
-                      .px(10)
-                      .gap(8)
-                      .items_center()
-                      .cursor_pointer()
-                      .hover((s) => s.bg(t.hover))
-                      .on_click((_e, cx) => this.setAdvisorModel(model, cx))
-                      .child(div().flex_1().text_size(12).text_color(t.foreground).child(model))
-                      .when(model === this.advisorModel, (row) => row.child(div().text_color(t.accent).child("✓"))),
-                  ),
-                ),
-            ),
+          .child(
+            this.selectBox("style-select", this.nameError ? "LETTERS, DIGITS, - _ ONLY" : this.naming ? "NEW OUTPUT STYLE" : "OUTPUT STYLE", this.outputStyle, this.styleOpen || this.naming, (cx) => {
+              if (this.naming) return;
+              this.styleOpen = !this.styleOpen;
+              this.advisorOpen = false;
+              this.modelOpen = false;
+              this.effortOpen = false;
+              this.groupOpen = false;
+              cx.notify();
+            }, t, this.naming ? div().flex_1().min_w(0).on_key_down((e, cx) => {
+              if (e.key === "escape") { this.cancelNaming(cx); cx.stop_propagation(); }
+            }).child(Input.new(this.styleInput)) : null,
+            this.nameError ? (settings()?.dark ? "#ef4444" : "#dc2626") : null),
           ),
       )
+      .when(this.advisorOpen, (el) => el.child(box(this.optionList("advisor", ADVISOR_OPTIONS, this.advisorModel, (name, cx) => this.setAdvisorModel(name, cx), t))))
+      .when(this.styleOpen, (el) => el.child(box(this.optionList("style", [...this.styles, NEW_STYLE], this.outputStyle, (name, cx) => this.setStyle(name, cx), t))))
       // Agents
       .child(
         h_flex()
