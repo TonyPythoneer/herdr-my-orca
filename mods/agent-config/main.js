@@ -930,7 +930,7 @@ export default class AgentConfig extends View {
           .mt(2)
           .gap(8)
           .items_center()
-          .child(div().text_size(12).font_medium().text_color(t.foreground).child("System prompt"))
+          .child(div().text_size(12).font_medium().text_color(t.foreground).child("Append system prompt"))
           .child(div().flex_1())
           .child(
             div()
