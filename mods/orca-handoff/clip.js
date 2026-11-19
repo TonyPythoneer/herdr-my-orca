@@ -32,11 +32,13 @@ export function copyText(text, cx) {
 }
 
 export function reveal(path, isDir = false) {
+  // macOS: `open -R` selects the file in Finder; elsewhere open the containing folder.
   const dir = isDir ? path : (path.replace(/\/[^/]*$/, "") || path);
-  for (const cmd of ["xdg-open", "open", "explorer.exe"]) {
-    try {
-      exec("sh", ["-c", 'command -v "$1" >/dev/null 2>&1 && ("$1" "$2" >/dev/null 2>&1 &)', "reveal", cmd, dir]);
-      return;
-    } catch {}
-  }
+  exec("sh", [
+    "-c",
+    'if [ "$(uname)" = Darwin ]; then if [ "$2" = 1 ]; then open "$1"; else open -R "$1"; fi; ' +
+    'elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$3"; ' +
+    'elif command -v explorer.exe >/dev/null 2>&1; then explorer.exe "$3"; fi >/dev/null 2>&1 &',
+    "reveal", path, isDir ? "1" : "0", dir,
+  ]).catch(() => {});
 }
