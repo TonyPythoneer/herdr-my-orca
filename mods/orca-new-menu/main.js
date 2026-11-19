@@ -125,7 +125,7 @@ export default class NewMenu extends View {
       hint: a.installed ? "" : "not installed",
       // Orca opens model setup from the agent row (`AgentLaunchSetupButton.tsx:27-84`,
       // `AgentLaunchSetupPanel.tsx:180-283`); this popup has no submenu (`orca-menu/main.js:418`).
-      ...(MODELS[a.key]?.flyout ? { run: () => this.launch(a), config: a } : MODELS[a.key] ? { stay: (cx) => this.pickModel(a, cx) } : { run: () => this.launch(a) }),
+      ...(MODELS[a.key]?.flyout ? { run: () => this.launchConfigured(a), config: a } : MODELS[a.key] ? { stay: (cx) => this.pickModel(a, cx) } : { run: () => this.launch(a) }),
     }));
     // Not an Orca agent: no model list, and the login shell finds it on PATH the way a terminal does.
     const freebuff = { key: "freebuff", name: "freebuff", run: ["zsh", "-lic", "exec freebuff"] };
@@ -211,6 +211,12 @@ export default class NewMenu extends View {
     this.handle.focus();
   }
 
+  // A click on the row itself is the flyout's "Launch terminal": the flyout opens with launchNow and
+  // launches with its saved model and effort, then closes.
+  launchConfigured(agent) {
+    this.hoverConfig(agent, true, true);
+  }
+
   // Permission flags live in programs.json's `run`; the menu only adds the chosen model.
   launch(agent, model) {
     const space = spaces().find((s) => s.active);
@@ -271,10 +277,10 @@ export default class NewMenu extends View {
   // Hovering a row's chevron opens that agent's setup flyout beside the pointer (Orca's AgentLaunchSetupSubmenu).
   // The flyout is its own popup: shared "agent-config" holds its id. It is sticky, so leaving the
   // chevron does not close it; only another agent's chevron swaps its content.
-  hoverConfig(agent, hovered) {
+  hoverConfig(agent, hovered, launchNow) {
     if (!hovered) return;
     const open = shared("agent-config");
-    if (open?.key === agent.key) return;
+    if (open?.key === agent.key && !launchNow) return;
     if (open) closeOverlay(open.id);
     const id = openOverlay({
       mod: "agent-config",
@@ -289,6 +295,7 @@ export default class NewMenu extends View {
         name: agent.name,
         key: agent.key,
         argv: agent.run,
+        launchNow,
       },
     });
     setShared("agent-config", { id, key: agent.key });

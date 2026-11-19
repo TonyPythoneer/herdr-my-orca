@@ -225,6 +225,13 @@ export default class AgentConfig extends View {
           const pick = this.models.find((m) => m.id === saved.model) ?? this.models[0];
           this.choose(pick, saved.effort);
         };
+        // The row's own click (launchNow) launches with this flyout's saved config, as its button does.
+        const go = () => {
+          if (props().launchNow && this.current() && !this.launched) {
+            this.launched = true;
+            this.launch(cx);
+          }
+        };
 
         const cached = all.catalog?.[this.key];
         const cachedModels = cached?.schema === CATALOG_SCHEMA ? cached.models : null;
@@ -233,6 +240,7 @@ export default class AgentConfig extends View {
           this.models = cachedModels;
           pickSaved();
           cx.notify();
+          go();
         }
 
         const fresh = cachedModels && typeof cached.checkedAt === "number" && Date.now() - cached.checkedAt < CATALOG_TTL_MS;
@@ -252,6 +260,7 @@ export default class AgentConfig extends View {
           else pickSaved();
           cx.notify();
         }
+        go();
         this.saveCatalog(version, models);
       } catch (e) {
         // A failed refresh keeps the cached list; only show the error when there is nothing to show.
