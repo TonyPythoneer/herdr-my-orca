@@ -690,7 +690,7 @@ export default class Tabs extends View {
       // A window would follow any press it isn't told to stop (herdr.d.ts OverlaySpec).
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_mouse_move((e, cx) => {
-        const next = edgeZone(panel, e.position, box.stripHeight || TAB_STRIP_FALLBACK);
+        const next = edgeZone(panel, e.position, box.stripHeight || find(layout(), "tabs")?.size?.px || TAB_STRIP_FALLBACK);
         dropTrace("drop-move", { panel, at: e.position, zone: next });
         if (next === this.zone) return;
         this.zone = next;
@@ -1094,10 +1094,9 @@ export default class Tabs extends View {
         })
         .child(svg("mods/orca-tabs/minimize-2.svg").size(14))))
       // TitlebarMainStrip.tsx:76 — Orca's `RightSidebarToggle` moves into the panel header
-      // while the panel is open (`right-sidebar/index.tsx:124-144` draws the same button as its
-      // close control). Keeping one fixed slot is better here: the control never moves, and
-      // `layout.toggle` (commands.rs:77) is the action either way.
-      .child(panelToggle(() => run("layout.toggle", { id: "panel" })))
+      // while the panel is open (`right-sidebar/index.tsx:124-144`); `orca-panel-head` draws it
+      // there, so this copy shows only while the panel is hidden (a hidden node draws nothing).
+      .when(find(layout(), "panel")?.hidden, el => el.child(panelToggle(() => run("layout.toggle", { id: "panel" }))))
       // WindowControls.tsx:27-30,42-49,60-67 — Orca replaces native chrome on Linux and Windows
       // with the same 10x10 SVG paths; only macOS keeps its traffic lights. Herdr reports
       // `buttons: false` here (the compositor owns decorations) but draws none of its own, so

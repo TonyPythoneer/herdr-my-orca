@@ -96,10 +96,9 @@ export default class PanelHead extends View {
     // (`right-sidebar-titlebar-drag-regions.ts:5`). Each button is 32px wide here with a
     // 16px glyph; inactive is text-muted-foreground/60 and hover text-muted-foreground
     // (`activity-bar-buttons.tsx:156-157`) — a colour change, not element opacity.
-    // The toggle is NOT drawn here. Orca moves the same `.sidebar-toggle` into this header while
-    // the panel is open (`right-sidebar/index.tsx:124-144`), but the port keeps one fixed slot in
-    // the titlebar (`orca-tabs`) so the control never moves; drawing it here too put two on
-    // screen. `layout.toggle` from that slot closes this panel.
+    // The panel spans the full window height, so this header sits in the titlebar row. Orca moves the
+    // `.sidebar-toggle` into it while the panel is open (`right-sidebar/index.tsx:124-144`); `orca-tabs`
+    // draws its copy only while the panel is hidden, so one toggle is ever on screen.
     return h_flex().w_full().h_full().items_center().pl(8).pr(4).border_b(1).border_color(t.border)
       .children(tools.map(({ id, icon, title }) => {
         const on = active === id;
@@ -107,12 +106,19 @@ export default class PanelHead extends View {
           .text_color(on ? t.foreground : "#acacac99")
           .when(!on, el => el.hover(s => s.text_color(t.muted)))
           .role("button").accessibility_label(title).tooltip(title)
+          .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click(() => run("layout.select", { stack: "panel-body", child: id }))
           .child(svg(`mods/orca-panel-head/${icon}.svg`).size(16))
           // `activity-bar-buttons.tsx:175-177`: bottom-0, left/right 25%, h-2px,
           // bg-foreground, rounded-t. 25% of 32px is 8px.
           .when(on, el => el.child(div().absolute().bottom(0).left(8).right(8).h(2).bg(t.foreground).rounded_t(4)));
       }))
-      .child(div().flex_1());
+      .child(div().flex_1())
+      .child(div().id("panel-toggle").mr(3).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
+        .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+        .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+        .on_click(() => run("layout.toggle", { id: "panel" }))
+        .child(svg("mods/orca-panel-head/panel-right.svg").size(16)));
   }
 }
