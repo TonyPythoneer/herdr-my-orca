@@ -6,6 +6,8 @@ import { v_flex, h_flex, v_virtual_list, Scrollbar, Input, InputState, Editor, E
 import { spaces, exec, readTextFile, writeTextFile, watchFolder, theme, settings, window, props, run, openOverlay, closeOverlay, shared, setShared, nextCommand, appHome } from "herdr";
 import { copyText, reveal } from "./clip.js";
 
+const plat = () => (typeof window === "function" ? window()?.platform : null);
+
 // "Open in" lists the apps the system offers for the file (macOS: LaunchServices, what Finder's
 // Open With shows), not a built-in list. Orca keeps its own `openInApplications` setting instead;
 // the nearest Herdr has is <app home>/open-in-apps.json ([{ "label", "app": "/Applications/X.app" }]):
@@ -21,7 +23,7 @@ async function systemApps(full) {
 async function openInApps(full) {
   try {
     const list = JSON.parse(await readTextFile(openInFile(), null));
-    if (Array.isArray(list)) return list.filter(a => a?.label && a?.app);
+    if (Array.isArray(list) && list.length) return list.filter(a => a?.label && a?.app);
   } catch {}
   return systemApps(full);
 }
@@ -912,7 +914,7 @@ cp -r "$src" "$cand"
   openIn() {
     const { target, overlay } = props() ?? {};
     this.closeOpenIn();
-    const r = this.rowEdge, vp = typeof window !== "undefined" && window.viewport_size ? window.viewport_size() : null;
+    const r = this.rowEdge, vp = globalThis.window?.viewport_size?.() ?? null; // the imported `window` is Herdr's function, so the global is the one with viewport_size
     const W = 200, GAP = 6, M = 8;
     let at = "pointer";
     if (r) {
@@ -955,7 +957,7 @@ cp -r "$src" "$cand"
       .child(div().h(1).my(3).mx(4).bg(t.border))
       .child(row("customize", "Customize apps…", () => {
         void (async () => {
-          if (await readTextFile(openInFile(), null).then(() => false, () => true)) await writeTextFile(openInFile(), JSON.stringify(this.openApps.map(({ label, app }) => ({ label, app })), null, 2) + "\n", null);
+          if (this.openApps.length && await readTextFile(openInFile(), null).then(() => false, () => true)) await writeTextFile(openInFile(), JSON.stringify(this.openApps.map(({ label, app }) => ({ label, app })), null, 2) + "\n", null);
           exec("open", ["-t", openInFile()]).catch(() => {});
         })();
         close();
