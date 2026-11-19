@@ -3,8 +3,31 @@
 // A lazy file browser for the active space's folder, with bounded previews; local files under 400 KB are editable.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, v_virtual_list, Scrollbar, Input, InputState, Editor, EditorState } from "gpui-base";
-import { spaces, exec, readTextFile, writeTextFile, watchFolder, theme, settings, window, props, run, openOverlay, closeOverlay, shared, setShared, nextCommand } from "herdr";
+import { spaces, exec, readTextFile, writeTextFile, watchFolder, theme, settings, window, props, run, openOverlay, closeOverlay, shared, setShared, nextCommand, appHome } from "herdr";
 import { copyText, reveal } from "./clip.js";
+
+// "Open in" lists the apps the system offers for the file (macOS: LaunchServices, what Finder's
+// Open With shows), not a built-in list. Orca keeps its own `openInApplications` setting instead;
+// the nearest Herdr has is <app home>/open-in-apps.json ([{ "label", "app": "/Applications/X.app" }]):
+// when it exists it replaces the system list, and "Customize apps…" seeds and opens it.
+// shortcut: macOS only; other platforms get an empty list until they have a lookup.
+const openInFile = () => `${appHome()}/open-in-apps.json`;
+const OPEN_WITH = 'ObjC.import("AppKit"); function run(argv) { const a = $.NSWorkspace.sharedWorkspace.URLsForApplicationsToOpenURL($.NSURL.fileURLWithPath(argv[0])), out = []; for (let i = 0; i < a.count; i++) out.push(ObjC.unwrap(a.objectAtIndex(i).path)); return out.join("\n"); }';
+async function systemApps(full) {
+  if (plat() !== "macos") return [];
+  const r = await exec("osascript", ["-l", "JavaScript", "-e", OPEN_WITH, full]).catch(() => null);
+  return (r?.stdout ?? "").split("\n").filter(Boolean).map(app => ({ label: app.replace(/^.*\//, "").replace(/\.app$/, ""), app }));
+}
+async function openInApps(full) {
+  try {
+    const list = JSON.parse(await readTextFile(openInFile(), null));
+    if (Array.isArray(list)) return list.filter(a => a?.label && a?.app);
+  } catch {}
+  return systemApps(full);
+}
+
+// herdr's JS has no ICU collation: localeCompare orders by code point (README before keys). Orca sorts case-insensitively.
+const byName = (a, b) => { const x = a.toLowerCase(), y = b.toLowerCase(); return x < y ? -1 : x > y ? 1 : a < b ? -1 : a > b ? 1 : 0; };
 
 // Reads write nothing under .git (no index refresh or lock, no fsmonitor cookie):
 // the folder watch would see it, and every refresh would start the next one.
@@ -259,7 +282,7 @@ export default class Files extends View {
     const entries = await directory(path ? `${root}/${path}` : root, on);
     if (!this.current(context) || (path && !this.folders.has(path))) return;
     const used = [...this.entries.entries()].filter(([p]) => p !== path).reduce((n, [, e]) => n + e.length, 0);
-    this.entries.set(path, entries.slice(0, Math.max(0, Math.min(PER_FOLDER, TOTAL - used))).sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name)));
+    this.entries.set(path, entries.slice(0, Math.max(0, Math.min(PER_FOLDER, TOTAL - used))).sort((a, b) => Number(b.dir) - Number(a.dir) || byName(a.name, b.name)));
     if (entries.length > PER_FOLDER || used + entries.length > TOTAL) this.limited = true;
   }
 
@@ -471,7 +494,7 @@ export default class Files extends View {
       add(prefix, parts[parts.length - 1], false);
     }
     // appendNameFilteredEntries (:196-205) sorts directories first, then by name.
-    for (const list of map.values()) list.sort((a, b) => a.dir !== b.dir ? (a.dir ? -1 : 1) : a.name.localeCompare(b.name));
+    for (const list of map.values()) list.sort((a, b) => a.dir !== b.dir ? (a.dir ? -1 : 1) : byName(a.name, b.name));
     this.nfMap = map; this.nfLoading = false;
     cx.notify();
   }
@@ -555,7 +578,7 @@ export default class Files extends View {
   // New/Rename ask in the popup's own prompt because run("<mod>.<cmd>") delivers only
   // the command name to nextCommand(), so typed text cannot cross mods.
   menu(path, entry) {
-    openOverlay({ mod: "orca-files", kind: "popup", width: 230,
+    openOverlay({ mod: "orca-files", kind: "popup", width: 256,
       props: { tab: "file", target: { path, dir: entry.dir } } });
   }
 
@@ -585,6 +608,11 @@ export default class Files extends View {
     switch (name) {
       case "new-file": return ask("touch", "New File", null, parent);
       case "new-folder": return ask("mkdir", "New Folder", null, parent);
+      // Copy — puts the file itself on the pasteboard (macOS), so Finder can paste it; elsewhere its path.
+      case "copy-file":
+        if (plat() === "macos") exec("osascript", ["-e", "on run argv\nset the clipboard to (POSIX file (item 1 of argv))\nend run", full]).catch(() => {});
+        else void copyText(full, cx);
+        return close();
       case "copy-path": void copyText(full, cx); return close();
       case "copy-rel": void copyText(path, cx); return close();
       // Duplicate — file-explorer-row-context-menu.tsx:197-202 & useFileDuplicate.ts:34-63,89-91
@@ -765,7 +793,7 @@ cp -r "$src" "$cand"
     const list = this.flat("", 0, [], this.name.value().trim() ? "name" : undefined);
     const named = Boolean(this.name.value().trim());
     const find = (key) => list.find((r) => r.path === key);
-    return v_virtual_list("files-rows", list.length, 26, i => list[i]?.path ?? String(i),
+    return v_virtual_list("files-rows", list.length, 24, i => list[i]?.path ?? String(i),
       (range) => list.slice(range.start, range.end).map(r => this.row(r, t)))
       .on_item_click((key, cx) => {
         const r = find(key);
@@ -802,7 +830,7 @@ cp -r "$src" "$cand"
         : svg(`mods/orca-files/${open ? "folder-open" : "folder"}.svg`).size(12).flex_none().text_color(t.muted)
       : link ? svg("mods/orca-files/link.svg").size(12).flex_none().text_color(t.muted)
       : svg(`mods/orca-files/${fileIcon(name)}.svg`).size(12).flex_none().text_color(t.muted);
-    return h_flex().id(`file-${path}`).w_full().h(26).flex_none().pl(8 + depth * 16).pr(8).gap(4).items_center().rounded(2).text_size(12).cursor_pointer()
+    return h_flex().id(`file-${path}`).w_full().h(24).flex_none().pl(8 + depth * 16).pr(8).gap(4).items_center().rounded(2).text_size(12).cursor_pointer()
       .when(this.file === path, el => el.bg(fade(t.accent, 0.7)).border_1().border_color(t.border).text_color(t.accent_foreground).hover(s => s.bg(fade(t.accent, 0.8))))
       .when(this.file !== path, el => el.hover(s => s.bg(t.accent)))
       .child(dir ? svg(`mods/orca-files/chevron-${open ? "down" : "right"}.svg`).size(12).flex_none().text_color(t.dim) : div().w(12).flex_none())
@@ -836,35 +864,102 @@ cp -r "$src" "$cand"
 
   menuView(t) {
     const target = props()?.target ?? {};
-    const { path, dir } = target;
-    const plat = typeof window !== "undefined" && typeof window === "function" ? window()?.platform : null;
-    const revealLabel = plat === "macos" ? "Reveal in Finder" : plat === "windows" ? "Reveal in File Explorer" : "Open Containing Folder";
+    const { dir } = target;
+    const revealLabel = plat() === "macos" ? "Reveal in Finder" : plat() === "windows" ? "Reveal in File Explorer" : "Open Containing Folder";
 
-    const item = (i, label, icon, name, destructive = false) => h_flex().id(`fx-${i}`).h(30).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
-      .hover(s => s.bg(t.hover)).on_click((_e, cx) => this.act(name, cx))
-      .child(svg(`mods/orca-files/${icon}.svg`).size(14).flex_none().text_color(destructive ? "#ff6568" : t.muted))
-      .child(div().text_color(destructive ? "#ff6568" : t.foreground).child(label));
+    // Rows are 26 tall with the shortcut right-aligned and muted, as in Orca's menu. The shortcuts are
+    // display only: Herdr binds none of them.
+    const item = (i, label, icon, name, { shortcut, destructive = false, chevron = false, onClick, track } = {}) =>
+      h_flex().id(`fx-${i}`).h(26).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
+        .hover(s => s.bg(t.hover)).on_click((_e, cx) => onClick ? onClick(cx) : this.act(name, cx))
+        // Dropdown behaviour: the flyout opens while the pointer is on "Open in" and folds back as soon
+        // as it moves onto any other row of this menu; moving onto the flyout itself keeps it open.
+        .on_mouse_move((e) => { if (track) { track(e); if (!shared("orca-files.openIn")) this.openIn(); } else this.closeOpenIn(); })
+        .child(svg(`mods/orca-files/${icon}.svg`).size(14).flex_none().text_color(destructive ? "#ff6568" : t.muted))
+        .child(div().flex_1().text_color(destructive ? "#ff6568" : t.foreground).child(label))
+        .when(Boolean(shortcut), el => el.child(div().flex_none().text_size(12).text_color(t.muted).child(shortcut)))
+        .when(chevron, el => el.child(svg("mods/orca-files/chevron-right.svg").size(14).flex_none().text_color(t.muted)));
     const sep = () => div().h(1).my(3).mx(4).bg(t.border);
 
-    return v_flex().id("orca-files-menu").w_full().min_h(0).p(5).bg(t.popover).text_size(12.8).text_color(t.foreground)
-      .child(div().px(8).py(4).text_size(11).text_color(t.dim).child(path ?? ""))
-      .child(item(0, "New File", "plus", "new-file"))
-      .child(item(1, "New Folder", "folder", "new-folder"))
+    return v_flex().id("orca-files-menu").w_full().min_h(0).p(4).bg(t.popover).text_size(12.8).text_color(t.foreground)
+      .child(item(0, "New File", "file-plus", "new-file"))
+      .child(item(1, "New Folder", "folder-plus", "new-folder"))
       .child(sep())
-      .child(item(2, "Copy Path", "copy", "copy-path"))
-      .child(item(3, "Copy Relative Path", "copy", "copy-rel"))
+      .child(item(2, "Copy", "copy", "copy-file"))
+      .child(item(3, "Copy Path", "copy", "copy-path", { shortcut: "⌘⌥C" }))
+      .child(item(4, "Copy Relative Path", "copy", "copy-rel", { shortcut: "⌘⌥⇧C" }))
       // Duplicate — file-explorer-row-context-menu.tsx:197-202 (files only)
-      .when(!dir, el => el.child(item(4, "Duplicate", "files", "duplicate")))
+      .when(!dir, el => el.child(item(5, "Duplicate", "files", "duplicate")))
       // Open in Terminal — file-explorer-row-context-menu.tsx:210 (directories only)
-      .when(Boolean(dir), el => el.child(item(5, "Open in Terminal", "terminal", "terminal")))
+      .when(Boolean(dir), el => el.child(item(6, "Open in Terminal", "terminal", "terminal")))
       // View File — file-explorer-row-context-menu.tsx:216-221 (files only)
-      .when(!dir, el => el.child(item(6, "View File", "file", "view-file")))
+      .when(!dir, el => el.child(item(7, "View File", "file", "view-file")))
+      // "Open in Orca Browser" is left out on purpose: Herdr has no browser.
+      .child(item(8, "Open in", "folder-open", null, { chevron: true,
+        track: (e) => { if (e.local_position && e.bounds) { const left = e.position.x - e.local_position.x; this.rowEdge = { left, right: left + e.bounds.width, y: e.position.y - e.local_position.y }; } },
+        onClick: () => { if (!shared("orca-files.openIn")) this.openIn(); } }))
       // Reveal in File Manager / Open Containing Folder — file-explorer-row-context-menu.tsx:254-263
-      .child(item(7, revealLabel, "external-link", "reveal"))
+      .child(item(9, revealLabel, "external-link", "reveal"))
       .child(sep())
       // Rename & Delete — file-explorer-row-context-menu.tsx:265-276
-      .child(item(8, "Rename", "square-pen", "rename"))
-      .child(item(9, "Delete", "trash", "delete", true));
+      .child(item(10, "Rename", "pencil", "rename", { shortcut: "↩" }))
+      .child(item(11, "Delete", "trash", "delete", { shortcut: "⌘⌫, Delete", destructive: true }));
+  }
+
+  // The "Open in" flyout is its own popup (as orca-new-menu's agent setup is), level with the row and
+  // flipped to the menu's left when the right side would leave the window. Its width is fixed
+  // so that position is known; the menu's id rides along so choosing an app closes both.
+  openIn() {
+    const { target, overlay } = props() ?? {};
+    this.closeOpenIn();
+    const r = this.rowEdge, vp = typeof window !== "undefined" && window.viewport_size ? window.viewport_size() : null;
+    const W = 200, GAP = 6, M = 8;
+    let at = "pointer";
+    if (r) {
+      const left = r.left - 4 - GAP - W, right = r.right + GAP;
+      at = { x: left >= M ? left : right, y: r.y };
+      if (vp && at.x + W > vp.width - M) at.x = Math.max(M, vp.width - W - M);
+    }
+    setShared("orca-files.openIn", openOverlay({ mod: "orca-files", kind: "popup", width: W, at,
+      props: { tab: "open-in", target, root: this.root, menu: overlay } }));
+  }
+
+  closeOpenIn() {
+    const open = shared("orca-files.openIn");
+    if (!open) return;
+    closeOverlay(open);
+    setShared("orca-files.openIn", null);
+  }
+
+  // OpenInSubmenu: the apps the system offers for the file, a separator, then "Customize apps…".
+  openInView(t, cx) {
+    const { target, menu } = props() ?? {};
+    const root = props()?.root ?? this.root;
+    const full = root ? `${root}/${target?.path ?? ""}` : target?.path ?? "";
+    // Looked up once per flyout; the render phase may not notify, so the result lands after a timer.
+    if (!this.openApps) {
+      this.openApps = [];
+      void openInApps(full).then(list => cx.timer.after(0, (cx) => { this.openApps = list; cx.notify(); }));
+    }
+    const close = () => { closeOverlay(props().overlay); if (menu) closeOverlay(menu); setShared("orca-files.openIn", null); };
+    const row = (i, label, onClick, icon) => h_flex().id(`oi-${i}`).h(26).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
+      .hover(s => s.bg(t.hover)).on_click(onClick)
+      .child(svg(`mods/orca-files/${icon ?? "folder-open"}.svg`).size(14).flex_none().text_color(t.muted))
+      .child(div().flex_1().text_color(t.foreground).child(label));
+    // shortcut: no per-app icon (Orca shows a favicon); a generic one stands in until Herdr can load remote images.
+    return v_flex().id("orca-files-open-in").w_full().min_h(0).p(4).bg(t.popover).text_size(12.8).text_color(t.foreground)
+      .children(this.openApps.map((a, i) => row(i, a.label, () => {
+        exec("open", ["-a", a.app, full]).catch(() => {});
+        close();
+      })))
+      .child(div().h(1).my(3).mx(4).bg(t.border))
+      .child(row("customize", "Customize apps…", () => {
+        void (async () => {
+          if (await readTextFile(openInFile(), null).then(() => false, () => true)) await writeTextFile(openInFile(), JSON.stringify(this.openApps.map(({ label, app }) => ({ label, app })), null, 2) + "\n", null);
+          exec("open", ["-t", openInFile()]).catch(() => {});
+        })();
+        close();
+      }, "square-pen"));
   }
 
   // FileExplorerToolbar.tsx:66 — `flex h-8 min-h-8 items-center gap-2 border-b border-border px-2`;
@@ -931,10 +1026,11 @@ cp -r "$src" "$cand"
   queryStrip(t) {
     const search = this.view === "search";
     // FileExplorerViewSwitch.tsx:44-73 — `rounded-md bg-muted p-0.5`, group `h-6 w-full`,
-    // items sized `xs` (h-6, text-xs, flex-1); selected `bg-card text-card-foreground`.
+    // items sized `xs` (h-6, text-xs, flex-1); selected `bg-card text-card-foreground`: the selected segment is the lighter
+    // one (hover) on the darker track (raised), as in the Orca screenshot.
     const seg = (id, label, view) => div().id(id).flex_1().h(24).flex().items_center().justify_center().rounded(6).text_size(12)
       .cursor_pointer().role("button").accessibility_label(label).tooltip(label)
-      .when(this.view === view, s => s.bg(t.raised).text_color(t.foreground))
+      .when(this.view === view, s => s.bg(t.hover).text_color(t.foreground))
       .when(this.view !== view, s => s.text_color(t.muted).hover(x => x.text_color(t.foreground)))
       .on_click((_e, cx) => { this.view = view; cx.notify(); })
       .child(label);
@@ -943,7 +1039,7 @@ cp -r "$src" "$cand"
     // One shared `Input` element kept whichever state it bound first, so keystrokes
     // in one mode landed in the other's state and neither search ever ran.
     return v_flex().id("files-query").flex_none().p(8).gap(8).border_b(1).border_color(t.border)
-      .child(h_flex().w_full().h(28).p(2).gap(4).rounded(6).bg(t.hover)
+      .child(h_flex().w_full().h(28).p(2).gap(4).rounded(6).bg(t.raised)
         .child(seg("files-names", "Names", "files"))
         .child(seg("files-contents", "Contents", "search")))
       .child(this.queryRow(this.name, "names", !search, !search && this.nfLoading, t))
@@ -1098,6 +1194,7 @@ cp -r "$src" "$cand"
     const t = theme();
     if (this.prompt) return this.promptView(t);
     if (props()?.tab === "file") return this.menuView(t);
+    if (props()?.tab === "open-in") return this.openInView(t, cx);
     if (props()?.tab === "more") return this.moreView(t);
     return v_flex().id("files").size_full().min_h(0).overflow_hidden().text_color(t.foreground).text_size(13)
       .when(Boolean(this.file), el => el.child(h_flex().h(30).flex_none().px(10).gap(6).items_center().border_b(1).border_color(t.border)
@@ -1112,7 +1209,7 @@ cp -r "$src" "$cand"
       // SearchResultsPane.tsx:88-94 — the summary is a fixed header above the scrolled rows.
       .when(!this.file && this.view === "search" && this.hits && (this.hits.files.length > 0 || this.hits.truncated),
         el => el.child(this.searchSummary(t)))
-      .when(!this.file, el => el.child(v_flex().id("files-tree").flex_1().min_h(0).relative().py(4)
+      .when(!this.file, el => el.child(v_flex().id("files-tree").flex_1().min_h(0).relative().pt(8).pb(4)
         // The virtual list scrolls itself; only the contents hits still ride a scroll container.
         .when(this.view === "search", s => s.overflow_y_scrollbar().mode("always"))
         // SearchResultsPane.tsx:57-70 — its virtualizer mixes 28px file rows with 20px match
