@@ -406,7 +406,7 @@ export default class AgentConfig extends View {
 
     const extra = [];
     // --advisor, --agents and --append-system-prompt are Claude CLI flags; codex rejects them.
-    if (this.key === "claude" && this.advisorOn) {
+    if (this.key === "claude") {
       const agents = this.agentsInput.value();
       if (agents.trim()) {
         try {
@@ -421,7 +421,7 @@ export default class AgentConfig extends View {
       }
 
       const prompt = this.promptInput.value();
-      extra.push("--advisor", this.advisorModel);
+      if (this.advisorOn) extra.push("--advisor", this.advisorModel);
       if (agents.trim()) extra.push("--agents", agents);
       if (prompt.trim()) extra.push("--append-system-prompt", prompt);
     }
@@ -743,7 +743,6 @@ export default class AgentConfig extends View {
   }
 
   presetSection(t) {
-    const dim = this.advisorOn ? 1 : 0.45;
     const mono = settings()?.font_family ?? "JetBrains Mono";
     const danger = settings()?.dark ? "#ef4444" : "#dc2626";
     const badge = this.agentsError
@@ -775,7 +774,7 @@ export default class AgentConfig extends View {
                   .flex_1()
                   .min_w(0)
                   .child(div().text_size(12).font_medium().text_color(t.foreground).child("Advisor"))
-                  .child(div().text_size(10).text_color(t.muted).child("Master switch for --advisor, --agents and --append-system-prompt")),
+                  .child(div().text_size(10).text_color(t.muted).child("Pass --advisor to the Claude CLI")),
               )
               .child(
                 h_flex()
@@ -887,7 +886,6 @@ export default class AgentConfig extends View {
                   .text_size(11)
                   .text_color(t.foreground)
                   .bg("#00000000")
-                  .opacity(dim),
               ),
           )
       )
@@ -946,7 +944,6 @@ export default class AgentConfig extends View {
                   .text_size(12)
                   .text_color(t.foreground)
                   .bg("#00000000")
-                  .opacity(dim),
               ),
           ),
       );
