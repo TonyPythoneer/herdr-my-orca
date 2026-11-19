@@ -936,10 +936,10 @@ cp -r "$src" "$cand"
     const { target, menu } = props() ?? {};
     const root = props()?.root ?? this.root;
     const full = root ? `${root}/${target?.path ?? ""}` : target?.path ?? "";
-    // Looked up once per flyout; the render phase may not notify, so the result lands after a timer.
+    // Looked up once per flyout; notify runs on the spawn's own cx, as render's is invalid after an await.
     if (!this.openApps) {
       this.openApps = [];
-      void openInApps(full).then(list => cx.timer.after(0, (cx) => { this.openApps = list; cx.notify(); }));
+      cx.spawn(async (cx) => { this.openApps = await openInApps(full); cx.notify(); });
     }
     const close = () => { closeOverlay(props().overlay); if (menu) closeOverlay(menu); setShared("orca-files.openIn", null); };
     const row = (i, label, onClick, icon) => h_flex().id(`oi-${i}`).h(26).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
