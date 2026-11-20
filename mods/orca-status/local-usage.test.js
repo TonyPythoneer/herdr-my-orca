@@ -31,10 +31,10 @@ test('parseClaudeStatusLine keeps one window when the other is absent', () => {
   assert.deepEqual(reading.buckets.map((b) => b.label), ['wk']);
 });
 
-test('parseClaudeStatusLine keeps the reported percentage after a window resets', () => {
+test('parseClaudeStatusLine shows an expired window as static 0% / 5h until new data', () => {
   const reading = parseClaudeStatusLine({ five_hour: { used_percentage: 90, resets_at: 1 } });
-  assert.equal(reading.buckets[0].usedPercent, 90);
-  assert.equal(reading.buckets[0].resetTime, '1970-01-01T00:00:01.000Z');
+  const [five] = reading.buckets;
+  assert.deepEqual([five.usedPercent, five.resetTime, five.idleText], [0, null, '5h']);
 });
 
 test('parseClaudeStatusLine reads resets_at in seconds, milliseconds or ISO', () => {

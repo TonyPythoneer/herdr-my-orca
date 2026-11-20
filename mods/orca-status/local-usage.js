@@ -77,12 +77,16 @@ const resetSeconds = (value) => {
   return value > 1e10 ? value / 1000 : value;
 };
 
+// A window past its reset has nothing used. It stays 0% with its full length as static text
+// (no countdown) until a newer report arrives (Codex rollouts and Claude statusLine alike).
 const bucket = (id, windowMinutes, usedPercent, resetsAt, label) => {
   const at = resetSeconds(resetsAt);
+  const over = at !== null && at <= Date.now() / 1000;
   return {
     id, name: '', label, windowMinutes,
-    usedPercent: clampUsedPercent(usedPercent),
-    resetTime: at === null ? null : new Date(at * 1000).toISOString()
+    usedPercent: over ? 0 : clampUsedPercent(usedPercent),
+    resetTime: at === null || over ? null : new Date(at * 1000).toISOString(),
+    ...(over && { idleText: windowMinutes >= 10080 ? `${windowMinutes / 1440}d` : `${windowMinutes / 60}h` })
   };
 };
 const reading = (provider, buckets) => buckets.length
@@ -155,14 +159,7 @@ export async function probeLocal(execFn) {
     claudeReading,
     // Codex reports the windows its plan has: both for Plus and Pro, so both are shown.
     codex && reading('codex', [codex.primary, codex.secondary].filter(Boolean)
-      .map((w) => {
-        // A window past its reset has nothing used. It stays 0% with its full length as static
-        // text (no countdown) until a newer rollout reports.
-        const at = resetSeconds(w.resets_at);
-        const over = at !== null && at <= Date.now() / 1000;
-        const b = bucket(String(w.window_minutes), w.window_minutes, over ? 0 : w.used_percent, over ? null : w.resets_at, w.window_minutes === 300 ? '5h' : w.window_minutes === 10080 ? 'wk' : `${w.window_minutes}m`);
-        return over ? { ...b, idleText: w.window_minutes >= 10080 ? `${w.window_minutes / 1440}d` : `${w.window_minutes / 60}h` } : b;
-      })),
+      .map((w) => bucket(String(w.window_minutes), w.window_minutes, w.used_percent, w.resets_at, w.window_minutes === 300 ? '5h' : w.window_minutes === 10080 ? 'wk' : `${w.window_minutes}m`))),
     Number.isFinite(tokens) && Number.isFinite(resetAt) && {
       provider: 'opencode', status: 'ok', label: '', buckets: [], ...(tokens || fresh
         ? { text: `${formatTokens(tokens)} tokens`, resetTime: new Date(resetAt * 1000).toISOString() }
