@@ -225,7 +225,7 @@ sidebar nav/chrome、cards 狀態圖示、handoff 對話框、`keys.json` ↔ ke
 拖曳多選／range selection、keyboard focus order（Orca 是 web，全站 Tab 可走）、
 dictation／notifications／bots 相關表面（大概率超出你的範圍，需要先畫線）。
 
-#### 4.5 覆蓋率（為什麼這不是全部）
+### 4.5 覆蓋率（為什麼這不是全部）
 
 | 面 | Orca 的總量 | 這輪比過 | 估計 |
 |---|---|---|---|
