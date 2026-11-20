@@ -2,8 +2,9 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, panes, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile } from "herdr";
+import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile } from "herdr";
 import { selectTabPanes } from "./tab-panes.js";
+import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
 
 // Memoized tab colour store: shared() is the primary source; localStorage is the fallback.
 // Cache the parsed fallback by its raw string so repeated renders skip re-parsing.
@@ -472,12 +473,25 @@ export default class Tabs extends View {
     localStorage.setItem("panels", JSON.stringify(this.panels));
   }
 
+  // Official agents resolve through their own report or the program table. An unofficial CLI
+  // cannot, so its tab keeps the name the menu shows instead of Herdr's fallback title
+  // (freebuff sets none, so the tab would otherwise be called by its terminal address, "t9k").
+  unofficialApp(pane, byTerminal = undefined) {
+    if (!pane) return null;
+    const direct = UNOFFICIAL_APPS.find((a) => a.key === pane.app);
+    if (direct) return direct;
+    // An official agent's own name and icon always win over a launch command that mentions one.
+    if (pane.program?.agent) return null;
+    return (byTerminal ?? unofficialByTerminal(terminals() ?? [])).get(pane.terminal) ?? null;
+  }
+
   // Resolves tab display title matching SortableTab.tsx:130-131 & terminal-tab-actions.ts:111.
-  getTabLabel(c, pane = undefined) {
+  getTabLabel(c, pane = undefined, unofficial = undefined) {
     if (pane === undefined) pane = (panes() ?? []).find(p => p.tab === c.id && p.program?.agent) ?? (panes() ?? []).find(p => p.tab === c.id);
+    if (unofficial === undefined) unofficial = this.unofficialApp(pane);
     const program = pane?.program;
     const raw = c.name ?? "Terminal";
-    const name = c.named ? raw : (pane?.title || program?.name || raw || "Terminal");
+    const name = c.named ? raw : (unofficial?.name || pane?.title || program?.name || raw || "Terminal");
     return program?.agent ? stripLeadingAgentTitleDecoration(name) : name;
   }
 
@@ -755,6 +769,7 @@ export default class Tabs extends View {
     const space = (spaces() ?? []).find(p => p.active);
     const shown = space?.tabs ?? [];
     const tabPanes = selectTabPanes(panes() ?? []);
+    const unofficialPanes = unofficialByTerminal(terminals() ?? []);
     // Tab colour store, read once per render. orca-menu writes shared("tab.colors")
     // and mirrors to localStorage["tab.colors.v1"]. SortableTab.tsx:293-297 drives the dot below.
     const tabColorStore = readTabColorStore();
@@ -797,8 +812,9 @@ export default class Tabs extends View {
     const item = (c, i) => {
       const pane = tabPanes.get(c.id) ?? null;
       const program = pane?.program;
+      const unofficial = this.unofficialApp(pane, unofficialPanes);
       // SortableTab.tsx:130 — displayTitle = customTitle ?? (tabAgent ? strip(title) : title).
-      const label = this.getTabLabel(c, pane);
+      const label = this.getTabLabel(c, pane, unofficial);
       const tabColour = tabColorStore[c.id] ?? null;
       // TerminalTabLeadingIcon.tsx:31-45 — the agent's identity mark, `opacity-70` while the
       // tab is inactive. Orca's `AgentIcon` (`agent-catalog.tsx:50-122`) decides which mark an
@@ -822,11 +838,13 @@ export default class Tabs extends View {
         droid: "mods/orca-tabs/agent-icons/droid.svg",
         kilo: "mods/orca-tabs/agent-icons/kilo.svg",
         aider: "mods/orca-tabs/agent-icons/aider.svg",
+        freebuff: "mods/orca-tabs/agent-icons/freebuff.png",
       };
-      const mark = agentMarks[pane?.app];
+      const identityApp = unofficial?.key ?? pane?.app;
+      const mark = agentMarks[identityApp];
       let identity = null;
       if (mark === "mono") identity = program?.icon ? svg(program.icon).size(12).text_color(t.muted) : null;
-      else if (mark) identity = ownFills.has(pane?.app) || !mark.endsWith(".svg")
+      else if (mark) identity = ownFills.has(identityApp) || !mark.endsWith(".svg")
         ? image(mark).size(12)
         : svg(mark).size(12).text_color(t.muted);
       else if (program?.icon) identity = program.tint ? svg(program.icon).size(12).text_color(t.muted) : image(program.icon).size(12);
