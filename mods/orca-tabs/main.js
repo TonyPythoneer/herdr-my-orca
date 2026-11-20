@@ -1022,7 +1022,7 @@ export default class Tabs extends View {
     // and a dragged-narrow sidebar can be smaller than the window buttons.
     const lights = root?.traffic_lights;
     const leftPad = w.platform === "macos" && w.titlebar === "none" && !w.fullscreen && lights?.length
-      ? Math.max(10, (lights[0] + 64) / (settings()?.zoom || 1) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
+      ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
     const enabled = shared("workspace.panels") ?? ["files", "changes"];
