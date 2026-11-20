@@ -7,12 +7,24 @@ The smallest `--append-system-prompt` that gives the intent below with no loss i
 Intent: verify thoroughly inside, deliver only the converged result. One answer, the one or two checks that best prove it, what failed or stays risky, and only decisions a human must make. Self-verification is process, not report content.
 
 ## Applied now (Herdr desktop, live and repo)
-`DEFAULT_PROMPT` and `.claude.preset.systemPrompt` = config `M4` (51 words):
+`DEFAULT_PROMPT` and `.claude.preset.systemPrompt` = the P0 delegation lines + config `M4` (about 99 words):
 ```
+You are the primary implementation agent.
+
+Delegate research to scout.
+Write and test code yourself.
+Ask checker to review significant changes.
+
+Consult the advisor:
+1. Before finalizing complex plans.
+2. When the same error occurs twice.
+3. Before declaring complex work complete.
+
 Before finishing, verify the change by running checks on the edge cases that matter for it. Then reply with only: your answer, the one or two checks that best prove it, anything that failed or remains risky, and decisions only a human can make. Leave out the rest of your process.
 ```
 `.claude.preset.outputStyle` = `"default"` (eli5 removed). `agents` unchanged (scout haiku, checker opus, read-only tools).
-The old P0 lines (delegate to scout, ask checker, consult the advisor) were dropped: N0 (no prompt) matched P0 on every measured goal, and scout, checker and advisor never fired in 80+ runs. To restore them, append the 48-word P0 text.
+The P0 line "Skip unnecessary delegation for trivial tasks." is omitted, as the owner specified.
+**This exact combination was never run.** M4 alone and P0 alone were tested. The P0 delegation lines are untested, not proven useless: no fixture has needed delegation (scout, checker and the advisor fired in none of 80+ runs, so N0 equalling P0 says nothing about them). Keep them until a delegation fixture shows what they do.
 
 ## Evidence (interactive TTY runs, sonnet, effort max, advisor none, style default; s2-feature)
 | config | words | pass | checks run after last edit | median reply size | $/run |
@@ -34,8 +46,9 @@ The old P0 lines (delegate to scout, ask checker, consult the advisor) were drop
 ## Next steps
 1. `cd ~/prompt-eval && ./quota.sh` (needs the 7-day figure low).
 2. Regression for M4 at max: `RUNS_DIR=$TMPDIR/pe EFFORT=max ADVISOR=none ./run-tty.sh M4 s1-fix 1` (also s3-cleanup, s4-blocked), then s5-research x3 for M4, P0 and N0 at max for a fair comparison.
-3. Optional shorter variants: `M1` (21 words, verify only) and `M3` (27 words). Keep the shortest one that holds M4's depth.
-4. If M4 loses depth, try one sentence naming the single most decisive check. Do not bring back a fixed edge-case list.
-5. Add a fixture that really needs delegation, then re-test the P0 lines against M4.
+3. Run the applied combination (P0 lines + M4) as a new config, e.g. `PM4`, on s2-feature, s5-research and the regression set, and compare with M4 alone.
+4. Optional shorter variants: `M1` (21 words, verify only) and `M3` (27 words). Keep the shortest one that holds M4's depth.
+5. If M4 loses depth, try one sentence naming the single most decisive check. Do not bring back a fixed edge-case list.
+6. Add a fixture that really needs delegation, then re-test the P0 lines against M4.
 
 Harness lives outside the repo at `~/prompt-eval` (`run-tty.sh`, `report.mjs`, `score.mjs`, `quota.sh`, `configs/`, `results/`; `results-backup-1120/` holds the overwritten earlier TTY rows). Keep `RUNS_DIR` short, and never run two runs at once.
