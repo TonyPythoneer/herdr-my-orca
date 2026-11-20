@@ -43,6 +43,34 @@ test('successful git refresh replaces the snapshot and worktree list', async () 
   assert.equal(view.unsure.has(key), false);
 });
 
+test('a refresh updates the worktree catalog cached for sibling spaces', async () => {
+  const siblingKey = JSON.stringify(['offline', '/linked']);
+  const sibling = { ...snapshot, top: '/linked', worktrees: [{ path: '/repo', branch: 'old' }] };
+  const exec = async (_program, args) => {
+    const operation = args.includes('status') ? 'status' : args.includes('--show-toplevel') ? 'top' : args.includes('--git-common-dir') ? 'common' : args[0] === 'worktree' ? 'worktrees' : 'remote';
+    return { code: operation === 'remote' ? 1 : 0, stderr: '', stdout: { status: '# branch.head main', top: '/repo', common: '/repo/.git', worktrees: 'worktree /repo\nbranch refs/heads/main\n' }[operation] ?? '' };
+  };
+  const view = { git: { [siblingKey]: sibling }, checked: {}, unsure: new Set(), watch() {}, lookupPRByBranch() {} };
+  const check = new Function('exec', 'base', 'parseWorktreeList', 'parseRemote', 'readPair', `return ({ ${method} }).check`)(exec, base, parseWorktreeList, () => null, readPair);
+  await check.call(view, key, {});
+  assert.deepEqual(view.git[siblingKey].worktrees, [{ path: '/repo', branch: 'main' }]);
+});
+
+test('a missing linked checkout refreshes its catalog through the common git directory', async () => {
+  const linked = { ...snapshot, top: '/linked', linked: true, worktrees: [{ path: '/repo' }, { path: '/linked' }] };
+  const view = { git: { [key]: linked }, checked: {}, unsure: new Set(), watch() {}, lookupPRByBranch() {} };
+  const exec = async (_program, args, options) => {
+    if (!args.includes('--git-dir')) throw new Error('working directory missing');
+    assert.equal(options.cwd, undefined);
+    assert.equal(args[1], '/repo/.git');
+    return { code: 0, stdout: 'worktree /repo\nbranch refs/heads/main\n' };
+  };
+  const check = new Function('exec', 'base', 'parseWorktreeList', 'parseRemote', 'readPair', `return ({ ${method} }).check`)(exec, base, parseWorktreeList, () => null, readPair);
+  await check.call(view, key, {});
+  assert.deepEqual(view.git[key].worktrees, [{ path: '/repo', branch: 'main' }]);
+  assert.ok(view.unsure.has(key));
+});
+
 test('known non-repositories and failed lookups respect retry pacing', () => {
   const dueMethod = source.slice(source.indexOf('  due(now, sp, ps) {'), source.indexOf('\n  // `key` and the other places', source.indexOf('  due(now, sp, ps) {')));
   const due = new Function('where', 'readPair', 'machines', 'window', 'FALLBACK', `return ({ ${dueMethod} }).due`)(where, readPair, () => [], () => ({ active: true }), 60000);

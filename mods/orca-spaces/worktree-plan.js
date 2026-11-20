@@ -22,7 +22,7 @@ export function parseWorktreeList(output) {
     for (const line of block.trim().split(/\r?\n/)) {
       if (line.startsWith("worktree ")) path = line.slice(9);
       else if (line.startsWith("branch ")) branch = line.slice(7).replace(/^refs\/heads\//, "");
-      else if (line === "bare") bare = true;
+      else if (line === "bare" || line.startsWith("prunable")) bare = true;
     }
     if (path && !bare) out.push({ path, branch });
   }
@@ -228,12 +228,8 @@ export function projectWorktreePlan({
   // and EmptyState.tsx:14 gates "No workspaces found" on that flag.
   const isDiscoverable = (w) => loaded || getWhere(w) in gitState;
 
-  const rows = sp.map((w, i) => ({
-    w,
-    i,
-    g: gitState[getWhere(w)] ?? null,
-    ok: isDiscoverable(w),
-  }));
+  const rows = sp.map((w, i) => ({ w, i, g: gitState[getWhere(w)] ?? null, ok: isDiscoverable(w) }))
+    .filter(({ g }) => !g?.linked || !g.worktrees || g.worktrees.some(wt => wt.path === g.top));
 
   // Orca's projects are repos, not sessions (`listRepoWorktrees`): a group exists because the
   // repo is known, and its rows are `git worktree list` — main first

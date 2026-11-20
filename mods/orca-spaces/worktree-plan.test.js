@@ -1,6 +1,17 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { projectWorktreePlan, where } from './worktree-plan.js';
+import { parseWorktreeList, projectWorktreePlan, where } from './worktree-plan.js';
+
+test('deleted worktrees disappear from the sidebar without closing their tabs', () => {
+  const repo = JSON.stringify([null, '/repo/.git']);
+  const space = { id: 'deleted', folder: '/deleted', tabs: [{ id: 'tab' }] };
+  const catalog = parseWorktreeList('worktree /repo\nbranch refs/heads/main\n\nworktree /deleted\nbranch refs/heads/old\nprunable gitdir file points to non-existent location\n');
+  const gitState = { [where(space)]: { repo, top: '/deleted', name: 'repo', linked: true, branch: 'old', worktrees: catalog } };
+  const plan = projectWorktreePlan({ spaces: [space], gitState, loaded: true });
+  assert.equal(plan.visibleRows.some(r => r.w.id === 'deleted'), false);
+  assert.deepEqual(space.tabs, [{ id: 'tab' }]);
+  assert.deepEqual(catalog, [{ path: '/repo', branch: 'main' }]);
+});
 
 test('duplicate worktree spaces stay attached to the first row in order', () => {
   const spaces = [

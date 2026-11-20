@@ -423,6 +423,17 @@ export default class Spaces extends View {
   // One place's git: branch, its repo, and the review on that branch.
   async check(key, cx) {
     const [on, cwd] = readPair(key);
+    const cached = this.git[key];
+    const refreshCatalog = async () => {
+      if (!cached?.linked) return;
+      try {
+        const wt = await exec("git", ["--git-dir", readPair(cached.repo)[1], "worktree", "list", "--porcelain"], { on });
+        if (wt.code === 0) {
+          const worktrees = parseWorktreeList(wt.stdout);
+          for (const entry of Object.values(this.git)) if (entry?.repo === cached.repo) entry.worktrees = worktrees;
+        }
+      } catch {}
+    };
     this.checked[key] = Date.now();
     this.unsure.delete(key);
     try {
@@ -430,6 +441,7 @@ export default class Spaces extends View {
       // Writes nothing under .git (index lock, fsmonitor cookie): watch() would wake on it.
       const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch"], { cwd, on });
       if (r.code !== 0) {
+        await refreshCatalog();
         // Only git's own "no" is remembered as no repo; anything else is asked again.
         if (/not a git repository/i.test(r.stderr)) this.git[key] = null;
         else { this.git[key] ??= null; this.unsure.add(key); }
@@ -490,6 +502,9 @@ export default class Spaces extends View {
       const wt = await exec("git", ["worktree", "list", "--porcelain"], { cwd, on });
       if (wt.code !== 0) throw new Error("Couldn't list git worktrees");
       info.worktrees = parseWorktreeList(wt.stdout);
+      for (const cached of Object.values(this.git)) {
+        if (cached?.repo === info.repo) cached.worktrees = info.worktrees;
+      }
       this.git[key] = info;
       // The review is NOT part of the worktree row. Orca's `buildWorkspaceReviewFacts` looks
       // each worktree's own branch up in a persisted PR cache; the row never carries a PR to
@@ -497,6 +512,7 @@ export default class Spaces extends View {
       if (!on && info.branch) this.lookupPRByBranch(`${repo}::${info.branch}`, info.base, info.head, info.branch, cwd, cx);
       if (!on) this.watch(repo, cx);
     } catch (err) {
+      await refreshCatalog();
       // Couldn't ask (the machine is away): keep what it showed, look again later.
       this.git[key] ??= null;
       this.unsure.add(key);
