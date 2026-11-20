@@ -173,7 +173,7 @@ export default class HandoffDialog extends View {
   render(cx) {
     const t = theme();
     const isFork = this.action === "fork";
-    const title = isFork ? "Fork Agent Session" : "Hand Off to Another Agent";
+    const title = isFork ? "Fork Agent Session" : "Hand off to another agent";
     const description = isFork
       ? "Create an independent session fork with captured context from this terminal."
       : "Start a fresh Agent session from this stopping point. The original session stays unchanged.";

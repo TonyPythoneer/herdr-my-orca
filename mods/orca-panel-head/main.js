@@ -2,7 +2,9 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { theme, run, layout, panes, spaces, focused, exec } from "herdr";
+import { theme, run, layout, panes, spaces, focused, exec, nextCommand } from "herdr";
+import { visibleTools, fallbackChild } from "./panel-gating.js";
+import { viewCommands } from "./panel-views.js";
 
 const find = (n, id) => {
   if (!n) return null;
@@ -45,6 +47,20 @@ const ITEMS = [
 ];
 
 export default class PanelHead extends View {
+  // Orca reveals a right-sidebar view from one shortcut; Herdr needs show + select, so
+  // keys.json calls `orca-panel-head.<view>` and this bridge runs the commands.
+  init(_props, cx) {
+    cx.spawn(async (cx) => {
+      for (;;) {
+        const command = await nextCommand();
+        if (!command) continue;
+        const commands = viewCommands(command);
+        if (commands) for (const { name, args } of commands) run(name, args);
+        cx.notify();
+      }
+    });
+  }
+
   render(cx) {
     const t = theme();
     const stack = find(layout(), "panel-body");
@@ -80,16 +96,13 @@ export default class PanelHead extends View {
     // folder is that case; a workspace on a machine (`space.machine`) is the SSH case.
     const isFolder = gitCache.resolved ? !gitCache.ok : false;
     const onSshHost = Boolean(on || (spaces() ?? []).find(s => s.active)?.machine);
-    const tools = ITEMS.filter(({ gating }) =>
-      gating === "gitOnly" ? !isFolder
-        : gating === "folderOnly" ? isFolder
-        : gating === "sshOnly" ? onSshHost
-        : true);
+    const tools = visibleTools(ITEMS, { isFolder, onSshHost });
+    const fallback = fallbackChild(tools, active);
     // Orca falls back to the first visible item when the active tab is gated out
     // (`right-sidebar-effective-tab.ts:28-32`). Deferred: selecting a stack child mutates
     // state, which render itself may not do.
-    if (!tools.some(tool => tool.id === active)) {
-      cx.spawn(() => { run("layout.select", { stack: "panel-body", child: tools[0].id }); });
+    if (fallback && fallback !== active) {
+      cx.spawn(() => { run("layout.select", { stack: "panel-body", child: fallback }); });
     }
     // `right-sidebar-top-activity-bar.tsx:40` is a bare `h-[36px] border-b border-border`
     // wrapper with NO background; it shows the panel surface #171717

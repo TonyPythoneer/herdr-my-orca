@@ -66,9 +66,8 @@ function items(p, git) {
         // Quick Commands, agent rows, split section, title/ID block, close, clear, reset.
         // Add to chat (:209) stays out: Herdr has no chat.
         ["Copy", "terminal.copy", {}],
-        // Orca selects the whole buffer (:217); Herdr cannot select, so the closest thing is
-        // the buffer in the clipboard (`hc read --lines 10000` prints the screen and scrollback).
-        ["Select All", "orca-menu.select-all", { terminal: term?.address ?? null, pane: tg.pane }],
+        // Herdr cannot select the buffer; this copies up to 10,000 lines instead.
+        ...(term ? [["Copy Terminal Buffer", "orca-menu.select-all", { terminal: term.address, pane: tg.pane }]] : []),
         ["Paste", "terminal.paste", {}],
         // Orca's Quick Commands menu (:227) is its command surface; Herdr's is the palette.
         ["Quick Commands", "app.palette", {}],
@@ -77,7 +76,7 @@ function items(p, git) {
         // Fork Agent Session… (:239), Copy Context (:246).
         ...(term
           ? [
-              ...(isAgent ? [["Hand Off to Another Agent…", "orca-menu.handoff", { terminal: term.address, pane: tg.pane }]] : []),
+              ...(isAgent ? [["Hand off to agent", "orca-menu.handoff", { terminal: term.address, pane: tg.pane }]] : []),
               ["Fork Agent Session…", "orca-menu.fork", { terminal: term.address, pane: tg.pane }],
               ["Copy Context", "orca-menu.copy-context", { terminal: term.address, pane: tg.pane }],
             ]
@@ -593,7 +592,7 @@ export default class Menu extends View {
       return;
     }
     if (it[1] === "worktree") {
-      openOverlay({ mod: "worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
+      openOverlay({ mod: "orca-worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
       closeOverlay(overlayId);
     } else if (it[1] === "tab.close") {
       // Close tab confirmation — terminal-tab-actions.ts:121-131 & running-terminal-close-guard.ts:56-97
@@ -693,8 +692,10 @@ export default class Menu extends View {
         cx.notify();
       })
       .children([
-        // Orca's workspace menu starts with a label (WorktreeContextMenuView.tsx:160-162).
-        ...(p?.tab === "space"
+        // Orca labels the card section only for a multi-selection; a single highlighted
+        // card already names the worktree (WorktreeContextMenuView.tsx:147-152). Herdr has
+        // no multi-select yet, so this stays off unless a caller asks for it.
+        ...(p?.tab === "space" && p?.multi
           ? [div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child("Workspace")]
           : []),
         ...list.map((it, i) => {
