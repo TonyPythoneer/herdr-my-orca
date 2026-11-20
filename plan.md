@@ -1,16 +1,21 @@
 # UI 操作一致性計畫（herdr-my-orca ↔ Orca）
 
 對照基準：`/Users/tonyyang/git/orca` @ `30d56bd62b0`（2026-11-19 21:10 -0800）
-本仓库基準：`herdr-my-orca` @ `b21d442`（2026-11-20，分支 `feat/wt-align-orca`）
+本倉庫基準：`herdr-my-orca` @ `b21d442`（2026-11-20，分支 `feat/wt-align-orca`）
 工作區：`main` checkout（`/Users/tonyyang/git/herdr-my-orca`）正在跑**別的**工作（11/20 14:2x 起
 `agent-config`、`orca-status` 三個 commit）。本檔只在這個 worktree 裡改，不要直接動 main。
 注意：1.E.1 的 tooltip 覆蓋率表是 `db0181a` 量的，`0e35f64` 已補了 `agent-config` 的 Save
 tooltip + a11y label，那一列要重量。
 範圍：**只做「操作」一致性**（選單項目、標籤、快速鍵、鍵盤導覽、hover/tooltip、狀態用語）。比例、尺寸、圓角、配色數值不在本計畫（配色只在「影響 light theme 行為」時列一項）。
 
+> **這份不是完整清單。** 第 1 節是**一輪取樣**的結果：手動查了 10 個表面／Orca 的
+> 2,841 個元件檔、1,304 條選單列、23,714 條字串（見 §4.5 的覆蓋率）。它保證的是
+> 「列出來的每一條都有原始碼出處」，不是「差異只有這些」。
+> 要拿全，先做 §3 的 **M0（機械化盤點）**，別再靠人眼掃。
+
 > ⚠️ 環境缺口（依 `AGENTS.md` 規定回報）：agentflow skill 檔
 > （`~/.agents/skills/agentflow/SKILL.md`）讀取被權限擋下，因此 agentflow 未啟動；
-> `.agentflow/rules.md` 是空的。本檔是直接寫在 repo 根目錄的 `plan.md`，未走 agentflow 的
+> `.agentflow/rules.md` 是空的。本檔是新 worktree 根目錄的 `plan.md`，未走 agentflow 的
 > plan/tracker 機制，也未寫入 devlog（那需要共享紀錄權限）。
 
 ---
@@ -177,6 +182,15 @@ tooltip + a11y label，那一列要重量。
 
 ## 3. 執行順序
 
+* [ ] **M0 機械化盤點（1 天，先做這個）**：寫 `scripts/orca-surface.mjs`，兩邊各產出一張表：
+      * Orca 側：`t('key','Default')` 全部預設字串（含所在檔案）、每個 `DropdownMenu*Item` 的
+        列序與所屬選單、每個 `TooltipContent` 的按鈕標籤、`definitions-core-*.ts` 的 103 個 action
+        （id/title/chord/group）。來源：`/Users/tonyyang/git/orca` @ `30d56bd`。
+      * 你這側：從 `mods/orca-*/main.js` 抽選單列陣列（`items()` 的各 `case`、`ITEMS`、
+        `createRows()`、`agentRows()`）、每個 `.tooltip("…")`／`.accessibility_label("…")`、
+        `keys.json` 的 chord → action。
+      * 輸出三欄判定：`matched` / `different（附兩邊原文）` / `orca-only（缺口）` + `yours-only（Herdr 自創）`。
+      這張表才是「所有差異」；本檔 §1 之後變成它的子集合與範例。
 * [ ] **M1 標籤同步（0.5 天）**：A1–A5 + `#45153` 全 82 條掃一遍；`space`→`workspace`；
       tooltip 加 chord。驗：`grep -rn '"[A-Z][^"]*"' mods/orca-*/main.js` 逐條對 Orca 原文。
 * [ ] **M2 快速鍵表（0.5 天）**：按 1.B 改 `keys.json`（⌘/⌃ 1-9 對調、⌘K、⌘⇧T、⌘⌥R、⌘⇧⌫、
@@ -189,10 +203,9 @@ tooltip + a11y label，那一列要重量。
       驗：`grep -c 'role("button")' / 'tooltip(' / 'accessibility_label(' 每個 mod 都要 ≈ 1:1:1`。
 * [ ] **M5 缺少的表面（選做，各 0.5–1 天）**：D3 狀態列可見性選單 → D2 activity bar 位置 →
       D1 `+` 選單客製 → D4 `⌘K`/`⌘P`。
-* [ ] **M6 長效檢查（0.5 天）**：寫一個 `scripts/parity-labels.mjs`：
-      從 `/Users/tonyyang/git/orca` 抽出所有 `t('key','Default')` 的字串集合，
-      比你 mods 裡硬寫的 `"..."` 標籤，輸出「Orca 沒有這句」+「近似但不同（大小寫/用字）」兩張表，
-      接進你現有的 `*.test.js` 跑。這樣 Orca 之後改字，你能一鍵看到。
+* [ ] **M6 把它變成 regression guard（0.5 天）**：M0 那張表存成 `scripts/orca-surface.json`
+      （附 Orca commit hash），加一支 test：mods 裡的選單列／tooltip 若不在表內、
+      或 Orca 端 hash 變了，就 fail。這樣 Orca 之後改字、改 chord，你 `git -C ../orca pull` 後一跑就知道。
 
 ---
 
@@ -208,6 +221,23 @@ sidebar nav/chrome、cards 狀態圖示、handoff 對話框、`keys.json` ↔ ke
 `orca-agents` ↔ AI Vault/Agents 面板、`agent-config` ↔ Orca 的 agent launch setup panel、
 拖曳多選／range selection、keyboard focus order（Orca 是 web，全站 Tab 可走）、
 dictation／notifications／bots 相關表面（大概率超出你的範圍，需要先畫線）。
+
+### 4.5 覆蓋率（為什麼這不是全部）
+
+| 面 | Orca 的總量 | 這輪比過 | 估計 |
+|---|---|---|---|
+| 選單列 | 1,304 條 `DropdownMenu*Item` | pane / tab / space / group 四個選單 ≈ 90 條 | ~7% |
+| 字串 | en.json 23,714 條、mods 側 403 條unique 標籤 | 只比了 `#45153` 改到的 82 條 + 手邊碰到的 | <1% |
+| 元件檔 | 2,841 個 `.tsx`（101 個頂層目錄） | 12 個目錄 | ~12% |
+| tooltip | 412 個檔案用 `TooltipContent` | 6 支 mods 的覆蓋率統計 | 抽樣 |
+| 快速鍵 | 103 個 action | 全部列舉比對 ✅ | 100%（唯一查完的一項） |
+| 佈局表面 | 你 42 支 mods | 10 支 | ~24% |
+
+所以：**快速鍵那一節（1.B）可以當成完整的**；其他各節都是「已抽到的」，
+尤其 §1 完全沒碰 `orca-files`、`orca-changes`、`orca-diff*`、`orca-landing`、`orca-float`、
+`orca-agents`、`agent-config` 這 7 支（佔你 mods 的一半工作量）。
+還有一整類我**沒有能力從程式碼判斷**的差異：動畫／過渡、focus ring、hover 延遲、
+toast 時間、拖曳預覽、捲動行為 — 這些只能並排開兩個 app 用眼睛對，或你截圖給我。
 
 **工具限制**：`/Users/tonyyang/git/orca` 的部分檔案（`AGENTS.md`、`i18n/locales/en.json` 直接讀）
 被權限擋；`en.json` 我是用 `git show <commit> -- <path>` 繞過的，所以**只能看到有 diff 的字串**。
