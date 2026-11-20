@@ -143,14 +143,14 @@ export default class OrcaStatus extends View {
     const floatLabel = floatOpen ? "Minimize Floating Workspace" : "Show Floating Workspace";
     const floatChord = (keys() ?? []).find(k => k.action === "orca-float.toggle")?.keys ?? "";
 
-    // Orca segment shape: gap-1.5 px-1 py-0.5 rounded, 12px glyph, 11px label,
+    // Orca segment shape: gap-1.5 px-1 py-0.5 rounded, 10px glyph, 9px label,
     // hover:bg-accent/70 (UpdateStatusSegment.tsx:115-122); the label keeps #f0f0f0.
     const segment = (id, iconName, label, opts = {}) => h_flex()
-      .id(id).gap(6).px(4).py(2).rounded(4).items_center().text_size(11)
+      .id(id).gap(5).px(3).py(2).rounded(3).items_center().text_size(9)
       .text_color(opts.muted ? t.muted : t.foreground)
       .when(Boolean(opts.on), el => el.role("button").accessibility_label(label).tooltip(label)
         .cursor_pointer().hover(s => s.bg("#404040b3").text_color(t.foreground)).on_click(opts.on))
-      .child(svg(`mods/orca-status/${iconName}.svg`).size(12).flex_none()
+      .child(svg(`mods/orca-status/${iconName}.svg`).size(10).flex_none()
         .text_color(opts.iconColor ?? t.muted)
         .when(Boolean(opts.spin), el => el.spin(1000)))
       .child(label);
@@ -167,7 +167,7 @@ export default class OrcaStatus extends View {
       if (m?.image) return image(`mods/orca-status/${m.path}`).w(size).h(size).flex_none().rounded(2);
       if (m) return svg(`mods/orca-status/${m.path}`).size(size).flex_none();
       return div().size(size).flex_none().flex().items_center().justify_center()
-        .text_size(10).text_color(t.muted).child(letterFor(provider));
+        .text_size(9).text_color(t.muted).child(letterFor(provider));
     };
     const chip = (reading) => {
       // Local providers (local-usage.js): a bar for the first window (5h), then every window as
@@ -177,29 +177,32 @@ export default class OrcaStatus extends View {
         // [pct, rest]: the percentage goes in a badge, the reset (or name) after it.
         const parts = reading.text
           ? [[null, `${reading.text} ${resetIn(reading.resetTime)}`]]
-          : reading.buckets.map(b => [`${b.usedPercent}%`, b.label === "5h" || b.label === "wk" ? resetIn(b.resetTime) : b.label]);
-        const part = ([pct, rest]) => h_flex().gap(5).items_center()
-          .when(pct != null, el => el.child(div().px(8).py(1).rounded_full().bg("#ffffff").text_color("#000000").child(pct)))
+          : reading.buckets.map(b => [`${b.usedPercent}%`, b.idleText ?? (b.label === "5h" || b.label === "wk" ? resetIn(b.resetTime) : b.label)]);
+        // The percentage badge keeps the same 1.3 line height at the 20pt scale: a 9px line
+        // plus 1px padding is ~14px, so the badge sits inside the 20pt bar with the same
+        // breathing room Orca's plain 11px percentage has in its 24pt bar.
+        const part = ([pct, rest]) => h_flex().gap(4).items_center()
+          .when(pct != null, el => el.child(div().px(5).py(1).line_height(1.3).rounded_full().bg("#ffffff").text_color("#000000").child(pct)))
           .child(div().child(rest));
-        return h_flex().gap(8).items_center().child(mark(reading.provider, 13))
+        return h_flex().gap(7).items_center().child(mark(reading.provider, 11))
           .when(Boolean(first), el => el.child(h_flex().w(80).h(5).flex_none().gap(2)
             .children([0, 1, 2, 3, 4].map(i => div().flex_1().h(5).rounded(2).bg(t.raised)
               .child(div().h(5).rounded(2).bg(t.foreground).w(`${Math.min(100, Math.max(0, (first.usedPercent - i * 20) * 5))}%`))))))
-          .child(h_flex().gap(6).items_center().text_color(t.foreground)
+          .child(h_flex().gap(5).items_center().text_color(t.foreground)
             .children(parts.flatMap((x, i) => i ? [div().text_color(t.muted).child("·"), part(x)] : [part(x)])));
       }
       const tightest = reading.status === "ok" ? getTightestUsageBucket(reading.buckets) : null;
       if (tightest) {
         const label = formatBucketChipLabel(tightest);
-        return h_flex().gap(6).items_center()
-          .child(mark(reading.provider, 13))
+        return h_flex().gap(5).items_center()
+          .child(mark(reading.provider, 11))
           .child(div().text_color(t.foreground).child(`${tightest.usedPercent}% ${label}`));
       }
       // Error chip: mark, warning triangle, then the source's own words
       // (StatusBarProviderSegment.tsx:297-305; the copy is usage-error-copy.ts:131).
-      return h_flex().gap(4).items_center().text_color(t.muted)
-        .child(mark(reading.provider, 13))
-        .child(svg("mods/orca-status/triangle-alert.svg").size(11).flex_none().text_color(t.muted))
+      return h_flex().gap(3).items_center().text_color(t.muted)
+        .child(mark(reading.provider, 11))
+        .child(svg("mods/orca-status/triangle-alert.svg").size(9).flex_none().text_color(t.muted))
         .child(div().text_size(11).child(reading.label));
     };
     const drawn = (readings ?? [])
@@ -208,14 +211,17 @@ export default class OrcaStatus extends View {
       .sort((a, b) => rank(a.provider) - rank(b.provider));
 
     // StatusBarSurface.tsx:121 — h-6 min-h-[24px] px-3 gap-4 border-t, text-xs,
-    // bg-[var(--bg-titlebar,var(--card))] = t.surface (#171717).
-    return h_flex().w_full().h(24).min_h(24).flex_none().px(12).gap(16).items_center()
-      .bg(t.surface).border_t(1).border_color(t.border).text_size(12).text_color(t.foreground)
+    // bg-[var(--bg-titlebar,var(--card))] = t.surface (#171717). The maintenance row is now 20pt
+    // instead of Orca's 24; every spacing, text and glyph here is scaled by 5/6 (20/24) so the
+    // layout compresses without changing the arrangement, keeping the 14/15/16 glyphs at
+    // 12/11/10 and the usage bar/percentages at their scaled widths/heights.
+    return h_flex().w_full().h(20).min_h(20).flex_none().px(10).gap(13).items_center()
+      .bg(t.surface).border_t(1).border_color(t.border).text_size(10).text_color(t.foreground)
       // StatusBarSurface.tsx:136 — left usage cluster: flex min-w-0 flex-1 items-center
       .child(
-        h_flex().flex_1().min_w(0).items_center().gap(12)
+        h_flex().flex_1().min_w(0).items_center().gap(10)
           .child(
-            h_flex().gap(12).items_center().px(4).py(2).rounded(4).text_size(11)
+            h_flex().gap(10).items_center().px(3).py(2).rounded(3).text_size(9)
               .role("button").cursor_pointer().hover(s => s.bg("#404040b3"))
               // usage-unit-label.tsx:32-50: "Used" in muted text; it is absent when no chip
               // shows a percentage (getUsageUnitLabelState), which here means no reading at all.
@@ -225,25 +231,25 @@ export default class OrcaStatus extends View {
               // The two sources this mod reads, before either has answered.
               .when(readings === null, el =>
                 el.children(["antigravity", "omp"].map(p =>
-                  h_flex().gap(6).items_center().text_color(t.muted)
-                    .child(mark(p, 13)).child(div().child("···")))))
+                  h_flex().gap(5).items_center().text_color(t.muted)
+                    .child(mark(p, 11)).child(div().child("···")))))
               .children(drawn.map(chip))
           )
           // StatusBarSurface.tsx:280-298 — Refresh button
           .child(
-            h_flex().px(3).py(3).rounded(4).items_center().justify_center()
+            h_flex().px(2.5).py(2).rounded(3).items_center().justify_center()
               .role("button").accessibility_label("Refresh rate limits").tooltip("Refresh usage data")
               .cursor_pointer().hover(s => s.bg("#404040b3"))
               .on_click((_e, cx) => this.refreshUsage(cx, true))
               .child(
-                svg("mods/orca-status/refresh-cw.svg").size(11).flex_none()
+                svg("mods/orca-status/refresh-cw.svg").size(9).flex_none()
                   .text_color(t.muted)
                   .when(this.isRefreshing, el => el.spin(1000).text_color(t.foreground))
               )
           )
       )
       // StatusBarSurface.tsx:308 — middle maintenance group: flex w-max gap-3
-      .child(h_flex().gap(12).items_center()
+      .child(h_flex().gap(10).items_center()
         // Remote-server update (RemoteServerUpdateStatusSegment.tsx:19-70)
         .when(up.core.updating, el => el.child(segment("st-core-updating", "refresh-cw", "Updating", { spin: true, on: openSettings("updates") })))
         .when(!up.core.updating && Boolean(up.core.error), el => el.child(segment("st-core-failed", "alert-circle", "1 server update failed", { iconColor: t.blocked, on: openSettings("updates") })))
@@ -253,7 +259,7 @@ export default class OrcaStatus extends View {
         .when(hostsKnown, el => el.child(segment("st-hosts", "server", `${connected} host${connected === 1 ? "" : "s"}`, { muted: true, on: openSettings("machines") })))
         // StatusBarSurface.tsx:330-366 — `border-border bg-secondary shadow-xs`, hover
         // `bg-accent`; the dot sits `right-0.5 top-0.5` and its ring is the button's fill.
-        .child(div().id("st-float").relative().size(20).flex_none().flex().items_center().justify_center().rounded(4)
+        .child(div().id("st-float").relative().size(17).flex_none().flex().items_center().justify_center().rounded(3)
           .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground)
           .cursor_pointer().hover(s => s.bg(t.hover).text_color(t.foreground))
           .role("button")
@@ -261,7 +267,7 @@ export default class OrcaStatus extends View {
           .tooltip(floatChord ? `${floatLabel} (${floatChord})` : floatLabel)
           .on_click(() => run("orca-float.toggle"))
           .child(svg("mods/orca-status/panels-top-left.svg").size(14).flex_none())
-          .when(floatAttention, el => el.child(div().absolute().top(2).right(2).size(6).rounded_full().flex_none()
+          .when(floatAttention, el => el.child(div().absolute().top(2).right(2).size(5).rounded_full().flex_none()
             .bg("#f59e0b").border_1().border_color(t.raised))))
       );
   }

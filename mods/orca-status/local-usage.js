@@ -155,7 +155,14 @@ export async function probeLocal(execFn) {
     claudeReading,
     // Codex reports the windows its plan has: both for Plus and Pro, so both are shown.
     codex && reading('codex', [codex.primary, codex.secondary].filter(Boolean)
-      .map((w) => bucket(String(w.window_minutes), w.window_minutes, w.used_percent, w.resets_at, w.window_minutes === 300 ? '5h' : w.window_minutes === 10080 ? 'wk' : `${w.window_minutes}m`))),
+      .map((w) => {
+        // A window past its reset has nothing used. It stays 0% with its full length as static
+        // text (no countdown) until a newer rollout reports.
+        const at = resetSeconds(w.resets_at);
+        const over = at !== null && at <= Date.now() / 1000;
+        const b = bucket(String(w.window_minutes), w.window_minutes, over ? 0 : w.used_percent, over ? null : w.resets_at, w.window_minutes === 300 ? '5h' : w.window_minutes === 10080 ? 'wk' : `${w.window_minutes}m`);
+        return over ? { ...b, idleText: w.window_minutes >= 10080 ? `${w.window_minutes / 1440}d` : `${w.window_minutes / 60}h` } : b;
+      })),
     Number.isFinite(tokens) && Number.isFinite(resetAt) && {
       provider: 'opencode', status: 'ok', label: '', buckets: [], ...(tokens || fresh
         ? { text: `${formatTokens(tokens)} tokens`, resetTime: new Date(resetAt * 1000).toISOString() }

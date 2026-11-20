@@ -2,7 +2,7 @@
 // Source of the shape: Orca's claude-statusline-rate-limits.ts (see NOTICE).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseClaudeStatusLine, formatTokens } from './local-usage.js';
+import { parseClaudeStatusLine, formatTokens, probeLocal } from './local-usage.js';
 
 const future = () => Math.floor(Date.now() / 1000) + 3600;
 
@@ -61,4 +61,20 @@ test('formatTokens keeps the bar short', () => {
   assert.equal(formatTokens(999), '999');
   assert.equal(formatTokens(1500), '2k');
   assert.equal(formatTokens(2400000), '2.4M');
+});
+
+test('probeLocal shows an expired codex window as 0% as static 0% / 5h', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const codex = JSON.stringify({
+    primary: { window_minutes: 300, used_percent: 34, resets_at: now - 60 },
+    secondary: { window_minutes: 10080, used_percent: 68, resets_at: now + 3600 }
+  });
+  const exec = async (_c, [, script]) => ({ code: 0, stdout: script.includes('.codex') ? codex : '' });
+  const codexReading = (await probeLocal(exec)).find((r) => r.provider === 'codex');
+  const [five, week] = codexReading.buckets;
+  assert.equal(five.usedPercent, 0);
+  assert.equal(five.resetTime, null);
+  assert.equal(five.idleText, '5h');
+  assert.equal(week.idleText, undefined);
+  assert.equal(week.usedPercent, 68);
 });
