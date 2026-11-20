@@ -2,9 +2,14 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 // A lazy file browser for the active space's folder, with bounded previews; local files under 400 KB are editable.
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, v_virtual_list, Scrollbar, Input, InputState, Editor, EditorState } from "gpui-base";
+import { v_flex, h_flex, v_virtual_list, Scrollbar, VirtualListScrollHandle, Input, InputState, Editor, EditorState } from "gpui-base";
 import { spaces, exec, readTextFile, writeTextFile, watchFolder, theme, settings, window, props, run, openOverlay, closeOverlay, shared, setShared, nextCommand, appHome } from "herdr";
 import { copyText, reveal } from "./clip.js";
+import { deleteTarget } from "./delete-target.js";
+import { mutateFile } from "./file-mutation.js";
+import { queueSave } from "./save-queue.js";
+import { canEditPath, writeEditorFile } from "./editor-path.js";
+import { resolveTreeKey } from "./tree-nav.js";
 
 const plat = () => (typeof window === "function" ? window()?.platform : null);
 
@@ -192,10 +197,14 @@ function statusLetter(char) {
 export default class Files extends View {
   init(_props, cx) {
     if (!props()?.tab) mainFilesView = this;
-    this.saved = new Map(); this.doc = null;
+    this.saved = new Map(); this.drafts = new Map(); this.doc = null;
     this.entries = new Map(); this.folders = new Set(); this.pending = new Set(); this.marks = {};
     this.ignored = new Set(); this.git = false; this.folderMarks = {}; this.folderErrors = {};
     this.inputHandle = cx.focus_handle();
+    // Keyboard navigation follows Orca's explorer keys (useFileExplorerKeys.ts): the tree
+    // owns the keyboard while it is focused, so terminal and query inputs keep theirs.
+    this.treeFocus = cx.focus_handle(); this.treeScroll = VirtualListScrollHandle.new();
+    this.selected = null; this.visible = [];
     this.hits = null; this.searching = false; this.qFocused = false; this.view = "files";
     // `tab.new { mod: "orca-files", props: { file } }` / `pane.split { …, props: { file } }`
     // open the pane already showing that file — the Herdr stand-in for Orca's `openFile`
@@ -233,19 +242,9 @@ export default class Files extends View {
     // replace the pane with its "could not be re-rendered" banner — which is the
     // orange 2px bar at the top of the sidebar that appeared while typing.
     // `cx.timer.after` hands each callback a fresh context (`typings.rs:3914-3921`).
-    this.searchTimer = null;
+    this.searchTimer = null; this.searchGeneration = 0;
     this.q.on("change", (_e, cx) => {
-      const v = this.q.value().trim();
-      this.searchTimer?.cancel();
-      this.searching = Boolean(v); cx.notify();
-      this.searchTimer = cx.timer.after(200, (cx) => {
-        this.searchTimer = null;
-        if (!v) { this.hits = null; this.searching = false; this.collapsedSearch = new Set(); cx.notify(); return; }
-        cx.spawn(async (cx) => {
-          const h = await this.search(v);
-          this.hits = h; this.searching = false; cx.notify();
-        });
-      });
+      this.rerun(cx);
     });
     // `focus-within:border-ring ring-1 ring-ring` (FileExplorerNameFilter.tsx:23): GPUI has no
     // `:focus-within` or ring, so the input's own focus events paint the border in ring colour.
@@ -253,7 +252,7 @@ export default class Files extends View {
     this.q.on("blur", (_e, cx) => { this.qFocused = false; cx.notify(); });
     this.input = InputState.new({ placeholder: "Name" });
     this.input.on("change", (_e, cx) => cx.notify());
-    this.input.on("submit", (_e, cx) => { void this.apply(this.input.value().trim(), cx); cx.notify(); });
+    this.input.on("submit", (_e, cx) => { void this.apply(this.input.value(), cx); cx.notify(); });
     this.refresh(cx);
     cx.timer.every(10000, cx => this.refresh(cx));
     cx.spawn(async cx => {
@@ -291,6 +290,7 @@ export default class Files extends View {
   refresh(cx) {
     const { cwd, on } = location(), next = key();
     if (next !== this.context?.key) {
+      this.searchGeneration++; this.searchTimer?.cancel(); this.searchTimer = null;
       if (this.context) this.saved.set(this.context.key, { folders: this.folders, file: this.file });
       const saved = this.saved.get(next);
       this.context = { key: next, cwd, on }; this.root = cwd; this.on = on; this.entries = new Map(); this.folders = new Set(saved?.folders);
@@ -302,6 +302,7 @@ export default class Files extends View {
       this.caseSensitive = false; this.wholeWord = false; this.useRegex = false;
       this.include.set_value(""); this.exclude.set_value(""); this.filtersOpen = false;
       this.hits = null; this.searching = false; this.collapsedSearch = new Set();
+      this.selected = null; this.visible = [];
       this.show(null); this.watched = null; this.error = null; this.limited = false;
       this.loading = false;
       if (saved?.file) this.show(saved.file, cx);
@@ -518,6 +519,7 @@ export default class Files extends View {
   // `expected` is the text last read or written, so a file changed on disk meanwhile is refused, not overwritten.
   edited(doc, cx) {
     if (this.doc !== doc) return;
+    doc.failure = null;
     const v = ++doc.ver;
     doc.status = "editing";
     cx.timer.after(800, (cx) => { if (this.doc === doc && doc.ver === v) this.save(doc, cx); });
@@ -526,9 +528,8 @@ export default class Files extends View {
 
   save(doc, cx) {
     const text = this.code.value(), v = doc.ver;
-    if (text === doc.disk) { doc.status = "saved"; cx.notify(); return; }
     cx.spawn(async (cx) => {
-      try { await writeTextFile(doc.full, text, doc.disk); doc.disk = text; if (doc.ver === v) doc.status = "saved"; }
+      try { await queueSave(doc, text, (_path, value, expected) => writeEditorFile(doc, value, expected, exec, writeTextFile)); if (doc.ver === v) doc.status = "saved"; }
       catch (e) { doc.status = "failed"; doc.error = String(e); }
       cx.notify();
     });
@@ -538,38 +539,62 @@ export default class Files extends View {
   // open: by the time a workspace switch gets here `this.root` already points at the new one.
   flush() {
     const doc = this.doc;
-    if (!doc || !this.code || doc.status === "failed") return;
+    if (!doc || !this.code) return;
     const text = this.code.value();
-    if (text !== doc.disk) return writeTextFile(doc.full, text, doc.disk).catch(() => {});
+    const draft = { text, disk: doc.disk, error: doc.error ?? "Save pending" };
+    this.drafts.set(doc.full, draft);
+    return queueSave(doc, text, (_path, value, expected) => writeEditorFile(doc, value, expected, exec, writeTextFile)).then(() => {
+      if (this.drafts.get(doc.full) === draft) {
+        this.drafts.delete(doc.full);
+        if (this.viewDraft?.draft === draft) { this.reloadDraft = this.viewDraft; run("orca-files.refresh"); }
+      }
+    }).catch((e) => {
+      draft.error = String(e);
+      this.operationError = "An unsaved draft is retained in memory. Reopen its file to copy it.";
+      run("orca-files.refresh");
+      throw e;
+    });
   }
 
   // A pane, tab or layout slot closing. Best effort: only `exec` and `terminal.kill` are promised to finish on app quit.
   async close() { await this.flush(); }
 
   show(path, cx) {
-    this.flush();
-    this.code?.release(); this.code = null; this.doc = null; this.file = path; this.fileError = null;
+    this.flush()?.catch(() => {});
+    this.code?.release(); this.code = null; this.doc = null; this.file = path; this.fileError = null; this.viewDraft = null;
     if (!path || !cx) return;
     const context = this.context, root = this.root, on = this.on;
     cx.spawn(async cx => {
       try {
-        const full = path.startsWith("/") ? path : `${root}/${path}`; // an absolute file prop opens outside the worktree
-        const text = await readTextFile(full, { on });
+        const full = path.startsWith("/") ? path : root ? `${root.replace(/\/+$/, "")}/${path}` : null;
+        if (!full) { this.fileError = "Select a workspace to open this file"; return; }
+        let draft = !on ? this.drafts.get(full) : null;
+        let text = await readTextFile(full, { on }).catch((e) => { if (draft) return null; throw e; });
         if (this.file !== path || !this.current(context)) return;
-        if (text === null) { this.fileError = "This file is no longer available"; return; }
-        if (text.includes("\0")) { this.fileError = "Binary file · no text preview"; return; }
+        if (draft && this.drafts.get(full) !== draft) {
+          draft = this.drafts.get(full) ?? null;
+          if (!draft) { text = await readTextFile(full, { on }); if (this.file !== path || !this.current(context)) return; }
+        }
+        if (text === null && !draft) { this.fileError = "This file is no longer available"; return; }
+        const content = draft?.text ?? text;
+        if (content.includes("\0")) { this.fileError = "Binary file · no text preview"; return; }
         const t = theme(), ext = path.includes(".") ? path.split(".").pop() : "txt";
         // Read-only where saving is unsafe: another machine (`writeTextFile` is local only), a truncated preview, and
         // text the editor does not hand back unchanged (line endings, BOM, normalisation), which a save would rewrite.
         const make = (readonly) => EditorState.new({ language: LANG[ext] ?? ext, readonly,
-          value: text.length > 400000 ? text.slice(0, 400000) + "\n… (file truncated)" : text,
+          value: !draft && content.length > 400000 ? content.slice(0, 400000) + "\n… (file truncated)" : content,
           font_family: settings().font_family, font_size: 12,
           syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
-        let editable = !on && text.length <= 400000;
+        const pathSafe = !on && !draft && content.length <= 400000 ? await canEditPath(root, full, exec) : false;
+        let editable = pathSafe;
+        if (this.file !== path || !this.current(context)) return;
         this.code = make(!editable);
         if (editable && this.code.value() !== text) { this.code.release(); this.code = make(true); editable = false; }
+        if (draft) { this.viewDraft = { draft, path, context }; this.fileError = `Unsaved draft (read-only): ${draft.error}. Copy its contents before closing.`; }
+        else if (!on && content.length <= 400000 && !pathSafe) this.fileError = "Read-only: file path is outside the workspace, unsafe, or cannot be verified.";
+        else if (pathSafe && !editable) this.fileError = "Read-only: this text cannot be saved without changing it.";
         if (editable) {
-          const doc = this.doc = { full, disk: text, status: "", ver: 0 };
+          const doc = this.doc = { full, root, disk: text, status: "", ver: 0 };
           this.code.on("change", (_e, cx) => this.edited(doc, cx));
         }
       } catch { if (this.file === path && this.current(context)) this.fileError = "Cannot preview this file (binary, too large, or unreadable)"; }
@@ -581,28 +606,31 @@ export default class Files extends View {
   // New/Rename ask in the popup's own prompt because run("<mod>.<cmd>") delivers only
   // the command name to nextCommand(), so typed text cannot cross mods.
   menu(path, entry) {
+    if (!this.context || !this.current(this.context)) return;
     openOverlay({ mod: "orca-files", kind: "popup", width: 256,
-      props: { tab: "file", target: { path, dir: entry.dir } } });
+      props: { tab: "file", target: { path, dir: entry.dir, location: location() } } });
   }
-
-  full(path) { return this.root ? `${this.root}/${path}` : path; }
 
   act(name, cx) {
     const target = props()?.target;
     if (!target) return;
     const { path, dir } = target;
-    const full = this.full(path);
     const overlay = props()?.overlay;
     const close = () => { if (overlay) closeOverlay(overlay); };
+    if (!target.location || JSON.stringify(target.location) !== key()) {
+      if (mainFilesView) { mainFilesView.operationError = "Workspace or host changed; action was cancelled."; cx.notify(); }
+      return close();
+    }
+    const full = `${target.location.cwd.replace(/\/+$/, "")}/${path}`;
     // New File / New Folder target a folder; for a file row that is its parent, as Orca
     // computes `targetDir` (FileExplorerVirtualRows.tsx:242 ->
     // file-explorer-row-context-menu.tsx:153,160).
-    const parent = dir ? full : full.replace(/\/[^/]*$/, "");
+    const parent = dir ? full : full.replace(/\/[^/]*$/, "") || "/";
     // Typed text cannot cross mods: run("<mod>.<cmd>") delivers only the command
     // string to nextCommand(). So New/Rename ask in this mod's own popup instead.
     // Stay in this popup: closing it first would take the prompt with it.
     const ask = (mode, title, value, base = full) => {
-      this.prompt = { mode, title, full: base, overlay, value: value ?? "" };
+      this.prompt = { mode, title, full: base, overlay, value: value ?? "", ...target.location };
       if (value) this.input.set_value(value), this.input.set_selected_range({ start: 0, end: value.length });
       else this.input.set_value("");
       this.input.focus();
@@ -621,26 +649,16 @@ export default class Files extends View {
       // Duplicate — file-explorer-row-context-menu.tsx:197-202 & useFileDuplicate.ts:34-63,89-91
       case "duplicate": {
         close();
-        const on = this.on;
+        const source = { ...target.location, full, mode: "duplicate" };
         cx.spawn(async (cx) => {
-          const dir = full.includes("/") ? full.replace(/\/[^/]*$/, "") : ".";
-          const name = full.includes("/") ? full.slice(full.lastIndexOf("/") + 1) : full;
-          const dot = name.lastIndexOf(".");
-          const stem = dot > 0 ? name.slice(0, dot) : name;
-          const ext = dot > 0 ? name.slice(dot) : "";
-          const script = `
-dir="$1"; stem="$2"; ext="$3"; src="$4"
-cand="$dir/\${stem} copy\${ext}"
-n=2
-while [ -e "$cand" ]; do
-  cand="$dir/\${stem} copy \${n}\${ext}"
-  n=$((n + 1))
-done
-cp -r "$src" "$cand"
-`;
-          await exec("sh", ["-c", script, "duplicate", dir, stem, ext, full], { on });
-          if (mainFilesView) mainFilesView.refresh(cx);
-          run("orca-files.refresh");
+          try {
+            await mutateFile(source, location(), path.slice(path.lastIndexOf("/") + 1), exec);
+            if (mainFilesView && key() === JSON.stringify(target.location)) { mainFilesView.operationError = null; mainFilesView.refresh(cx); }
+            run("orca-files.refresh");
+          } catch (e) {
+            if (mainFilesView && key() === JSON.stringify(target.location)) mainFilesView.operationError = `Duplicate failed: ${e.message || e}`;
+            run("orca-files.refresh"); cx.notify();
+          }
         });
         return;
       }
@@ -658,9 +676,11 @@ cp -r "$src" "$cand"
       case "rename": return ask("mv", "Rename", path.replace(/^.*\//, ""));
       case "delete":
         close();
-        setShared("orca-files.target", full);
+        const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
         return openOverlay({ mod: "confirm", kind: "dialog", width: 420, height: 180,
-          props: { title: "Delete?", detail: full, command: { name: "orca-files.remove" } } });
+          props: { title: "Delete?", detail: `${full}\nHost: ${target.location.on ?? "local"}`,
+            confirmShared: { key: `orca-files.target.${token}`, value: { ...target.location, path: full } },
+            command: { name: `orca-files.remove-${token}` } } });
     }
   }
 
@@ -670,35 +690,53 @@ cp -r "$src" "$cand"
   // Ported from Orca file-explorer-row-context-menu.tsx:153-164,289-296
   apply(name, cx) {
     const p = this.prompt;
-    this.prompt = null;
-    if (p?.overlay) closeOverlay(p.overlay);
-    if (!p || !name) return;
-    const parent = p.full.replace(/\/[^/]*$/, "");
-    const on = this.on;
+    if (!p || p.busy) return;
+    p.busy = true; p.error = null; cx.notify();
     cx.spawn(async (cx) => {
-      if (p.mode === "touch") await writeTextFile(`${p.full}/${name}`, "", null);
-      if (p.mode === "mkdir") await exec("mkdir", ["-p", `${p.full}/${name}`], { on });
-      if (p.mode === "mv") await exec("mv", [p.full, `${parent}/${name}`], { on });
-      if (mainFilesView) mainFilesView.refresh(cx);
-      run("orca-files.refresh");
+      try {
+        await mutateFile(p, location(), name, exec);
+        if (this.prompt === p) { this.prompt = null; if (p.overlay) closeOverlay(p.overlay); }
+        if (mainFilesView) mainFilesView.refresh(cx);
+        run("orca-files.refresh");
+      } catch (e) { if (this.prompt === p) p.error = String(e.message || e); }
+      finally { p.busy = false; cx.notify(); }
     });
   }
 
   // Delete needs no typed text, so the shipped confirm mod can drive it.
   // `cx` is the `nextCommand` loop's AsyncContext (see `command`), which stays
   // valid across awaits. Ported from Orca file-explorer-row-context-menu.tsx:298-302
-  async remove(cx) {
-    const full = shared("orca-files.target");
-    setShared("orca-files.target", null);
-    if (full) await exec("rm", ["-rf", full], { on: this.on });
+  async remove(token, cx) {
+    const targetKey = `orca-files.target.${token}`;
+    const target = shared(targetKey);
+    if (!target) return;
+    setShared(targetKey, null);
+    try { await deleteTarget(target, location(), exec); this.operationError = null; }
+    catch (e) { this.operationError = `Delete failed: ${e.message || e}`; }
     this.refresh(cx);
+    cx.notify();
   }
 
   // command loop dispatch: handles delete confirmation, refresh requests, and cross-mod view requests
   // (src/renderer/src/components/right-sidebar/file-explorer/panel/file-explorer-row-context-menu.tsx:220-225,298-302)
   command(c, cx) {
-    if (c === "remove") return this.remove(cx);
-    if (c === "refresh") return this.refresh(cx);
+    if (c.startsWith("remove-")) return this.remove(c.slice(7), cx);
+    // Revealed by ⌘⇧F (orca-panel-head.search): the panel is already shown and on the
+    // Explorer tab by the time this runs. Orca's showRightSidebarSearch opens the Contents
+    // view with its query field focused (right-sidebar-state.ts:87-110).
+    if (c === "search") {
+      this.view = "search";
+      this.q.focus();
+      if (this.q.value().trim()) this.rerun(cx);
+      cx.notify();
+      return;
+    }
+    if (c === "refresh") {
+      if (this.reloadDraft && this.reloadDraft === this.viewDraft && this.current(this.reloadDraft.context)) {
+        const path = this.reloadDraft.path; this.reloadDraft = null; this.show(path, cx);
+      }
+      return this.refresh(cx);
+    }
     // The More menu's filter toggles rebuild the cached name projection (see moreView).
     if (c === "filters") return this.scheduleName(cx);
     if (c === "view") {
@@ -714,6 +752,7 @@ cp -r "$src" "$cand"
   // debounces all of them for the same reason).
   rerun(cx) {
     const v = this.q.value().trim();
+    const generation = ++this.searchGeneration, context = this.context;
     this.searchTimer?.cancel();
     if (!v) { this.searchTimer = null; this.hits = null; this.searching = false; this.collapsedSearch = new Set(); cx.notify(); return; }
     this.searching = true; cx.notify();
@@ -721,6 +760,7 @@ cp -r "$src" "$cand"
       this.searchTimer = null;
       cx.spawn(async (cx) => {
         const h = await this.search(v);
+        if (generation !== this.searchGeneration || !this.current(context)) return;
         this.hits = h; this.searching = false; cx.notify();
       });
     });
@@ -789,6 +829,76 @@ cp -r "$src" "$cand"
     return out;
   }
 
+  // Orca's explorer keys (useFileExplorerKeys.ts:200-260, file-explorer-keyboard-navigation.ts):
+  // Space activates the row, Enter renames it, Delete removes it, ⌘⌥C copies its path and
+  // ⌘⌥⇧C its workspace-relative path. Selection only changes while the tree holds focus, so
+  // typing in the query inputs and terminals is never intercepted.
+  treeKey(e, cx) {
+    if (this.view !== "files" || this.file || this.prompt || !this.treeFocus.is_focused()) return;
+    const mods = e.modifiers ?? {};
+    const index = this.visible.findIndex((r) => r.path === this.selected);
+    const row = index === -1 ? null : this.visible[index];
+    if (mods.platform && mods.alt && e.key === "c") {
+      if (row) void copyText(mods.shift ? row.path : `${(this.root ?? "").replace(/\/+$/, "")}/${row.path}`, cx);
+      cx.stop_propagation(); return;
+    }
+    if (mods.platform && e.key === "backspace" && !mods.control && !mods.alt && !mods.shift) {
+      if (row) this.requestDelete(row.path, row.dir, cx);
+      cx.stop_propagation(); return;
+    }
+    if (mods.platform || mods.control || mods.alt) return;
+    const resolved = resolveTreeKey(e.key, index === -1 ? null : index, this.visible);
+    if (resolved.type === "move") {
+      this.selected = this.visible[resolved.index]?.path ?? null;
+      this.treeScroll.scroll_to_item(resolved.index);
+      cx.stop_propagation(); cx.notify(); return;
+    }
+    if (resolved.type === "expand" || resolved.type === "collapse") {
+      const isOpen = row.open;
+      if (resolved.type === "expand" ? !isOpen : isOpen) {
+        this.name.value().trim() ? this.nameToggle(resolved.path, cx) : this.toggle(resolved.path, cx);
+      }
+      cx.stop_propagation(); cx.notify(); return;
+    }
+    if (!row) return;
+    if (e.key === "space") {
+      if (row.dir) this.name.value().trim() ? this.nameToggle(row.path, cx) : this.toggle(row.path, cx);
+      else this.show(row.path, cx);
+      cx.stop_propagation(); cx.notify(); return;
+    }
+    if (e.key === "enter") { this.startRename(row, cx); cx.stop_propagation(); return; }
+    if (e.key === "delete") {
+      this.requestDelete(row.path, row.dir, cx); cx.stop_propagation();
+    }
+  }
+
+  // Enter rename and Delete confirmation, reachable without the row menu. The target is
+  // captured now so a workspace/host switch before the write cancels (M1).
+  startRename(row, cx) {
+    const loc = location();
+    if (!this.root || JSON.stringify(loc) !== this.context?.key) {
+      this.operationError = "Workspace or host changed; action was cancelled."; cx.notify(); return;
+    }
+    const full = `${loc.cwd.replace(/\/+$/, "")}/${row.path}`;
+    this.prompt = { mode: "mv", title: "Rename", full, overlay: null, value: row.name, ...loc };
+    this.input.set_value(row.name);
+    this.input.set_selected_range({ start: 0, end: row.name.length });
+    this.input.focus(); cx.notify();
+  }
+
+  requestDelete(path, dir, cx) {
+    const loc = location();
+    if (!this.root || JSON.stringify(loc) !== this.context?.key) {
+      this.operationError = "Workspace or host changed; action was cancelled."; cx.notify(); return;
+    }
+    const full = `${loc.cwd.replace(/\/+$/, "")}/${path}`;
+    const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    openOverlay({ mod: "confirm", kind: "dialog", width: 420, height: 180,
+      props: { title: "Delete?", detail: `${full}\nHost: ${loc.on ?? "local"}`,
+        confirmShared: { key: `orca-files.target.${token}`, value: { ...loc, path: full } },
+        command: { name: `orca-files.remove-${token}` } } });
+  }
+
   // v_virtual_list hands its renderer a {start,end} range, not an index (defaults/mods/changes
   // uses the same contract), and rows cannot register their own handlers — the renderer runs
   // every frame, so the list takes one `on_item_click` keyed by `get_key` instead.
@@ -796,13 +906,21 @@ cp -r "$src" "$cand"
     const list = this.flat("", 0, [], this.name.value().trim() ? "name" : undefined);
     const named = Boolean(this.name.value().trim());
     const find = (key) => list.find((r) => r.path === key);
-    return v_virtual_list("files-rows", list.length, 24, i => list[i]?.path ?? String(i),
+    this.visible = list;
+    return div().size_full().track_focus(this.treeFocus).tab_index(0).role("tree")
+      .on_key_down((e, cx) => this.treeKey(e, cx))
+      .child(v_virtual_list("files-rows", list.length, 24, i => list[i]?.path ?? String(i),
       (range) => list.slice(range.start, range.end).map(r => this.row(r, t)))
+      // The list keeps its own position; the handle lets keyboard moves scroll the
+      // selected row into view (gpui-kit track_scroll, VirtualListScrollHandle docs).
+      .track_scroll(this.treeScroll)
       .on_item_click((key, cx) => {
         const r = find(key);
         if (!r) return;
+        this.selected = r.path; this.treeFocus.focus();
         if (r.dir) named ? this.nameToggle(r.path, cx) : this.toggle(r.path, cx);
         else this.show(r.path, cx);
+        cx.notify();
       })
       .on_item_secondary_click((key, _event, cx) => {
         const r = find(key);
@@ -810,7 +928,7 @@ cp -r "$src" "$cand"
         cx.stop_propagation();
         this.menu(r.path, r.entry);
       })
-      .size_full();
+      .size_full());
   }
 
   // FileExplorerRow.tsx:147-152 — px-2 py-1 text-xs gap-1, indent depth*16 + 8; 26px is
@@ -834,8 +952,11 @@ cp -r "$src" "$cand"
       : link ? svg("mods/orca-files/link.svg").size(12).flex_none().text_color(t.muted)
       : svg(`mods/orca-files/${fileIcon(name)}.svg`).size(12).flex_none().text_color(t.muted);
     return h_flex().id(`file-${path}`).w_full().h(24).flex_none().pl(8 + depth * 16).pr(8).gap(4).items_center().rounded(2).text_size(12).cursor_pointer()
+      .role("button").accessibility_label(name)
       .when(this.file === path, el => el.bg(fade(t.accent, 0.7)).border_1().border_color(t.border).text_color(t.accent_foreground).hover(s => s.bg(fade(t.accent, 0.8))))
       .when(this.file !== path, el => el.hover(s => s.bg(t.accent)))
+      // Keyboard selection is a lighter fill than the previewed file's (Orca keeps both).
+      .when(this.selected === path && this.file !== path, el => el.bg(fade(t.accent, 0.55)))
       .child(dir ? svg(`mods/orca-files/chevron-${open ? "down" : "right"}.svg`).size(12).flex_none().text_color(t.dim) : div().w(12).flex_none())
       .child(icon)
       .child(div().flex_1().min_w(0).truncate().when(Boolean(mark), el => el.text_color(gitTone(mark, t))).child(name))
@@ -849,7 +970,7 @@ cp -r "$src" "$cand"
   }
 
   promptView(t) {
-    const close = (cx) => { this.prompt = null; cx.notify(); };
+    const close = (cx) => { if (!this.prompt.busy) { this.prompt = null; cx.notify(); } };
     return v_flex().id("orca-files-prompt").w_full().min_h(0).p(14).gap(10).bg(t.popover).text_size(12.8).text_color(t.foreground)
       .child(h_flex().items_center()
         .child(div().flex_1().text_size(14).font_semibold().child(this.prompt.title))
@@ -857,12 +978,13 @@ cp -r "$src" "$cand"
           if (e.key === "escape") { close(cx); cx.stop_propagation(); }
         }).track_focus(this.inputHandle))
       .child(div().text_size(11).text_color(t.dim).child(this.prompt.full))
+      .when(Boolean(this.prompt.error), el => el.child(div().text_size(11).text_color(t.ansi1).child(this.prompt.error)))
       .child(Input.new(this.input).h(34).px(10).rounded(8).border_1().border_color(t.input).bg(t.surface).text_size(12.8).text_color(t.foreground)
-        .on_key_down((e, cx) => { if (e.key === "enter") { void this.apply(this.input.value().trim(), cx); cx.stop_propagation(); } }))
+        .on_key_down((e, cx) => { if (e.key === "enter") { void this.apply(this.input.value(), cx); cx.stop_propagation(); } }))
       .child(h_flex().gap(8).justify_end()
         .child(h_flex().id("fx-cancel").h(30).px(12).items_center().rounded(7).border_1().border_color(t.input).text_size(12).cursor_pointer().hover(s => s.opacity(0.88)).on_click((_e, cx) => close(cx)).child("Cancel"))
         .child(h_flex().id("fx-save").h(30).px(12).items_center().rounded(7).bg(t.solid).text_color(t.solid_foreground).text_size(12).font_medium().cursor_pointer()
-          .hover(s => s.opacity(0.88)).on_click((_e, cx) => { void this.apply(this.input.value().trim(), cx); cx.notify(); }).child("Save")));
+          .hover(s => s.opacity(0.88)).on_click((_e, cx) => { void this.apply(this.input.value(), cx); cx.notify(); }).child(this.prompt.busy ? "Saving…" : "Save")));
   }
 
   menuView(t) {
@@ -889,8 +1011,8 @@ cp -r "$src" "$cand"
       .child(item(1, "New Folder", "folder-plus", "new-folder"))
       .child(sep())
       .child(item(2, "Copy", "copy", "copy-file"))
-      .child(item(3, "Copy Path", "copy", "copy-path", { shortcut: "⌘⌥C" }))
-      .child(item(4, "Copy Relative Path", "copy", "copy-rel", { shortcut: "⌘⌥⇧C" }))
+      .child(item(3, "Copy Path", "copy", "copy-path"))
+      .child(item(4, "Copy Relative Path", "copy", "copy-rel"))
       // Duplicate — file-explorer-row-context-menu.tsx:197-202 (files only)
       .when(!dir, el => el.child(item(5, "Duplicate", "files", "duplicate")))
       // Open in Terminal — file-explorer-row-context-menu.tsx:210 (directories only)
@@ -905,8 +1027,8 @@ cp -r "$src" "$cand"
       .child(item(9, revealLabel, "external-link", "reveal"))
       .child(sep())
       // Rename & Delete — file-explorer-row-context-menu.tsx:265-276
-      .child(item(10, "Rename", "pencil", "rename", { shortcut: "↩" }))
-      .child(item(11, "Delete", "trash", "delete", { shortcut: "⌘⌫, Delete", destructive: true }));
+      .child(item(10, "Rename", "pencil", "rename"))
+      .child(item(11, "Delete", "trash", "delete", { destructive: true }));
   }
 
   // The "Open in" flyout is its own popup (as orca-new-menu's agent setup is), level with the row and
@@ -1200,11 +1322,12 @@ cp -r "$src" "$cand"
     if (props()?.tab === "open-in") return this.openInView(t, cx);
     if (props()?.tab === "more") return this.moreView(t);
     return v_flex().id("files").size_full().min_h(0).overflow_hidden().text_color(t.foreground).text_size(13)
+      .when(Boolean(this.operationError), el => el.child(div().px(12).py(6).text_size(11).text_color(t.ansi1).child(this.operationError)))
       .when(Boolean(this.file), el => el.child(h_flex().h(30).flex_none().px(10).gap(6).items_center().border_b(1).border_color(t.border)
         .child(div().id("files-back").w(20).cursor_pointer().text_color(t.muted).on_click((_e, cx) => { this.show(null, cx); cx.notify(); }).child("←"))
         .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.dim).child(this.file ?? ""))
         .when(Boolean(this.code), el => el.child(div().flex_none().text_size(10).text_color(this.doc?.status === "failed" ? t.ansi1 : t.muted)
-          .child(!this.doc ? "Read-only" : this.doc.status === "failed" ? `Not saved: ${this.doc.error.slice(0, 60)}` : ({ editing: "Editing…", saved: "Saved" })[this.doc.status] ?? "")))))
+          .child(!this.doc ? this.fileError || "Read-only" : this.doc.status === "failed" ? `Not saved: ${this.doc.error.slice(0, 60)}` : ({ editing: "Editing…", saved: "Saved" })[this.doc.status] ?? "")))))
       // FileExplorerToolbar.tsx:66-198 (the h-8 title/actions band, above) then
       // FileExplorerQueryStrip.tsx:35-52 (switch + active query input) then the tree.
       .when(!this.file, el => el.child(this.toolbar(t)))

@@ -105,9 +105,9 @@ export default class NewMenu extends View {
       // Orca has no worktree rows here; the stock Herdr menu did, and orca-landing's
       // "Create workspace" button opens this menu for them.
       { label: "New worktree…", icon: "git-branch-plus", sep: true,
-        run: () => openOverlay({ mod: "worktree", kind: "dialog", width: 440, height: 260, props: { space: space?.id, folder, action: "new" } }) },
+        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 440, height: 260, props: { space: space?.id, folder, action: "new" } }) },
       { label: "Open worktree…", icon: "workflow",
-        run: () => openOverlay({ mod: "worktree", kind: "dialog", width: 560, height: 480, props: { space: space?.id, folder, action: "open" } }) },
+        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 560, height: 480, props: { space: space?.id, folder, action: "open" } }) },
     ];
   }
 

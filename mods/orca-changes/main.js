@@ -3,8 +3,13 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, Input, InputState } from "gpui-base";
 import { spaces, exec, watchFolder, theme, focused, panes, shared, setShared, window, run, props, openOverlay, closeOverlay, nextCommand } from "herdr";
-import { recordReview, invalidateReview } from "./review-store.js";
 import { copyText, reveal } from "./clip.js";
+import { commitAndPush } from "./commit-push.js";
+import { prepareCreatePr, createPr } from "./create-pr.js";
+import { sameOperationTarget } from "./operation-target.js";
+import { GIT_OPTIONS as READ, chunkPaths as chunks } from "./git-options.js";
+import { assertDiscardUnchanged, discardSnapshot } from "./discard-snapshot.js";
+import { displayPushDestination, forcePushConfirmed, forcePushTarget, pushConfigured } from "./push-target.js";
 
 let mainChangesView = null;
 
@@ -21,11 +26,6 @@ function location() {
   return { cwd: space?.folder ?? null, on: space?.machine ?? null, space: space?.id };
 }
 const key = () => JSON.stringify(location());
-// Reads write nothing under .git (no index refresh or lock, no fsmonitor cookie):
-// the folder watch would see it, and every refresh would start the next one.
-const READ = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "diff.autoRefreshIndex=false"];
-// Pathspecs stay under the arg limit while keeping one index write per batch.
-const chunks = (paths, size = 200) => Array.from({ length: Math.ceil(paths.length / size) }, (_, i) => paths.slice(i * size, i * size + size));
 
 // `props.file` is read against orca-files' root, which is space.folder (GLOSSARY.md:
 // "The space is the scope; the terminal is only where keystrokes go").
@@ -69,6 +69,7 @@ export default class Changes extends View {
   init(_props, cx) {
     if (props()?.tab !== "entry-menu") mainChangesView = this;
     this.files = []; this.message = ""; this.handle = cx.focus_handle();
+    this.sectionViewFocus = { changes: cx.focus_handle(), staged: cx.focus_handle() };
     this.hovered = null; this.collapsed = {}; this.busy = false; this.busyReason = null; this.typing = false;
     this.menuOpen = false;
     this.input = TextareaState.new({ placeholder: "Message", rows: 2 });
@@ -181,13 +182,41 @@ export default class Changes extends View {
   }
 
   runCommitAndPush(cx) {
-    if (!this.message.trim() || !this.root || this.busy || this.loading) return;
-    this.apply([["commit", "-m", this.message.trim()], ["push"]], cx, () => { this.message = ""; this.input.set_value(""); });
+    const action = this.primaryAction();
+    if (action.disabled || action.kind !== "commit" || !this.root || this.busy || this.loading || key() !== this.context) return;
+    const root = this.root, on = this.on, context = this.context, message = this.message.trim();
+    this.busy = true; this.busyReason = "Commit in progress…"; this.note = null;
+    cx.spawn(async (cx) => {
+      try {
+        const pushed = await commitAndPush(
+          (step) => step === "commit"
+            ? exec("git", [...READ, "commit", "-m", message], { cwd: root, on })
+            : pushConfigured((args) => exec("git", [...READ, ...args], { cwd: root, on }), () => key() === context),
+          () => key() === context,
+          () => {
+            if (this.message.trim() === message) { this.message = ""; this.input.set_value(""); }
+            this.busyReason = "Push in progress…"; cx.notify();
+          },
+        );
+        if (pushed && key() === context) this.note = "Push completed.";
+      } catch (e) { if (key() === context) this.note = String(e).trim(); }
+      finally { this.busy = false; this.busyReason = null; this.refresh(cx); cx.notify(); }
+    });
+    cx.notify();
   }
 
   runPush(cx) {
-    if (!this.root || this.busy || this.loading) return;
-    this.apply([["push"]], cx);
+    if (!this.root || this.busy || this.loading || key() !== this.context) return;
+    const root = this.root, on = this.on, context = this.context;
+    this.busy = true; this.busyReason = "Push in progress…"; this.note = null; cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const r = await pushConfigured((args) => exec("git", [...READ, ...args], { cwd: root, on }), () => key() === context);
+        if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim() || "Push failed");
+        if (key() === context) this.note = "Push completed.";
+      } catch (e) { if (key() === context) this.note = String(e.message || e).trim(); }
+      finally { this.busy = false; this.busyReason = null; this.refresh(cx); cx.notify(); }
+    });
   }
 
   runSync(cx) {
@@ -211,10 +240,41 @@ export default class Changes extends View {
   }
 
   runForcePush(cx) {
-    if (!this.root || this.busy || this.loading) return;
-    // remote.ts:41-48 — force-with-lease, then --set-upstream; origin/HEAD stands in for the
-    // configured push target this panel does not read.
-    this.apply([["push", "--force-with-lease", "--set-upstream", "origin", "HEAD"]], cx);
+    if (!this.root || this.busy || this.loading || key() !== this.context) return;
+    const location = this.operationTarget(), git = (args) => exec("git", [...READ, ...args], { cwd: location.root, on: location.on });
+    this.busy = true; this.busyReason = "Checking Force Push target…"; this.note = null; cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const target = await forcePushTarget(git);
+        if (!this.matchesTarget(location)) return;
+        const t = theme();
+        const destination = displayPushDestination(target.destination);
+        window.open_dialog(() => v_flex().w(420).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
+          .child(div().text_size(13).font_weight(500).text_color(t.foreground).child("Force Push?"))
+          .child(div().text_size(12).text_color(t.muted).child(`This can overwrite remote history.\nRepository: ${location.root}\nHost: ${location.on ?? "local"}\nBranch: ${target.branch}\nRemote: ${target.remote} (${destination})\nTarget: ${target.ref}\nLease from local tracking: ${target.expected}\nPush commit: ${target.oid}`))
+          .child(h_flex().justify_end().gap(8)
+            .child(div().h(24).px(12).flex().items_center().rounded(6).border_1().border_color(t.border).text_color(t.muted).cursor_pointer().on_click(() => window.close_dialog()).child("Cancel"))
+            .child(div().h(24).px(12).flex().items_center().rounded(6).bg(t.blocked).text_color(t.canvas).cursor_pointer()
+              .on_click((_e, cx) => { window.close_dialog(); this.confirmForcePush(location, target, cx); }).child("Force Push"))));
+      } catch (e) { if (this.matchesTarget(location)) this.note = String(e.message || e); }
+      finally { this.busy = false; this.busyReason = null; cx.notify(); }
+    });
+  }
+
+  confirmForcePush(location, target, cx) {
+    if (!this.matchesTarget(location) || this.busy || this.loading) {
+      this.note = "Workspace or host changed, or an operation is in progress. Force Push cancelled."; cx.notify(); return;
+    }
+    const git = (args) => exec("git", [...READ, ...args], { cwd: location.root, on: location.on });
+    this.busy = true; this.busyReason = "Force Push in progress…"; this.note = null; cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const r = await forcePushConfirmed(git, target, () => this.matchesTarget(location));
+        if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim() || "Force Push failed");
+        if (this.matchesTarget(location)) this.note = "Push completed.";
+      } catch (e) { if (this.matchesTarget(location)) this.note = String(e.message || e); }
+      finally { this.busy = false; this.busyReason = null; this.refresh(cx); cx.notify(); }
+    });
   }
 
   runPublish(cx) {
@@ -244,151 +304,106 @@ export default class Changes extends View {
           if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim());
         }
       } catch (e) { if (key() === context) this.note = String(e).trim(); }
-      finally { this.busy = false; this.refresh(cx); cx.notify(); }
+      finally { this.busy = false; this.busyReason = null; this.refresh(cx); cx.notify(); }
     });
   }
 
-  // Opens Orca's PR creation composer (use-hosted-review-creation.ts:80-150, review-animated-visual-ship-styles.tsx:7)
-  openCreatePrDialog(cx, options = {}) {
-    const root = this.root, on = this.on;
-    if (!root || this.busy) return;
+  openCreatePrDialog(cx) {
+    const target = this.operationTarget();
+    if (!this.matchesTarget(target) || this.busy || this.loading) return;
+    const git = (args) => exec("git", [...READ, ...args], { cwd: target.root, on: target.on });
+    const gh = (args) => exec("gh", args, { cwd: target.root, on: target.on });
+    this.busy = true; this.busyReason = "Checking GitHub branch…"; this.note = null; cx.notify();
     cx.spawn(async (cx) => {
       try {
-        const br = await exec("git", [...READ, "branch", "--show-current"], { cwd: root, on });
-        const branch = br.code === 0 ? br.stdout.trim() : "";
-        if (!branch) {
-          this.note = "Cannot create PR from detached HEAD";
-          cx.notify();
-          return;
-        }
-
-        const sym = await exec("git", [...READ, "symbolic-ref", "refs/remotes/origin/HEAD"], { cwd: root, on }).catch(() => null);
-        let base = "main";
-        if (sym && sym.code === 0) {
-          const parts = sym.stdout.trim().split("/");
-          base = parts[parts.length - 1] || "main";
-        }
-
-        const last = await exec("git", [...READ, "log", "-1", "--pretty=%s"], { cwd: root, on }).catch(() => null);
-        const defaultTitle = this.message.trim() || (last && last.code === 0 ? last.stdout.trim() : branch);
-
-        const titleInput = InputState.new({ placeholder: "Title" });
-        titleInput.set_value(defaultTitle);
-        const bodyInput = InputState.new({ placeholder: "Description (optional)" });
-        let isDraft = false;
-
+        const snapshot = await prepareCreatePr(git, gh);
+        if (!this.matchesTarget(target)) return;
+        const title = InputState.new({ placeholder: "Title" });
+        title.set_value(this.message.trim() || snapshot.branch);
+        const body = InputState.new({ placeholder: "Description (optional)" });
+        let draft = false;
         const t = theme();
-        // review-animated-visual-ship-styles.tsx:7 ravs-pr-dialog chrome
-        window.open_dialog(() => v_flex().w(380).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
-          .child(h_flex().items_center().justify_between()
-            .child(h_flex().items_center().gap(6)
-              .child(svg("mods/orca-changes/git-pull-request.svg").size(14).text_color(t.foreground))
-              .child(div().text_size(13).font_weight(500).text_color(t.foreground).child("Create Pull Request")))
-            .child(div().text_size(11).font_mono().px(6).py(1).rounded(4).bg(fade(t.input, 0.4)).text_color(t.muted)
-              .child(`${branch} → ${base}`)))
-          .child(v_flex().gap(8)
-            .child(v_flex().gap(4)
-              .child(div().text_size(10).font_semibold().text_color(t.muted).child("TITLE"))
-              .child(h_flex().h(30).px(8).rounded(6).border_1().border_color(t.border).bg(fade(t.input, 0.4)).items_center()
-                .child(Input.new(titleInput).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"))))
-            .child(v_flex().gap(4)
-              .child(div().text_size(10).font_semibold().text_color(t.muted).child("BODY"))
-              .child(h_flex().h(56).px(8).py(6).rounded(6).border_1().border_color(t.border).bg(fade(t.input, 0.4)).items_start()
-                .child(Input.new(bodyInput).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"))))
-            .child(h_flex().items_center().gap(6).cursor_pointer()
-              .on_click((_e, cx) => { isDraft = !isDraft; cx.notify(); })
-              .child(div().size(14).rounded(3).border_1().border_color(isDraft ? t.accent : t.border)
-                .bg(isDraft ? t.accent : "#00000000").flex().items_center().justify_center()
-                .when(isDraft, (e) => e.child(svg("mods/orca-changes/plus.svg").size(10).text_color(t.canvas))))
-              .child(div().text_size(11).text_color(t.muted).child("Create as draft PR"))))
+        window.open_dialog(() => v_flex().w(420).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
+          .child(div().text_size(13).font_weight(500).text_color(t.foreground).child("Create Pull Request"))
+          .child(div().text_size(11).text_color(t.muted).child(`${snapshot.name} · ${snapshot.head} → ${snapshot.base}\nHost: ${target.on ?? "local"} · already-pushed branch`))
+          .child(Input.new(title).h(30).px(8).border_1().border_color(t.input).text_color(t.foreground))
+          .child(Input.new(body).h(56).px(8).border_1().border_color(t.input).text_color(t.foreground))
+          .child(h_flex().gap(6).cursor_pointer().on_click((_e, cx) => { draft = !draft; cx.notify(); })
+            .child(div().size(14).border_1().border_color(t.border).bg(draft ? t.accent : t.popover))
+            .child(div().text_size(11).text_color(t.muted).child("Create as draft PR")))
           .child(h_flex().justify_end().gap(8)
-            .child(div().h(24).px(12).flex().items_center().rounded(6).border_1().border_color(t.border)
-              .text_size(11).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover))
-              .on_click(() => window.close_dialog()).child("Cancel"))
-            .child(div().h(24).px(12).flex().items_center().rounded(6).bg(t.done)
-              .text_color(t.canvas).text_size(11).cursor_pointer()
-              .on_click((_e, cx) => {
-                const titleVal = titleInput.value().trim();
-                const bodyVal = bodyInput.value().trim();
-                window.close_dialog();
-                this.runCreatePr(branch, base, titleVal || defaultTitle, bodyVal, isDraft, options.pushFirst, cx);
-              }).child(options.pushFirst ? "Push & Create PR" : "Create PR"))));
-      } catch (e) {
-        this.note = "Failed to prepare PR: " + String(e);
-        cx.notify();
-      }
+            .child(div().px(12).py(5).cursor_pointer().text_color(t.muted).on_click(() => window.close_dialog()).child("Cancel"))
+            .child(div().px(12).py(5).rounded(4).bg(t.done).text_color(t.canvas).cursor_pointer()
+              .on_click((_e, cx) => { const text = title.value().trim(); if (!text) return; window.close_dialog(); this.submitCreatePr(target, snapshot, text, body.value(), draft, cx); }).child("Create PR"))));
+      } catch (e) { if (this.matchesTarget(target)) this.note = `Cannot prepare PR: ${e.message || e}`; }
+      finally { this.busy = false; this.busyReason = null; cx.notify(); }
     });
   }
 
-  // Executes hosted review creation via `gh pr create` (use-hosted-review-creation.ts:80-150)
-  runCreatePr(branch, base, title, body, draft, pushFirst, cx) {
-    const root = this.root, on = this.on;
-    if (!root) return;
-    this.busy = true;
-    this.busyReason = pushFirst ? "Pushing branch and creating pull request…" : "Creating pull request…";
-    this.note = null;
-    cx.notify();
-
+  submitCreatePr(target, snapshot, title, body, draft, cx) {
+    if (!this.matchesTarget(target) || this.busy || this.loading) return;
+    this.busy = true; this.busyReason = "Creating pull request…"; this.note = null; cx.notify();
+    const git = (args) => exec("git", [...READ, ...args], { cwd: target.root, on: target.on });
+    const gh = (args) => exec("gh", args, { cwd: target.root, on: target.on });
     cx.spawn(async (cx) => {
       try {
-        if (pushFirst) {
-          const pushRes = await exec("git", [...READ, "push", "-u", "origin", branch], { cwd: root, on });
-          if (pushRes.code !== 0) throw new Error("git push failed: " + (pushRes.stderr || pushRes.stdout).trim());
-        }
-
-        const args = ["pr", "create", "--title", title, "--body", body, "--base", base];
-        if (draft) args.push("--draft");
-        const res = await exec("gh", args, { cwd: root, on });
-        if (res.code !== 0) throw new Error("gh pr create failed: " + (res.stderr || res.stdout).trim());
-
-        const out = res.stdout.trim();
-        this.note = `Created PR: ${out}`;
-
-        // Update the review store immediately so the sidebar badge appears without waiting for
-        // the 15-minute negative cache interval. Keyed `<common-dir>::<branch>`
-        // (hosted-review-creation.ts:289-293, hosted-review-branch-cache.ts:66-79).
-        const common = await exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, on });
-        const repo = common.code === 0 ? common.stdout.trim() : root;
-
-        const m = out.match(/\/pull\/(\d+)/);
-        let number = m ? parseInt(m[1], 10) : null;
-        if (!number) {
-          try {
-            const pv = await exec("gh", ["pr", "view", "--json", "number"], { cwd: root, on });
-            if (pv.code === 0) {
-              const pvd = JSON.parse(pv.stdout || "{}");
-              if (pvd.number) number = pvd.number;
-            }
-          } catch {}
-        }
-        if (number) {
-          recordReview(repo, branch, { number, title, state: draft ? "draft" : "open" });
-        } else {
-          invalidateReview(repo, branch);
-        }
-      } catch (e) {
-        this.note = String(e.message || e).trim();
-      } finally {
-        this.busy = false;
-        this.busyReason = null;
-        this.refresh(cx);
-        cx.notify();
-      }
+        const pr = await createPr(snapshot, git, gh, () => this.matchesTarget(target), title, body, draft);
+        if (this.matchesTarget(target)) this.note = `Created PR #${pr.number}: ${pr.url}`;
+      } catch (e) { if (this.matchesTarget(target)) this.note = String(e.message || e); }
+      finally { this.busy = false; this.busyReason = null; this.refresh(cx); cx.notify(); }
     });
   }
 
-  apply(commands, cx, done) {
+  operationTarget() { return { root: this.root, on: this.on, context: this.context }; }
+
+  matchesTarget(expected) {
+    return sameOperationTarget(expected, { ...this.operationTarget(), activeContext: key() });
+  }
+
+  prepareDiscard(target, paths, cx, open) {
+    if (!this.matchesTarget(target) || this.busy || this.loading) return;
+    this.busy = true; this.note = null; cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const snapshot = await discardSnapshot(target, paths, exec);
+        if (this.matchesTarget(target)) open(snapshot);
+      } catch (e) { if (this.matchesTarget(target)) this.note = `Cannot prepare discard: ${e.message || e}`; }
+      finally { this.busy = false; cx.notify(); }
+    });
+  }
+
+  verifyDiscard(target, paths, snapshot, cx, perform) {
+    if (!this.matchesTarget(target) || this.busy || this.loading) {
+      this.note = "Workspace or host changed, or an operation is in progress. Action cancelled."; cx.notify(); return;
+    }
+    this.busy = true; this.note = null; cx.notify();
+    cx.spawn(async (cx) => {
+      let verified = false;
+      try {
+        await assertDiscardUnchanged(target, paths, snapshot, exec);
+        verified = this.matchesTarget(target);
+      } catch (e) { if (this.matchesTarget(target)) this.note = `Discard cancelled: ${e.message || e}`; }
+      finally { this.busy = false; cx.notify(); }
+      if (verified && this.matchesTarget(target)) perform(cx);
+    });
+  }
+
+  apply(commands, cx, done, expected = this.operationTarget()) {
+    if (!this.matchesTarget(expected) || this.busy || this.loading) {
+      this.note = "Workspace or host changed, or an operation is in progress. Action cancelled."; cx.notify(); return;
+    }
     const root = this.root, on = this.on, context = this.context;
     this.busy = true; this.busyReason = commands[0]?.[0] === "commit" ? "Commit in progress…" : null; this.note = null;
     cx.spawn(async (cx) => {
       try {
         for (const args of commands) {
+          if (key() !== context) throw new Error("Workspace or host changed; remaining actions were cancelled.");
           const r = await exec("git", [...READ, ...args], { cwd: root, on });
           if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim());
         }
         if (key() === context && done) done();
       } catch (e) { if (key() === context) this.note = String(e).trim(); }
-      finally { this.busy = false; this.refresh(cx); cx.notify(); }
+      finally { this.busy = false; this.busyReason = null; this.refresh(cx); cx.notify(); }
     });
     cx.notify();
   }
@@ -403,9 +418,11 @@ export default class Changes extends View {
 
   actionButton(icon, t, cx, onClick, title, enabled = true) {
     // uncommitted-entry-row.tsx:218-273 overlay buttons are 24px with 14px glyphs (action-button.tsx:31-40);
-    // Orca disables them with opacity-50 while a bulk action runs.
+    // Orca disables them with opacity-50 while a bulk action runs. These are icon-only, so the
+    // name and disabled state must reach the accessibility tree as well as the tooltip (M8).
+    const label = title ?? icon.replace(/\.svg$/, "");
     return div().w(24).h(24).flex().flex_none().items_center().justify_center().rounded(4)
-      .when(Boolean(title), (s) => s.tooltip(title))
+      .role("button").accessibility_label(label).tooltip(label).disabled(!enabled)
       .when(enabled, (s) => s.cursor_pointer().hover((x) => x.bg(t.chrome))
         .on_click((_e, cx) => { cx.stop_propagation(); onClick(); }))
       .when(!enabled, (s) => s.opacity(0.5))
@@ -417,20 +434,20 @@ export default class Changes extends View {
     const hovered = this.hovered === id, buttons = [];
     // Per-file commands match Orca: stage `git add --` (src/main/git/source-control/staging.ts:23-31), unstage
     // `git reset --quiet --` (:88-102), discard `git restore --worktree --` (discard-changes.ts:39),
-    // untracked delete `git clean -ffdx --` (:53-69,106-112).
+    // Untracked deletion excludes ignored files and nested repositories.
     if (f.section === "changes") {
       buttons.push(this.actionButton(f.fresh ? "trash.svg" : "undo.svg", t, cx, () => this.confirmDiscard(f, name, cx),
         f.fresh ? "Delete untracked file" : "Discard changes",
         !this.busy));
-      buttons.push(this.actionButton("plus.svg", t, cx, () => this.apply([["add", "--", f.path]], cx)));
+      buttons.push(this.actionButton("plus.svg", t, cx, () => this.apply([["add", "--", f.path]], cx), "Stage", !this.busy));
     } else if (f.section === "staged") {
-      buttons.push(this.actionButton("minus.svg", t, cx, () => this.apply([["reset", "--quiet", "--", f.path]], cx)));
+      buttons.push(this.actionButton("minus.svg", t, cx, () => this.apply([["reset", "--quiet", "--", f.path]], cx), "Unstage", !this.busy));
     } else if (f.section === "conflicts") {
       // uncommitted-entry-row.tsx:218-229 draws one ActionButton per resolution; the commands are
       // resolveConflict (src/main/git/source-control/staging.ts:41-86): `git add` stages the file, `git rm -f` records the deletion.
       for (const r of conflictResolutions(f.xy)) {
         const [icon, title] = RESOLUTION[r];
-        buttons.push(this.actionButton(icon, t, cx, () => this.resolveConflict(f, r, cx), title, !this.busy));
+        buttons.push(this.actionButton(icon, t, cx, () => this.resolveConflict(f, r, cx), title, !this.busy && r !== "keep_deletion"));
       }
     }
     // Row click opens the file's diff in the diff pane (openDiff); Open in File Explorer opens the file itself.
@@ -447,7 +464,7 @@ export default class Changes extends View {
           mod: "orca-changes",
           kind: "popup",
           width: 208,
-          props: { tab: "entry-menu", entry: f, root: this.root }
+          props: { tab: "entry-menu", entry: f, target: this.operationTarget() }
         });
       })
       .child(svg("mods/orca-changes/file.svg").size(14).flex_none().text_color(gitTone(f.status, t)))
@@ -477,7 +494,7 @@ export default class Changes extends View {
   openDiff(f, root = this.root, on = location().on) {
     if (f.section === "conflicts") return this.openEntry(f, root);
     if (!root) return;
-    const target = { root, on, all: Boolean(f.all), path: f.path, section: f.section, status: f.status };
+    const target = { root, on, all: Boolean(f.all), sectionAll: Boolean(f.sectionAll), paths: f.paths, limited: Boolean(f.limited), path: f.path, section: f.section, status: f.status };
     setShared("orca-diff.target", target);
     const tab = focused()?.tab, inTab = panes().filter((p) => p.tab === tab);
     if (inTab.some((p) => p.mod === "orca-diff")) return run("orca-diff.show");
@@ -495,9 +512,9 @@ export default class Changes extends View {
   }
 
   // resolveConflict (src/main/git/source-control/staging.ts:41-86, entry-context-menu.tsx:100-113)
-  resolveConflict(f, resolution, cx, root = this.root, on = this.on) {
-    const context = this.context;
-    if (!root || this.busy) return;
+  resolveConflict(f, resolution, cx, target = this.operationTarget()) {
+    if (!this.matchesTarget(target) || this.busy || resolution === "keep_deletion") return;
+    const { root, on, context } = target;
     // resolveConflict (src/main/git/source-control/staging.ts:41-86) re-reads the exact unmerged
     // record and refuses to keep a file the worktree no longer has, because `git add` would stage
     // that deletion (:56-68); the worktree mode is field 7 of porcelain v2's `u` record (:66).
@@ -509,13 +526,14 @@ export default class Changes extends View {
     this.busy = true; this.note = null; cx.notify();
     cx.spawn(async (cx) => {
       try {
-        const st = await exec("git", [...READ, "status", "--porcelain=v2", "-z", "--untracked-files=no", "--", f.path], { cwd: root, on });
+        const st = await exec("git", [...READ, "--literal-pathspecs", "status", "--porcelain=v2", "-z", "--untracked-files=no", "--", f.path], { cwd: root, on });
         if (st.code !== 0) throw new Error((st.stderr || st.stdout).trim());
         const record = st.stdout.split("\0").find((line) => line.startsWith("u "));
         if (!record) throw new Error(`${f.path} is no longer in conflict. Refresh to see its current state.`);
         if (resolution !== "keep_deletion" && record.split(" ")[6] === "000000")
           throw new Error(`${f.path} has changed since this list loaded. Refresh to see its current state.`);
-        const r = await exec("git", [...READ, ...command], { cwd: root, on });
+        if (!this.matchesTarget(target)) throw new Error("Workspace changed; conflict resolution cancelled.");
+        const r = await exec("git", [...READ, "--literal-pathspecs", ...command], { cwd: root, on });
         if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim());
         if (mainChangesView) mainChangesView.refresh(cx);
         run("orca-changes.refresh");
@@ -527,23 +545,23 @@ export default class Changes extends View {
   confirmDiscard(f, name, cx) {
     // Orca gates every per-row discard/delete behind a confirmation dialog
     // (discard-confirmation.ts:13-62, use-discard-confirmation.ts:190-201).
-    const t = theme(), deleting = f.fresh, restoring = f.status === "D";
+    const t = theme(), target = this.operationTarget(), deleting = f.fresh, restoring = f.status === "D";
     const title = deleting ? `Delete "${name}"?` : restoring ? `Restore "${name}"?` : `Discard changes to "${name}"?`;
     const text = deleting ? "This will permanently delete this file. This cannot be undone."
       : restoring ? "This will restore the last staged version and discard the deletion. This cannot be undone."
       : "This will revert the unstaged changes to this file. This cannot be undone.";
     const label = deleting ? "Delete" : restoring ? "Restore" : "Discard";
-    const command = deleting ? ["clean", "-ffdx", "--", f.path] : ["restore", "--worktree", "--", f.path];
-    window.open_dialog(() => v_flex().w(360).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
+    const command = deleting ? ["clean", "-f", "--", f.path] : ["restore", "--worktree", "--", f.path];
+    this.prepareDiscard(target, [f.path], cx, (snapshot) => window.open_dialog(() => v_flex().w(360).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
       .child(div().text_size(13).font_weight(500).text_color(t.foreground).child(title))
-      .child(div().text_size(12).text_color(t.muted).child(text))
+      .child(div().text_size(12).text_color(t.muted).child(`${text}\nRepository: ${target.root}\nHost: ${target.on ?? "local"}\nPath: ${f.path}`))
       .child(h_flex().justify_end().gap(8)
         .child(div().h(24).px(12).flex().items_center().rounded(6).border_1().border_color(t.border)
           .text_size(11).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover))
           .on_click((_e, _cx) => { window.close_dialog(); }).child("Cancel"))
         .child(div().h(24).px(12).flex().items_center().rounded(6).bg(deleting ? t.blocked : t.done)
           .text_color(t.canvas).text_size(11).cursor_pointer()
-          .on_click((_e, _cx) => { window.close_dialog(); this.apply([command], cx); }).child(label))));
+          .on_click((_e, cx) => { window.close_dialog(); this.verifyDiscard(target, [f.path], snapshot, cx, (cx) => this.apply([command], cx, null, target)); }).child(label)))));
   }
 
   // Discard all is gated by the same destructive confirmation as one row
@@ -551,28 +569,31 @@ export default class Changes extends View {
   // unstages the staged area before discarding (source-control-discard-all-sequence.ts:73-118).
   confirmDiscardAll(key, paths, cx) {
     if (!paths.length || this.busy) return;
-    const t = theme(), area = key === "staged" ? "staged" : "changes";
+    const t = theme(), target = this.operationTarget(), area = key === "staged" ? "staged" : "changes";
     const count = `${paths.length} ${paths.length === 1 ? "file" : "files"}`;
-    window.open_dialog(() => v_flex().w(360).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
+    this.prepareDiscard(target, paths, cx, (snapshot) => window.open_dialog(() => v_flex().w(360).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
       .child(div().text_size(13).font_weight(500).text_color(t.foreground).child("Discard all changes?"))
-      .child(div().text_size(12).text_color(t.muted).child(area === "staged"
+      .child(div().max_h(200).overflow_y_scrollbar().text_size(12).text_color(t.muted).child((area === "staged"
         ? `This will unstage and discard the changes to ${count}. This cannot be undone.`
-        : `This will revert the unstaged changes to ${count}. This cannot be undone.`))
+        : `This will revert the unstaged changes to ${count}. This cannot be undone.`) + `\nRepository: ${target.root}\nHost: ${target.on ?? "local"}\n${paths.join("\n")}`))
       .child(h_flex().justify_end().gap(8)
         .child(div().h(24).px(12).flex().items_center().rounded(6).border_1().border_color(t.border)
           .text_size(11).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover))
           .on_click((_e, _cx) => { window.close_dialog(); }).child("Cancel"))
         .child(div().h(24).px(12).flex().items_center().rounded(6).bg(t.blocked)
           .text_color(t.canvas).text_size(11).cursor_pointer()
-          .on_click((_e, _cx) => { window.close_dialog(); this.discardPaths(paths, area, cx); }).child("Discard all"))));
+          .on_click((_e, cx) => { window.close_dialog(); this.verifyDiscard(target, paths, snapshot, cx, (cx) => this.discardPaths(paths, area, cx, target)); }).child("Discard all")))));
   }
 
-  discardPaths(paths, area, cx) {
+  discardPaths(paths, area, cx, expected = this.operationTarget()) {
     const root = this.root, on = this.on, context = this.context;
-    if (!root || this.busy) return;
+    if (!this.matchesTarget(expected) || this.busy || this.loading) {
+      this.note = "Workspace or host changed, or an operation is in progress. Action cancelled."; cx.notify(); return;
+    }
     // discard-changes.ts:16-60 picks the command per path: tracked -> `restore --worktree`,
-    // untracked -> `clean -ffdx`; tracked-ness comes from `ls-files` (listTrackedPathSpecs, :64-80).
+    // untracked -> `clean -f`; tracked-ness comes from `ls-files` (listTrackedPathSpecs, :64-80).
     const git = async (args) => {
+      if (key() !== context) throw new Error("Workspace or host changed; remaining actions were cancelled.");
       const r = await exec("git", [...READ, ...args], { cwd: root, on });
       if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim());
       return r.stdout;
@@ -586,7 +607,7 @@ export default class Changes extends View {
           for (const p of (await git(["ls-files", "-z", "--", ...c])).split("\0")) if (p) tracked.add(p);
         }
         for (const c of chunks(paths.filter((p) => tracked.has(p)))) await git(["restore", "--worktree", "--", ...c]);
-        for (const c of chunks(paths.filter((p) => !tracked.has(p)))) await git(["clean", "-ffdx", "--", ...c]);
+        for (const c of chunks(paths.filter((p) => !tracked.has(p)))) await git(["clean", "-f", "--", ...c]);
       } catch (e) { if (key() === context) this.note = String(e).trim(); }
       finally { this.busy = false; this.refresh(cx); cx.notify(); }
     });
@@ -603,8 +624,10 @@ export default class Changes extends View {
       () => this.confirmDiscardAll(key, items.map((f) => f.path), cx), "Discard all", !this.busy));
     if (key === "changes") bulk.push(this.actionButton("plus.svg", t, cx, () => this.stagePaths(items.map((f) => f.path), cx), "Stage all", !this.busy));
     if (key === "staged") bulk.push(this.actionButton("minus.svg", t, cx, () => this.unstagePaths(items.map((f) => f.path), cx), "Unstage all", !this.busy));
-    // View all (uncommitted-sections.tsx:144-175) opens the section's combined diff; the diff pane is
-    // per file (or all changes), so it is not drawn rather than as a dead button.
+    const viewAll = () => {
+      if (this.context !== JSON.stringify(location())) { this.note = "Workspace or host changed; action cancelled."; return; }
+      this.openDiff({ sectionAll: true, section: key, paths: items.map((item) => item.path), limited: this.limited }, this.root, this.on);
+    };
     return div().child(
       div().pl(4).pr(12).pt(12).pb(4).child(
         h_flex().rounded(6).pr(4).gap(4).items_center()
@@ -613,7 +636,14 @@ export default class Changes extends View {
             .child(svg(`mods/orca-changes/${collapsed ? "chevron-right.svg" : "chevron-down.svg"}`).size(14).flex_none().text_color(t.muted))
             .child(div().truncate().text_size(12).font_weight(600).text_color(t.muted).child(label.toUpperCase()))
             .child(div().flex_none().text_size(11).text_color(t.muted).child(String(items.length))))
-          .child(h_flex().flex_none().items_center().gap(6).children(bulk))))
+          .child(h_flex().flex_none().items_center().gap(6).children(bulk)
+            .when(key !== "conflicts", (e) => e.child(div().id(`view-all-${key}`).h(24).px(6).flex().items_center().rounded(4)
+              .text_size(11).text_color(t.muted).cursor_pointer().role("button").accessibility_label(`View all ${label}`)
+              .track_focus(this.sectionViewFocus[key]).tab_index(0)
+              .when(this.sectionViewFocus[key].is_focused(), (el) => el.border_1().border_color(t.accent))
+              .hover((el) => el.bg(t.hover)).on_click((_e, cx) => { cx.stop_propagation(); viewAll(); cx.notify(); })
+              .on_key_down((e, cx) => { if (this.sectionViewFocus[key].is_focused() && !e.modifiers?.platform && !e.modifiers?.control && !e.modifiers?.alt && !e.modifiers?.shift && (e.key === "enter" || e.key === "space")) { cx.stop_propagation(); viewAll(); cx.notify(); } })
+              .child("View all"))))))
       // One scroll container for the whole panel body, as Orca has (panel/panel-ready.tsx).
       .when(!collapsed, (e) => e.child(v_flex().children(items.map((f) => this.fileRow(f, t, cx)))));
   }
@@ -668,23 +698,24 @@ export default class Changes extends View {
     const canCommit = !action.disabled && action.kind === "commit";
     return v_flex().w_full().mt(4).p(4).gap(2).rounded(6).border_1().border_color(t.border).bg(t.popover)
       .child(item("Commit", canCommit, (cx) => this.runPrimary(cx)))
-      .child(item("Commit & Push", canCommit, (cx) => this.runCommitAndPush(cx)))
+      .child(item("Commit & Push · destination binding unavailable", false, () => {}))
       .child(div().h(1).my(2).bg(t.border))
-      .child(item("Push", Boolean(this.root), (cx) => this.runPush(cx)))
-      .child(item("Force Push", Boolean(this.root), (cx) => this.runForcePush(cx)))
-      .child(item("Create PR…", Boolean(this.root), (cx) => this.openCreatePrDialog(cx, { pushFirst: false }), "mods/orca-changes/git-pull-request.svg"))
-      .child(item("Push & Create PR…", Boolean(this.root), (cx) => this.openCreatePrDialog(cx, { pushFirst: true }), "mods/orca-changes/git-pull-request.svg"))
+      .child(item("Push · destination binding unavailable", false, () => {}))
+      .child(item("Force Push · destination binding unavailable", false, () => {}))
+      .child(item("Create PR…", Boolean(this.root), (cx) => this.openCreatePrDialog(cx), "mods/orca-changes/git-pull-request.svg"))
+      .child(item("Push & Create PR · target unavailable", false, () => {}, "mods/orca-changes/git-pull-request.svg"))
       .child(item("Pull", Boolean(this.root), (cx) => this.runPull(cx)))
-      .child(item("Sync", Boolean(this.root), (cx) => this.runSync(cx)))
-      .child(item("Rebase", Boolean(this.root), (cx) => this.runRebase(cx)))
+      .child(item("Sync · target unavailable", false, () => {}))
+      .child(item("Rebase · base unavailable", false, () => {}))
       .child(item("Fetch", Boolean(this.root), (cx) => this.runFetch(cx)))
-      .child(item("Publish", Boolean(this.root), (cx) => this.runPublish(cx)));
+      .child(item("Publish · target unavailable", false, () => {}));
   }
 
   // SourceControlEntryContextMenu — entry-context-menu.tsx:90-150
   entryMenuView(t, cx) {
-    const { entry, root } = props() ?? {};
-    if (!entry) return div();
+    const { entry, target } = props() ?? {};
+    const root = target?.root;
+    if (!entry || !target) return div();
     const abs = root ? `${root.replace(/\/+$/, "")}/${entry.path}` : entry.path;
     const overlay = props()?.overlay;
     const close = () => { if (overlay) closeOverlay(overlay); };
@@ -704,12 +735,12 @@ export default class Changes extends View {
     return v_flex().id("orca-changes-entry-menu").w_full().min_h(0).p(5).bg(t.popover).text_size(12.8).text_color(t.foreground)
       .child(div().px(8).py(4).text_size(11).text_color(t.dim).child(entry.path ?? ""))
       // View — entry-context-menu.tsx:93-99
-      .child(item(0, "View", "eye", () => this.openDiff(entry, root)))
+      .child(item(0, "View", "eye", () => { if (mainChangesView?.matchesTarget(target)) mainChangesView.openDiff(entry, target.root, target.on); }))
       .when(resolutions.length > 0, el => el
         .child(sep())
         .children(resolutions.map((r, idx) => {
           const [icon, title] = RESOLUTION[r];
-          return item(`res-${idx}`, title, icon.replace(/\.svg$/, ""), (clickCx) => this.resolveConflict(entry, r, clickCx, root, location().on));
+          return item(`res-${idx}`, title, icon.replace(/\.svg$/, ""), (clickCx) => { if (mainChangesView?.matchesTarget(target)) mainChangesView.resolveConflict(entry, r, clickCx, target); }, r !== "keep_deletion");
         }))
       )
       .child(sep())
@@ -723,6 +754,7 @@ export default class Changes extends View {
       .child(sep())
       // Open in File Explorer — entry-context-menu.tsx:141-147
       .child(item(4, "Open in File Explorer", "folder-open", () => {
+        if (!mainChangesView?.matchesTarget(target)) return;
         const cwd = location().cwd;
         const file = cwd ? relPath(cwd, abs) : entry.path;
         run("tab.new", { mod: "orca-files", props: { file } });
@@ -765,7 +797,7 @@ export default class Changes extends View {
       .child(v_flex().id("changes-list").flex_1().min_h(0).overflow_y_scrollbar()
         .children(sections.map(([key, label]) => this.section(key, label, t, cx)).filter(Boolean))
         .when(!this.files.length, (e) => e.child(this.emptyState(t))))
-      .when(Boolean(this.note), (e) => e.child(div().px(12).pb(8).text_size(11).text_color(t.ansi1).child(this.note)));
+      .when(Boolean(this.note), (e) => e.child(div().px(12).pb(8).text_size(11).text_color(this.note === "Push completed." ? t.ansi2 : t.ansi1).child(this.note)));
   }
 
   tooManyBanner(t, cx) {

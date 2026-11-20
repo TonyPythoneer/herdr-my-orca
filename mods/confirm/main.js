@@ -4,7 +4,7 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, theme } from "herdr";
+import { run, props, closeOverlay, theme, setShared } from "herdr";
 
 export default class Confirm extends View {
   init(_props, cx) {
@@ -14,6 +14,7 @@ export default class Confirm extends View {
 
   yes() {
     const p = props();
+    if (p.confirmShared) setShared(p.confirmShared.key, p.confirmShared.value);
     closeOverlay(p.overlay);
     run(p.command.name, p.command.args ?? {});
   }

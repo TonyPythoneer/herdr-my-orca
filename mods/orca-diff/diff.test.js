@@ -1,7 +1,13 @@
 // mods/orca-diff/diff.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diffRows, diffLines } from "./diff-rows.js";
+import { diffRows, diffLines, untrackedPreview } from "./diff-rows.js";
+
+test("untracked preview reports omitted files", () => {
+  const paths = Array.from({ length: 23 }, (_, i) => `file ${i}`);
+  assert.deepEqual(untrackedPreview(paths), { paths: paths.slice(0, 20), omitted: 3 });
+  assert.deepEqual(untrackedPreview(["only"]), { paths: ["only"], omitted: 0 });
+});
 
 const sample = [
   "diff --git a/a.txt b/a.txt", "index 1..2 100644", "--- a/a.txt", "+++ b/a.txt",
@@ -37,4 +43,13 @@ test("files mode keeps each file header and drops the git preamble", () => {
   assert.deepEqual(diffRows(diffLines(two, { files: true })).map((r) => [r.kind, r.text]),
     [["F", "a"], ["@", "@@ -1 +1 @@"], ["-", "x"], ["+", "y"], ["F", "dir/b"], ["", "Binary file · no text diff"]]);
   assert.equal(diffLines(two).includes("a"), false);
+});
+
+test("file headers retain ambiguous and Git-quoted paths", () => {
+  const rows = diffRows([
+    "diff --git a/folder b/file.txt b/folder b/file.txt",
+    'diff --git "a/line\\nbreak.txt" "b/line\\nbreak.txt"',
+    'diff --git "a/quote\\"file" "b/quote\\"file"',
+  ]);
+  assert.deepEqual(rows.map((row) => row.text), ["folder b/file.txt", '"line\\nbreak.txt"', '"quote\\"file"']);
 });
