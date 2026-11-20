@@ -112,6 +112,9 @@ tooltip + a11y label，那一列要重量。
 
 ### D. Orca 有、你完全沒做的操作面（要決定做或明確標「超出範圍」）
 
+> 先讀 §5.1（`handoff.md`）：你已經有 `mods/orca-panel-gap` 這個「誠實缺口 panel」慣例。
+> 本節多数項目的正確結論是**用它聲明**，不是實作。
+
 1. **`+` 選單可客製**：`Customize`、`In the + menu` / `Hidden` 兩區拖曳、`Show`/`Hide`/
    `Always shown`、`Reset Order`、`All Keyboard Shortcuts…`
    （`tab-bar/create-menu/TabBarCreateRowCustomizer.tsx:151-365`）。你的 `orca-new-menu` 是寫死的清單。
@@ -222,7 +225,7 @@ sidebar nav/chrome、cards 狀態圖示、handoff 對話框、`keys.json` ↔ ke
 拖曳多選／range selection、keyboard focus order（Orca 是 web，全站 Tab 可走）、
 dictation／notifications／bots 相關表面（大概率超出你的範圍，需要先畫線）。
 
-### 4.5 覆蓋率（為什麼這不是全部）
+#### 4.5 覆蓋率（為什麼這不是全部）
 
 | 面 | Orca 的總量 | 這輪比過 | 估計 |
 |---|---|---|---|
@@ -238,6 +241,9 @@ dictation／notifications／bots 相關表面（大概率超出你的範圍，�
 `orca-agents`、`agent-config` 這 7 支（佔你 mods 的一半工作量）。
 還有一整類我**沒有能力從程式碼判斷**的差異：動畫／過渡、focus ring、hover 延遲、
 toast 時間、拖曳預覽、捲動行為 — 這些只能並排開兩個 app 用眼睛對，或你截圖給我。
+
+**交接件**：同一目錄的 `handoff.md` —— 環境限制、哪些是查證/哪些是宣稱、owner 正在並行的工作、
+以及 plan 交給別的 model 時會失敗的 8 個機制。要換 model 執行本檔，先讀它。
 
 **工具限制**：`/Users/tonyyang/git/orca` 的部分檔案（`AGENTS.md`、`i18n/locales/en.json` 直接讀）
 被權限擋；`en.json` 我是用 `git show <commit> -- <path>` 繞過的，所以**只能看到有 diff 的字串**。
