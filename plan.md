@@ -2,6 +2,8 @@
 
 ## 2026-11-20 修復與交付補記
 
+真實 GitHub 驗證：已在獨立私人測試 repo 對已推送分支建立 draft PR，驗證 repository ID、head、base 與 draft 狀態；沒有使用 Herdr 的實際 dialog。測試 repo 因原 gh token 缺少 delete_repo scope 曾遇到 403；完成臨時授權後已刪除，GitHub 以 404 確認，臨時登入檔已清除。
+
 合併預演：將目前 Orca 程式碼與必要測試放入臨時 Git index，與 main 進行隔離合併後，178/178 測試及 orca-changes、orca-files、orca-worktree 模組檢查通過。此預演未修改分支或現有 index；不包含臨時 HTML、stock worktree 修改及未追蹤文件。Create PR 真實送出、UI 焦點／滾動、Push 與 worktree 安全移除仍未完成，因此尚未提交合併。
 
 驗證補記：`node --test` 181/181、`git diff --check` 與 10 個 mod 載入檢查通過；Herdr 目前畫面可見 Explorer 且 status 無錯誤。Create PR 在隔離本地 repo 中以真實 Git/gh 對現有 GitHub 分支做唯讀確認，head、default base 和 repository ID 取得成功；預設分支正確拒絕。另在臨時 Git repo 實際製造衝突，執行 resolveConflict 成功 stage；未建立真實 PR，亦未驗證 Herdr 實際鍵盤焦點／捲動與遠端 mutation。
