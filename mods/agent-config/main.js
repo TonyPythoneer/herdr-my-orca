@@ -888,16 +888,15 @@ export default class AgentConfig extends View {
               .id("save-agents")
               .items_center()
               .justify_center()
-              .h(21)
-              .px(12)
+              .size(22)
               .rounded(5)
               .bg(t.accent)
-              .text_size(10)
-              .font_medium()
               .text_color(t.accent_foreground)
               .cursor_pointer()
+              .tooltip("Save")
+              .accessibility_label("Save")
               .on_click((_e, cx) => this.saveAgents(cx))
-              .child("Save"),
+              .child(svg("mods/agent-config/save.svg").size(14)),
           ),
       )
       .child(
@@ -949,16 +948,15 @@ export default class AgentConfig extends View {
               .id("save-prompt")
               .items_center()
               .justify_center()
-              .h(21)
-              .px(12)
+              .size(22)
               .rounded(5)
               .bg(t.accent)
-              .text_size(10)
-              .font_medium()
               .text_color(t.accent_foreground)
               .cursor_pointer()
+              .tooltip("Save")
+              .accessibility_label("Save")
               .on_click((_e, cx) => this.savePrompt(cx))
-              .child("Save"),
+              .child(svg("mods/agent-config/save.svg").size(14)),
           ),
       )
       .child(
