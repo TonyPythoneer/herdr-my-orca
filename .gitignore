@@ -1,4 +1,7 @@
 .agentflow
 
 gpui-kit.d.ts
+# Written by `herdr-app check` (and gpui-shell) into any folder that imports a
+# built-in module; byte-identical on every run, so it is never worth tracking.
+jsconfig.json
 .claude
