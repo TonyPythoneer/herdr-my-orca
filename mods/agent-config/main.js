@@ -122,20 +122,8 @@ const DEFAULT_AGENTS = {
 const DEFAULT_AGENTS_TEXT = JSON.stringify(DEFAULT_AGENTS, null, 2);
 
 // The supplied prompt with the shell example's leading indentation removed.
-const DEFAULT_PROMPT = [
-  "You are the primary implementation agent.",
-  "",
-  "Delegate research to scout.",
-  "Write and test code yourself.",
-  "Ask checker to review significant changes.",
-  "",
-  "Consult the advisor:",
-  "1. Before finalizing complex plans.",
-  "2. When the same error occurs twice.",
-  "3. Before declaring complex work complete.",
-  "",
-  "Skip unnecessary delegation for trivial tasks.",
-].join("\n");
+const DEFAULT_PROMPT =
+  "Before finishing, verify the change by running checks on the edge cases that matter for it. Then reply with only: your answer, the one or two checks that best prove it, anything that failed or remains risky, and decisions only a human can make. Leave out the rest of your process.";
 const SETTINGS = `${appHome()}/agent-config.json`;
 
 // The CLI's version, the last line of `--version` output: the cache is valid while it stays the same.
