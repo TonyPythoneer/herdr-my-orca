@@ -6,7 +6,7 @@
 // visibility-menu trigger last.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { machines, updates, theme, run, exec, home, shared, keys, watchFolder, nextCommand } from "herdr";
+import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand } from "herdr";
 import { probeLocal } from "./local-usage.js";
 import { probeAllProviders, getTightestUsageBucket, formatBucketChipLabel } from "./usage.js";
 
@@ -109,7 +109,9 @@ export default class OrcaStatus extends View {
     cx.spawn(async (cx) => {
       try {
         const { providers } = await probeAllProviders({ exec, home: home() });
-        this.readings = [...await probeLocal(exec), ...providers];
+        // Only agents the create menu lists as installed get a chip; a failed check hides none.
+        const installed = await knownAgents().then((a) => new Set(a.filter((x) => x.installed).map((x) => x.run[0]))).catch(() => null);
+        this.readings = [...await probeLocal(exec, installed), ...providers];
       } catch {
         // Retain prior state on failure
       } finally {

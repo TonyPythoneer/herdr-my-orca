@@ -15,7 +15,10 @@ import { clampUsedPercent } from './usage.js';
 const LIVE_FRESH_MINUTES = 5;
 const OAUTH_FRESH_MINUTES = 15;
 
-const CLAUDE = `d="$HOME/.cache/herdr-usage"; mkdir -p "$d"
+// A provider is drawn only when its CLI is installed (the create menu's knownAgents) and signed
+// in: each script below prints nothing without its credential, so a logged-out CLI leaves no chip.
+const CLAUDE = `{ security find-generic-password -s "Claude Code-credentials" >/dev/null 2>&1 || [ -s "$HOME/.claude/.credentials.json" ]; } || exit 0
+d="$HOME/.cache/herdr-usage"; mkdir -p "$d"
 s="$d/claude-statusline.json"; c="$d/claude-oauth.json"
 live=null
 if [ -n "$(find "$s" -mmin -${LIVE_FRESH_MINUTES} 2>/dev/null)" ]; then
@@ -27,7 +30,8 @@ if [ "$live" = "null" ] && [ -z "$(find "$c" -mmin -${OAUTH_FRESH_MINUTES} 2>/de
 fi
 api=$(cat "$c" 2>/dev/null)
 printf '{"live":%s,"api":%s}' "$live" "\${api:-null}"`;
-const CODEX = `f=$(ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | head -n 1); [ -n "$f" ] || exit 0
+const CODEX = `[ -s "$HOME/.codex/auth.json" ] || exit 0
+f=$(ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | head -n 1); [ -n "$f" ] || exit 0
 grep '"primary":{' "$f" | tail -n 1 | jq -c '.. | objects | select(has("rate_limits")) | .rate_limits | select(.primary) | {primary, secondary}' 2>/dev/null`;
 // opencode's free-model tokens (cache included, as Claude and Codex are billed) since its last
 // reset. A 429 carries the server's own reset (time + retryAfterMs): the newest one past is the
@@ -145,8 +149,10 @@ export function parseClaudeStatusLine(rateLimits) {
   return buckets.length ? reading('claude', buckets) : null;
 }
 
-export async function probeLocal(execFn) {
-  const [c, x, o] = await Promise.all([CLAUDE, CODEX, OPENCODE].map((s) => sh(execFn, s)));
+/** `installed`: the CLI names `knownAgents()` found; null (not known) skips that check. opencode needs no login: its free tokens count either way. */
+export async function probeLocal(execFn, installed = null) {
+  const [c, x, o] = await Promise.all([['claude', CLAUDE], ['codex', CODEX], ['opencode', OPENCODE]]
+    .map(([name, script]) => !installed || installed.has(name) ? sh(execFn, script) : ''));
   const claude = json(c), codex = json(x);
   // Live windows win while a session is active; the API snapshot only adds its extra pools
   // (or stands in entirely once the session has been quiet past the freshness window).

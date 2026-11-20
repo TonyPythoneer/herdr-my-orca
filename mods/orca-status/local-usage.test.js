@@ -78,3 +78,21 @@ test('probeLocal shows an expired codex window as 0% as static 0% / 5h', async (
   assert.equal(week.idleText, undefined);
   assert.equal(week.usedPercent, 68);
 });
+
+test('probeLocal skips providers whose CLI is not installed', async () => {
+  const ran = [];
+  const exec = async (_c, [, script]) => { ran.push(script.includes('.codex') ? 'codex' : script.includes('opencode') ? 'opencode' : 'claude'); return { code: 0, stdout: '' }; };
+  await probeLocal(exec, new Set(['opencode']));
+  assert.deepEqual(ran, ['opencode']);
+});
+
+test('the claude and codex probes print nothing when signed out', async () => {
+  const { execFile } = await import('node:child_process');
+  const { mkdtempSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const home = mkdtempSync(join(tmpdir(), 'herdr-login-'));
+  const exec = (_c, args) => new Promise((resolve) => execFile('sh', args, { env: { HOME: home, PATH: '/usr/bin:/bin' } }, (e, stdout) => resolve({ code: e ? 1 : 0, stdout })));
+  const rows = await probeLocal(exec, new Set(['claude', 'codex']));
+  assert.deepEqual(rows.map((r) => r.provider), []);
+});
