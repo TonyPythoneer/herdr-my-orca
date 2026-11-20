@@ -263,8 +263,8 @@ export default class DiffBreakdown extends View {
   }
 
   lineCounts(added, deleted, t, small = false) {
-    if (added === null && deleted === null) return div().text_size(small ? 11 : 12).text_color(t.dim).child("binary");
-    return h_flex().gap(6).text_size(small ? 11 : 12)
+    if (added === null && deleted === null) return div().flex_none().text_size(small ? 11 : 12).text_color(t.dim).child("binary");
+    return h_flex().flex_none().gap(6).text_size(small ? 11 : 12)
       .children([
         added ? div().text_color("#5fcf85").child(`+${added.toLocaleString()}`) : null,
         deleted ? div().text_color("#f07872").child(`−${deleted.toLocaleString()}`) : null
@@ -280,10 +280,10 @@ export default class DiffBreakdown extends View {
       .border_b(1).border_color(t.border).cursor_pointer().hover(s => s.bg(t.hover))
       .child(div().w(12).flex_none().text_center().text_color(t.dim).child(isOpen ? "▾" : "▸"))
       .child(div().w(10).h(10).rounded(3).bg(CATEGORY_COLORS[group.id] ?? t.dim).flex_none())
-      .child(div().text_size(13).font_weight(600).text_color(generated ? t.dim : t.foreground).child(group.name))
+      .child(div().flex_none().text_size(13).font_weight(600).text_color(generated ? t.dim : t.foreground).child(group.name))
       .child(div().flex_1().min_w(0))
-      .child(div().text_size(12).text_color(t.dim).child(files))
-      .child(div().w(36).text_size(12).text_color(t.dim).text_right().child(generated ? "—" : share))
+      .child(div().flex_none().text_size(12).text_color(t.dim).child(files))
+      .child(div().w(36).flex_none().text_size(12).text_color(t.dim).text_right().child(generated ? "—" : share))
       .child(this.lineCounts(group.added, group.deleted, t));
   }
 
@@ -327,9 +327,9 @@ export default class DiffBreakdown extends View {
       : file.status === "D" ? "#f07872" : "#d9b25a";
     const content = [
       div().w(14).flex_none().text_color(t.dim).child(svg("mods/orca-diff-breakdown/file.svg").size(13)),
-      div().text_size(12.5).text_color(file.status === "D" ? t.dim : t.foreground)
+      div().flex_none().max_w(180).truncate().text_size(12.5).text_color(file.status === "D" ? t.dim : t.foreground)
         .when(file.status === "D", e => e.line_through()).child(name),
-      div().flex_1().min_w(0).text_size(11).text_color(t.dim).child(dir),
+      div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(dir),
       this.lineCounts(file.added, file.deleted, t, true),
       div().w(14).flex_none().text_center().text_size(12).font_weight(600).text_color(tone).child(file.status)
     ];
