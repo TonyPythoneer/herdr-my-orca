@@ -54,7 +54,7 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 
 The Orca UI is now described by **one manifest**: [ui/orca.profile.json](ui/orca.profile.json).
 It lists the shell, workspaces, sidebar panels, menus and supporting mods that together
-form this layout. These are *components*, not 25 copies of the same UI: Herdr requires
+form this layout. These are *components*, not a monolithic UI implementation: Herdr requires
 each mod's own named entrypoint, so the source folders stay independent. The manifest is
 the single entry point for knowing which pieces belong to **my UI**.
 
