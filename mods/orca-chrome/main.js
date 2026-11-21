@@ -43,6 +43,9 @@ export default class WorkspaceChrome extends View {
         .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
       return h_flex().size_full().items_center().justify_between().bg(t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
         .child(h_flex().items_center().gap(4)
+          // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
+          // while the Agents page lives in the `main` stack (`main-agents`).
+          .child(row("agents", "bot", "Agents", () => run("layout.select", { stack: "main", child: "main-agents" })))
           .child(row("settings", "settings", "Settings", () => run("app.settings")))
           // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
           // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).

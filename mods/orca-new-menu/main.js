@@ -5,13 +5,19 @@
 // Opened by orca-tabs, orca-landing and orca-nav.
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared } from "herdr";
+import { theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared, appHome, readTextFile } from "herdr";
 import { MODELS } from "./models.js";
 
 // Cache agents so the menu paints immediately on reopen; shared() needs another render (AGENTS.md rule 10).
 let agentsCache = null;
 let agentsFailed = false;
 let agentsLoading = false;
+// Agents the person turned off in the Agent Manager (`agent-manager.json`). Orca's equivalent is
+// `disabledTuiAgents`; `isTuiAgentEnabled` keeps a disabled agent installed but out of pickers
+// (`agent-launch/catalog/tui-agent-selection.ts`). A failed read fails open: a broken file never
+// hides every agent. The Agent Manager page writes this file.
+let disabledAgents = new Set();
+const MANAGER_FILE = `${appHome()}/agent-manager.json`;
 // A probed model list survives the app; the picker paints it before asking again. Orca serves a
 // saved catalog until it is 10 minutes old (`agent-model-catalog-entry-lifetime.ts:12`).
 const MODELS_KEY = "new-menu.models.v1";
@@ -74,6 +80,17 @@ export default class NewMenu extends View {
     this.input.on("change", (_e, cx) => { this.filter = this.input.value(); this.at = 0; cx.notify(); });
     // The filter owns Enter while it is focused, so a model is chosen through submit.
     this.input.on("submit", (_e, cx) => this.choose(this.at, cx));
+    // Availability changes while the menu is closed, so read it again on every open.
+    cx.spawn(async (cx) => {
+      const text = await readTextFile(MANAGER_FILE).catch(() => null);
+      try {
+        const saved = JSON.parse(text ?? "{}");
+        disabledAgents = new Set(Array.isArray(saved.disabled) ? saved.disabled : []);
+      } catch {
+        disabledAgents = new Set();
+      }
+      cx.notify();
+    });
     if (agentsCache || agentsLoading) return;
     const machine = spaces().find((s) => s.active)?.machine;
     agentsLoading = true;
@@ -108,6 +125,10 @@ export default class NewMenu extends View {
         run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 440, height: 260, props: { space: space?.id, folder, action: "new" } }) },
       { label: "Open worktree…", icon: "workflow",
         run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 560, height: 480, props: { space: space?.id, folder, action: "open" } }) },
+      // The Agent Manager page lives in the same `main` stack as terminals and landing; the
+      // chooser closes itself in choose() before this runs.
+      { label: "Manage agents…", icon: "bot", sep: true,
+        run: () => run("layout.select", { stack: "main", child: "main-agents" }) },
     ];
   }
 
@@ -116,9 +137,11 @@ export default class NewMenu extends View {
     if (!agentsCache) {
       return [{ label: agentsFailed ? "Could not load agents" : "Checking installed agents…", disabled: true }];
     }
-    // Show installed agents and up to two installable suggestions.
-    const installed = agentsCache.filter((a) => a.installed);
-    const rows = [...installed, ...agentsCache.filter((a) => !a.installed).slice(0, 2)].map((a) => ({
+    // Show installed agents and up to two installable suggestions. Disabled agents are not
+    // launch choices, so they are not rows here at all.
+    const offered = agentsCache.filter((a) => !disabledAgents.has(a.key));
+    const installed = offered.filter((a) => a.installed);
+    const rows = [...installed, ...offered.filter((a) => !a.installed).slice(0, 2)].map((a) => ({
       label: a.name,
       program: a,
       disabled: !a.installed,
@@ -214,11 +237,14 @@ export default class NewMenu extends View {
   // A click on the row itself is the flyout's "Launch terminal": the flyout opens with launchNow and
   // launches with its saved model and effort, then closes.
   launchConfigured(agent) {
+    if (disabledAgents.has(agent.key)) return;
     this.hoverConfig(agent, true, true);
   }
 
   // Permission flags live in programs.json's `run`; the menu only adds the chosen model.
   launch(agent, model) {
+    // A menu left open while the Agent Manager changed availability cannot launch a disabled one.
+    if (disabledAgents.has(agent.key)) return;
     const space = spaces().find((s) => s.active);
     const seed = MODELS[agent.key];
     run("tab.new", {

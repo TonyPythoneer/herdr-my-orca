@@ -153,6 +153,13 @@
                       "content": {
                         "mod": "orca-landing"
                       }
+                    },
+                    {
+                      "id": "main-agents",
+                      "type": "block",
+                      "content": {
+                        "mod": "orca-agent-manager"
+                      }
                     }
                   ]
                 }
