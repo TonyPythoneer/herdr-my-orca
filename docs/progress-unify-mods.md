@@ -4,7 +4,7 @@
 |---|---|---|
 | 1. Repo holds only our mods | done | #6 |
 | 2. One source for helpers | done | #7 |
-| 3. Split big files | in progress (agent-manager done) | #8 |
+| 3. Split big files | agent-manager done; spaces and tabs deferred | #8 |
 
 ## Log
 - Plan written.
@@ -22,3 +22,11 @@
   builders) moved out; `main.js` 1629 -> 1536 lines. Tests 220 pass, check passes, live synced.
   The class's stateful render methods (`row`, `editor`, `uninstallSection`) read `this`, so they
   stay: moving them needs a wider refactor with no test net.
+- Phase 3, orca-spaces: not split. Its pure helpers (`stored`, `workspaceOptions`, about 50 lines)
+  are cut out of `main.js` by character-offset slicing in `storage.test.js`, and `orca-menu`
+  carries its own copy of `stored`; the three tests that evaluate `main.js` also stub its scope.
+  Moving them means rewriting those tests for roughly 3% of the file. `card()` (340 lines) reads
+  `this` throughout. Worth doing only together with a render test harness.
+- Phase 3, orca-tabs: deferred. Live holds an unmerged close-tabs feature in `orca-tabs/main.js`
+  (it was dropped from the repo on request), so a split in the repo would be undone by the next sync.
+- Not done on purpose: option 1b (bundler) and shared SVG de-duplication.
