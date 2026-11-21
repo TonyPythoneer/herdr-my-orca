@@ -1,3 +1,4 @@
+// Generated from shared/transcript.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // Agent session transcript extraction, ANSI sanitization, and continuation/fork prompt synthesis.
 // Ported directly from Orca:
 //   - src/renderer/src/lib/agent-session-fork-context.ts:1-160
