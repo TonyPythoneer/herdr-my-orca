@@ -872,7 +872,8 @@ export default class AgentManager extends View {
       .id(id)
       .track_scroll(group === "installed" ? this.installedScroll : this.availableScroll)
       .w_full()
-      .px(10)
+      .pl(10)
+      .pr(18)
       .when(viewport, (el) => el.absolute().inset_0().overflow_y_scroll())
       .children(rows.map((row, index) => this.row(row, t, index === rows.length - 1)));
     return div()
@@ -1059,7 +1060,7 @@ export default class AgentManager extends View {
     const dirty = draft.run ? !sameRun(draft.run, row.run) : true;
     return v_flex()
       .w_full()
-      .pl(this.width && this.width < 520 ? 0 : 44)
+      .pl(52)
       .pr(2)
       .pb(14)
       .gap(8)
