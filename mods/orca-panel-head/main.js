@@ -1,6 +1,6 @@
 // Derived from Herdr App's defaults/mods/changes/main.js (Apache-2.0, Copyright Herdr App authors).
 // Modified for herdr-orca; see LICENSE and NOTICE.
-import { View, div, svg, image } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { theme, run, layout, panes, spaces, focused, exec, nextCommand } from "herdr";
 import { visibleTools, fallbackChild } from "./panel-gating.js";
@@ -43,8 +43,7 @@ const ITEMS = [
   { id: "changes", icon: "git-branch", title: "Source Control", gating: "gitOnly" },
   { id: "checks", icon: "list-checks", title: "Checks", gating: "gitOnly" },
   { id: "diff-breakdown", icon: "layers", title: "Diff Breakdown", gating: "gitOnly" },
-  { id: "ports", icon: "plug", title: "Ports", gating: "sshOnly" },
-  { id: "skillshare", title: "skillshare" }
+  { id: "ports", icon: "plug", title: "Ports", gating: "sshOnly" }
 ];
 
 export default class PanelHead extends View {
@@ -123,7 +122,7 @@ export default class PanelHead extends View {
           .role("button").accessibility_label(title).tooltip(title)
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click(() => run("layout.select", { stack: "panel-body", child: id }))
-          .child(id === "skillshare" ? image("mods/skillshare/mark.svg").w(16).h(16) : svg(`mods/orca-panel-head/${icon}.svg`).size(16))
+          .child(svg(`mods/orca-panel-head/${icon}.svg`).size(16))
           // `activity-bar-buttons.tsx:175-177`: bottom-0, left/right 25%, h-2px,
           // bg-foreground, rounded-t. 25% of 32px is 8px.
           .when(on, el => el.child(div().absolute().bottom(0).left(8).right(8).h(2).bg(t.foreground).rounded_t(4)));
