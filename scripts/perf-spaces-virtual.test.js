@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
 import { planRenderRows, agentsByRow, foldKey } from '../mods/orca-spaces/worktree-plan.js';
+import { stored, workspaceOptions } from '../mods/orca-spaces/storage.js';
 
 test('performance fixture does not drive focus or add unconditional polling notifications', t => {
   const root = mkdtempSync(join(tmpdir(), 'orca-virtual-test-'));
@@ -40,7 +41,7 @@ function candidate(t, extras = {}) {
   execFileSync('python3', [fileURLToPath(new URL('./perf-spaces-virtual.py', import.meta.url)), destination]);
   const source = readFileSync(join(destination, 'main.js'), 'utf8')
     .replace(/^import .*;$/gm, '').replace('export default class Spaces', 'class Spaces');
-  const scope = { View: class {}, onStop: () => null, shared: () => null, planRenderRows, ...extras };
+  const scope = { View: class {}, onStop: () => null, shared: () => null, planRenderRows, stored, workspaceOptions, ...extras };
   vm.runInNewContext(source + '\nglobalThis.Spaces = Spaces;', scope);
   return new scope.Spaces();
 }
@@ -301,7 +302,7 @@ function projectedOwner(t, rows, groupBy, extras = {}) {
     theme:()=>({}), panes:()=>[], agents:()=>[],
     foldKey,
     agentsByRow:sourceRows=>agentsByRow(sourceRows, []),
-    localStorage:{getItem:key=>key === 'workspace.options.v1' ? JSON.stringify({groupBy:currentGroupBy}) : null},
+    workspaceOptions:()=>({...workspaceOptions(), groupBy:currentGroupBy}),
     tint:name=>name, avatarFile:()=>null, setShared() {},
     ...extras,
   });

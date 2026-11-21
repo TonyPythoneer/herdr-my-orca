@@ -4,6 +4,8 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile } from "herdr";
 import { selectTabPanes } from "./tab-panes.js";
+import { edgeZone } from "./drop-zone.js";
+import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
 
 // Memoized tab colour store: shared() is the primary source; localStorage is the fallback.
@@ -22,16 +24,6 @@ function readTabColorStore() {
   } catch {
     return {};
   }
-}
-
-// `src/shared/agent-status/title/agent-title-decoration.ts`: the tab already shows the
-// provider icon, so a known agent's own leading status glyph is dropped. Glyph-only titles
-// keep the original rather than rendering a blank label.
-const LEADING_AGENT_TITLE_DECORATION_RE =
-  /^(?:[\u2733\u2726\u23F2\u25C7\u270B\u25B2\u2800-\u28FF\u25D0-\u25D3]+|[.*]\s)\s*/;
-function stripLeadingAgentTitleDecoration(title) {
-  const stripped = String(title ?? "").replace(LEADING_AGENT_TITLE_DECORATION_RE, "").trimStart();
-  return stripped.length > 0 ? stripped : title;
 }
 
 function find(node, id) {
@@ -273,33 +265,6 @@ function dropResolve(zone, cx) {
 
 // The drag in flight: the tab it started from and the panel it aims at. Written through
 // `DROP_KEY` above, because the overlay's copy of this mod is a separate realm.
-
-// `tab-drop-zone.ts:38-88`, ported: a zone only in the outer bands, the strip left to
-// reordering, and the middle of the panel meaning "no split".
-function edgeZone(panel, point, stripHeight) {
-  const stripBottom = panel.top + stripHeight;
-  if (point.y < stripBottom) return null;
-  const localX = point.x - panel.left;
-  const horizontalEdge = panel.width * 0.2;
-  if (localX < horizontalEdge) return "left";
-  if (localX > panel.width - horizontalEdge) return "right";
-  const bodyHeight = Math.max(0, panel.height - stripHeight);
-  if (bodyHeight <= 0) return null;
-  const bodyLocalY = point.y - stripBottom;
-  const verticalEdge = bodyHeight * 0.2;
-  if (bodyLocalY < verticalEdge) return "up";
-  if (bodyLocalY > bodyHeight - verticalEdge) return "down";
-  // Orca's bands leave the middle of the panel unclaimed because there the drop MERGES the tab
-  // into that pane group (`resolveDropZone`'s 'center', `tab-drop-zone.ts:19-36`). Herdr has no
-  // tab-group merge — a tab *is* its panes — so the centre has no action, and keeping it dead
-  // makes most of the panel a no-op. The nearest edge wins instead; horizontal on a tie, which
-  // is the preference Orca states in that same function.
-  const toLeft = localX, toRight = panel.width - localX;
-  const toUp = bodyLocalY, toDown = bodyHeight - bodyLocalY;
-  const horizontal = Math.min(toLeft, toRight), vertical = Math.min(toUp, toDown);
-  if (horizontal <= vertical) return toLeft <= toRight ? "left" : "right";
-  return toUp <= toDown ? "up" : "down";
-}
 
 export default class Tabs extends View {
   init(_props, cx) {

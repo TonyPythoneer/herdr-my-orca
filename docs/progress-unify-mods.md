@@ -39,3 +39,14 @@
 - Open, needs the owner: live `layouts/orca.json` was re-wrapped in a row at 23:26 on 2026-11-21,
   which moves `titlebar`/`traffic_lights` off the root (left as is on request); live
   `orca-new-menu/main.js` has inventory-merge and freebuff changes that are in no repo commit.
+
+## Third pass (2026-11-22)
+- orca-tabs: `drop-zone.js` (`edgeZone`) and `tab-title.js` (`stripLeadingAgentTitleDecoration`) moved
+  out with tests; `main.js` 1127 -> 1092. Live `orca-tabs/main.js` had drifted (toggle margin `mr(10)`,
+  x 88 instead of 80), so it was NOT synced: needs the owner to say which side is current.
+- orca-spaces: `storage.js` (`stored`, `workspaceOptions`) moved out; `storage.test.js` imports it,
+  and the vm-based tests (`retained-row`, `perf-spaces-virtual`) inject the two names. Synced live.
+  `orca-menu` keeps its own `stored` copy (its test slices that file).
+- orca-agent-manager stateful render methods and `orca-spaces` `card()`: left, no render harness.
+- Tests 226 pass, `herdr-app check` passes for both mods.
+

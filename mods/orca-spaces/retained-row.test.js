@@ -1,3 +1,4 @@
+import { stored, workspaceOptions } from './storage.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -9,7 +10,7 @@ function fixture() {
   let sharedReads = 0;
   const scope = {
     View: class {}, foldKey: r => `space:${r.w.id}`, shared: () => { sharedReads++; return null; },
-    onStop: v => v.focused, avatarFile: () => null,
+    onStop: v => v.focused, avatarFile: () => null, stored, workspaceOptions,
   };
   vm.runInNewContext(source + '\nglobalThis.Spaces = Spaces;', scope);
   const owner = new scope.Spaces();

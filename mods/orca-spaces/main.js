@@ -14,6 +14,7 @@ import { getFolderWorkspaceRowGeometry, getFlushWorktreeCardPaddingLeft, getProj
 import { tip, tipMark } from "./tip.js";
 import { stopsInit, stop, focusRoot, enter, within, onStop } from "./focus.js";
 import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, otherTabs, activeReviewKeys, planRenderRows, STATUS_RANK } from "./worktree-plan.js";
+import { stored, workspaceOptions } from "./storage.js";
 import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUPS, BRANCH_PR_LOOKUP_PAGE_SIZE } from "./review-store.js";
 
 // `BRANCH_PR_LOOKUP_PAGE_SIZE` (pr-branch-lookup.ts:28): "GitHub lists a branch's PRs newest
@@ -22,51 +23,6 @@ import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUP
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
-// Safely read a stored JSON value of the expected shape; a mangled key never throws.
-// Memoized by the raw string so repeated renders skip re-parsing; an external write
-// changes the raw string and invalidates the entry automatically.
-const _storedCache = new Map();
-function stored(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    const cached = _storedCache.get(key);
-    if (cached && cached.raw === raw) return cached.value;
-    const v = JSON.parse(raw ?? "null");
-    const value = Array.isArray(fallback) === Array.isArray(v) && v !== null && typeof v === "object" ? v : fallback;
-    _storedCache.set(key, { raw, value });
-    return value;
-  } catch { return fallback; }
-}
-
-// Workspace options written by orca-nav's options popup (SidebarWorkspaceOptionsMenu.tsx:23-100).
-// Orca persists these in PersistedUIState (`persisted-ui-state-types.ts:39-89`); Herdr mods have
-// no shared store, so this is the same read-only handoff as `projects.saved.v1`: orca-nav writes
-// "workspace.options.v1", this projection reads it. Defaults are NO_WORKSPACE_ROW_FILTERS
-// (`workspace-row-filters.ts:45-56`) plus repo grouping and manual sort.
-const WORKSPACE_OPTIONS_KEY = "workspace.options.v1";
-const WORKSPACE_OPTIONS_DEFAULTS = {
-  groupBy: "repo",              // none | workspace-status | repo
-  sortBy: "manual",             // name | smart | recent | repo | manual
-  projectOrderBy: "manual",     // manual | recent
-  filterRepoIds: [],
-  visibleWorkspaceHostIds: null,
-  hideSleepingWorkspaces: false,
-  alwaysShowDefaultBranchWorkspace: true,
-  hideDefaultBranchWorkspace: false,
-  hideAutomationGeneratedWorkspaces: false,
-  hideCliCreatedWorkspaces: false,
-  hideWorkspacesFromOtherDevices: false,
-  hideDetachedHeadWorkspaces: false,
-};
-let _workspaceOptionsCache = { src: undefined, value: null };
-function workspaceOptions() {
-  const saved = stored(WORKSPACE_OPTIONS_KEY, null);
-  if (_workspaceOptionsCache.src === saved) return _workspaceOptionsCache.value;
-  const value = saved && !Array.isArray(saved) ? { ...WORKSPACE_OPTIONS_DEFAULTS, ...saved } : { ...WORKSPACE_OPTIONS_DEFAULTS };
-  _workspaceOptionsCache = { src: saved, value };
-  return value;
-}
-
 export default class Spaces extends View {
   init(_props, cx) {
     stopsInit(this, cx, "entry");

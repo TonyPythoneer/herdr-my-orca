@@ -16,29 +16,13 @@ This file is only what is left and what will bite you.
   `herdr-app status` (errors empty), `node scripts/sync-shared.mjs --check`, and a screenshot
   with `herdr-app shot x.png` read back. Quote globs in zsh.
 
-## Not done, in order of value
-
-### 1. `orca-tabs` split (1127 lines) - now unblocked
-It was held back because live carried an unreviewed auto-close-tabs feature. That was removed
-from live on 2026-11-22, and live `orca-tabs/main.js` equals the repo again, so a split is safe
-to sync. Pure candidates: drop-geometry and tab-pane selection helpers (`selectTabPanes`,
-`matchUnofficialApp`, `unofficialByTerminal`), each with a test like `tab-panes.test.js`.
-Before starting: `diff mods/orca-tabs/main.js ~/.config/herdr-app/mods/orca-tabs/main.js` must be empty.
-
-### 2. `orca-spaces` split (1436 lines)
-Why it was skipped: `storage.test.js` slices `main.js` by character offset
-(`const _storedCache =` ... `export default class Spaces`) and three tests evaluate `main.js`
-with a stubbed scope (`card-agents`, `git-refresh`, `retained-row`). Moving `stored` and
-`workspaceOptions` (about 50 lines) means rewriting those tests first: make `storage.test.js`
-import a real `storage.js`, add the new names to each fixture scope. `orca-menu` has its own copy
-of `stored` (same test slices it): decide whether to share it through `shared/`. `card()` is 340
-lines and reads `this` everywhere; leave it unless you add a render test harness.
-
-### 3. `orca-agent-manager` stateful render methods
-`row` (about 117 lines), `editor` (about 214), `uninstallSection` (about 90) read `this`. Moving
-them means turning them into functions of `(owner, ...)`. There is no render test: `herdr-app
-check` only builds the first frame. Add a fake-builder test (see `orca-spaces/card-agents.test.js`)
-before moving anything.
+## Not done
+- `orca-tabs` split is done in the repo (drop-zone.js, tab-title.js) but not synced: live `main.js`
+  differs from the repo (`mr(10)` on the sidebar toggle, x 88 vs 80). Decide which is current, then
+  sync `main.js`, `drop-zone.js`, `tab-title.js`. Live also differs in `agent-config/main.js`,
+  `orca-agent-manager/state.test.js`, `orca-chrome/main.js`, `orca-pane/crew.js`.
+- `orca-spaces` `card()` (340 lines) and `orca-agent-manager` `row`/`editor`/`uninstallSection` read
+  `this`; moving them needs a fake-builder render test first (see `orca-spaces/card-agents.test.js`).
 
 ## Live leftovers (decisions for the owner; do not delete without asking)
 - `~/.config/herdr-app/layouts/main.json`, `terminals.json`, `layouts/.state/win98.json`,

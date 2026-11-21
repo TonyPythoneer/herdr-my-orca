@@ -30,10 +30,9 @@ test('failed tab color persistence does not mutate the cached fallback', async (
 
 
 test('stored reads and workspace options invalidate when another mod writes', async () => {
-  const source = await readFile(new URL('./main.js', import.meta.url), 'utf8');
-  const helper = source.slice(source.indexOf('const _storedCache ='), source.indexOf('export default class Spaces'));
   const values = new Map();
-  const view = new Function('localStorage', `${helper}\nreturn { stored, workspaceOptions };`)({ getItem: key => values.get(key) ?? null });
+  globalThis.localStorage = { getItem: key => values.get(key) ?? null };
+  const view = await import('./storage.js');
   const initial = view.workspaceOptions();
   assert.equal(view.workspaceOptions(), initial);
   values.set('workspace.options.v1', '{"groupBy":"none"}');
