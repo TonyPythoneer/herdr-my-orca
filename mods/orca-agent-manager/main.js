@@ -618,7 +618,7 @@ export default class AgentManager extends View {
       .items_center()
       .p(2)
       .rounded_full()
-      .bg(on ? t.accent : t.input)
+      .bg(on ? t.foreground : t.input)
       .when(installed, (el) => el.cursor_pointer())
       .when(!installed, (el) => el.opacity(0.45))
       .role("switch")
@@ -637,33 +637,53 @@ export default class AgentManager extends View {
           .items_center()
           .when(on, (el) => el.justify_end())
           .when(!on, (el) => el.justify_start())
-          .child(div().size(16).rounded_full().bg(on ? t.accent_foreground : t.muted)),
+          .child(div().size(16).rounded_full().bg(on ? t.background : t.muted)),
       );
   }
 
-  section(title, count, t, note) {
+  catalog(rows, t) {
+    return v_flex()
+      .w_full()
+      .px(10)
+      .rounded(10)
+      .border_1()
+      .border_color(t.border)
+      .bg(t.surface)
+      .overflow_hidden()
+      .children(rows.map((row, index) => this.row(row, t, index === rows.length - 1)));
+  }
+
+  section(title, count, t, note, muted = false) {
     return h_flex()
       .w_full()
       .items_center()
       .gap(8)
       .pt(18)
       .pb(6)
-      .child(div().text_size(13).font_semibold().text_color(t.foreground).child(title))
-      .child(this.badge(count, t, { border: true }))
+      .child(div().text_size(13).font_semibold().text_color(muted ? t.muted : t.foreground).child(title))
+      .child(this.badge(count, t, { border: true, color: muted ? t.muted : t.accent }))
       .when(note, (el) => el.child(div().text_size(11).text_color(t.dim).child(note)))
       .child(div().flex_1());
   }
 
-  commandLine(row, t) {
+  commandLine(row, t, quiet) {
     const mono = settings()?.font_family ?? "JetBrains Mono";
     const effective = formatArgv(row.run);
     if (!row.customized || !row.defaultCmd) {
-      return div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted).child(effective);
+      return div()
+        .min_w(0)
+        .truncate()
+        .font_family(mono)
+        .text_size(11)
+        .text_color(t.muted)
+        .when(quiet, (el) => el.opacity(0.45))
+        .child(effective);
     }
     const fallback = div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted).child(effective);
     return h_flex()
       .min_w(0)
       .gap(6)
+      .when(quiet, (el) => el.opacity(0.45))
       .child(
         div()
           .flex_none()
@@ -676,17 +696,16 @@ export default class AgentManager extends View {
       .when(row.override, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child("→")).child(fallback));
   }
 
-  row(row, t) {
+  row(row, t, last = false) {
     const open = this.expanded.has(row.key);
     const focused = this.focusKey === row.key && this.handle.is_focused();
     const editor = this.editors.get(row.key);
-    const quiet = !row.enabled && row.installed;
+    const quiet = !row.enabled;
     return v_flex()
       .id(`am-row-${row.key}`)
       .relative()
       .w_full()
-      .border_b(1)
-      .border_color(t.border)
+      .when(!last, (el) => el.border_b(1).border_color(t.border))
       .when(focused, (el) => el.bg(t.hover))
       .child(div().absolute().left(0).top(0).bottom(0).w(2).bg(focused ? t.accent : "#00000000"))
       .child(
@@ -736,31 +755,10 @@ export default class AgentManager extends View {
                       .on_click((_event, cx) => this.toggleExpand(row, cx))
                       .child(row.name),
                   )
-                  .when(!row.enabled && row.installed, (el) => el.child(this.badge("Disabled", t, { color: t.blocked, border: true })))
                   .when(row.customized, (el) => el.child(this.badge("Customized", t, { color: t.accent, border: true })))
                   .when(row.entryError, (el) => el.child(this.badge("Invalid command", t, { color: t.blocked, border: true }))),
               )
-              .child(this.commandLine(row, t))
-              .when(!row.installed, (el) =>
-                el.child(
-                  h_flex()
-                    .gap(6)
-                    .items_center()
-                    .child(div().text_size(11).text_color(t.dim).child("Not installed"))
-                    .when(row.homepage, (inner) =>
-                      inner.child(
-                        Link.new(`am-guide-${row.key}`)
-                          .href(row.homepage)
-                          .text_size(11)
-                          .text_color(t.accent)
-                          .underline()
-                          .tooltip(row.homepage)
-                          .child("Install guide ↗"),
-                      ),
-                    )
-                    .when(!row.homepage, (inner) => inner.child(div().text_size(11).text_color(t.dim).child("· no install guide known"))),
-                ),
-              ),
+              .child(this.commandLine(row, t, quiet)),
           )
           .child(
             h_flex()
@@ -774,6 +772,7 @@ export default class AgentManager extends View {
                   .id(`am-more-${row.key}`)
                   .size(26)
                   .flex_none()
+                  .when(!row.installed, (el) => el.opacity(0.45))
                   .flex()
                   .items_center()
                   .justify_center()
@@ -833,6 +832,26 @@ export default class AgentManager extends View {
             ),
         ),
       )
+      .when(!row.installed, (el) =>
+        el.child(
+          h_flex()
+            .gap(6)
+            .items_center()
+            .flex_wrap()
+            .child(div().text_size(11).text_color(t.dim).child("This CLI is not installed."))
+            .when(row.homepage, (inner) =>
+              inner.child(
+                Link.new(`am-guide-${row.key}`)
+                  .href(row.homepage)
+                  .text_size(11)
+                  .text_color(t.accent)
+                  .underline()
+                  .tooltip(row.homepage)
+                  .child("Install guide ↗"),
+              ),
+            ),
+        ),
+      )
       .child(div().text_size(10).font_semibold().text_color(t.dim).child("EXECUTABLE"))
       .child(
         h_flex()
@@ -842,7 +861,7 @@ export default class AgentManager extends View {
           .rounded(6)
           .border_1()
           .border_color(t.input)
-          .bg(t.surface)
+          .bg(t.background)
           .child(
             Input.new(editor.command)
               .w_full()
@@ -875,7 +894,7 @@ export default class AgentManager extends View {
           .rounded(6)
           .border_1()
           .border_color(t.input)
-          .bg(t.surface)
+          .bg(t.background)
           .child(
             Textarea.new(editor.args)
               .size_full()
@@ -1190,14 +1209,14 @@ export default class AgentManager extends View {
                   .when(split.installed.length === 0, (inner) =>
                     inner.child(this.empty("No agents detected. If one is installed, the probe may have timed out — try Refresh.", t)),
                   )
-                  .children(split.installed.map((row) => this.row(row, t)))
+                  .when(split.installed.length > 0, (inner) => inner.child(this.catalog(split.installed, t)))
                   .when(split.available.length > 0, (inner) =>
                     inner
-                      .child(this.section("Available to install", `${split.available.length} agents`, t))
-                      .children(split.available.map((row) => this.row(row, t))),
+                      .child(this.section("Available to install", `${split.available.length} agents`, t, null, true))
+                      .child(this.catalog(split.available, t)),
                   )
                   .when(split.available.length === 0 && split.installed.length > 0, (inner) =>
-                    inner.child(this.section("Available to install", "0 agents", t, "every supported agent is installed")),
+                    inner.child(this.section("Available to install", "0 agents", t, "every supported agent is installed", true)),
                   )
                   .child(
                     h_flex()
