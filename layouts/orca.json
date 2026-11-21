@@ -252,6 +252,13 @@
                       "tab": "ports"
                     }
                   }
+                },
+                {
+                  "id": "skillshare",
+                  "type": "block",
+                  "content": {
+                    "mod": "skillshare"
+                  }
                 }
               ],
               "size": {

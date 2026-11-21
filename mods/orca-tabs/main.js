@@ -1025,7 +1025,7 @@ export default class Tabs extends View {
       ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
-    const enabled = shared("workspace.panels") ?? ["files", "changes"];
+    const enabled = [...(shared("workspace.panels") ?? ["files", "changes"]), "skillshare"];
     this.syncPanel(space, panel, body, enabled);
     this.syncLanding(cx);
     // `.titlebar`: 36px, border-bottom var(--border), background var(--card) #171717
