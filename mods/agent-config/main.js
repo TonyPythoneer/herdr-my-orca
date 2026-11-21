@@ -171,7 +171,7 @@ function normalizeAgents(text) {
 
 export default class AgentConfig extends View {
   init(_props, cx) {
-    this.key = props().key;
+    this.key = props()?.key ?? "claude";
     this.agent = AGENTS[this.key];
     this.models = null; // null while loading
     this.error = "";
