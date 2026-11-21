@@ -145,12 +145,12 @@ export default class NewMenu extends View {
         return;
       }
       if (!machine) known = await this.withLocalRuns(known);
-      const fresh = machine ? null : recentInventory();
-      const next = mergeInventory(known, fresh?.agents);
-      agentsByMachine.set(key, next);
+      // Not merged with the manager inventory here: currentState() does that on every render, so the
+      // overrides lapse with the inventory instead of sticking to the stored list.
+      agentsByMachine.set(key, known);
       agentsFailedByMachine.set(key, false);
       if (this.machine === machine) {
-        this.agents = next;
+        this.agents = known;
         this.agentsFailed = false;
         cx.notify();
       }
