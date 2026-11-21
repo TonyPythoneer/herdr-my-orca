@@ -13,7 +13,7 @@ The running app reads only live `~/.config/herdr-app/`; git sees only the repo (
 3. Done only when every changed file diffs empty, `herdr-app check ~/.config/herdr-app/mods/<mod>` exits 0 for each changed mod, and `herdr-app status` shows no errors from the files you changed. Tell the user which files went which way.
 
 Never:
-- rsync, copy a directory, or `--delete`. Live holds files the repo must never get and you must never remove: `gpui-kit.d.ts` and `jsconfig.json` (written by `herdr-app check`), `*.bak*`, `AGENTS.md`, `data/`, `icons/`, `layouts/.state/`, runtime `*.json` (installed, shared, view, agent-config...), other mods (browser-url, `*-edited`). `skillshare` is part of Orca and tracked in `mods/skillshare/` (never its generated `gpui-kit.d.ts` / `jsconfig.json`).
+- rsync, copy a directory, or `--delete`. Live holds files the repo must never get and you must never remove: `gpui-kit.d.ts` and `jsconfig.json` (written by `herdr-app check`), `*.bak*`, `AGENTS.md`, `data/`, `icons/`, `layouts/.state/`, runtime `*.json` (installed, shared, view, agent-config...), other mods (browser-url, `*-edited`).
 - Mirror a deletion or rename; list it for the user instead.
 - Leave your own probe mod (e.g. `zz-probe`) live: remove its dir, layout block and `layouts/.state` entry before finishing; never sync it.
 - Commit unasked, or commit `AGENTS.md` or `.agentflow/` at all.
