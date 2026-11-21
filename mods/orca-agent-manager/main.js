@@ -46,7 +46,7 @@ import {
   uninstallCommand,
 } from "./install.js";
 import { errorText, sameRun, tail, timeLabel } from "./util.js";
-import { badge, banner, empty, icon, section } from "./parts.js";
+import { badge, banner, empty, group, icon, section } from "./parts.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
@@ -229,6 +229,7 @@ export default class AgentManager extends View {
         }
         if (gen !== this.refreshGen) return;
         if (fresh) this.agents = applyFreshInstalled(this.agents, fresh);
+        if (fresh) this.freebuffInstalled = fresh.get("freebuff");
         if (this.agents) this.cache();
 
         try {
@@ -264,15 +265,15 @@ export default class AgentManager extends View {
   async freshInstallCheck() {
     // The effective command is the one the row would launch, not the cached knownAgents() run.
     const rows = this.allRows().all;
-    const commands = checkCommands(rows);
-    if (!commands.length) return null;
+    const commands = [...checkCommands(rows), "freebuff"]; // freebuff: unofficial, probed with the rest
+    if (rows.length === 0) return null;
     const shell = await this.shellPath();
     const script = commandCheckScript(shell);
     const attempt = async (interactive) => {
       const result = await exec(shell, checkArgs(shell, script, commands, interactive), { timeout: 30000 });
       if (result.code !== 0) throw new Error(result.stderr.trim() || `${shell} exited ${result.code}`);
       const answers = parseCommandCheck(result.stdout, commands.length);
-      return new Map(rows.map((row, index) => [row.key, answers[index]]));
+      return new Map([...rows.map((row, index) => [row.key, answers[index]]), ["freebuff", answers[rows.length]]]);
     };
     try {
       return await attempt(true);
@@ -835,6 +836,20 @@ export default class AgentManager extends View {
       .when(viewport, (el) => el.h(viewport))
       .child(list)
       .when(viewport, (el) => el.child(Scrollbar.vertical(id).absolute().inset_0()));
+  }
+
+  unofficialRow(t, installed) {
+    const row = { key: "freebuff", installed, enabled: installed && !this.disabled.has("freebuff") };
+    const mono = settings()?.font_family ?? "JetBrains Mono";
+    return div().w_full().flex_none().rounded(10).border_1().border_color(t.border).bg(t.surface).child(
+      h_flex().w_full().h(LIST_ROW_HEIGHT - 12).my(6).px(18).gap(12).items_center()
+        .child(h_flex().w(32).h(32).flex_none().items_center().justify_center().rounded(8).border_1().border_color(t.border)
+          .child(icon({ name: "freebuff", icon: "mods/orca-new-menu/freebuff.png" }, 18, t)))
+        .child(v_flex().flex_1().min_w(0).gap(3)
+          .child(div().text_size(13).font_medium().text_color(t.foreground).child("freebuff"))
+          .child(div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted).child("freebuff")))
+        .child(this.toggle(row, t)),
+    );
   }
 
   commandLine(row, t, quiet) {
@@ -1472,6 +1487,7 @@ export default class AgentManager extends View {
       )
       .when(!loading, (el) =>
         el
+          .child(group("Official support", "Agents Herdr supports natively", t))
           .child(
             section(
               "Installed",
@@ -1492,6 +1508,13 @@ export default class AgentManager extends View {
           .when(split.available.length === 0 && split.installed.length > 0, (inner) =>
             inner.child(section("Available to install", "0 agents", t, "every supported agent is installed", true)),
           )
+          .child(div().w_full().h(1).mt(16).bg(t.border))
+          .child(group("Unofficial support", "Community CLIs Herdr does not manage; they start from the Start menu", t))
+          .child(section("Installed", this.freebuffInstalled ? "1 detected" : "0 detected", t))
+          .when(this.freebuffInstalled, (inner) => inner.child(this.unofficialRow(t, true)))
+          .when(!this.freebuffInstalled, (inner) => inner.child(empty("No unofficial agents detected.", t)))
+          .child(section("Available to install", this.freebuffInstalled ? "0 agents" : "1 agent", t, null, true))
+          .when(!this.freebuffInstalled, (inner) => inner.child(this.unofficialRow(t, false)))
           .child(
             h_flex()
               .w_full()

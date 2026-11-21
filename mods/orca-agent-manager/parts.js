@@ -79,3 +79,9 @@ export function empty(text, t) {
     .text_color(t.muted)
     .child(text);
 }
+
+export function group(title, note, t) {
+  return v_flex().w_full().pt(14).pb(2).gap(2)
+    .child(div().text_size(15).font_semibold().text_color(t.foreground).child(title))
+    .child(div().text_size(11).text_color(t.dim).child(note));
+}

@@ -103,7 +103,7 @@ export default class NewMenu extends View {
     const key = machine ?? "__local__";
     const inventory = machine ? null : recentInventory();
     const cached = agentsByMachine.get(key);
-    this.agents = cached ?? null;
+    this.agents = cached?.length ? mergeInventory(cached, inventory?.agents) : inventory?.agents ?? cached ?? null;
     this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
     // The manager file is this computer's. A remote machine must not inherit its disabled list.
     this.disabled = machine ? new Set() : new Set(Array.isArray(inventory?.disabled) ? inventory.disabled : disabledAgents);
@@ -137,15 +137,20 @@ export default class NewMenu extends View {
         agentsFailedByMachine.set(key, true);
         if (this.machine === machine) {
           this.agentsFailed = true;
+          if (!this.agents) {
+            this.agents = inventory?.agents ?? cached ?? null;
+          }
           cx.notify();
         }
         return;
       }
       if (!machine) known = await this.withLocalRuns(known);
-      agentsByMachine.set(key, known);
+      const fresh = machine ? null : recentInventory();
+      const next = mergeInventory(known, fresh?.agents);
+      agentsByMachine.set(key, next);
       agentsFailedByMachine.set(key, false);
       if (this.machine === machine) {
-        this.agents = known;
+        this.agents = next;
         this.agentsFailed = false;
         cx.notify();
       }
@@ -186,7 +191,7 @@ export default class NewMenu extends View {
     const freebuff = this.freebuff !== undefined
       ? this.freebuff
       : typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
-    return { agents, disabled, freebuff, ready: this.disabledReady && Boolean(agents) };
+    return { agents, disabled, freebuff: freebuff === true && disabled.has("freebuff") ? false : freebuff, ready: this.disabledReady && Boolean(agents) };
   }
 
   createRows() {
