@@ -42,7 +42,6 @@ const ITEMS = [
   { id: "pr-checks", icon: "list-checks", title: "PR Checks", gating: "folderOnly" },
   { id: "changes", icon: "git-branch", title: "Source Control", gating: "gitOnly" },
   { id: "checks", icon: "list-checks", title: "Checks", gating: "gitOnly" },
-  { id: "diff-breakdown", icon: "layers", title: "Diff Breakdown", gating: "gitOnly" },
   { id: "ports", icon: "plug", title: "Ports", gating: "sshOnly" }
 ];
 

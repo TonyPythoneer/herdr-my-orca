@@ -227,13 +227,6 @@
                   }
                 },
                 {
-                  "id": "diff-breakdown",
-                  "type": "block",
-                  "content": {
-                    "mod": "orca-diff-breakdown"
-                  }
-                },
-                {
                   "id": "checks",
                   "type": "block",
                   "content": {
