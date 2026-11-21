@@ -47,6 +47,13 @@
 - orca-spaces: `storage.js` (`stored`, `workspaceOptions`) moved out; `storage.test.js` imports it,
   and the vm-based tests (`retained-row`, `perf-spaces-virtual`) inject the two names. Synced live.
   `orca-menu` keeps its own `stored` copy (its test slices that file).
-- orca-agent-manager stateful render methods and `orca-spaces` `card()`: left, no render harness.
-- Tests 226 pass, `herdr-app check` passes for both mods.
+- Render net: `scripts/gpui-stub-loader.mjs` (node module hooks) turns `gpui-kit`/`gpui-base`/`herdr` into
+  recorders, so `render.test.js` in `orca-agent-manager` and `orca-spaces` imports the real `main.js`,
+  renders `row`/`editor`/`uninstallSection`/`card` in 22 + 14 states and compares with `render.snap.json`
+  (delete the snapshot to re-record after an intended view change).
+- orca-agent-manager: `views.js` (`rowView`, `editorView`, `uninstallSectionView`), `main.js` 1536 -> 1148.
+  orca-spaces: `cards.js` (`cardView`), `main.js` 1436 -> 1056. The class methods delegate. The snapshot
+  caught two slips of the mechanical `this` -> `owner` rewrite (prose containing "this", a bare `stop(this`).
+- `orca-menu` keeps its own `stored`: it differs (accepts any object, no array/fallback match), so sharing would change behaviour.
+- Tests 228 pass, `herdr-app check` passes for the three mods. Live got orca-spaces and orca-agent-manager.
 

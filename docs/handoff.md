@@ -21,8 +21,6 @@ This file is only what is left and what will bite you.
   differs from the repo (`mr(10)` on the sidebar toggle, x 88 vs 80). Decide which is current, then
   sync `main.js`, `drop-zone.js`, `tab-title.js`. Live also differs in `agent-config/main.js`,
   `orca-agent-manager/state.test.js`, `orca-chrome/main.js`, `orca-pane/crew.js`.
-- `orca-spaces` `card()` (340 lines) and `orca-agent-manager` `row`/`editor`/`uninstallSection` read
-  `this`; moving them needs a fake-builder render test first (see `orca-spaces/card-agents.test.js`).
 
 ## Live leftovers (decisions for the owner; do not delete without asking)
 - `~/.config/herdr-app/layouts/main.json`, `terminals.json`, `layouts/.state/win98.json`,

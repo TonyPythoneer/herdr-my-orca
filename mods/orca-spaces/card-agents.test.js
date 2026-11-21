@@ -39,7 +39,8 @@ function fixture() {
     STATUS_RANK: { blocked: 4, working: 3, done: 2, idle: 1 },
     loadReviewCache() {}, saveReviewCache() {}, isReviewFresh() {}, MAX_INFLIGHT_PR_LOOKUPS: 1, BRANCH_PR_LOOKUP_PAGE_SIZE: 1,
   };
-  vm.runInNewContext(source + '\nglobalThis.Spaces = Spaces;', scope);
+  const cards = readFileSync(new URL('./cards.js', import.meta.url), 'utf8').replace(/^import .*;$/gm, '').replace('export function', 'function');
+  vm.runInNewContext(cards + source + '\nglobalThis.Spaces = Spaces;', scope);
   const owner = new scope.Spaces();
   Object.assign(owner, {
     expandedAgents: new Set(), unread: new Set(), reviewOf: () => null,
