@@ -233,6 +233,8 @@ function items(p, git) {
         ["Mark " + (tg.unread ? "Read" : "Unread"), "orca-menu.toggle-unread", { id: tg.id }],
         ...(repo ? [["New worktree", "worktree", { ...args, action: "new" }], ["Open worktree", "worktree", { ...args, action: "open" }]] : []),
         ...(linked ? [["Remove worktree", "worktree", { ...args, action: "remove" }]] : []),
+        // Every unpinned tab on this worktree's spaces; greyed out when there is none.
+        ["Delete all tabs", "orca-menu.delete-all-tabs", { id: tg.id, disabled: !unpinnedTabs(tg.id).length }],
         ...(open ? [["Close", "space.close", { id: tg.id }]] : []),
       ];
     }
@@ -249,6 +251,15 @@ function items(p, git) {
 }
 
 // Orca's lucide glyph for each row, taken from the component named in the citation.
+// Tabs of the space and of any other space on the same checkout (one card), minus pinned ones.
+function unpinnedTabs(id) {
+  const all = spaces();
+  const me = all.find((s) => s.id === id);
+  if (!me) return [];
+  return all.filter((s) => s.machine === me.machine && place(s) === place(me))
+    .flatMap((s) => s.tabs ?? []).filter((t) => !t.settled).map((t) => t.id);
+}
+
 function menuIcon(it, zoomed) {
   const [, command, args] = it;
   if (it[0] === "Clear Pane Title") return "mods/orca-menu/x.svg";
@@ -262,7 +273,7 @@ function menuIcon(it, zoomed) {
   if (command === "pane.zoom") return `mods/orca-menu/${zoomed ? "minimize-2" : "maximize-2"}.svg`;
   if (command === "worktree") return `mods/orca-menu/${args?.action === "new" ? "git-branch-plus" : args?.action === "open" ? "workflow" : "unlink"}.svg`;
   if (command === "tab.move") return `mods/orca-menu/${it[0] === "Move Left" ? "arrow-left" : "arrow-right"}.svg`;
-  if (command === "orca-menu.close-others" || command === "orca-menu.close-split-panes") return "mods/orca-menu/x.svg";
+  if (command === "orca-menu.close-others" || command === "orca-menu.delete-all-tabs" || command === "orca-menu.close-split-panes") return "mods/orca-menu/x.svg";
   if (command === "tab.settle" || command === "tab.unsettle") return `mods/orca-menu/${command === "tab.unsettle" ? "pin-off" : "pin"}.svg`;
   if (command === "orca-menu.handoff") return "mods/orca-menu/message-square-plus.svg";
   if (command === "orca-menu.fork") return "mods/orca-menu/git-fork.svg";
@@ -290,7 +301,8 @@ function section(p, list, i) {
   if (!prev) return false;
   // Close starts its own group in every menu (dropdown-menu.tsx:208): pane
   // (TerminalContextMenu.tsx:355), tab (SortableTabContextMenu.tsx:207), space (:196).
-  if (it[1].endsWith(".close") || it[1] === "orca-menu.close-group") return true;
+  if (it[1] === "orca-menu.delete-all-tabs") return true;
+  if (it[1].endsWith(".close") || it[1] === "orca-menu.close-group") return prev[1] !== "orca-menu.delete-all-tabs";
   // Orca's pane menu separates the Copy/Paste block from the split section
   // (TerminalContextMenu.tsx:263), and separates swap/move and zoom blocks.
   if (p?.tab === "pane") {
@@ -336,7 +348,7 @@ function destructive() {
 // Orca marks pane close, close split pane (CloseSplitPaneMenuItem.tsx:21-24), and workspace close rows destructive;
 // the tab's Close is plain (TerminalContextMenu.tsx:351, WorktreeContextMenuView.tsx:353, SortableTabContextMenu.tsx:208, repo-header-project-actions.tsx:181).
 function isDestructive(p, it) {
-  return it[1] === "pane.close" || (p?.tab === "pane" && it[1] === "tab.close") || it[1] === "orca-menu.close-split-panes" || ((p?.tab === "space" || p?.tab === "group") && (it[1] === "space.close" || it[1] === "orca-menu.close-group"));
+  return it[1] === "pane.close" || (p?.tab === "pane" && it[1] === "tab.close") || it[1] === "orca-menu.close-split-panes" || it[1] === "orca-menu.delete-all-tabs" || ((p?.tab === "space" || p?.tab === "group") && (it[1] === "space.close" || it[1] === "orca-menu.close-group"));
 }
 
 // The key bound to a command, for the hint on the right.
@@ -369,7 +381,7 @@ export default class Menu extends View {
   choose(i, cx) {
     const pProps = props();
     const it = items(pProps, this.git)[i];
-    if (!it) return;
+    if (!it || it[2]?.disabled) return;
     const overlayId = pProps?.overlay;
     // `terminal.copy`/`terminal.paste` act on the focused terminal (commands.md:285-287), so
     // focus the pane that was right-clicked before the overlay gives focus back.
@@ -439,6 +451,17 @@ export default class Menu extends View {
               }
             }
           });
+        }
+        closeOverlay(overlayId);
+        return;
+      }
+      // Same confirmation as Close Others; pinned tabs were left out of `tabIds` already.
+      if (it[1] === "orca-menu.delete-all-tabs") {
+        // Spaces may have changed since the menu opened: ask again, not the list it carried.
+        const ids = unpinnedTabs(it[2].id);
+        if (ids.length > 0) {
+          openOverlay({ mod: "orca-tabs", kind: "dialog", modal: true, width: 384, height: 180,
+            props: { confirmClose: { kind: "bulk", scope: "all", tabIds: ids } } });
         }
         closeOverlay(overlayId);
         return;
@@ -699,7 +722,8 @@ export default class Menu extends View {
           ? [div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child("Workspace")]
           : []),
         ...list.map((it, i) => {
-          const red = isDestructive(p, it);
+          const off = Boolean(it[2]?.disabled);
+          const red = !off && isDestructive(p, it);
           // Orca's Copy Tab ID and Close Others are `inset`: no icon, 32px left pad
           // (CopyTabIdMenuItem.tsx:24, SortableTabContextMenu.tsx:208).
           const inset = it[1] === "orca-menu.copy-tab-id" || it[1] === "orca-menu.close-others";
@@ -721,11 +745,11 @@ export default class Menu extends View {
             // Orca's rows are whitespace-nowrap (TerminalContextMenu.tsx:265,273); the label
             // gives way with an ellipsis rather than wrapping inside the fixed popup.
             .whitespace_nowrap()
-            .text_color(red ? bad : t.foreground)
+            .text_color(red ? bad : off ? t.muted : t.foreground)
             // One current row: pointer hover moves `this.at`, so hover, keyboard and Enter
             // agree (dropdown-menu.tsx:115 data-[current=true]).
-            .when(i === this.at, (el) => el.bg(red ? `${bad}1a` : t.selected))
-            .on_hover((hovered, cx) => { if (hovered && this.at !== i) { this.at = i; cx.notify(); } })
+            .when(i === this.at && !off, (el) => el.bg(red ? `${bad}1a` : t.selected))
+            .on_hover((hovered, cx) => { if (hovered && !off && this.at !== i) { this.at = i; cx.notify(); } })
             .on_click((_e, cx) => this.choose(i, cx))
             .when(!inset, (el) => el.child(svg(menuIcon(it, zoomed)).size(14).flex_none().text_color(red ? bad : t.muted)))
             .child(div().flex_1().min_w(0).truncate().child(it[0]))

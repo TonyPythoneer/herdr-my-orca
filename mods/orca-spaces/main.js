@@ -13,7 +13,7 @@ import { statusMark, agentStateMark } from "./status.js";
 import { getFolderWorkspaceRowGeometry, getFlushWorktreeCardPaddingLeft, getProjectGroupHeaderPaddingLeft, WORKTREE_CARD_SURFACE_MARGIN, LEGACY_STATUS_LANE_WIDTH } from "./indentation.js";
 import { tip, tipMark } from "./tip.js";
 import { stopsInit, stop, focusRoot, enter, within, onStop } from "./focus.js";
-import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, activeReviewKeys, planRenderRows, STATUS_RANK } from "./worktree-plan.js";
+import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, otherTabCount, activeReviewKeys, planRenderRows, STATUS_RANK } from "./worktree-plan.js";
 import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUPS, BRANCH_PR_LOOKUP_PAGE_SIZE } from "./review-store.js";
 
 // `BRANCH_PR_LOOKUP_PAGE_SIZE` (pr-branch-lookup.ts:28): "GitHub lists a branch's PRs newest
@@ -1083,6 +1083,8 @@ export default class Spaces extends View {
     // `WorktreeCardAgents.tsx:371-416`: the summary exists only for MORE THAN ONE agent
     // (`shouldUseSummaryRow = summaryAgents.length > 1`); a single agent is just its row. The
     // list starts collapsed (`worktree-card-agents-expansion-state.ts:12-16`).
+    const otherTabs = otherTabCount({ w, also }, mine);
+    const otherLabel = `${otherTabs} other tab${otherTabs === 1 ? "" : "s"}`;
     const agentBlock = mine.length > 1 ? v_flex().min_w(0).mt(4).gap(2)
       .child(h_flex().id(toggleId).h(24).w_full().min_w(0).px(4).gap(4).items_center().rounded(2)
         .text_size(11).line_height("11px").text_color(t.muted).cursor_pointer()
@@ -1104,6 +1106,7 @@ export default class Spaces extends View {
         .when(!expanded, el => el.child(h_flex().min_w(0).flex_1().items_center().gap(4).overflow_hidden()
           .children(visibleGroups.map(cluster))
           .when(hiddenGroupCount > 0, (s) => s.child(div().flex_none().text_size(10).text_color(t.dim).child(`+${hiddenGroupCount}`)))))
+        .when(otherTabs > 0, el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(otherLabel)))
         .child(svg(`mods/orca-spaces/chevron-${expanded ? "down" : "right"}.svg`).size(12).flex_none()))
       .when(expanded, el => el.child(v_flex().min_w(0).gap(2).pt(2).children(mine.map(agentRow))))
       : v_flex().min_w(0).mt(4).gap(2).children(mine.map(agentRow));
@@ -1271,7 +1274,9 @@ export default class Spaces extends View {
             .when(Boolean(this.reviewOf(g)), row => row.child(this.prBadge(this.reviewOf(g), t, w.id)))))
           // Orca's compact agent summary (worktree-card-compact-agents.tsx): h-6, px-1, 11px
           // muted; the collapsed pill draws state clusters and the rows carry AgentStateDot.
-          .when(mine.length > 0, el => el.child(agentBlock))),
+          .when(mine.length > 0, el => el.child(agentBlock))
+          // Tabs that are not agents (shells, editors, mods): inside the pill beside the agents, or alone when there is no pill.
+          .when(otherTabs > 0 && mine.length < 2, el => el.child(div().mt(4).px(4).text_size(11).line_height("11px").text_color(t.muted).child(otherLabel)))),
       ),
       // A worktree with no space opens one in its folder; anything else selects the space.
       8, { enter: () => { if (unopened) { run("space.new", { folder: g.top, machine: w.machine ?? "" }); } else { run("space.select", { id: w.id }); } run("layout.select", { stack: "main", child: "main-terminals" }); } });

@@ -41,6 +41,13 @@ test('agents are grouped by card while preserving agent order and merged tabs', 
   assert.deepEqual(rows.map(row => grouped.get(row).map(a => a.id)), [[1, 3], [2], [3]]);
 });
 
+test('other tabs counts tabs without an agent once, across merged spaces', async () => {
+  const { otherTabCount } = await import('./worktree-plan.js');
+  const row = { w: { tabs: [{ id: 'a' }, { id: 'b' }, { id: 'b' }] }, also: [{ w: { tabs: [{ id: 'c' }, { id: 'd' }] } }] };
+  assert.equal(otherTabCount(row, [{ tab: 'a' }, { tab: 'a' }, { tab: 'd' }]), 2);
+  assert.equal(otherTabCount({ w: {} }, []), 0);
+});
+
 test('pruning git cache drops only inactive negative entries and preserves projects', async () => {
   const { pruneGitCache } = await import('./worktree-plan.js');
   const active = { id: 'open', folder: '/open' };

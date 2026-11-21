@@ -35,7 +35,7 @@ function fixture() {
     tip() {}, tipMark() {}, stopsInit() {}, stop: (_owner, _theme, _id, node) => node,
     focusRoot: (_owner, node) => node, enter() {}, within: () => false, onStop() {},
     parseWorktreeList() {}, place: w => w.folder, where() {}, base: () => 'repo', readPair() {}, foldKey() {},
-    projectWorktreePlan() {}, pruneGitCache() {}, agentsByRow() {}, activeReviewKeys() {}, planRenderRows() {},
+    projectWorktreePlan() {}, pruneGitCache() {}, agentsByRow() {}, otherTabCount: () => 0, activeReviewKeys() {}, planRenderRows() {},
     STATUS_RANK: { blocked: 4, working: 3, done: 2, idle: 1 },
     loadReviewCache() {}, saveReviewCache() {}, isReviewFresh() {}, MAX_INFLIGHT_PR_LOOKUPS: 1, BRANCH_PR_LOOKUP_PAGE_SIZE: 1,
   };
