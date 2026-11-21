@@ -17,3 +17,5 @@ Never:
 - Mirror a deletion or rename; list it for the user instead.
 - Leave your own probe mod (e.g. `zz-probe`) live: remove its dir, layout block and `layouts/.state` entry before finishing; never sync it.
 - Commit unasked, or commit `AGENTS.md` or `.agentflow/` at all.
+- Edit a file that has a copy under `shared/` in `shared/` only, run `node scripts/sync-shared.mjs`, then copy the regenerated files; `node scripts/sync-shared.mjs --check` must exit 0.
+- Delete or rename Herdr-shipped mods, layouts or the `*-edited` folders in live: list them for the user instead.

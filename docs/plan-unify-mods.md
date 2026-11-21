@@ -6,9 +6,11 @@ folder, so nothing here may import across folders (verified: `herdr-app check` r
 `../shared/x.js` and a symlinked shared dir).
 
 ## Facts that shape the plan
-- 11 repo mods are Herdr-shipped (`confirm help machine-add menu new-menu peek picker
+- Herdr also ships layouts (`main`, `terminals`) and other mods; deleting shipped items is not
+  recommended. Whether Herdr restores a deleted shipped mod is untested.
+- 11 repo mods were Herdr-shipped (`confirm help machine-add menu new-menu peek picker
   prompt toast workspace-chrome worktree`). Herdr supplies them; editing them makes
-  Herdr move the file to `<name>-edited`. Their source is compiled into the binary, so
+  Herdr move the file to `<name>-edited` on its next start (live already has several). Their source is compiled into the binary, so
   the unedited copy in `~/.config/herdr-app/mods/` is the reference.
 - The orca layout opens only `orca-*` mods, except `orca-files` -> `confirm` and
   `orca-nav` -> `picker`. `orca-files` passes a `confirmShared` prop that the stock

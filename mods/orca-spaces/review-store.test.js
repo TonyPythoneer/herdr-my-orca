@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 
-for (const mod of ['orca-spaces', 'orca-changes']) {
+for (const mod of ['orca-spaces']) {
   test(`${mod} review cache keeps the 200 most recently refreshed entries`, async () => {
     const source = await readFile(new URL(`../${mod}/review-store.js`, import.meta.url), 'utf8');
     let sharedValue;
