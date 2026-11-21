@@ -7,6 +7,7 @@
 // Herdr's built-in `run` for the agents it offers, read from a clean app home (no programs.json)
 // on Herdr 0.1.16 (`knownAgents()`); a key missing here is a program the user added in
 // programs.json, which has no built-in command to reset to.
+// shortcut: the catalog is a Herdr version snapshot, update all three lists when Herdr adds agents.
 export const BUILTIN_DEFAULTS = {
   claude: ["claude"],
   codex: ["codex", "--no-daemon"],
@@ -18,6 +19,9 @@ export const BUILTIN_DEFAULTS = {
   gemini: ["gemini"],
   grok: ["grok"],
   antigravity: ["agy"],
+  boldcreate: ["boldcreate"],
+  empryo: ["empryo"],
+  swival: ["swival"],
   crush: ["crush"],
   "dsh-tui": ["dsh-tui"],
   goose: ["goose"],
@@ -29,8 +33,7 @@ export const BUILTIN_DEFAULTS = {
   qoder: ["qodercli"],
 };
 
-// Install documentation verified against Orca's agent catalog. `pig` has no catalog entry, so
-// the manager says no guide is known instead of guessing a URL.
+// Official install documentation for the supported agent catalog.
 export const HOMEPAGES = {
   claude: "https://code.claude.com/docs",
   codex: "https://github.com/openai/codex",
@@ -42,6 +45,10 @@ export const HOMEPAGES = {
   gemini: "https://github.com/google-gemini/gemini-cli",
   grok: "https://x.ai/cli",
   antigravity: "https://antigravity.google/docs/cli-overview",
+  boldcreate: "https://docs.boldcreate.ai/cli/getting-started/installation",
+  empryo: "https://empryo.com/docs/installation",
+  swival: "https://github.com/Swival/swival#quick-start",
+  pig: "https://www.pi-in-go.dev/install/",
   crush: "https://github.com/charmbracelet/crush",
   "dsh-tui": "https://github.com/ccch1mneyyy/dsh-TUI#quick-start",
   goose: "https://goose-docs.ai/docs/quickstart/",
@@ -255,18 +262,14 @@ export function isFish(shellPath) {
  * Prints one marked line per command so login-shell startup noise on stdout cannot shift the
  * results. Commands arrive as positional arguments, never interpolated into the script.
  */
-// The Settings list is one scroll surface. Rows are a fixed height so a 5.5-row viewport always
-// leaves half a row visible; group headers are part of that surface, not separate boxes.
+// Each group shows up to five full rows and half of the next one.
 export const LIST_ROW_HEIGHT = 56;
 export const LIST_HEADER_HEIGHT = 42;
 export const LIST_VISIBLE_ROWS = 5.5;
 
-/** The list's max height, or null when all rows fit and no scrolling is needed. */
+/** Cap each group's rows independently; expanded editors also stay inside the group. */
 export function listViewportHeight(rowCount, expanded = false) {
-  const max = LIST_VISIBLE_ROWS * LIST_ROW_HEIGHT + 2 * LIST_HEADER_HEIGHT;
-  if (expanded) return max;
-  const content = Math.max(0, rowCount) * LIST_ROW_HEIGHT + 2 * LIST_HEADER_HEIGHT;
-  return content > max ? max : null;
+  return rowCount > LIST_VISIBLE_ROWS || expanded ? LIST_VISIBLE_ROWS * LIST_ROW_HEIGHT + 2 : null;
 }
 
 /** A single `command -v` probe; the command is positional, never interpolated into the script. */

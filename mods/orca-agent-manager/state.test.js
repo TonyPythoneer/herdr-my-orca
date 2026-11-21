@@ -80,12 +80,12 @@ test("fish gets no extra $0 argument and POSIX keeps its placeholder", () => {
   ]);
 });
 
-test("the installed/available list uses one 5.5-row viewport", () => {
+test("each agent group is capped at 5.5 rows", () => {
   assert.equal(listViewportHeight(5), null);
   assert.equal(listViewportHeight(0), null);
-  assert.equal(listViewportHeight(6), 5.5 * 56 + 2 * 42);
-  assert.equal(listViewportHeight(20), 5.5 * 56 + 2 * 42);
-  assert.equal(listViewportHeight(2, true), 5.5 * 56 + 2 * 42);
+  assert.equal(listViewportHeight(6), 5.5 * 56 + 2);
+  assert.equal(listViewportHeight(20), 5.5 * 56 + 2);
+  assert.equal(listViewportHeight(2, true), 5.5 * 56 + 2);
 });
 
 test("command path probing keeps the command out of the script and survives shell banners", () => {
@@ -99,6 +99,7 @@ test("built-in defaults cover the agents Herdr offers", () => {
   for (const key of Object.keys(BUILTIN_DEFAULTS)) {
     assert.ok(Array.isArray(defaultRun(key)) && defaultRun(key).length > 0);
     assert.ok(isBuiltinAgent(key));
+    assert.match(HOMEPAGES[key], /^https:\/\//);
   }
   assert.equal(defaultRun("user-added"), null);
   assert.equal(isBuiltinAgent("user-added"), false);

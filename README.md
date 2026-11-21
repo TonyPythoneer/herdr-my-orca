@@ -3,23 +3,23 @@
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
+- **skillshare**: the right sidebar icon opens the skillshare panel. Install the [skillshare Herdr mod](https://github.com/runkids/skillshare/tree/main/herdr/skillshare) separately in `~/.config/herdr-app/mods/skillshare/`; its CLI is also required for data and actions.
 - **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status/`). Claude and
   Codex read what the CLIs already write on this computer; Claude's quota comes live from
   Claude Code's own `rate_limits` statusline feed, with Anthropic's usage API only as the idle
   fallback (its token is read from the macOS Keychain and never written anywhere). Cached in
   `~/.cache/herdr-usage/`.
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
-- **Agent Manager**: the sidebar's bottom Agents button opens a Settings-style page with one
-  scrollable list (Installed, then Available to install). It lists the Agent CLIs Herdr detects,
+- **Agent Manager**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
+  5.5 rows. It lists the Agent CLIs Herdr detects,
   turns availability on/off for installed CLIs, and edits each CLI's executable and launch
   arguments. Commands are written to `programs.json`; the on/off choice lives in
   `agent-manager.json`. Refresh re-checks this computer by running a login-shell `command -v`
   probe, because `knownAgents()` caches for a minute and offers no force option.
-- **Install/uninstall**: verified npm-global installs are offered for Claude, Codex, Gemini,
-  Copilot, OpenCode, Pi and Amp. Other supported CLIs show their official install guide instead of
-  a guessed command. Uninstall is only automated when the executable resolves through npm's global
-  root, asks for confirmation, refuses while a live session uses it, and never touches settings,
-  sessions or command overrides.
+- **Install/uninstall**: Install opens the official guide for the user to follow. Uninstall is
+  only automated when the executable belongs to its verified npm-global package; it asks for
+  confirmation, refuses while a live session uses it, and never touches settings, sessions or
+  command overrides.
 - **Start an agent**: the Orca menu shows only installed and enabled official agents. Disabled and
   uninstalled entries are absent, not greyed out. When nothing official and no FreeBuff is
   available it shows one **Open Agent Settings** action. FreeBuff is the only unofficial row and

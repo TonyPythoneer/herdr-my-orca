@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  currentInventory,
   emptyAgentState,
   freebuffRun,
   freebuffVisible,
@@ -13,6 +14,7 @@ const AGENTS = [
   { key: "claude", name: "Claude", installed: true, run: ["claude"] },
   { key: "codex", name: "Codex", installed: true, run: ["codex"] },
   { key: "qoder", name: "Qoder", installed: false, run: ["qodercli"] },
+  { key: "custom", installed: true, run: ["custom"] },
   { key: "freebuff", name: "freebuff", installed: true, run: ["freebuff"] },
 ];
 
@@ -25,7 +27,7 @@ test("only installed and enabled official agents become rows", () => {
 test("FreeBuff is conditional and uses the existing launch integration", () => {
   assert.equal(freebuffVisible(true, []), true);
   assert.equal(freebuffVisible(false, []), false);
-  assert.equal(freebuffVisible(false, AGENTS), true);
+  assert.equal(freebuffVisible(false, AGENTS), false);
   assert.deepEqual(freebuffRun([]), FREEBUFF_RUN);
   assert.deepEqual(freebuffRun([{ key: "freebuff", installed: true, run: ["/custom/freebuff"] }]), ["/custom/freebuff"]);
   assert.deepEqual(freebuffProbeArgs(), ["-lic", "command -v -- freebuff >/dev/null 2>&1"]);
@@ -58,7 +60,15 @@ test("a fresh inventory overrides installed and run without replacing identity",
     { key: "claude", name: "Claude", installed: false, run: ["claude"] },
     { key: "codex", name: "Codex", installed: true, run: ["codex"] },
     { key: "qoder", name: "Qoder", installed: true, run: ["/custom/qoder"] },
+    { key: "custom", installed: true, run: ["custom"] },
     { key: "freebuff", name: "freebuff", installed: true, run: ["freebuff"] },
   ]);
   assert.deepEqual(mergeInventory(null, fresh), fresh);
+});
+
+test("inventory expires after Herdr cache has had time to refresh", () => {
+  const inventory = { at: 1000, agents: AGENTS };
+  assert.equal(currentInventory(inventory, 120999), inventory);
+  assert.equal(currentInventory(inventory, 121000), null);
+  assert.equal(currentInventory({ agents: AGENTS }, 121000), null);
 });

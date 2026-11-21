@@ -7,7 +7,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { checking, theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared, appHome, readTextFile, exec } from "herdr";
 import { MODELS } from "./models.js";
-import { emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory } from "./rows.js";
+import { currentInventory, emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory } from "./rows.js";
 import { detectFreebuff } from "./freebuff.js";
 
 // Keep one inventory per machine for the first paint, then always ask again on open. The Agent
@@ -33,11 +33,7 @@ function parseDisabled(text) {
 }
 
 function recentInventory() {
-  // The Settings page is the authority. Its snapshot may be minutes old, but it came from a
-  // fresh install probe and is still better than Herdr's minute-long knownAgents() cache; it is
-  // republished on every refresh, install, uninstall and enable/disable change.
-  const inventory = shared(INVENTORY_KEY);
-  return inventory && Array.isArray(inventory.agents) ? inventory : null;
+  return currentInventory(shared(INVENTORY_KEY));
 }
 // A probed model list survives the app; the picker paints it before asking again. Orca serves a
 // saved catalog until it is 10 minutes old (`agent-model-catalog-entry-lifetime.ts:12`).
@@ -107,7 +103,7 @@ export default class NewMenu extends View {
     const key = machine ?? "__local__";
     const inventory = machine ? null : recentInventory();
     const cached = agentsByMachine.get(key);
-    this.agents = cached?.length ? mergeInventory(cached, inventory?.agents) : inventory?.agents ?? cached ?? null;
+    this.agents = cached ?? null;
     this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
     // The manager file is this computer's. A remote machine must not inherit its disabled list.
     this.disabled = machine ? new Set() : new Set(Array.isArray(inventory?.disabled) ? inventory.disabled : disabledAgents);
@@ -141,20 +137,15 @@ export default class NewMenu extends View {
         agentsFailedByMachine.set(key, true);
         if (this.machine === machine) {
           this.agentsFailed = true;
-          if (!this.agents) {
-            this.agents = inventory?.agents ?? cached ?? null;
-          }
           cx.notify();
         }
         return;
       }
       if (!machine) known = await this.withLocalRuns(known);
-      const fresh = machine ? null : recentInventory();
-      const next = mergeInventory(known, fresh?.agents);
-      agentsByMachine.set(key, next);
+      agentsByMachine.set(key, known);
       agentsFailedByMachine.set(key, false);
       if (this.machine === machine) {
-        this.agents = next;
+        this.agents = known;
         this.agentsFailed = false;
         cx.notify();
       }
@@ -231,7 +222,7 @@ export default class NewMenu extends View {
     const state = this.currentState();
     if (!state.ready) return [];
     const official = installedEnabledAgents(state.agents, state.disabled);
-    const showFreebuff = freebuffVisible(state.freebuff === true, state.agents);
+    const showFreebuff = freebuffVisible(state.freebuff);
     // Wait for the FreeBuff probe before choosing the empty state; otherwise an empty catalog
     // would flash "Open Agent Settings" and then change to FreeBuff.
     if (!official.length && state.freebuff === undefined) return [];
@@ -343,8 +334,9 @@ export default class NewMenu extends View {
   // launches with its saved model and effort, then closes.
   launchConfigured(agent) {
     const state = this.currentState();
-    if (!state.ready || !agent.installed || state.disabled.has(agent.key) || this.machineChanged()) return;
-    this.hoverConfig(agent, true, true);
+    const current = installedEnabledAgents(state.agents, state.disabled).find((item) => item.key === agent.key);
+    if (!state.ready || !current || this.machineChanged()) return;
+    this.hoverConfig(current, true, true);
   }
 
   // Permission flags live in programs.json's `run`; the menu only adds the chosen model.
@@ -352,8 +344,11 @@ export default class NewMenu extends View {
     // A menu left open while Settings changed availability cannot launch a removed agent.
     const state = this.currentState();
     if (!state.ready || this.machineChanged()) return;
-    if (!unofficial && (!agent.installed || state.disabled.has(agent.key))) return;
-    if (unofficial && !freebuffVisible(state.freebuff === true, state.agents)) return;
+    if (!unofficial) {
+      agent = installedEnabledAgents(state.agents, state.disabled).find((item) => item.key === agent.key);
+      if (!agent) return;
+    }
+    if (unofficial && !freebuffVisible(state.freebuff)) return;
     const space = spaces().find((s) => s.active);
     const seed = MODELS[agent.key];
     run("tab.new", {

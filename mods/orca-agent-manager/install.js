@@ -26,12 +26,6 @@ export function installMethodFor(key) {
   return { kind: "npm", package: pkg };
 }
 
-/** An argv to run, never a shell string. */
-export function installCommand(method) {
-  if (!method || method.kind !== "npm" || !PACKAGE_NAME.test(method.package)) return null;
-  return { executable: "npm", args: ["install", "-g", `${method.package}@latest`] };
-}
-
 export function uninstallCommand(method) {
   if (!method || method.kind !== "npm" || !PACKAGE_NAME.test(method.package)) return null;
   return { executable: "npm", args: ["uninstall", "-g", method.package] };
@@ -48,8 +42,9 @@ function under(path, root) {
 }
 
 /** True when an executable's real file lives under npm's global module root. */
-export function npmManaged(executable, realTarget, npmRoot) {
-  return under(realTarget ?? executable, npmRoot);
+export function npmManaged(executable, realTarget, npmRoot, packageName) {
+  if (!PACKAGE_NAME.test(packageName ?? "")) return false;
+  return under(realTarget ?? executable, `${norm(npmRoot)}/${packageName}`);
 }
 
 /** Resolve a readlink target against the directory holding the link. Handles `.` and `..`. */

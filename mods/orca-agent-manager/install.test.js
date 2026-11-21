@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   NPM_INSTALLS,
   activeSessions,
-  installCommand,
   installMethodFor,
   npmManaged,
   resolveLinkTarget,
@@ -12,16 +11,12 @@ import {
 
 test("npm methods are allowlisted and build argv, never a shell string", () => {
   assert.deepEqual(installMethodFor("claude"), { kind: "npm", package: "@anthropic-ai/claude-code" });
-  assert.deepEqual(installCommand(installMethodFor("claude")), {
-    executable: "npm",
-    args: ["install", "-g", "@anthropic-ai/claude-code@latest"],
-  });
   assert.deepEqual(uninstallCommand(installMethodFor("claude")), {
     executable: "npm",
     args: ["uninstall", "-g", "@anthropic-ai/claude-code"],
   });
   assert.equal(installMethodFor("cursor"), null);
-  assert.equal(installCommand({ kind: "npm", package: "bad; rm -rf /" }), null);
+  assert.equal(uninstallCommand({ kind: "npm", package: "bad; rm -rf /" }), null);
   for (const pkg of Object.values(NPM_INSTALLS)) {
     assert.match(pkg, /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/);
   }
@@ -29,9 +24,10 @@ test("npm methods are allowlisted and build argv, never a shell string", () => {
 
 test("npm-managed executables are recognized by their real path under npm's root", () => {
   const root = "/opt/homebrew/lib/node_modules";
-  assert.equal(npmManaged("/opt/homebrew/bin/claude", "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js", root), true);
-  assert.equal(npmManaged("/Users/me/.local/bin/claude", "/Users/me/.local/bin/claude", root), false);
-  assert.equal(npmManaged("/opt/homebrew/bin/foo", "/opt/homebrew/lib/node_modules-other/foo", root), false);
+  assert.equal(npmManaged("/opt/homebrew/bin/claude", "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js", root, "@anthropic-ai/claude-code"), true);
+  assert.equal(npmManaged("/Users/me/.local/bin/claude", "/Users/me/.local/bin/claude", root, "@anthropic-ai/claude-code"), false);
+  assert.equal(npmManaged("/opt/homebrew/bin/foo", "/opt/homebrew/lib/node_modules/other/cli.js", root, "@anthropic-ai/claude-code"), false);
+  assert.equal(npmManaged("/opt/homebrew/bin/foo", "/opt/homebrew/lib/node_modules-other/foo", root, "@anthropic-ai/claude-code"), false);
 });
 
 test("a relative readlink target resolves to the npm package path", () => {

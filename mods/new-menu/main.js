@@ -4,6 +4,8 @@ import { appHome, theme, spaces, panes, knownAgents, readTextFile, run, openOver
 
 // The last agents each machine reported, shown at once while knownAgents() checks again.
 const KNOWN = "new-menu.agents";
+// shortcut: the catalog is a Herdr version snapshot, update all three lists when Herdr adds agents.
+const OFFICIAL = new Set("claude codex pi opencode cursor copilot amp gemini grok antigravity boldcreate crush dsh-tui empryo goose hermes kimi kiro omp pig qoder swival".split(" "));
 
 // The Agent Manager's on/off list. A disabled agent is still installed, it is just not offered.
 function disabledAgents(text) {
@@ -54,8 +56,6 @@ export default class NewMenu extends View {
       try {
         let known = await knownAgents({ on: machine });
         known = await this.withLocalRuns(known);
-        const inventory = this.recentInventory();
-        if (inventory) known = mergeInventory(known, inventory);
         this.agents = known;
         setShared(KNOWN, { ...shared(KNOWN), [where]: known });
       }
@@ -75,11 +75,11 @@ export default class NewMenu extends View {
   recentInventory() {
     if (this.machine) return null;
     const inventory = shared("agent-manager.inventory");
-    if (!inventory || !Array.isArray(inventory.agents) || Date.now() - Number(inventory.at) > 30000) return null;
-    return inventory.agents;
+    return inventory && Array.isArray(inventory.agents) && Date.now() - Number(inventory.at) < 120_000 ? inventory : null;
   }
 
   mergeInventory(known, inventory) {
+    if (known.length === 0) return inventory;
     const fresh = new Map(inventory.filter(a => a?.key).map(a => [a.key, a]));
     return known.map(a => {
       const current = fresh.get(a.key);
@@ -116,7 +116,7 @@ export default class NewMenu extends View {
   officialAgents(agents, disabled) {
     const seen = new Set();
     return (agents ?? []).filter((agent) => {
-      if (!agent || typeof agent.key !== "string" || agent.key === "freebuff" || disabled.has(agent.key) || seen.has(agent.key)) return false;
+      if (!agent || !OFFICIAL.has(agent.key) || disabled.has(agent.key) || seen.has(agent.key)) return false;
       if (!agent.installed) return false;
       seen.add(agent.key);
       return true;
@@ -126,8 +126,7 @@ export default class NewMenu extends View {
   // Read the Agent Manager's recent inventory at render/action time, so Settings changes while
   // this menu is open take effect. The manager file read in init is the fallback.
   currentState() {
-    const inventory = this.machine ? null : shared("agent-manager.inventory");
-    const fresh = inventory && Array.isArray(inventory.agents) ? inventory : null;
+    const fresh = this.recentInventory();
     const agents = fresh?.agents ? this.mergeInventory(this.agents ?? [], fresh.agents) : this.agents;
     const disabled = new Set(fresh && Array.isArray(fresh.disabled) ? fresh.disabled : this.disabled);
     return { agents, disabled, ready: this.disabledReady && Boolean(agents) };
@@ -146,7 +145,8 @@ export default class NewMenu extends View {
       .on_key_down((e) => {
         if (e.modifiers.control || e.modifiers.platform || e.modifiers.alt) return;
         const s = this.currentState();
-        const agent = /^[1-9]$/.test(e.key) ? choices[Number(e.key) - 1] : null;
+        const selected = /^[1-9]$/.test(e.key) ? choices[Number(e.key) - 1] : null;
+        const agent = this.officialAgents(s.agents, s.disabled).find(a => a.key === selected?.key);
         if (!agent || !s.ready || s.disabled.has(agent.key) || this.machineChanged()) return;
         closeOverlay(props().overlay);
         run("tab.new", { name: agent.name, space: space?.id, argv: agent.run });
@@ -157,8 +157,9 @@ export default class NewMenu extends View {
         .children(choices.map((a, i) => this.row(a.key, a.tint ? svg(a.icon).size(14).text_color(t.foreground) : image(a.icon).size(14), a.name,
           () => {
             const now = this.currentState();
-            if (now.ready && !now.disabled.has(a.key) && !this.machineChanged()) {
-              run("tab.new", { name: a.name, space: space?.id, argv: a.run });
+            const current = this.officialAgents(now.agents, now.disabled).find(item => item.key === a.key);
+            if (now.ready && current && !this.machineChanged()) {
+              run("tab.new", { name: current.name, space: space?.id, argv: current.run });
             }
           }, i < 9 ? String(i + 1) : "", true)))
         .when(empty, el => el.child(this.row("settings", svg("mods/orca-new-menu/bot.svg").size(14).text_color(t.foreground), "Open Agent Settings",

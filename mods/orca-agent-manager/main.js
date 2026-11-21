@@ -12,7 +12,7 @@
 // `command -v` probe in state.js, run in the same login shell Herdr uses. If it fails, the
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
 import { View, div, svg, image } from "gpui-kit";
-import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, Link } from "gpui-base";
+import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, Link, ScrollHandle, Scrollbar } from "gpui-base";
 import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, settings, writeTextFile } from "herdr";
 import {
   LIST_HEADER_HEIGHT,
@@ -42,10 +42,8 @@ import {
 } from "./state.js";
 import {
   activeSessions,
-  installCommand,
   installMethodFor,
   npmManaged,
-  resolveLinkTarget,
   uninstallCommand,
 } from "./install.js";
 
@@ -87,6 +85,8 @@ export default class AgentManager extends View {
     this.expanded = new Set();
     this.editors = new Map();
     this.focusKey = null;
+    this.installedScroll = ScrollHandle.new();
+    this.availableScroll = ScrollHandle.new();
     this.typing = false;
     this.loading = true;
     this.refreshing = false;
@@ -98,11 +98,8 @@ export default class AgentManager extends View {
     this.savedKey = null;
     this.shell = null;
     this.refreshGen = 0;
-    this.inventoryGen = 0;
     this.action = null; // { key, kind, phase, message }
-    this.uninstall = null; // { key, phase, method, executable, npm, message }
-    this.npmPath = undefined;
-    this.npmRoot = undefined;
+    this.uninstall = null; // { key, phase, status, message }
 
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-manager", props: {expand: "claude"}}`).
@@ -182,7 +179,7 @@ export default class AgentManager extends View {
     const seen = new Set();
     const base = (this.agents ?? [])
       .filter((agent) => {
-        if (agent.key === "freebuff" || seen.has(agent.key)) return false;
+        if (!isBuiltinAgent(agent.key) || seen.has(agent.key)) return false;
         seen.add(agent.key);
         return true;
       })
@@ -321,7 +318,7 @@ export default class AgentManager extends View {
         this.writeError = null;
         this.syncEditors();
         changed = true;
-        this.reloadInventory(cx);
+        this.refresh(cx);
       } else if (update.kind === "conflict") {
         this.pendingProgramsText = update.text;
         this.externalConflict = true;
@@ -332,23 +329,6 @@ export default class AgentManager extends View {
         if (!this.externalConflict) this.shareInventory();
         cx.notify();
       } else if (this.externalConflict) cx.notify();
-    });
-  }
-
-  // Adding/removing a programs.json entry changes the agent list, which only knownAgents knows.
-  reloadInventory(cx) {
-    if (this.refreshing) return;
-    const gen = ++this.inventoryGen;
-    cx.spawn(async (cx) => {
-      try {
-        const known = await knownAgents();
-        // A refresh that started meanwhile owns the whole inventory; drop this stale result.
-        if (gen !== this.inventoryGen || this.refreshing) return;
-        this.agents = known;
-        this.cache();
-        if (!this.externalConflict) this.shareInventory();
-      } catch {}
-      if (gen === this.inventoryGen) cx.notify();
     });
   }
 
@@ -570,50 +550,28 @@ export default class AgentManager extends View {
     }
   }
 
-  async npmExecutable() {
-    if (this.npmPath !== undefined) return this.npmPath;
-    try {
-      const shell = await this.shellPath();
-      const result = await exec(shell, ["-lc", "command -v npm"], { timeout: 10000 });
-      this.npmPath = result.code === 0 ? parseCommandPath(result.stdout) : null;
-    } catch {
-      this.npmPath = null;
-    }
-    return this.npmPath;
-  }
-
-  async npmGlobalRoot() {
-    if (this.npmRoot !== undefined) return this.npmRoot;
-    const npm = await this.npmExecutable();
-    if (!npm) return null;
-    try {
-      const result = await exec(npm, ["root", "-g"], { timeout: 15000 });
-      this.npmRoot = result.code === 0 ? (result.stdout.trim().split("\n").pop() || null) : null;
-    } catch {
-      this.npmRoot = null;
-    }
-    return this.npmRoot;
-  }
-
-  async linkedPath(path) {
-    try {
-      const result = await exec("readlink", [path], { timeout: 5000 });
-      const target = result.code === 0 ? result.stdout.trim() : "";
-      return target ? resolveLinkTarget(path, target) : path;
-    } catch {
-      return path;
-    }
+  async realPath(path) {
+    if (!path?.startsWith("/")) return null;
+    const result = await exec("realpath", [path], { timeout: 5000 });
+    return result.code === 0 ? parseCommandPath(result.stdout) : null;
   }
 
   async npmStatusFor(row) {
     const method = installMethodFor(row.key);
     if (!method) return { method: null, managed: false };
-    const path = await this.commandPath(row.run[0]);
+    const override = readRunOverride(await readTextFile(PROGRAMS), row.key);
+    if (override.error) throw new Error(override.error);
+    const executable = (override.run ?? row.defaultCmd ?? row.run)[0];
+    const path = await this.commandPath(executable);
     if (!path) return { method, path: null, managed: false };
-    const npm = await this.npmExecutable();
-    const root = await this.npmGlobalRoot();
-    const real = await this.linkedPath(path);
-    return { method, path, npm, root, managed: Boolean(npm && root && npmManaged(path, real, root)) };
+    const npm = await this.commandPath("npm");
+    if (!npm) return { method, path, managed: false };
+    const global = await exec(npm, ["root", "-g"], { timeout: 15000 });
+    const [real, root] = await Promise.all([
+      this.realPath(path),
+      this.realPath(global.code === 0 ? global.stdout.trim() : null),
+    ]);
+    return { method, path, npm, root, real, managed: npmManaged(real, root, method.package) };
   }
 
   async recheckAgent(key) {
@@ -630,41 +588,8 @@ export default class AgentManager extends View {
     return Boolean(row?.installed);
   }
 
-  installAgent(row, cx) {
-    if (this.action?.phase === "running") return;
-    const method = installMethodFor(row.key);
-    if (!method) return;
-    const command = installCommand(method);
-    if (!command) return;
-    this.action = { key: row.key, kind: "install", phase: "running", message: `Installing ${method.package}…` };
-    cx.notify();
-    cx.spawn(async (cx) => {
-      try {
-        const npm = await this.npmExecutable();
-        if (!npm) {
-          this.action = { key: row.key, kind: "install", phase: "error", message: "npm was not found in the login shell. Use the official install guide instead." };
-          return;
-        }
-        const result = await exec(npm, command.args, { timeout: 10 * 60_000 });
-        if (result.code !== 0) {
-          const detail = tail(result.stderr || result.stdout);
-          this.action = { key: row.key, kind: "install", phase: "error", message: `npm exited ${result.code}${detail ? `: ${detail}` : "."}` };
-          return;
-        }
-        const installed = await this.recheckAgent(row.key);
-        this.action = installed
-          ? { key: row.key, kind: "install", phase: "done", message: "Installed and detected. The Start an agent menu now follows its switch." }
-          : { key: row.key, kind: "install", phase: "warning", message: "npm finished, but the executable is still not detected on PATH. Check the install guide or edit the executable." };
-      } catch (error) {
-        this.action = { key: row.key, kind: "install", phase: "error", message: errorText(error) };
-      } finally {
-        cx.notify();
-      }
-    });
-  }
-
   requestUninstall(row, cx) {
-    if (this.action?.phase === "running") return;
+    if (this.action?.phase === "running" || this.uninstall?.phase === "checking") return;
     this.uninstall = { key: row.key, phase: "checking", message: "" };
     cx.notify();
     cx.spawn(async (cx) => {
@@ -688,15 +613,13 @@ export default class AgentManager extends View {
           return;
         }
         if (!status.managed) {
-          this.uninstall = { key: row.key, phase: "error", message: "This copy was not installed by npm in the global root. Herdr will not guess at another uninstall method; use the official install guide." };
+          this.uninstall = { key: row.key, phase: "error", message: "This executable does not belong to the expected npm package in the global root. Herdr will not guess at another uninstall method; use the official install guide." };
           return;
         }
         this.uninstall = {
           key: row.key,
           phase: "confirm",
-          method: status.method,
-          executable: status.path,
-          npm: status.npm,
+          status,
           message: "",
         };
       } catch (error) {
@@ -716,26 +639,40 @@ export default class AgentManager extends View {
     const request = this.uninstall;
     if (!request || request.key !== row.key || request.phase !== "confirm") return;
     if (this.action?.phase === "running") return;
-    const running = activeSessions(terminals(), row.key, row.run);
+    const running = activeSessions(terminals(), row.key, [request.status.path]);
     if (running.length) {
       this.uninstall = { ...request, phase: "error", message: "A session started while you were confirming. Close it before uninstalling." };
       cx.notify();
       return;
     }
-    const command = uninstallCommand(request.method);
+    const command = uninstallCommand(request.status.method);
     if (!command) return;
     this.uninstall = { ...request, phase: "running" };
-    this.action = { key: row.key, kind: "uninstall", phase: "running", message: `Uninstalling ${request.method.package}…` };
+    this.action = { key: row.key, kind: "uninstall", phase: "running", message: `Uninstalling ${request.status.method.package}…` };
     cx.notify();
     cx.spawn(async (cx) => {
+      let removed = false;
       try {
-        const result = await exec(request.npm, command.args, { timeout: 10 * 60_000 });
+        const status = await this.npmStatusFor(row);
+        const confirmed = request.status;
+        if (!status.managed || status.path !== confirmed.path || status.real !== confirmed.real || status.npm !== confirmed.npm || status.root !== confirmed.root) {
+          this.action = null;
+          this.uninstall = { ...request, phase: "error", message: "The installation changed. Check it again before uninstalling." };
+          return;
+        }
+        if (activeSessions(terminals(), row.key, [status.path]).length) {
+          this.action = null;
+          this.uninstall = { ...request, phase: "error", message: "A session started while you were confirming. Close it before uninstalling." };
+          return;
+        }
+        const result = await exec(status.npm, command.args, { timeout: 10 * 60_000 });
         if (result.code !== 0) {
           const detail = tail(result.stderr || result.stdout);
           this.action = { key: row.key, kind: "uninstall", phase: "error", message: `npm exited ${result.code}${detail ? `: ${detail}` : "."}` };
           this.uninstall = { ...request, phase: "error", message: "The CLI was not removed." };
           return;
         }
+        removed = true;
         const installed = await this.recheckAgent(row.key);
         if (installed) {
           this.action = { key: row.key, kind: "uninstall", phase: "warning", message: "npm finished, but the executable is still detected. It may have another copy on PATH." };
@@ -745,8 +682,9 @@ export default class AgentManager extends View {
           this.uninstall = null;
         }
       } catch (error) {
-        this.action = { key: row.key, kind: "uninstall", phase: "error", message: errorText(error) };
-        this.uninstall = { ...request, phase: "error", message: "The CLI was not removed." };
+        const message = removed ? "npm finished, but the executable could not be rechecked." : "Could not complete the uninstall.";
+        this.action = { key: row.key, kind: "uninstall", phase: removed ? "warning" : "error", message: `${message} ${errorText(error)}` };
+        this.uninstall = { ...request, phase: "error", message };
       } finally {
         cx.notify();
       }
@@ -816,6 +754,13 @@ export default class AgentManager extends View {
       else return false;
     } else {
       return false;
+    }
+    const split = this.allRows();
+    const installedIndex = split.installed.findIndex((row) => row.key === this.focusKey);
+    if (installedIndex >= 0) this.installedScroll.scroll_to_item(installedIndex);
+    else {
+      const availableIndex = split.available.findIndex((row) => row.key === this.focusKey);
+      if (availableIndex >= 0) this.availableScroll.scroll_to_item(availableIndex);
     }
     this.handle.focus();
     cx.notify();
@@ -920,16 +865,28 @@ export default class AgentManager extends View {
       );
   }
 
-  catalog(rows, t) {
-    return v_flex()
+  catalog(rows, t, group) {
+    const viewport = listViewportHeight(rows.length, rows.some((row) => this.expanded.has(row.key)));
+    const id = `am-catalog-${group}`;
+    const list = v_flex()
+      .id(id)
+      .track_scroll(group === "installed" ? this.installedScroll : this.availableScroll)
       .w_full()
       .px(10)
+      .when(viewport, (el) => el.absolute().inset_0().overflow_y_scroll())
+      .children(rows.map((row, index) => this.row(row, t, index === rows.length - 1)));
+    return div()
+      .w_full()
+      .flex_none()
+      .relative()
       .rounded(10)
       .border_1()
       .border_color(t.border)
       .bg(t.surface)
       .overflow_hidden()
-      .children(rows.map((row, index) => this.row(row, t, index === rows.length - 1)));
+      .when(viewport, (el) => el.h(viewport))
+      .child(list)
+      .when(viewport, (el) => el.child(Scrollbar.vertical(id).absolute().inset_0()));
   }
 
   section(title, count, t, note, muted = false) {
@@ -978,20 +935,23 @@ export default class AgentManager extends View {
 
   row(row, t, last = false) {
     const open = this.expanded.has(row.key);
-    const focused = this.focusKey === row.key && this.handle.is_focused();
     const editor = this.editors.get(row.key);
     const quiet = !row.enabled;
     return v_flex()
       .id(`am-row-${row.key}`)
       .relative()
       .w_full()
+      .flex_none()
       .when(!last, (el) => el.border_b(1).border_color(t.border))
-      .when(focused, (el) => el.bg(t.hover))
-      .child(div().absolute().left(0).top(0).bottom(0).w(2).bg(focused ? t.accent : "#00000000"))
       .child(
         h_flex()
+          .id(`am-row-highlight-${row.key}`)
           .w_full()
-          .h(LIST_ROW_HEIGHT)
+          .rounded(8)
+          .hover((s) => s.bg(t.hover))
+          .h(LIST_ROW_HEIGHT - 12)
+          .my(6)
+          .px(8)
           .min_w(0)
           .gap(12)
           .py(0)
@@ -1048,27 +1008,27 @@ export default class AgentManager extends View {
               .items_center()
               .gap(10)
               .child(this.toggle(row, t))
-              .when(!row.installed, (el) =>
+              .when(!row.installed && row.homepage, (el) =>
                 el.child(
-                  this.button(`am-install-open-${row.key}`, this.action?.key === row.key && this.action.phase === "running" ? "Installing…" : "Install", t, (_event, cx) => {
-                    this.expanded.add(row.key);
-                    this.ensureEditor(row);
-                    this.focusKey = row.key;
-                    this.handle.focus();
-                    cx.notify();
-                  }, {
-                    height: 24,
-                    px: 8,
-                    disabled: this.action?.phase === "running",
-                  }),
+                  Link.new(`am-install-open-${row.key}`)
+                    .href(row.homepage)
+                    .tooltip(`Open ${row.name} installation guide`)
+                    .child(
+                      h_flex().h(24).px(8).flex_none().items_center().justify_center().rounded(6)
+                        .border_1().border_color(t.border).text_size(12).font_medium()
+                        .text_color(t.foreground).cursor_pointer().hover((style) => style.bg(t.hover))
+                        .child("Install"),
+                    ),
                 ),
               )
-              .child(
+              .when(!row.installed && !row.homepage, (el) =>
+                el.child(div().text_size(11).text_color(t.dim).child("No install guide")),
+              )
+              .when(row.installed, (el) => el.child(
                 div()
                   .id(`am-more-${row.key}`)
                   .size(26)
                   .flex_none()
-                  .when(!row.installed, (el) => el.opacity(0.45))
                   .flex()
                   .items_center()
                   .justify_center()
@@ -1084,7 +1044,7 @@ export default class AgentManager extends View {
                     this.toggleExpand(row, cx);
                   })
                   .child(svg(`mods/orca-agent-manager/${open ? "chevron-down" : "chevron-right"}.svg`).size(14)),
-              ),
+              )),
           ),
       )
       .when(open && editor, (el) => el.child(this.editor(row, editor, t)));
@@ -1149,7 +1109,6 @@ export default class AgentManager extends View {
             ),
         ),
       )
-      .when(!row.installed, (el) => el.child(this.installSection(row, t)))
       .child(div().text_size(10).font_semibold().text_color(t.dim).child("EXECUTABLE"))
       .child(
         h_flex()
@@ -1305,83 +1264,6 @@ export default class AgentManager extends View {
       .when(row.installed, (el) => el.child(this.uninstallSection(row, t)));
   }
 
-  installSection(row, t) {
-    const method = installMethodFor(row.key);
-    const command = method ? installCommand(method) : null;
-    const action = this.action?.key === row.key ? this.action : null;
-    const busy = this.action?.phase === "running";
-    const running = busy && action?.phase === "running";
-    return v_flex()
-      .w_full()
-      .gap(6)
-      .pt(4)
-      .child(div().text_size(10).font_semibold().text_color(t.dim).child("INSTALL"))
-      .when(Boolean(command), (el) =>
-        el
-          .child(
-            div()
-              .font_family(settings()?.font_family ?? "JetBrains Mono")
-              .text_size(11)
-              .text_color(t.muted)
-              .child(formatArgv([command.executable, ...command.args])),
-          )
-          .child(
-            h_flex()
-              .gap(8)
-              .items_center()
-              .child(
-                this.button(`am-install-${row.key}`, running ? "Installing…" : "Install with npm", t, (_event, cx) => this.installAgent(row, cx), {
-                  height: 26,
-                  px: 10,
-                  primary: true,
-                  disabled: busy,
-                }),
-              )
-              .when(row.homepage, (inner) =>
-                inner.child(
-                  Link.new(`am-install-guide-${row.key}`)
-                    .href(row.homepage)
-                    .text_size(11)
-                    .text_color(t.accent)
-                    .underline()
-                    .tooltip(row.homepage)
-                    .child("Official guide ↗"),
-                ),
-              ),
-          ),
-      )
-      .when(!command, (el) =>
-        el.child(
-          div()
-            .text_size(11)
-            .text_color(t.muted)
-            .child("No verified automatic installer is defined for this CLI. Use its official install guide instead."),
-        ),
-      )
-      .when(!row.homepage && !command, (el) =>
-        el.child(div().text_size(11).text_color(t.dim).child("Herdr has no verified install URL for this agent yet.")),
-      )
-      .when(Boolean(action), (el) =>
-        el.child(
-          h_flex()
-            .gap(6)
-            .items_start()
-            .child(
-              action.phase === "running"
-                ? div().flex_none().text_size(11).text_color(t.accent).frames(["◐", "◓", "◑", "◒"], 120)
-                : div().flex_none().text_size(11).text_color(action.phase === "error" ? t.blocked : action.phase === "warning" ? t.blocked : t.done).child(action.phase === "done" ? "✓" : action.phase === "error" || action.phase === "warning" ? "!" : "·"),
-            )
-            .child(
-              div()
-                .min_w(0)
-                .text_size(11)
-                .text_color(action.phase === "error" || action.phase === "warning" ? t.blocked : t.muted)
-                .child(action.message),
-            ),
-        ),
-      );
-  }
-
   uninstallSection(row, t) {
     const request = this.uninstall?.key === row.key ? this.uninstall : null;
     const method = installMethodFor(row.key);
@@ -1419,7 +1301,7 @@ export default class AgentManager extends View {
                 height: 26,
                 px: 10,
                 color: t.blocked,
-                disabled: this.action?.phase === "running",
+                disabled: this.action?.phase === "running" || this.uninstall?.phase === "checking",
               }),
             )
             .when(row.homepage, (inner) =>
@@ -1448,7 +1330,7 @@ export default class AgentManager extends View {
               div()
                 .text_size(11)
                 .text_color(t.blocked)
-                .child(`Remove ${row.name}? This runs npm uninstall -g ${request.method.package}. It does not delete settings, sessions, or your command override.`),
+                .child(`Remove ${row.name}? This runs npm uninstall -g ${request.status.method.package}. It does not delete settings, sessions, or your command override.`),
             )
             .child(
               h_flex()
@@ -1507,11 +1389,6 @@ export default class AgentManager extends View {
     const loading = this.loading && !this.agents;
     const width = this.width || 800;
     const contentPad = width < 520 ? 12 : 24;
-    // One scroll surface for both groups. The max height leaves half of the next row visible;
-    // headers are counted in the same 5.5-row budget. With fewer rows it stays content-sized.
-    const editing = this.expanded.size > 0;
-    const viewport = editing ? null : listViewportHeight(rows.length, false);
-
     const refreshButton = h_flex()
       .id("am-refresh")
       .h(30)
@@ -1699,11 +1576,11 @@ export default class AgentManager extends View {
           .when(split.installed.length === 0, (inner) =>
             inner.child(this.empty("No agents detected. If one is installed, the probe may have timed out — try Refresh.", t)),
           )
-          .when(split.installed.length > 0, (inner) => inner.child(this.catalog(split.installed, t)))
+          .when(split.installed.length > 0, (inner) => inner.child(this.catalog(split.installed, t, "installed")))
           .when(split.available.length > 0, (inner) =>
             inner
               .child(this.section("Available to install", `${split.available.length} agents`, t, null, true))
-              .child(this.catalog(split.available, t)),
+              .child(this.catalog(split.available, t, "available")),
           )
           .when(split.available.length === 0 && split.installed.length > 0, (inner) =>
             inner.child(this.section("Available to install", "0 agents", t, "every supported agent is installed", true)),
@@ -1744,9 +1621,7 @@ export default class AgentManager extends View {
           .w_full()
           .min_h(0)
           .overflow_y_scrollbar()
-          .when(viewport, (el) => el.flex_1().max_h(viewport))
-          .when(!viewport && editing, (el) => el.flex_1())
-          .when(!viewport && !editing, (el) => el.flex_none())
+          .flex_1()
           .child(sectionBody),
       );
   }

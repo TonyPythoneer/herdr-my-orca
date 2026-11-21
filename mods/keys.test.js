@@ -49,3 +49,11 @@ test("aligned chords do not take shell or text-editing keys", () => {
     assert.equal(keys["layout:orca"][chord], undefined, `${chord} must reach the program`);
   }
 });
+
+test("skillshare is a right-sidebar view", () => {
+  const root = JSON.parse(readFileSync(new URL("../layouts/orca.json", import.meta.url), "utf8"));
+  const body = root.children.find((node) => node.id === "body");
+  const panel = body.children.find((node) => node.id === "panel");
+  const stack = panel.children.find((node) => node.id === "panel-body");
+  assert.equal(stack.children.find((node) => node.id === "skillshare").content.mod, "skillshare");
+});
