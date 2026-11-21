@@ -1,3 +1,4 @@
+// Derived from Herdr App's defaults/mods/confirm/main.js (Apache-2.0, Copyright Herdr App authors); adds `confirmShared`.
 // Asks before something destructive, e.g. "Close space?". Opened as a
 // dialog with props { title, detail, command: { name, args } }.
 // Enter confirms (runs the command), Esc cancels.

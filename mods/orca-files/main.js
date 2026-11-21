@@ -677,7 +677,7 @@ export default class Files extends View {
       case "delete":
         close();
         const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-        return openOverlay({ mod: "confirm", kind: "dialog", width: 420, height: 180,
+        return openOverlay({ mod: "orca-confirm", kind: "dialog", width: 420, height: 180,
           props: { title: "Delete?", detail: `${full}\nHost: ${target.location.on ?? "local"}`,
             confirmShared: { key: `orca-files.target.${token}`, value: { ...target.location, path: full } },
             command: { name: `orca-files.remove-${token}` } } });
@@ -893,7 +893,7 @@ export default class Files extends View {
     }
     const full = `${loc.cwd.replace(/\/+$/, "")}/${path}`;
     const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-    openOverlay({ mod: "confirm", kind: "dialog", width: 420, height: 180,
+    openOverlay({ mod: "orca-confirm", kind: "dialog", width: 420, height: 180,
       props: { title: "Delete?", detail: `${full}\nHost: ${loc.on ?? "local"}`,
         confirmShared: { key: `orca-files.target.${token}`, value: { ...loc, path: full } },
         command: { name: `orca-files.remove-${token}` } } });

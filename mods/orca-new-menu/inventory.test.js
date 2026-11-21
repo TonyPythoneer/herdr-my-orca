@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { currentInventory, mergeInventory } from "./rows.js";
 
-for (const mod of ["orca-new-menu", "new-menu"]) {
+for (const mod of ["orca-new-menu"]) {
   test(`${mod} falls back to Herdr after the manager inventory expires`, async () => {
     const known = { key: "codex", installed: false, run: ["codex"] };
     const fresh = { ...known, installed: true, run: ["/custom/codex"] };
