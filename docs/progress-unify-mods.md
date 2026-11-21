@@ -27,6 +27,16 @@
   carries its own copy of `stored`; the three tests that evaluate `main.js` also stub its scope.
   Moving them means rewriting those tests for roughly 3% of the file. `card()` (340 lines) reads
   `this` throughout. Worth doing only together with a render test harness.
-- Phase 3, orca-tabs: deferred. Live holds an unmerged close-tabs feature in `orca-tabs/main.js`
-  (it was dropped from the repo on request), so a split in the repo would be undone by the next sync.
+- Phase 3, orca-tabs: deferred. Live `orca-tabs/main.js` holds a close-tabs feature that exists in
+  no repo commit: every 30 s it closes (`tab.close {confirmed:true}`) tabs whose worktree is gone.
+  Its branch was deleted on request, but the live code still runs. Copying any repo `orca-tabs`
+  over live removes it. Decision needed: put it on a branch and review it, or drop it from live.
 - Not done on purpose: option 1b (bundler) and shared SVG de-duplication.
+
+## After the Opus review (second pass)
+- Removed `orca-changes/review-store.js` (no importer since an earlier refactor; verified by grep)
+  and `orca-pane-status` (referenced nowhere). Live copies are left alone.
+- Fixed the README (skillshare is tracked here; "unused mods can be deleted" was unsafe).
+- Open, needs the owner: live `layouts/orca.json` was re-wrapped in a row at 23:26 on 2026-11-21,
+  which moves `titlebar`/`traffic_lights` off the root; live is behind the repo on
+  `orca-status/local-usage.js` and `orca-new-menu/main.js`; the close-tabs code above.

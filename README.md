@@ -3,7 +3,7 @@
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
-- **skillshare**: the right sidebar icon opens the skillshare panel. Install the [skillshare Herdr mod](https://github.com/runkids/skillshare/tree/main/herdr/skillshare) separately in `~/.config/herdr-app/mods/skillshare/`; its CLI is also required for data and actions.
+- **skillshare**: the right sidebar icon opens the skillshare panel (`mods/skillshare/`, a third-party mod tracked here). Its CLI is also required for data and actions.
 - **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status/`). Claude and
   Codex read what the CLIs already write on this computer; Claude's quota comes live from
   Claude Code's own `rate_limits` statusline feed, with Anthropic's usage API only as the idle
@@ -82,4 +82,4 @@ These are runtime state or files Herdr writes itself, so they are not in this re
 ## Things to check before using
 
 - `programs.json` starts Claude and Codex with full-permission flags (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`). Remove them if you want the agents to ask first.
-- The `orca` layout expects the `orca-*` mods in this repo. Mods that are not used by any layout can be deleted.
+- The `orca` layout expects the `orca-*` mods in this repo. A mod that no layout lists may still be opened by another mod (`openOverlay({ mod: "orca-menu" })`, `run("mod.open", ...)`): grep for its name before deleting it.
