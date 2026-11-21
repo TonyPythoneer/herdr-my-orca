@@ -50,11 +50,46 @@ To enable the live Claude feed, point `statusLine` in `~/.claude/settings.json` 
 The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` from `PATH`, then
 `npx -y ccstatusline@latest`, so the status line you see does not change.
 
+## One UI profile
+
+The Orca UI is now described by **one manifest**: [ui/orca.profile.json](ui/orca.profile.json).
+It lists the shell, workspaces, sidebar panels, menus and supporting mods that together
+form this layout. These are *components*, not 25 copies of the same UI: Herdr requires
+each mod's own named entrypoint, so the source folders stay independent. The manifest is
+the single entry point for knowing which pieces belong to **my UI**.
+
+- Edit **layouts/orca.json** for placement and sizes, **themes/orca-dark.json** for colors,
+  and the relevant **mods/<name>/** for behavior. The manifest declares the composition,
+  not an additional competing copy of those settings.
+- Run **node scripts/ui-profile.mjs list** to see grouped modules and
+  **node scripts/ui-profile.mjs check** to validate layout, theme, shortcuts, overlays
+  and declared paths.
+- Run **node --test scripts/ui-profile.test.mjs** for the profile's automated checks.
+- The stock **layouts/main.json** and other legacy mods are left untouched. In particular
+  **orca-pane-status** is not part of this profile; the installer does not copy unused mods.
+
+### Installing this UI
+
+From this checkout:
+
+```sh
+node scripts/ui-profile.mjs check
+node scripts/ui-profile.mjs install --dry-run
+node scripts/ui-profile.mjs install
+```
+
+The destination defaults to **~/.config/herdr-app/**. Use **--target /other/config**
+if needed. Installation does **not** overwrite existing files or mod directories, making
+the first run safe for an existing Herdr configuration. For later updates, back up your
+configuration and explicitly use **install --force**; this updates the profile's files
+and mods, but does not delete unrelated mods or Herdr's runtime state. Then select the
+**orca** layout in Herdr.
+
 ## Setup
 
 Read ~/.config/herdr-app/AGENTS.md, then add this layout: https://github.com/TonyPythoneer/herdr-my-orca/tree/main
 
-In short: copy `layouts/`, `mods/`, `programs.json`, `keys.json`, `settings.json` and `themes/` into `~/.config/herdr-app/`, then switch to the `orca` layout.
+The UI profile installer above is the preferred setup path. For a manual setup, copy only the paths declared in `ui/orca.profile.json` and then switch to `orca`.
 
 ## Not included
 

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "my-orca",
+  "title": "My Orca UI",
+  "description": "Single install/validation manifest for the Orca layout; individual Herdr mods remain independently loadable.",
+  "layout": "orca",
+  "theme": "orca-dark",
+  "files": [
+    "layouts/orca.json",
+    "layouts/orca.svg",
+    "themes/orca-dark.json",
+    "themes/orca-light.json",
+    "keys.json",
+    "programs.json",
+    "settings.json"
+  ],
+  "components": {
+    "shell": [
+      "orca-chrome",
+      "orca-nav",
+      "orca-tabs",
+      "orca-pane",
+      "orca-status"
+    ],
+    "workspaces": [
+      "orca-spaces",
+      "orca-landing",
+      "orca-worktree",
+      "orca-float"
+    ],
+    "sidebarPanels": [
+      "orca-panel-head",
+      "orca-panel-gap",
+      "orca-files",
+      "orca-changes",
+      "orca-diff",
+      "orca-diff-breakdown",
+      "orca-agents"
+    ],
+    "dialogsAndMenus": [
+      "orca-menu",
+      "orca-new-menu",
+      "orca-split-menu",
+      "orca-handoff"
+    ],
+    "supportingMods": [
+      "agent-config",
+      "confirm",
+      "picker",
+      "workspace-chrome"
+    ]
+  }
+}
