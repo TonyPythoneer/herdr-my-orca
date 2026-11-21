@@ -42,7 +42,8 @@ const ITEMS = [
   { id: "pr-checks", icon: "list-checks", title: "PR Checks", gating: "folderOnly" },
   { id: "changes", icon: "git-branch", title: "Source Control", gating: "gitOnly" },
   { id: "checks", icon: "list-checks", title: "Checks", gating: "gitOnly" },
-  { id: "ports", icon: "plug", title: "Ports", gating: "sshOnly" }
+  { id: "ports", icon: "plug", title: "Ports", gating: "sshOnly" },
+  { id: "skillshare", icon: "skillshare", title: "Skillshare" }
 ];
 
 export default class PanelHead extends View {
