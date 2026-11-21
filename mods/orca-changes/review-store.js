@@ -1,3 +1,4 @@
+// Generated from shared/review-store.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // Review Store: cached PR review store for workspace cards and changes panel.
 // Port of Orca's hosted review branch cache (`hosted-review-branch-cache.ts:50-100`)
 // and refresh pacing (`hosted-review-refresh-pacing.ts:4-28`).

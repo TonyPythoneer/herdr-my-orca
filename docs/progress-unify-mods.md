@@ -3,7 +3,7 @@
 | Phase | Status | PR |
 |---|---|---|
 | 1. Repo holds only our mods | done | #6 |
-| 2. One source for helpers | todo | |
+| 2. One source for helpers | done | #7 |
 | 3. Split big files | todo | |
 
 ## Log
@@ -13,3 +13,8 @@
   captured target). Removed the 11 Herdr-shipped mods from the repo; live keeps Herdr's copies.
   Tests 214 pass, every mod checks, status has no errors, screenshot shows the window intact.
   Live got `orca-confirm` and `orca-files/main.js` only; no live deletions.
+- Phase 2: `shared/{clip,transcript,review-store}.js` are the only sources; `scripts/sync-shared.mjs`
+  copies them into 4 + 2 + 2 mod folders with a header line, `--check` and a test fail on drift
+  (verified by editing a copy). `helpers.js` and `remove.js` were only in `orca-worktree` after
+  phase 1, so nothing to share. Live got 7 of the 8 copies; live `orca-changes/review-store.js`
+  is an older version that lacks the repo's cache cap, left untouched.
