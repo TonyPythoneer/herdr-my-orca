@@ -94,7 +94,7 @@ test("Delete opens a confirmation bound to the captured target", () => {
   f.view.selected = "b";
   f.view.treeKey(key("delete"), f.cx);
   assert.equal(f.overlays.length, 1);
-  assert.equal(f.overlays[0].mod, "confirm");
+  assert.equal(f.overlays[0].mod, "orca-confirm");
   assert.equal(f.overlays[0].props.confirmShared.value.path, "/repo/b");
   assert.equal(f.overlays[0].props.command.name.startsWith("orca-files.remove-"), true);
 });
