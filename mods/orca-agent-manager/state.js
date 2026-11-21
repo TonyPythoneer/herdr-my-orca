@@ -78,17 +78,51 @@ export function argsFromText(text) {
   return lines.filter((line) => line !== "");
 }
 
-/** A draft's executable (one element) and arguments (kept apart from it). */
-export function validateDraft(command, argsText) {
+export function validateExecutable(command) {
   const cmd = String(command ?? "").trim();
   if (!cmd) return { error: "Enter the executable name or path." };
   if (/[\n\r]/.test(cmd)) return { error: "The executable cannot contain a line break." };
   if (cmd.includes("\0")) return { error: "The executable cannot contain a NUL character." };
+  return { command: cmd };
+}
+
+/** A draft's executable (one element) and arguments (kept apart from it). */
+export function validateDraft(command, argsText) {
+  const checked = validateExecutable(command);
+  if (checked.error) return checked;
   const args = argsFromText(argsText);
   if (args.some((arg) => arg.includes("\0"))) {
     return { error: "An argument cannot contain a NUL character." };
   }
-  return { run: [cmd, ...args] };
+  return { run: [checked.command, ...args] };
+}
+
+/** One argument per line can represent spaces, quotes and backslashes, but not empty or multi-line values. */
+export function argsEditable(argv) {
+  return (
+    Array.isArray(argv) &&
+    argv.every((arg) => typeof arg === "string" && arg !== "" && !/[\r\n]/.test(arg))
+  );
+}
+
+/**
+ * Compose a draft. Existing arguments the line editor cannot represent are carried over byte for
+ * byte so changing only the executable never rewrites them.
+ */
+export function draftRun(command, argsText, originalArgs) {
+  const original = Array.isArray(originalArgs) ? originalArgs : [];
+  if (!argsEditable(original)) {
+    const checked = validateExecutable(command);
+    return checked.error ? checked : { run: [checked.command, ...original] };
+  }
+  return validateDraft(command, argsText);
+}
+
+/** Decide what a fresh programs.json read means while drafts may be dirty. */
+export function programsUpdate(current, next, hasDirtyDrafts) {
+  if (next === undefined || next === current) return { kind: "none" };
+  if (hasDirtyDrafts) return { kind: "conflict", text: next };
+  return { kind: "apply", text: next };
 }
 
 export function programsTextError(text) {
@@ -226,6 +260,14 @@ export function commandCheckScript(shellPath) {
     return "for c in $argv; if command -v -- $c >/dev/null 2>&1; printf 'HERDRAM:1\\n'; else; printf 'HERDRAM:0\\n'; end; end";
   }
   return 'for c in "$@"; do if command -v -- "$c" >/dev/null 2>&1; then printf \'HERDRAM:1\\n\'; else printf \'HERDRAM:0\\n\'; fi; done';
+}
+
+/** Shell arguments for the probe. POSIX eats the first word as $0; fish puts every word in $argv. */
+export function checkArgs(shellPath, script, commands, interactive = true) {
+  const args = [interactive ? "-lic" : "-lc", script];
+  if (!isFish(shellPath)) args.push("herdr-agent-manager");
+  for (const command of commands) args.push(command);
+  return args;
 }
 
 /** Parse the marked lines from `commandCheckScript`; a short/long answer is a failed check. */

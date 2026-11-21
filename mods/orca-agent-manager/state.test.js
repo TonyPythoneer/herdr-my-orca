@@ -4,18 +4,23 @@ import {
   BUILTIN_DEFAULTS,
   HOMEPAGES,
   applyFreshInstalled,
+  argsEditable,
   argsFromText,
   argsToText,
+  checkArgs,
   commandCheckScript,
   defaultRun,
+  draftRun,
   formatArgv,
   isBuiltinAgent,
   parseCommandCheck,
   parseManagerConfig,
+  programsUpdate,
   readRunOverride,
   serializeManagerConfig,
   splitInventory,
   validateDraft,
+  validateExecutable,
   writeRunOverride,
 } from "./state.js";
 
@@ -40,6 +45,36 @@ test("validation keeps the executable and each argument apart", () => {
 
 test("preview quoting is display only and round-trippable by a shell", () => {
   assert.equal(formatArgv(["claude", "--model", "two words", "a'b"]), "claude --model 'two words' 'a'\\''b'");
+});
+
+test("an executable-only edit keeps empty and multi-line arguments intact", () => {
+  assert.deepEqual(draftRun("newbin", "ignored", ["", "a\nb"]), { run: ["newbin", "", "a\nb"] });
+  assert.deepEqual(draftRun("newbin", "--model\nopus", ["--old"]), { run: ["newbin", "--model", "opus"] });
+  assert.match(draftRun("", "x", [""]).error, /executable/);
+  assert.equal(argsEditable(["a", "b c"]), true);
+  assert.equal(argsEditable([]), true);
+  assert.equal(argsEditable([""]), false);
+  assert.equal(argsEditable(["a\nb"]), false);
+  assert.deepEqual(validateExecutable("  /opt/claude  "), { command: "/opt/claude" });
+  assert.deepEqual(draftRun("newbin", "ignored", undefined), { run: ["newbin", "ignored"] });
+});
+
+test("a fresh programs.json read never replaces a dirty draft", () => {
+  assert.deepEqual(programsUpdate(undefined, "{}", false), { kind: "apply", text: "{}" });
+  assert.deepEqual(programsUpdate("a", "a", true), { kind: "none" });
+  assert.deepEqual(programsUpdate("a", undefined, false), { kind: "none" });
+  assert.deepEqual(programsUpdate("a", "b", true), { kind: "conflict", text: "b" });
+  assert.deepEqual(programsUpdate("a", "b", false), { kind: "apply", text: "b" });
+});
+
+test("fish gets no extra $0 argument and POSIX keeps its placeholder", () => {
+  assert.deepEqual(checkArgs("/bin/zsh", "SCRIPT", ["claude", "qodercli"]), [
+    "-lic", "SCRIPT", "herdr-agent-manager", "claude", "qodercli",
+  ]);
+  assert.deepEqual(checkArgs("/opt/fish", "SCRIPT", ["claude"]), ["-lic", "SCRIPT", "claude"]);
+  assert.deepEqual(checkArgs("/bin/bash", "SCRIPT", ["claude"], false), [
+    "-lc", "SCRIPT", "herdr-agent-manager", "claude",
+  ]);
 });
 
 test("built-in defaults cover the agents Herdr offers", () => {

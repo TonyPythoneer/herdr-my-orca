@@ -13,23 +13,26 @@
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, Link } from "gpui-base";
-import { appHome, checking, exec, knownAgents, props, readTextFile, run, theme, settings, writeTextFile } from "herdr";
+import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, theme, settings, writeTextFile } from "herdr";
 import {
   applyFreshInstalled,
+  argsEditable,
   argsToText,
+  checkArgs,
   checkCommands,
   commandCheckScript,
   defaultRun,
+  draftRun,
   formatArgv,
   homepageFor,
   isBuiltinAgent,
   parseCommandCheck,
   parseManagerConfig,
   programsTextError,
+  programsUpdate,
   readRunOverride,
   serializeManagerConfig,
   splitInventory,
-  validateDraft,
   writeRunOverride,
 } from "./state.js";
 
@@ -76,7 +79,8 @@ export default class AgentManager extends View {
     this.externalConflict = false;
     this.savedKey = null;
     this.shell = null;
-    this.gen = 0;
+    this.refreshGen = 0;
+    this.inventoryGen = 0;
 
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-manager", props: {expand: "claude"}}`).
@@ -162,56 +166,73 @@ export default class AgentManager extends View {
     this.detectionError = null;
     this.freshWarning = null;
     this.writeError = null;
-    const gen = ++this.gen;
+    const gen = ++this.refreshGen;
     cx.spawn(async (cx) => {
-      let known = null;
-      let failure = null;
-      let programs;
-      let manager;
       try {
-        [known, programs, manager] = await Promise.all([
-          knownAgents().catch((error) => {
-            failure = error;
-            return null;
-          }),
-          readTextFile(PROGRAMS).catch(() => undefined),
-          readTextFile(MANAGER).catch(() => undefined),
-        ]);
-      } catch (error) {
-        failure = error;
-      }
-      if (gen !== this.gen) return;
-
-      this.applyPrograms(programs);
-      this.applyManager(manager);
-      if (known) {
-        this.agents = known;
-        this.fromCache = false;
-        this.cache();
-      }
-      if (failure) this.detectionError = `Could not detect installed agents: ${errorText(failure)}`;
-      if (failure && !this.agents) this.loading = false;
-
-      let fresh = null;
-      if (this.agents?.length) {
+        let known = null;
+        let failure = null;
+        let programs;
+        let manager;
         try {
-          fresh = await this.freshInstallCheck();
-          this.freshWarning = null;
+          [known, programs, manager] = await Promise.all([
+            knownAgents().catch((error) => {
+              failure = error;
+              return null;
+            }),
+            readTextFile(PROGRAMS).catch(() => undefined),
+            readTextFile(MANAGER).catch(() => undefined),
+          ]);
         } catch (error) {
-          this.freshWarning = `Fresh install check failed (${errorText(error)}); showing Herdr's cached answer.`;
+          failure = error;
+        }
+        if (gen !== this.refreshGen) return;
+
+        // A refresh must not replace the snapshot a dirty draft was based on. It becomes a
+        // conflict instead; only Reload or the explicit Overwrite action may move the base.
+        const update = programsUpdate(this.programsText, programs, this.anyDirty());
+        if (update.kind === "apply") {
+          this.applyPrograms(update.text);
+          this.pendingProgramsText = undefined;
+          this.externalConflict = false;
+        } else if (update.kind === "conflict") {
+          this.pendingProgramsText = update.text;
+          this.externalConflict = true;
+        }
+        this.applyManager(manager);
+        if (known) {
+          this.agents = known;
+          this.fromCache = false;
+          this.cache();
+        }
+        if (failure) this.detectionError = `Could not detect installed agents: ${errorText(failure)}`;
+        if (failure && !this.agents) this.loading = false;
+
+        let fresh = null;
+        if (this.agents?.length) {
+          try {
+            fresh = await this.freshInstallCheck();
+            this.freshWarning = null;
+          } catch (error) {
+            this.freshWarning = `Fresh install check failed (${errorText(error)}); showing Herdr's cached answer.`;
+          }
+        }
+        if (gen !== this.refreshGen) return;
+        if (fresh) this.agents = applyFreshInstalled(this.agents, fresh);
+        if (this.agents) this.cache();
+
+        try {
+          this.syncEditors();
+        } catch {}
+        if (!this.externalConflict) this.shareInventory();
+      } finally {
+        // A newer refresh owns the flag; never leave an older one stuck as refreshing.
+        if (gen === this.refreshGen) {
+          this.loading = false;
+          this.refreshing = false;
+          this.lastChecked = Date.now();
+          cx.notify();
         }
       }
-      if (gen !== this.gen) return;
-      if (fresh) this.agents = applyFreshInstalled(this.agents, fresh);
-      if (this.agents) this.cache();
-
-      try {
-        this.syncEditors();
-      } catch {}
-      this.loading = false;
-      this.refreshing = false;
-      this.lastChecked = Date.now();
-      cx.notify();
     });
   }
 
@@ -230,22 +251,23 @@ export default class AgentManager extends View {
   // One shell call for every agent. Commands travel as positional arguments, never as script
   // text, and the answers are marked so login profiles that print a banner cannot shift them.
   async freshInstallCheck() {
-    const agents = this.agents ?? [];
-    const commands = checkCommands(agents);
+    // The effective command is the one the row would launch, not the cached knownAgents() run.
+    const rows = this.allRows().all;
+    const commands = checkCommands(rows);
     if (!commands.length) return null;
     const shell = await this.shellPath();
     const script = commandCheckScript(shell);
-    const attempt = async (args) => {
-      const result = await exec(shell, args, { timeout: 30000 });
+    const attempt = async (interactive) => {
+      const result = await exec(shell, checkArgs(shell, script, commands, interactive), { timeout: 30000 });
       if (result.code !== 0) throw new Error(result.stderr.trim() || `${shell} exited ${result.code}`);
       const answers = parseCommandCheck(result.stdout, commands.length);
-      return new Map(agents.map((agent, index) => [agent.key, answers[index]]));
+      return new Map(rows.map((row, index) => [row.key, answers[index]]));
     };
     try {
-      return await attempt(["-lic", script, "herdr-agent-manager", ...commands]);
+      return await attempt(true);
     } catch (first) {
       try {
-        return await attempt(["-lc", script, "herdr-agent-manager", ...commands]);
+        return await attempt(false);
       } catch {
         throw first;
       }
@@ -260,38 +282,51 @@ export default class AgentManager extends View {
       const programs = await readTextFile(PROGRAMS).catch(() => undefined);
       const manager = await readTextFile(MANAGER).catch(() => undefined);
       let changed = false;
-      if (programs !== undefined && programs !== this.programsText) {
-        if (this.anyDirty()) {
-          this.pendingProgramsText = programs;
-          this.externalConflict = true;
-        } else {
-          this.applyPrograms(programs);
-          this.pendingProgramsText = undefined;
-          this.externalConflict = false;
-          this.writeError = null;
-          this.syncEditors();
-          changed = true;
-          this.reloadInventory(cx);
-        }
+      const update = programsUpdate(this.programsText, programs, this.anyDirty());
+      if (update.kind === "apply") {
+        this.applyPrograms(update.text);
+        this.pendingProgramsText = undefined;
+        this.externalConflict = false;
+        this.writeError = null;
+        this.syncEditors();
+        changed = true;
+        this.reloadInventory(cx);
+      } else if (update.kind === "conflict") {
+        this.pendingProgramsText = update.text;
+        this.externalConflict = true;
+        changed = true;
       }
       if (this.applyManager(manager)) changed = true;
-      if (changed) cx.notify();
-      else if (this.externalConflict) cx.notify();
+      if (changed) {
+        if (!this.externalConflict) this.shareInventory();
+        cx.notify();
+      } else if (this.externalConflict) cx.notify();
     });
   }
 
   // Adding/removing a programs.json entry changes the agent list, which only knownAgents knows.
   reloadInventory(cx) {
-    const gen = ++this.gen;
+    if (this.refreshing) return;
+    const gen = ++this.inventoryGen;
     cx.spawn(async (cx) => {
       try {
         const known = await knownAgents();
-        if (gen !== this.gen) return;
+        // A refresh that started meanwhile owns the whole inventory; drop this stale result.
+        if (gen !== this.inventoryGen || this.refreshing) return;
         this.agents = known;
         this.cache();
+        if (!this.externalConflict) this.shareInventory();
       } catch {}
-      cx.notify();
+      if (gen === this.inventoryGen) cx.notify();
     });
+  }
+
+  // The launch menus read this instead of trusting Herdr's minute-long detection cache.
+  shareInventory() {
+    if (!this.agents) return;
+    try {
+      setShared("agent-manager.inventory", { at: Date.now(), agents: this.allRows().all });
+    } catch {}
   }
 
   syncEditors() {
@@ -303,6 +338,7 @@ export default class AgentManager extends View {
     for (const row of rows) {
       const editor = this.editors.get(row.key);
       if (!editor || editor.dirty) continue;
+      editor.originalArgs = row.run.slice(1);
       editor.command.set_value(row.run[0] ?? "");
       editor.args.set_value(argsToText(row.run.slice(1)));
       editor.error = null;
@@ -326,9 +362,17 @@ export default class AgentManager extends View {
     });
     const args = TextareaState.new({ value: argsToText(row.run.slice(1)), rows: 3 });
     args.set_soft_wrap(false);
-    const editor = { command, args, dirty: false, error: null, conflict: false, force: false };
+    const editor = {
+      command,
+      args,
+      originalArgs: row.run.slice(1),
+      dirty: false,
+      error: null,
+      conflict: false,
+      force: false,
+    };
     const changed = (_event, cx) => {
-      const draft = validateDraft(command.value(), args.value());
+      const draft = draftRun(command.value(), args.value(), editor.originalArgs);
       const current = this.agents?.find((candidate) => candidate.key === row.key);
       const effective = current ? this.rowInfo(current).run : row.run;
       editor.dirty = Boolean(draft.error) || !sameRun(draft.run ?? [], effective);
@@ -369,6 +413,7 @@ export default class AgentManager extends View {
   cancelEdit(row, cx) {
     const editor = this.editors.get(row.key);
     if (!editor) return;
+    editor.originalArgs = row.run.slice(1);
     editor.command.set_value(row.run[0] ?? "");
     editor.args.set_value(argsToText(row.run.slice(1)));
     editor.dirty = false;
@@ -404,7 +449,7 @@ export default class AgentManager extends View {
   async save(row, cx) {
     const editor = this.editors.get(row.key);
     if (!editor) return;
-    const validated = validateDraft(editor.command.value(), editor.args.value());
+    const validated = draftRun(editor.command.value(), editor.args.value(), editor.originalArgs);
     if (validated.error) {
       editor.error = validated.error;
       cx.notify();
@@ -461,6 +506,7 @@ export default class AgentManager extends View {
     editor.force = false;
 
     const nextRun = run ?? defaultRun(row.key) ?? row.run;
+    editor.originalArgs = nextRun.slice(1);
     editor.command.set_value(nextRun[0] ?? "");
     editor.args.set_value(argsToText(nextRun.slice(1)));
     this.savedKey = row.key;
@@ -503,6 +549,7 @@ export default class AgentManager extends View {
       this.managerError = null;
       this.disabled = next;
       this.writeError = null;
+      this.shareInventory();
       cx.notify();
     });
   }
@@ -796,7 +843,8 @@ export default class AgentManager extends View {
 
   editor(row, editor, t) {
     const mono = settings()?.font_family ?? "JetBrains Mono";
-    const draft = validateDraft(editor.command.value(), editor.args.value());
+    const unsafeArgs = !argsEditable(editor.originalArgs);
+    const draft = draftRun(editor.command.value(), editor.args.value(), editor.originalArgs);
     const preview = draft.run ? formatArgv(draft.run) : "";
     const saveLabel = editor.conflict ? "Overwrite" : "Save";
     const dirty = draft.run ? !sameRun(draft.run, row.run) : true;
@@ -885,24 +933,53 @@ export default class AgentManager extends View {
           .child("A name from PATH or an absolute path. Spaces are allowed; quotes are literal."),
       )
       .child(div().text_size(10).font_semibold().text_color(t.dim).child("LAUNCH ARGUMENTS"))
-      .child(
-        v_flex()
-          .w_full()
-          .h(76)
-          .px(8)
-          .py(6)
-          .rounded(6)
-          .border_1()
-          .border_color(t.input)
-          .bg(t.background)
-          .child(
-            Textarea.new(editor.args)
-              .size_full()
-              .font_family(mono)
-              .text_size(11)
-              .text_color(t.foreground)
-              .bg("#00000000"),
-          ),
+      .when(unsafeArgs, (el) =>
+        el.child(
+          v_flex()
+            .w_full()
+            .gap(6)
+            .p(8)
+            .rounded(6)
+            .border_1()
+            .border_color(t.border)
+            .bg(t.background)
+            .child(
+              div()
+                .font_family(mono)
+                .text_size(11)
+                .text_color(t.muted)
+                .child(formatArgv(editor.originalArgs) || "No arguments"),
+            )
+            .child(
+              div()
+                .text_size(11)
+                .text_color(t.dim)
+                .child(
+                  "These arguments contain an empty or multi-line value, which this line editor cannot change without losing data. Only the executable is editable here; edit programs.json to change the arguments.",
+                ),
+            ),
+        ),
+      )
+      .when(!unsafeArgs, (el) =>
+        el.child(
+          v_flex()
+            .w_full()
+            .h(76)
+            .px(8)
+            .py(6)
+            .rounded(6)
+            .border_1()
+            .border_color(t.input)
+            .bg(t.background)
+            .child(
+              Textarea.new(editor.args)
+                .size_full()
+                .font_family(mono)
+                .text_size(11)
+                .text_color(t.foreground)
+                .bg("#00000000"),
+            ),
+        ),
       )
       .on_key_down((event, cx) => {
         if (event.keystroke === "cmd-enter" || event.keystroke === "ctrl-enter") {
@@ -916,7 +993,9 @@ export default class AgentManager extends View {
           this.handle.focus();
         }
       })
-      .child(div().text_size(11).text_color(t.dim).child("One argument per line; spaces, quotes and backslashes stay literal. Blank lines are ignored."))
+      .when(!unsafeArgs, (el) =>
+        el.child(div().text_size(11).text_color(t.dim).child("One argument per line; spaces, quotes and backslashes stay literal. Blank lines are ignored.")),
+      )
       .child(
         div()
           .min_w(0)

@@ -7,17 +7,37 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared, appHome, readTextFile } from "herdr";
 import { MODELS } from "./models.js";
+import { mergeInventory, offeredAgents, showStaticFreebuff } from "./rows.js";
 
-// Cache agents so the menu paints immediately on reopen; shared() needs another render (AGENTS.md rule 10).
-let agentsCache = null;
-let agentsFailed = false;
-let agentsLoading = false;
+// Keep one inventory per machine for the first paint, then always ask again on open. The Agent
+// Manager publishes a recent local inventory (fresh install checks and effective runs) in
+// shared(); Herdr's own detection cache can be a minute old, so it is only a fallback.
+const agentsByMachine = new Map();
+const agentsFailedByMachine = new Map();
+const INVENTORY_KEY = "agent-manager.inventory";
+const INVENTORY_TTL = 30000;
 // Agents the person turned off in the Agent Manager (`agent-manager.json`). Orca's equivalent is
 // `disabledTuiAgents`; `isTuiAgentEnabled` keeps a disabled agent installed but out of pickers
 // (`agent-launch/catalog/tui-agent-selection.ts`). A failed read fails open: a broken file never
 // hides every agent. The Agent Manager page writes this file.
 let disabledAgents = new Set();
 const MANAGER_FILE = `${appHome()}/agent-manager.json`;
+
+function parseDisabled(text) {
+  try {
+    const saved = JSON.parse(text ?? "{}");
+    return new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function recentInventory() {
+  const inventory = shared(INVENTORY_KEY);
+  if (!inventory || !Array.isArray(inventory.agents)) return null;
+  if (Date.now() - Number(inventory.at) > INVENTORY_TTL) return null;
+  return inventory.agents;
+}
 // A probed model list survives the app; the picker paints it before asking again. Orca serves a
 // saved catalog until it is 10 minutes old (`agent-model-catalog-entry-lifetime.ts:12`).
 const MODELS_KEY = "new-menu.models.v1";
@@ -80,29 +100,75 @@ export default class NewMenu extends View {
     this.input.on("change", (_e, cx) => { this.filter = this.input.value(); this.at = 0; cx.notify(); });
     // The filter owns Enter while it is focused, so a model is chosen through submit.
     this.input.on("submit", (_e, cx) => this.choose(this.at, cx));
-    // Availability changes while the menu is closed, so read it again on every open.
+
+    const machine = spaces().find((s) => s.active)?.machine ?? null;
+    this.machine = machine;
+    const key = machine ?? "__local__";
+    const inventory = machine ? null : recentInventory();
+    const cached = agentsByMachine.get(key);
+    this.agents = cached?.length ? mergeInventory(cached, inventory) : inventory ?? cached ?? null;
+    this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
+    // The manager file is this computer's. A remote machine must not inherit its disabled list.
+    this.disabled = machine ? new Set() : new Set(disabledAgents);
+    this.disabledReady = Boolean(machine);
+
+    if (!machine) {
+      cx.spawn(async (cx) => {
+        const text = await readTextFile(MANAGER_FILE).catch(() => null);
+        this.disabled = parseDisabled(text);
+        disabledAgents = new Set(this.disabled);
+        this.disabledReady = true;
+        cx.notify();
+      });
+    }
+
+    // Always re-read. A cached inventory paints immediately, but it is never the final answer.
     cx.spawn(async (cx) => {
-      const text = await readTextFile(MANAGER_FILE).catch(() => null);
+      let known;
       try {
-        const saved = JSON.parse(text ?? "{}");
-        disabledAgents = new Set(Array.isArray(saved.disabled) ? saved.disabled : []);
+        known = await knownAgents({ on: machine });
       } catch {
-        disabledAgents = new Set();
+        agentsFailedByMachine.set(key, true);
+        if (this.machine === machine) {
+          this.agentsFailed = true;
+          if (!this.agents) {
+            this.agents = inventory ?? cached ?? null;
+          }
+          cx.notify();
+        }
+        return;
       }
-      cx.notify();
-    });
-    if (agentsCache || agentsLoading) return;
-    const machine = spaces().find((s) => s.active)?.machine;
-    agentsLoading = true;
-    cx.spawn(async (cx) => {
-      try {
-        agentsCache = await knownAgents({ on: machine });
-      } catch {
-        agentsFailed = true;
+      if (!machine) known = await this.withLocalRuns(known);
+      const fresh = machine ? null : recentInventory();
+      const next = mergeInventory(known, fresh);
+      agentsByMachine.set(key, next);
+      agentsFailedByMachine.set(key, false);
+      if (this.machine === machine) {
+        this.agents = next;
+        this.agentsFailed = false;
+        cx.notify();
       }
-      agentsLoading = false;
-      cx.notify();
     });
+  }
+
+  // Only local programs.json overrides apply. A remote machine's run comes from its own host.
+  async withLocalRuns(agents) {
+    const text = await readTextFile(`${appHome()}/programs.json`).catch(() => undefined);
+    if (text === undefined) return agents;
+    let root;
+    try { root = JSON.parse(text); } catch { return agents; }
+    return (agents ?? []).map((agent) => {
+      const entry = root?.programs?.[agent.key];
+      const run = entry?.run;
+      if (Array.isArray(run) && run.length && run.every((part) => typeof part === "string")) {
+        return { ...agent, run: [...run] };
+      }
+      return agent;
+    });
+  }
+
+  machineChanged() {
+    return (spaces().find((s) => s.active)?.machine ?? null) !== this.machine;
   }
 
   createRows() {
@@ -134,12 +200,16 @@ export default class NewMenu extends View {
 
   // Orca lists agent pickers above static rows (`TabBarAgentPickerEntry.tsx:19-25`); Herdr uses knownAgents().
   agentRows() {
-    if (!agentsCache) {
-      return [{ label: agentsFailed ? "Could not load agents" : "Checking installed agents…", disabled: true }];
+    // The disabled list is the launch permission. Until this open has read it, offer no agent rows.
+    if (!this.disabledReady) {
+      return [{ label: "Checking agent availability…", disabled: true }];
+    }
+    if (!this.agents) {
+      return [{ label: this.agentsFailed ? "Could not load agents" : "Checking installed agents…", disabled: true }];
     }
     // Show installed agents and up to two installable suggestions. Disabled agents are not
     // launch choices, so they are not rows here at all.
-    const offered = agentsCache.filter((a) => !disabledAgents.has(a.key));
+    const offered = offeredAgents(this.agents, this.disabled);
     const installed = offered.filter((a) => a.installed);
     const rows = [...installed, ...offered.filter((a) => !a.installed).slice(0, 2)].map((a) => ({
       label: a.name,
@@ -151,8 +221,11 @@ export default class NewMenu extends View {
       ...(MODELS[a.key]?.flyout ? { run: () => this.launchConfigured(a), config: a } : MODELS[a.key] ? { stay: (cx) => this.pickModel(a, cx) } : { run: () => this.launch(a) }),
     }));
     // Not an Orca agent: no model list, and the login shell finds it on PATH the way a terminal does.
-    const freebuff = { key: "freebuff", name: "freebuff", run: ["zsh", "-lic", "exec freebuff"] };
-    return [...rows, { label: "freebuff", image: "freebuff.png", section: "-- unofficial --", run: () => this.launch(freebuff) }];
+    if (showStaticFreebuff(this.agents, this.disabled, this.disabledReady)) {
+      const freebuff = { key: "freebuff", name: "freebuff", run: ["zsh", "-lic", "exec freebuff"] };
+      rows.push({ label: "freebuff", image: "freebuff.png", section: "-- unofficial --", run: () => this.launch(freebuff) });
+    }
+    return rows;
   }
 
   // Orca only adds `--model` after selection (`AgentLaunchTextModelDefault.tsx:23-33`,
@@ -237,14 +310,14 @@ export default class NewMenu extends View {
   // A click on the row itself is the flyout's "Launch terminal": the flyout opens with launchNow and
   // launches with its saved model and effort, then closes.
   launchConfigured(agent) {
-    if (disabledAgents.has(agent.key)) return;
+    if (!this.disabledReady || this.disabled.has(agent.key) || this.machineChanged()) return;
     this.hoverConfig(agent, true, true);
   }
 
   // Permission flags live in programs.json's `run`; the menu only adds the chosen model.
   launch(agent, model) {
     // A menu left open while the Agent Manager changed availability cannot launch a disabled one.
-    if (disabledAgents.has(agent.key)) return;
+    if (!this.disabledReady || this.disabled.has(agent.key) || this.machineChanged()) return;
     const space = spaces().find((s) => s.active);
     const seed = MODELS[agent.key];
     run("tab.new", {
