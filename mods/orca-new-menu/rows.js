@@ -1,20 +1,40 @@
-// Pure row policy for the Orca menu. No herdr or gpui imports: node --test runs this directly.
+// Pure row policy for the Start an agent menu. No herdr or gpui imports: node --test runs this
+// directly. The supported catalog still comes from knownAgents(); this file only decides which
+// entries are launch choices.
 
-/** Agents the person has not disabled. A missing/duplicate entry never becomes a row. */
-export function offeredAgents(agents, disabled) {
+/** Only officially supported, installed, enabled agents; registry order is preserved. */
+export function installedEnabledAgents(agents, disabled) {
   const seen = new Set();
   return (agents ?? []).filter((agent) => {
-    if (!agent || typeof agent.key !== "string" || disabled.has(agent.key) || seen.has(agent.key)) {
+    if (!agent || typeof agent.key !== "string" || agent.key === "freebuff" || disabled.has(agent.key) || seen.has(agent.key)) {
       return false;
     }
+    if (!agent.installed) return false;
     seen.add(agent.key);
     return true;
   });
 }
 
-/** freebuff is a static unofficial row only when no configured freebuff row already exists. */
-export function showStaticFreebuff(agents, disabled, ready) {
-  return Boolean(ready) && !disabled.has("freebuff") && !(agents ?? []).some((agent) => agent?.key === "freebuff");
+/** Backwards-compatible name used by older callers; the policy is the same. */
+export const offeredAgents = installedEnabledAgents;
+
+/** FreeBuff is the only unofficial integration. It appears only when its executable is present. */
+export function freebuffVisible(detected, agents) {
+  if (detected) return true;
+  return Boolean((agents ?? []).find((agent) => agent?.key === "freebuff")?.installed);
+}
+
+/** Use a configured FreeBuff launch command when there is one; otherwise the existing integration. */
+export function freebuffRun(agents) {
+  const configured = (agents ?? []).find((agent) => agent?.key === "freebuff");
+  const run = configured?.run;
+  if (Array.isArray(run) && run.length && run.every((part) => typeof part === "string")) return [...run];
+  return ["zsh", "-lic", "exec freebuff"];
+}
+
+/** The agent section has exactly one row when nothing official and no FreeBuff is available. */
+export function emptyAgentState(officialCount, freebuff) {
+  return officialCount === 0 && !freebuff;
 }
 
 /**

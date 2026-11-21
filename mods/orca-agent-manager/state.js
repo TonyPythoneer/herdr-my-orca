@@ -255,6 +255,32 @@ export function isFish(shellPath) {
  * Prints one marked line per command so login-shell startup noise on stdout cannot shift the
  * results. Commands arrive as positional arguments, never interpolated into the script.
  */
+// The Settings list is one scroll surface. Rows are a fixed height so a 5.5-row viewport always
+// leaves half a row visible; group headers are part of that surface, not separate boxes.
+export const LIST_ROW_HEIGHT = 56;
+export const LIST_HEADER_HEIGHT = 42;
+export const LIST_VISIBLE_ROWS = 5.5;
+
+/** The list's max height, or null when all rows fit and no scrolling is needed. */
+export function listViewportHeight(rowCount, expanded = false) {
+  const max = LIST_VISIBLE_ROWS * LIST_ROW_HEIGHT + 2 * LIST_HEADER_HEIGHT;
+  if (expanded) return max;
+  const content = Math.max(0, rowCount) * LIST_ROW_HEIGHT + 2 * LIST_HEADER_HEIGHT;
+  return content > max ? max : null;
+}
+
+/** A single `command -v` probe; the command is positional, never interpolated into the script. */
+export function commandPathScript(shellPath) {
+  if (isFish(shellPath)) return "command -v -- $argv[1]";
+  return 'command -v -- "$1"';
+}
+
+/** First path printed by `command -v`, or null. Banners on stdout are ignored. */
+export function parseCommandPath(stdout) {
+  const line = String(stdout ?? "").split("\n").map((part) => part.trim()).find((part) => part.startsWith("/"));
+  return line ?? null;
+}
+
 export function commandCheckScript(shellPath) {
   if (isFish(shellPath)) {
     return "for c in $argv; if command -v -- $c >/dev/null 2>&1; printf 'HERDRAM:1\\n'; else; printf 'HERDRAM:0\\n'; end; end";

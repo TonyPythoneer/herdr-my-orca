@@ -9,6 +9,9 @@ import {
   argsToText,
   checkArgs,
   commandCheckScript,
+  commandPathScript,
+  listViewportHeight,
+  parseCommandPath,
   defaultRun,
   draftRun,
   formatArgv,
@@ -75,6 +78,21 @@ test("fish gets no extra $0 argument and POSIX keeps its placeholder", () => {
   assert.deepEqual(checkArgs("/bin/bash", "SCRIPT", ["claude"], false), [
     "-lc", "SCRIPT", "herdr-agent-manager", "claude",
   ]);
+});
+
+test("the installed/available list uses one 5.5-row viewport", () => {
+  assert.equal(listViewportHeight(5), null);
+  assert.equal(listViewportHeight(0), null);
+  assert.equal(listViewportHeight(6), 5.5 * 56 + 2 * 42);
+  assert.equal(listViewportHeight(20), 5.5 * 56 + 2 * 42);
+  assert.equal(listViewportHeight(2, true), 5.5 * 56 + 2 * 42);
+});
+
+test("command path probing keeps the command out of the script and survives shell banners", () => {
+  assert.deepEqual(commandPathScript("/bin/zsh"), 'command -v -- "$1"');
+  assert.deepEqual(commandPathScript("/opt/fish"), "command -v -- $argv[1]");
+  assert.equal(parseCommandPath("banner\n/opt/homebrew/bin/claude\n"), "/opt/homebrew/bin/claude");
+  assert.equal(parseCommandPath("not found"), null);
 });
 
 test("built-in defaults cover the agents Herdr offers", () => {

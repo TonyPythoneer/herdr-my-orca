@@ -13,20 +13,25 @@
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, Link } from "gpui-base";
-import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, theme, settings, writeTextFile } from "herdr";
+import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, settings, writeTextFile } from "herdr";
 import {
+  LIST_HEADER_HEIGHT,
+  LIST_ROW_HEIGHT,
   applyFreshInstalled,
   argsEditable,
   argsToText,
   checkArgs,
   checkCommands,
   commandCheckScript,
+  commandPathScript,
   defaultRun,
   draftRun,
   formatArgv,
   homepageFor,
   isBuiltinAgent,
+  listViewportHeight,
   parseCommandCheck,
+  parseCommandPath,
   parseManagerConfig,
   programsTextError,
   programsUpdate,
@@ -35,6 +40,14 @@ import {
   splitInventory,
   writeRunOverride,
 } from "./state.js";
+import {
+  activeSessions,
+  installCommand,
+  installMethodFor,
+  npmManaged,
+  resolveLinkTarget,
+  uninstallCommand,
+} from "./install.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
@@ -44,6 +57,11 @@ const POLL_MS = 4000;
 
 function errorText(error) {
   return String(error?.message ?? error ?? "unknown error");
+}
+
+function tail(text, max = 500) {
+  const value = String(text ?? "").trim();
+  return value.length > max ? `…${value.slice(-max)}` : value;
 }
 
 function timeLabel(at) {
@@ -81,6 +99,10 @@ export default class AgentManager extends View {
     this.shell = null;
     this.refreshGen = 0;
     this.inventoryGen = 0;
+    this.action = null; // { key, kind, phase, message }
+    this.uninstall = null; // { key, phase, method, executable, npm, message }
+    this.npmPath = undefined;
+    this.npmRoot = undefined;
 
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-manager", props: {expand: "claude"}}`).
@@ -155,7 +177,16 @@ export default class AgentManager extends View {
   }
 
   allRows() {
-    const base = (this.agents ?? []).map((agent) => ({ ...agent, ...this.rowInfo(agent) }));
+    // FreeBuff is an unofficial integration, not part of the official Settings catalog. Its
+    // configured row, if any, stays in programs.json and is used by the Start menu.
+    const seen = new Set();
+    const base = (this.agents ?? [])
+      .filter((agent) => {
+        if (agent.key === "freebuff" || seen.has(agent.key)) return false;
+        seen.add(agent.key);
+        return true;
+      })
+      .map((agent) => ({ ...agent, ...this.rowInfo(agent) }));
     const split = splitInventory(base, this.disabled);
     return { ...split, all: [...split.installed, ...split.available] };
   }
@@ -325,7 +356,11 @@ export default class AgentManager extends View {
   shareInventory() {
     if (!this.agents) return;
     try {
-      setShared("agent-manager.inventory", { at: Date.now(), agents: this.allRows().all });
+      setShared("agent-manager.inventory", {
+        at: Date.now(),
+        agents: this.allRows().all,
+        disabled: [...this.disabled],
+      });
     } catch {}
   }
 
@@ -521,6 +556,203 @@ export default class AgentManager extends View {
     this.refresh(cx);
   }
 
+  // ---- official CLI install / uninstall ------------------------------------
+
+  // The executable path is resolved through the user's login shell, and npm is located the same
+  // way. Every install/uninstall command is an argv array from install.js, never a shell string.
+  async commandPath(command) {
+    try {
+      const shell = await this.shellPath();
+      const result = await exec(shell, checkArgs(shell, commandPathScript(shell), [command], false), { timeout: 10000 });
+      return result.code === 0 ? parseCommandPath(result.stdout) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async npmExecutable() {
+    if (this.npmPath !== undefined) return this.npmPath;
+    try {
+      const shell = await this.shellPath();
+      const result = await exec(shell, ["-lc", "command -v npm"], { timeout: 10000 });
+      this.npmPath = result.code === 0 ? parseCommandPath(result.stdout) : null;
+    } catch {
+      this.npmPath = null;
+    }
+    return this.npmPath;
+  }
+
+  async npmGlobalRoot() {
+    if (this.npmRoot !== undefined) return this.npmRoot;
+    const npm = await this.npmExecutable();
+    if (!npm) return null;
+    try {
+      const result = await exec(npm, ["root", "-g"], { timeout: 15000 });
+      this.npmRoot = result.code === 0 ? (result.stdout.trim().split("\n").pop() || null) : null;
+    } catch {
+      this.npmRoot = null;
+    }
+    return this.npmRoot;
+  }
+
+  async linkedPath(path) {
+    try {
+      const result = await exec("readlink", [path], { timeout: 5000 });
+      const target = result.code === 0 ? result.stdout.trim() : "";
+      return target ? resolveLinkTarget(path, target) : path;
+    } catch {
+      return path;
+    }
+  }
+
+  async npmStatusFor(row) {
+    const method = installMethodFor(row.key);
+    if (!method) return { method: null, managed: false };
+    const path = await this.commandPath(row.run[0]);
+    if (!path) return { method, path: null, managed: false };
+    const npm = await this.npmExecutable();
+    const root = await this.npmGlobalRoot();
+    const real = await this.linkedPath(path);
+    return { method, path, npm, root, managed: Boolean(npm && root && npmManaged(path, real, root)) };
+  }
+
+  async recheckAgent(key) {
+    const fresh = await this.freshInstallCheck();
+    if (!fresh) throw new Error("There is no executable to check.");
+    this.agents = applyFreshInstalled(this.agents, fresh);
+    this.cache();
+    this.lastChecked = Date.now();
+    try {
+      this.syncEditors();
+    } catch {}
+    this.shareInventory();
+    const row = this.agents.find((agent) => agent.key === key);
+    return Boolean(row?.installed);
+  }
+
+  installAgent(row, cx) {
+    if (this.action?.phase === "running") return;
+    const method = installMethodFor(row.key);
+    if (!method) return;
+    const command = installCommand(method);
+    if (!command) return;
+    this.action = { key: row.key, kind: "install", phase: "running", message: `Installing ${method.package}…` };
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const npm = await this.npmExecutable();
+        if (!npm) {
+          this.action = { key: row.key, kind: "install", phase: "error", message: "npm was not found in the login shell. Use the official install guide instead." };
+          return;
+        }
+        const result = await exec(npm, command.args, { timeout: 10 * 60_000 });
+        if (result.code !== 0) {
+          const detail = tail(result.stderr || result.stdout);
+          this.action = { key: row.key, kind: "install", phase: "error", message: `npm exited ${result.code}${detail ? `: ${detail}` : "."}` };
+          return;
+        }
+        const installed = await this.recheckAgent(row.key);
+        this.action = installed
+          ? { key: row.key, kind: "install", phase: "done", message: "Installed and detected. The Start an agent menu now follows its switch." }
+          : { key: row.key, kind: "install", phase: "warning", message: "npm finished, but the executable is still not detected on PATH. Check the install guide or edit the executable." };
+      } catch (error) {
+        this.action = { key: row.key, kind: "install", phase: "error", message: errorText(error) };
+      } finally {
+        cx.notify();
+      }
+    });
+  }
+
+  requestUninstall(row, cx) {
+    if (this.action?.phase === "running") return;
+    this.uninstall = { key: row.key, phase: "checking", message: "" };
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const running = activeSessions(terminals(), row.key, row.run);
+        if (running.length) {
+          this.uninstall = {
+            key: row.key,
+            phase: "error",
+            message: `Close ${running.length} active ${row.name} session${running.length === 1 ? "" : "s"} first. Uninstalling while a session runs can break it.`,
+          };
+          return;
+        }
+        const status = await this.npmStatusFor(row);
+        if (!status.method) {
+          this.uninstall = { key: row.key, phase: "error", message: "No verified automatic uninstall is available for this CLI. Use its official install guide." };
+          return;
+        }
+        if (!status.path) {
+          this.uninstall = { key: row.key, phase: "error", message: "The executable is not on PATH, so the installation method cannot be verified. Use the official install guide to remove it." };
+          return;
+        }
+        if (!status.managed) {
+          this.uninstall = { key: row.key, phase: "error", message: "This copy was not installed by npm in the global root. Herdr will not guess at another uninstall method; use the official install guide." };
+          return;
+        }
+        this.uninstall = {
+          key: row.key,
+          phase: "confirm",
+          method: status.method,
+          executable: status.path,
+          npm: status.npm,
+          message: "",
+        };
+      } catch (error) {
+        this.uninstall = { key: row.key, phase: "error", message: errorText(error) };
+      } finally {
+        cx.notify();
+      }
+    });
+  }
+
+  cancelUninstall(cx) {
+    this.uninstall = null;
+    cx.notify();
+  }
+
+  confirmUninstall(row, cx) {
+    const request = this.uninstall;
+    if (!request || request.key !== row.key || request.phase !== "confirm") return;
+    if (this.action?.phase === "running") return;
+    const running = activeSessions(terminals(), row.key, row.run);
+    if (running.length) {
+      this.uninstall = { ...request, phase: "error", message: "A session started while you were confirming. Close it before uninstalling." };
+      cx.notify();
+      return;
+    }
+    const command = uninstallCommand(request.method);
+    if (!command) return;
+    this.uninstall = { ...request, phase: "running" };
+    this.action = { key: row.key, kind: "uninstall", phase: "running", message: `Uninstalling ${request.method.package}…` };
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const result = await exec(request.npm, command.args, { timeout: 10 * 60_000 });
+        if (result.code !== 0) {
+          const detail = tail(result.stderr || result.stdout);
+          this.action = { key: row.key, kind: "uninstall", phase: "error", message: `npm exited ${result.code}${detail ? `: ${detail}` : "."}` };
+          this.uninstall = { ...request, phase: "error", message: "The CLI was not removed." };
+          return;
+        }
+        const installed = await this.recheckAgent(row.key);
+        if (installed) {
+          this.action = { key: row.key, kind: "uninstall", phase: "warning", message: "npm finished, but the executable is still detected. It may have another copy on PATH." };
+          this.uninstall = { ...request, phase: "error", message: "The executable is still detected." };
+        } else {
+          this.action = { key: row.key, kind: "uninstall", phase: "done", message: "Uninstalled. Its command override and settings were left untouched." };
+          this.uninstall = null;
+        }
+      } catch (error) {
+        this.action = { key: row.key, kind: "uninstall", phase: "error", message: errorText(error) };
+        this.uninstall = { ...request, phase: "error", message: "The CLI was not removed." };
+      } finally {
+        cx.notify();
+      }
+    });
+  }
+
   toggleEnabled(row, cx) {
     // An uninstalled CLI has no availability to change; its switch is locked until it is installed.
     if (!row.installed) return;
@@ -704,9 +936,10 @@ export default class AgentManager extends View {
     return h_flex()
       .w_full()
       .items_center()
+      .h(LIST_HEADER_HEIGHT)
       .gap(8)
-      .pt(18)
-      .pb(6)
+      .pt(0)
+      .pb(0)
       .child(div().text_size(13).font_semibold().text_color(muted ? t.muted : t.foreground).child(title))
       .child(this.badge(count, t, { border: true, color: muted ? t.muted : t.accent }))
       .when(note, (el) => el.child(div().text_size(11).text_color(t.dim).child(note)))
@@ -758,11 +991,12 @@ export default class AgentManager extends View {
       .child(
         h_flex()
           .w_full()
+          .h(LIST_ROW_HEIGHT)
           .min_w(0)
-          .flex_wrap()
           .gap(12)
-          .py(10)
+          .py(0)
           .items_center()
+          .overflow_hidden()
           .child(
             h_flex()
               .w(32)
@@ -780,7 +1014,7 @@ export default class AgentManager extends View {
           .child(
             v_flex()
               .flex_1()
-              .min_w(180)
+              .min_w(100)
               .gap(3)
               .child(
                 h_flex()
@@ -814,6 +1048,21 @@ export default class AgentManager extends View {
               .items_center()
               .gap(10)
               .child(this.toggle(row, t))
+              .when(!row.installed, (el) =>
+                el.child(
+                  this.button(`am-install-open-${row.key}`, this.action?.key === row.key && this.action.phase === "running" ? "Installing…" : "Install", t, (_event, cx) => {
+                    this.expanded.add(row.key);
+                    this.ensureEditor(row);
+                    this.focusKey = row.key;
+                    this.handle.focus();
+                    cx.notify();
+                  }, {
+                    height: 24,
+                    px: 8,
+                    disabled: this.action?.phase === "running",
+                  }),
+                ),
+              )
               .child(
                 div()
                   .id(`am-more-${row.key}`)
@@ -900,6 +1149,7 @@ export default class AgentManager extends View {
             ),
         ),
       )
+      .when(!row.installed, (el) => el.child(this.installSection(row, t)))
       .child(div().text_size(10).font_semibold().text_color(t.dim).child("EXECUTABLE"))
       .child(
         h_flex()
@@ -1051,6 +1301,175 @@ export default class AgentManager extends View {
               disabled: !dirty && !editor.conflict,
             }),
           ),
+      )
+      .when(row.installed, (el) => el.child(this.uninstallSection(row, t)));
+  }
+
+  installSection(row, t) {
+    const method = installMethodFor(row.key);
+    const command = method ? installCommand(method) : null;
+    const action = this.action?.key === row.key ? this.action : null;
+    const busy = this.action?.phase === "running";
+    const running = busy && action?.phase === "running";
+    return v_flex()
+      .w_full()
+      .gap(6)
+      .pt(4)
+      .child(div().text_size(10).font_semibold().text_color(t.dim).child("INSTALL"))
+      .when(Boolean(command), (el) =>
+        el
+          .child(
+            div()
+              .font_family(settings()?.font_family ?? "JetBrains Mono")
+              .text_size(11)
+              .text_color(t.muted)
+              .child(formatArgv([command.executable, ...command.args])),
+          )
+          .child(
+            h_flex()
+              .gap(8)
+              .items_center()
+              .child(
+                this.button(`am-install-${row.key}`, running ? "Installing…" : "Install with npm", t, (_event, cx) => this.installAgent(row, cx), {
+                  height: 26,
+                  px: 10,
+                  primary: true,
+                  disabled: busy,
+                }),
+              )
+              .when(row.homepage, (inner) =>
+                inner.child(
+                  Link.new(`am-install-guide-${row.key}`)
+                    .href(row.homepage)
+                    .text_size(11)
+                    .text_color(t.accent)
+                    .underline()
+                    .tooltip(row.homepage)
+                    .child("Official guide ↗"),
+                ),
+              ),
+          ),
+      )
+      .when(!command, (el) =>
+        el.child(
+          div()
+            .text_size(11)
+            .text_color(t.muted)
+            .child("No verified automatic installer is defined for this CLI. Use its official install guide instead."),
+        ),
+      )
+      .when(!row.homepage && !command, (el) =>
+        el.child(div().text_size(11).text_color(t.dim).child("Herdr has no verified install URL for this agent yet.")),
+      )
+      .when(Boolean(action), (el) =>
+        el.child(
+          h_flex()
+            .gap(6)
+            .items_start()
+            .child(
+              action.phase === "running"
+                ? div().flex_none().text_size(11).text_color(t.accent).frames(["◐", "◓", "◑", "◒"], 120)
+                : div().flex_none().text_size(11).text_color(action.phase === "error" ? t.blocked : action.phase === "warning" ? t.blocked : t.done).child(action.phase === "done" ? "✓" : action.phase === "error" || action.phase === "warning" ? "!" : "·"),
+            )
+            .child(
+              div()
+                .min_w(0)
+                .text_size(11)
+                .text_color(action.phase === "error" || action.phase === "warning" ? t.blocked : t.muted)
+                .child(action.message),
+            ),
+        ),
+      );
+  }
+
+  uninstallSection(row, t) {
+    const request = this.uninstall?.key === row.key ? this.uninstall : null;
+    const method = installMethodFor(row.key);
+    const action = this.action?.key === row.key && this.action.kind === "uninstall" ? this.action : null;
+    return v_flex()
+      .w_full()
+      .gap(6)
+      .pt(12)
+      .mt(4)
+      .border_t(1)
+      .border_color(t.border)
+      .child(div().text_size(10).font_semibold().text_color(t.dim).child("UNINSTALL"))
+      .when(!method, (el) =>
+        el
+          .child(div().text_size(11).text_color(t.muted).child("No verified automatic uninstall is defined for this CLI. Use its official install guide to remove it."))
+          .when(row.homepage, (inner) =>
+            inner.child(
+              Link.new(`am-uninstall-guide-${row.key}`)
+                .href(row.homepage)
+                .text_size(11)
+                .text_color(t.accent)
+                .underline()
+                .tooltip(row.homepage)
+                .child("Official guide ↗"),
+            ),
+          ),
+      )
+      .when(Boolean(method) && (!request || request.phase === "error"), (el) =>
+        el.child(
+          h_flex()
+            .gap(8)
+            .items_center()
+            .child(
+              this.button(`am-uninstall-${row.key}`, "Uninstall…", t, (_event, cx) => this.requestUninstall(row, cx), {
+                height: 26,
+                px: 10,
+                color: t.blocked,
+                disabled: this.action?.phase === "running",
+              }),
+            )
+            .when(row.homepage, (inner) =>
+              inner.child(
+                Link.new(`am-uninstall-guide-${row.key}`)
+                  .href(row.homepage)
+                  .text_size(11)
+                  .text_color(t.accent)
+                  .underline()
+                  .tooltip(row.homepage)
+                  .child("Official guide ↗"),
+              ),
+            ),
+        ),
+      )
+      .when(request?.phase === "confirm", (el) =>
+        el.child(
+          v_flex()
+            .gap(8)
+            .p(10)
+            .rounded(8)
+            .border_1()
+            .border_color(t.blocked)
+            .bg("#ef444414")
+            .child(
+              div()
+                .text_size(11)
+                .text_color(t.blocked)
+                .child(`Remove ${row.name}? This runs npm uninstall -g ${request.method.package}. It does not delete settings, sessions, or your command override.`),
+            )
+            .child(
+              h_flex()
+                .gap(8)
+                .child(this.button(`am-uninstall-cancel-${row.key}`, "Cancel", t, (_event, cx) => this.cancelUninstall(cx), { height: 24, px: 8, color: t.muted }))
+                .child(this.button(`am-uninstall-confirm-${row.key}`, "Confirm uninstall", t, (_event, cx) => this.confirmUninstall(row, cx), { height: 24, px: 8, color: t.blocked })),
+            ),
+        ),
+      )
+      .when(request?.phase === "checking" || request?.phase === "running", (el) =>
+        el.child(
+          h_flex()
+            .gap(6)
+            .items_center()
+            .child(div().text_size(11).text_color(t.accent).frames(["◐", "◓", "◑", "◒"], 120))
+            .child(div().text_size(11).text_color(t.muted).child(request.phase === "checking" ? "Checking the installation method…" : "Uninstalling…")),
+        ),
+      )
+      .when(request?.phase === "error", (el) => el.child(div().text_size(11).text_color(t.blocked).child(request.message)))
+      .when(Boolean(action) && action.phase !== "running", (el) =>
+        el.child(div().text_size(11).text_color(action.phase === "done" ? t.muted : t.blocked).child(action.message)),
       );
   }
 
@@ -1088,6 +1507,10 @@ export default class AgentManager extends View {
     const loading = this.loading && !this.agents;
     const width = this.width || 800;
     const contentPad = width < 520 ? 12 : 24;
+    // One scroll surface for both groups. The max height leaves half of the next row visible;
+    // headers are counted in the same 5.5-row budget. With fewer rows it stays content-sized.
+    const editing = this.expanded.size > 0;
+    const viewport = editing ? null : listViewportHeight(rows.length, false);
 
     const refreshButton = h_flex()
       .id("am-refresh")
@@ -1147,11 +1570,164 @@ export default class AgentManager extends View {
             )
         : null;
 
+    const header = v_flex()
+      .w_full()
+      .max_w(760)
+      .mx_auto()
+      .px(contentPad)
+      .pt(20)
+      .gap(2)
+      .child(
+        h_flex()
+          .w_full()
+          .items_center()
+          .gap(8)
+          .child(
+            div()
+              .id("am-back")
+              .size(28)
+              .flex_none()
+              .flex()
+              .items_center()
+              .justify_center()
+              .rounded(6)
+              .text_color(t.muted)
+              .cursor_pointer()
+              .hover((s) => s.bg(t.hover).text_color(t.foreground))
+              .role("button")
+              .accessibility_label("Back to terminals")
+              .tooltip("Back to terminals")
+              .on_click(() => {
+                this.typing = false;
+                // The main stack's terminals page is the way back to the work.
+                run("layout.select", { stack: "main", child: TERMINALS_PAGE });
+              })
+              .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
+          )
+          .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Agents"))
+          .child(this.badge("This computer", t, { border: true }))
+          .child(div().flex_1())
+          .child(refreshButton),
+      )
+      .child(
+        div()
+          .mt(4)
+          .text_size(12)
+          .line_height("18px")
+          .text_color(t.muted)
+          .child(
+            "Install status for the Agent CLIs Herdr can start. Uninstalled CLIs keep their switch unavailable; disabled installed agents stay installed but are hidden from the Start an agent menu. Install, uninstall, or edit a command when the CLI is outside PATH.",
+          ),
+      )
+      .when(this.managerError, (el) =>
+        el.child(
+          this.banner(`agent-manager.json is invalid: ${this.managerError}`, t, {
+            actions: div().text_size(11).text_color(t.blocked).child("Availability toggles are paused until the file is fixed."),
+          }),
+        ),
+      )
+      .when(this.programsError, (el) =>
+        el.child(
+          this.banner(this.programsError, t, {
+            actions: div().text_size(11).text_color(t.blocked).child("Built-in commands are shown; editing is paused so valid JSON is not destroyed."),
+          }),
+        ),
+      )
+      .when(this.detectionError, (el) =>
+        el.child(
+          this.banner(this.detectionError, t, {
+            actions: h_flex()
+              .gap(8)
+              .child(
+                this.button("am-retry-detection", "Retry", t, (_event, cx) => this.refresh(cx), { height: 24, px: 8, color: t.blocked }),
+              ),
+          }),
+        ),
+      )
+      .when(this.freshWarning, (el) =>
+        el.child(
+          this.banner(this.freshWarning, t, {
+            border: t.blocked,
+            bg: "#f59e0b14",
+            color: t.blocked,
+          }),
+        ),
+      )
+      .when(this.writeError && !rows.some((row) => this.editors.get(row.key)?.conflict), (el) =>
+        el.child(this.banner(this.writeError, t)),
+      )
+      .when(conflictActions, (el) =>
+        el.child(
+          this.banner("programs.json changed on disk while you were editing. Your draft is kept.", t, {
+            actions: conflictActions,
+          }),
+        ),
+      );
+
+    const sectionBody = v_flex()
+      .w_full()
+      .max_w(760)
+      .mx_auto()
+      .px(contentPad)
+      .pb(20)
+      .gap(2)
+      .when(loading, (el) =>
+        el.child(
+          h_flex()
+            .w_full()
+            .gap(8)
+            .p(16)
+            .rounded(8)
+            .border_1()
+            .border_color(t.border)
+            .border_dashed()
+            .items_center()
+            .child(div().flex_none().text_size(12).text_color(t.muted).frames(["◐", "◓", "◑", "◒"], 120))
+            .child(div().text_size(12).text_color(t.muted).child("Detecting installed agents…")),
+        ),
+      )
+      .when(!loading, (el) =>
+        el
+          .child(
+            this.section(
+              "Installed",
+              `${split.installed.length} detected`,
+              t,
+              this.fromCache ? "showing last known result" : null,
+            ),
+          )
+          .when(split.installed.length === 0, (inner) =>
+            inner.child(this.empty("No agents detected. If one is installed, the probe may have timed out — try Refresh.", t)),
+          )
+          .when(split.installed.length > 0, (inner) => inner.child(this.catalog(split.installed, t)))
+          .when(split.available.length > 0, (inner) =>
+            inner
+              .child(this.section("Available to install", `${split.available.length} agents`, t, null, true))
+              .child(this.catalog(split.available, t)),
+          )
+          .when(split.available.length === 0 && split.installed.length > 0, (inner) =>
+            inner.child(this.section("Available to install", "0 agents", t, "every supported agent is installed", true)),
+          )
+          .child(
+            h_flex()
+              .w_full()
+              .pt(16)
+              .pb(4)
+              .gap(12)
+              .flex_wrap()
+              .items_center()
+              .child(div().text_size(11).text_color(t.dim).child(timeLabel(this.lastChecked)))
+              .child(div().flex_1())
+              .child(div().text_size(11).text_color(t.dim).child("↑↓ select · Enter edit · Space toggle installed · R refresh")),
+          ),
+      );
+
     return v_flex()
       .id("am-root")
       .track_focus(this.handle)
       .size_full()
       .min_h(0)
+      .overflow_hidden()
       .bg(t.background)
       .text_size(12)
       .on_key_down((event, cx) => this.onKey(event, cx))
@@ -1161,156 +1737,17 @@ export default class AgentManager extends View {
           cx.notify();
         }
       })
+      .child(header.flex_none())
       .child(
-        div()
-          .flex_1()
+        v_flex()
+          .id("am-list")
+          .w_full()
           .min_h(0)
           .overflow_y_scrollbar()
-          .child(
-            v_flex()
-              .w_full()
-              .max_w(760)
-              .mx_auto()
-              .px(contentPad)
-              .py(20)
-              .gap(2)
-              .child(
-                h_flex()
-                  .w_full()
-                  .items_center()
-                  .gap(8)
-                  .child(
-                    div()
-                      .id("am-back")
-                      .size(28)
-                      .flex_none()
-                      .flex()
-                      .items_center()
-                      .justify_center()
-                      .rounded(6)
-                      .text_color(t.muted)
-                      .cursor_pointer()
-                      .hover((s) => s.bg(t.hover).text_color(t.foreground))
-                      .role("button")
-                      .accessibility_label("Back to terminals")
-                      .tooltip("Back to terminals")
-                      .on_click(() => {
-                        this.typing = false;
-                        // The main stack's terminals page is the way back to the work.
-                        run("layout.select", { stack: "main", child: TERMINALS_PAGE });
-                      })
-                      .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
-                  )
-                  .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Agents"))
-                  .child(this.badge("This computer", t, { border: true }))
-                  .child(div().flex_1())
-                  .child(refreshButton),
-              )
-              .child(
-                div()
-                  .mt(4)
-                  .text_size(12)
-                  .line_height("18px")
-                  .text_color(t.muted)
-                  .child(
-                    "Install status for the Agent CLIs Herdr can start. Uninstalled CLIs keep their switch unavailable; disabled installed agents stay installed but are hidden from the Start an agent menu. Edit a command when the CLI is outside PATH.",
-                  ),
-              )
-              .when(this.managerError, (el) =>
-                el.child(
-                  this.banner(`agent-manager.json is invalid: ${this.managerError}`, t, {
-                    actions: div().text_size(11).text_color(t.blocked).child("Availability toggles are paused until the file is fixed."),
-                  }),
-                ),
-              )
-              .when(this.programsError, (el) =>
-                el.child(
-                  this.banner(this.programsError, t, {
-                    actions: div().text_size(11).text_color(t.blocked).child("Built-in commands are shown; editing is paused so valid JSON is not destroyed."),
-                  }),
-                ),
-              )
-              .when(this.detectionError, (el) =>
-                el.child(
-                  this.banner(this.detectionError, t, {
-                    actions: h_flex()
-                      .gap(8)
-                      .child(
-                        this.button("am-retry-detection", "Retry", t, (_event, cx) => this.refresh(cx), { height: 24, px: 8, color: t.blocked }),
-                      ),
-                  }),
-                ),
-              )
-              .when(this.freshWarning, (el) =>
-                el.child(
-                  this.banner(this.freshWarning, t, {
-                    border: t.blocked,
-                    bg: "#f59e0b14",
-                    color: t.blocked,
-                  }),
-                ),
-              )
-              .when(this.writeError && !rows.some((row) => this.editors.get(row.key)?.conflict), (el) =>
-                el.child(this.banner(this.writeError, t)),
-              )
-              .when(conflictActions, (el) =>
-                el.child(
-                  this.banner("programs.json changed on disk while you were editing. Your draft is kept.", t, {
-                    actions: conflictActions,
-                  }),
-                ),
-              )
-              .when(loading, (el) =>
-                el.child(
-                  h_flex()
-                    .w_full()
-                    .gap(8)
-                    .p(16)
-                    .rounded(8)
-                    .border_1()
-                    .border_color(t.border)
-                    .border_dashed()
-                    .items_center()
-                    .child(div().flex_none().text_size(12).text_color(t.muted).frames(["◐", "◓", "◑", "◒"], 120))
-                    .child(div().text_size(12).text_color(t.muted).child("Detecting installed agents…")),
-                ),
-              )
-              .when(!loading, (el) =>
-                el
-                  .child(
-                    this.section(
-                      "Installed",
-                      `${split.installed.length} detected`,
-                      t,
-                      this.fromCache ? "showing last known result" : null,
-                    ),
-                  )
-                  .when(split.installed.length === 0, (inner) =>
-                    inner.child(this.empty("No agents detected. If one is installed, the probe may have timed out — try Refresh.", t)),
-                  )
-                  .when(split.installed.length > 0, (inner) => inner.child(this.catalog(split.installed, t)))
-                  .when(split.available.length > 0, (inner) =>
-                    inner
-                      .child(this.section("Available to install", `${split.available.length} agents`, t, null, true))
-                      .child(this.catalog(split.available, t)),
-                  )
-                  .when(split.available.length === 0 && split.installed.length > 0, (inner) =>
-                    inner.child(this.section("Available to install", "0 agents", t, "every supported agent is installed", true)),
-                  )
-                  .child(
-                    h_flex()
-                      .w_full()
-                      .pt(16)
-                      .pb(4)
-                      .gap(12)
-                      .flex_wrap()
-                      .items_center()
-                      .child(div().text_size(11).text_color(t.dim).child(timeLabel(this.lastChecked)))
-                      .child(div().flex_1())
-                      .child(div().text_size(11).text_color(t.dim).child("↑↓ select · Enter edit · Space toggle installed · R refresh")),
-                  ),
-              ),
-          ),
+          .when(viewport, (el) => el.flex_1().max_h(viewport))
+          .when(!viewport && editing, (el) => el.flex_1())
+          .when(!viewport && !editing, (el) => el.flex_none())
+          .child(sectionBody),
       );
   }
 }

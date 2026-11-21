@@ -112,18 +112,42 @@ export default class NewMenu extends View {
     return (spaces().find(s => s.active)?.machine ?? null) !== this.machine;
   }
 
+  // Official agents only. FreeBuff is the Orca menu's unofficial integration, not a row here.
+  officialAgents(agents, disabled) {
+    const seen = new Set();
+    return (agents ?? []).filter((agent) => {
+      if (!agent || typeof agent.key !== "string" || agent.key === "freebuff" || disabled.has(agent.key) || seen.has(agent.key)) return false;
+      if (!agent.installed) return false;
+      seen.add(agent.key);
+      return true;
+    });
+  }
+
+  // Read the Agent Manager's recent inventory at render/action time, so Settings changes while
+  // this menu is open take effect. The manager file read in init is the fallback.
+  currentState() {
+    const inventory = this.machine ? null : shared("agent-manager.inventory");
+    const fresh = inventory && Array.isArray(inventory.agents) ? inventory : null;
+    const agents = fresh?.agents ? this.mergeInventory(this.agents ?? [], fresh.agents) : this.agents;
+    const disabled = new Set(fresh && Array.isArray(fresh.disabled) ? fresh.disabled : this.disabled);
+    return { agents, disabled, ready: this.disabledReady && Boolean(agents) };
+  }
+
   render() {
     const t = theme();
     const space = spaces().find(s => s.active);
-    const offered = this.disabledReady ? this.agents.filter(a => !this.disabled.has(a.key)) : [];
-    const installed = offered.filter(a => a.installed);
-    const choices = this.failed ? installed : [...installed, ...offered.filter(a => !a.installed).slice(0, 2)];
-    return v_flex().min_h(0).w_full().h(Math.min(491, 167 + Math.max(1, choices.length + (this.failed ? 1 : 0)) * 31)).bg(t.popover).p(5).text_size(12.8)
+    const state = this.currentState();
+    const offered = state.ready ? this.officialAgents(state.agents, state.disabled) : [];
+    const choices = offered;
+    const empty = state.ready && !this.failed && choices.length === 0;
+    const extra = (this.failed ? 1 : 0) + (empty ? 1 : 0);
+    return v_flex().min_h(0).w_full().h(Math.min(491, 184 + Math.max(1, choices.length + extra) * 31)).bg(t.popover).p(5).text_size(12.8)
       .id("new-menu").track_focus(this.handle)
       .on_key_down((e) => {
         if (e.modifiers.control || e.modifiers.platform || e.modifiers.alt) return;
-        const agent = /^[1-9]$/.test(e.key) ? installed[Number(e.key) - 1] : null;
-        if (!agent || !this.disabledReady || this.disabled.has(agent.key) || this.machineChanged()) return;
+        const s = this.currentState();
+        const agent = /^[1-9]$/.test(e.key) ? choices[Number(e.key) - 1] : null;
+        if (!agent || !s.ready || s.disabled.has(agent.key) || this.machineChanged()) return;
         closeOverlay(props().overlay);
         run("tab.new", { name: agent.name, space: space?.id, argv: agent.run });
       })
@@ -132,12 +156,15 @@ export default class NewMenu extends View {
       .child(v_flex().flex_1().min_h(0).overflow_y_scrollbar()
         .children(choices.map((a, i) => this.row(a.key, a.tint ? svg(a.icon).size(14).text_color(t.foreground) : image(a.icon).size(14), a.name,
           () => {
-            if (this.disabledReady && !this.disabled.has(a.key) && !this.machineChanged()) {
+            const now = this.currentState();
+            if (now.ready && !now.disabled.has(a.key) && !this.machineChanged()) {
               run("tab.new", { name: a.name, space: space?.id, argv: a.run });
             }
-          }, a.installed ? (i < 9 ? String(i + 1) : "") : "not installed", a.installed)))
-        .when(this.failed || offered.length === 0, el => el.child(div().px(9).py(6).text_color(t.dim).child(
-          !this.disabledReady ? "Checking agent availability…" : this.failed ? "Could not check installed agents" : this.agents.length ? "All agents are disabled in Agent Manager" : "Checking installed agents…"))))
+          }, i < 9 ? String(i + 1) : "", true)))
+        .when(empty, el => el.child(this.row("settings", svg("mods/orca-new-menu/bot.svg").size(14).text_color(t.foreground), "Open Agent Settings",
+          () => run("layout.select", { stack: "main", child: "main-agents" }), "", true)))
+        .when(this.failed, el => el.child(div().px(9).py(6).text_color(t.dim).child("Could not check installed agents")))
+        .when(!state.ready && !this.failed, el => el.child(div().px(9).py(6).text_color(t.dim).child("Checking agent availability…"))))
       .child(div().h(1).mx(4).my(5).bg(t.border))
       .child(this.row("space", div().w(14).child("+"), "New space", () => run("space.new"), shortcut("space.new")))
       .child(this.row("worktree", svg("mods/workspace-chrome/branch.svg").size(14), "New worktree…", () => openOverlay({ mod: "worktree", kind: "dialog", width: 460, height: 280, props: { space: space?.id, folder: panes().find(p => p.focused)?.cwd, action: "new" } }), "", Boolean(space)))
