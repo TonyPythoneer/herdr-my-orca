@@ -78,6 +78,20 @@ const AGENTS = {
   }
 };
 
+// Codex feature flags the launch can switch off with `--disable`. Off by default: nothing changes
+// until one is ticked. "mcp" is not a feature flag: `mcp_servers={}` does not clear servers
+// (codex#16045), so launch lists them and passes `-c mcp_servers.<name>.enabled=false` for each.
+const CODEX_FLAGS = ["plugins", "apps", "remote_plugin", "plugin_sharing", "browser_use", "browser_use_external", "computer_use", "image_generation", "in_app_browser", "skill_search", "skill_mcp_dependency_install", "mcp"];
+
+// Only servers in config.toml: `-c mcp_servers.<name>.enabled=false` on a plugin-provided server
+// (no config.toml entry) leaves an incomplete table and codex refuses to start.
+async function codexMcpOff() {
+  try {
+    const toml = await readTextFile(`${home()}/.codex/config.toml`);
+    return [...toml.matchAll(/^\[mcp_servers\.("[^"]+"|[\w-]+)\]\s*$/gm)].flatMap((m) => ["-c", `mcp_servers.${m[1]}.enabled=false`]);
+  } catch { return []; } // best effort: no config file, or unreadable, means nothing to disable
+}
+
 const AGENT_LABEL = { claude: "Claude", codex: "Codex", opencode: "OpenCode" };
 const EFFORT_LABEL = { low: "Low", medium: "Med", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra" };
 const ADVISOR_MODELS = ["opus", "haiku", "fable", "sonnet"];
@@ -195,6 +209,7 @@ export default class AgentConfig extends View {
 
     this.advisorModel = DEFAULT_ADVISOR;
     this.advisorOpen = false;
+    this.codexOff = new Set(); // codex features launched with --disable
     this.outputStyle = "default";
     this.styles = BUILTIN_STYLES;
     this.styleOpen = false;
@@ -240,6 +255,7 @@ export default class AgentConfig extends View {
         // The old on/off switch saved advisor: false; that is now "none".
         this.advisorModel = preset.advisor === false ? "none" : ADVISOR_OPTIONS.includes(preset.advisorModel) ? preset.advisorModel : DEFAULT_ADVISOR;
         if (typeof preset.outputStyle === "string") this.outputStyle = preset.outputStyle;
+        this.codexOff = new Set((preset.codexOff ?? []).filter((f) => CODEX_FLAGS.includes(f)));
         this.loadStyles(cx);
         this.agentsSaved = typeof preset.agents === "string" ? normalizeAgents(preset.agents) : DEFAULT_AGENTS_TEXT;
         this.agentsInput.set_value(this.agentsSaved);
@@ -349,7 +365,15 @@ export default class AgentConfig extends View {
       agents: this.agentsSaved,
       systemPrompt: this.promptSaved,
       outputStyle: this.outputStyle,
+      codexOff: [...this.codexOff],
     };
+  }
+
+  toggleCodexFlag(flag, cx) {
+    if (this.codexOff.has(flag)) this.codexOff.delete(flag);
+    else this.codexOff.add(flag);
+    this.rememberPreset();
+    cx.notify();
   }
 
   rememberPreset(patch = {}) {
@@ -484,13 +508,15 @@ export default class AgentConfig extends View {
 
   async launch(cx) {
     const p = props();
-    if (!this.current()) return;
+    if (!this.current() || this.launching) return;
+    this.launching = true; // the mcp listing awaits; a second click must not launch twice
     // The flyout is sticky; availability may have changed while it was open. Local settings only.
     const space = spaces().find((candidate) => candidate.id === p.space) ?? spaces().find((candidate) => candidate.active);
     if (!space?.machine) {
       const manager = await readTextFile(`${appHome()}/agent-manager.json`).catch(() => null);
       if (managerDisabled(manager).has(p.key)) {
         this.error = `${p.name ?? p.key} is disabled in Agent Manager.`;
+        this.launching = false;
         cx?.notify();
         return;
       }
@@ -508,6 +534,7 @@ export default class AgentConfig extends View {
           this.agentsError = describeJsonError(error, agents);
           this.agentsDirty = agents !== this.agentsSaved;
           cx?.notify();
+          this.launching = false;
           return;
         }
       }
@@ -517,6 +544,11 @@ export default class AgentConfig extends View {
       if (this.outputStyle !== "default") extra.push("--settings", JSON.stringify({ outputStyle: this.outputStyle }));
       if (agents.trim()) extra.push("--agents", agents);
       if (prompt.trim()) extra.push("--append-system-prompt", prompt);
+    }
+
+    if (this.key === "codex") {
+      for (const f of CODEX_FLAGS) if (f !== "mcp" && this.codexOff.has(f)) extra.push("--disable", f);
+      if (this.codexOff.has("mcp")) extra.push(...(await codexMcpOff()));
     }
 
     this.remember();
@@ -835,6 +867,36 @@ export default class AgentConfig extends View {
     );
   }
 
+  // Codex advanced arguments: tick a feature to launch with `--disable <feature>`.
+  codexSection(t) {
+    return v_flex()
+      .w_full()
+      .gap(2)
+      .child(div().mx(6).pt(2).text_size(10).font_medium().text_color(t.dim).child("ADVANCED ARGUMENTS · DISABLE"))
+      .child(
+        div().mx(6).flex().flex_wrap().gap(4).children(
+          CODEX_FLAGS.map((f) => {
+            const off = this.codexOff.has(f);
+            return h_flex()
+              .id(`codex-off-${f}`)
+              .h(24)
+              .px(8)
+              .gap(6)
+              .items_center()
+              .rounded(6)
+              .border_1()
+              .border_color(off ? t.accent : t.border)
+              .cursor_pointer()
+              .hover((s) => s.bg(t.hover))
+              .text_size(11)
+              .on_click((_e, cx) => this.toggleCodexFlag(f, cx))
+              .child(div().text_color(t.accent).w(10).child(off ? "✓" : ""))
+              .child(f);
+          }),
+        ),
+      );
+  }
+
   presetSection(t) {
     const box = (list) => v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(list);
     const mono = settings()?.font_family ?? "JetBrains Mono";
@@ -1018,6 +1080,7 @@ export default class AgentConfig extends View {
       .when(this.models, (el) => el.child(this.pickerRow(t)))
       .child(div().h(1).mx(6).my(4).bg(t.border))
       .when(this.key === "claude" && this.models, (el) => el.child(this.presetSection(t)))
+      .when(this.key === "codex" && this.models, (el) => el.child(this.codexSection(t)))
       .child(
         h_flex()
           .id("launch")
