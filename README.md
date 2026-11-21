@@ -11,7 +11,7 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
 - **Agent Manager**: the sidebar's bottom Agents button (or `Start an agent` → `Manage agents…`) opens
   a Settings-style page. It lists the Agent CLIs Herdr detects and the ones it supports but cannot
-  find, turns availability on/off for the launch menu, and edits each CLI's executable and launch
+  find, turns availability on/off for installed CLIs, and edits each CLI's executable and launch
   arguments. Commands are written to `programs.json`; the on/off choice lives in
   `agent-manager.json` and never uninstalls or stops an agent. Refresh re-checks this computer by
   running a login-shell `command -v` probe, because `knownAgents()` caches for a minute and offers

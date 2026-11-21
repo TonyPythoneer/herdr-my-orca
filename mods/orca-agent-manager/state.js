@@ -194,7 +194,12 @@ export function serializeManagerConfig(disabled) {
 
 /** Installed and Available keep Herdr's order; a disabled installed agent stays installed. */
 export function splitInventory(agents, disabled = new Set()) {
-  const withEnabled = (agents ?? []).map((agent) => ({ ...agent, enabled: !disabled.has(agent.key) }));
+  // A CLI that is not installed cannot start, so its switch is unavailable even when the stored
+  // disabled list does not contain it. Installing it makes the switch active again.
+  const withEnabled = (agents ?? []).map((agent) => ({
+    ...agent,
+    enabled: Boolean(agent.installed) && !disabled.has(agent.key),
+  }));
   return {
     installed: withEnabled.filter((agent) => agent.installed),
     available: withEnabled.filter((agent) => !agent.installed),

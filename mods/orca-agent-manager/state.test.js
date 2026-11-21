@@ -124,6 +124,12 @@ test("a disabled agent is never misclassified as missing", () => {
   assert.deepEqual(available.map((a) => [a.key, a.enabled]), [["codex", false]]);
 });
 
+test("an uninstalled agent's switch is unavailable even when it was never disabled", () => {
+  const { installed, available } = splitInventory(AGENTS, new Set());
+  assert.deepEqual(installed.map((a) => [a.key, a.enabled]), [["claude", true], ["opencode", true]]);
+  assert.deepEqual(available.map((a) => [a.key, a.enabled]), [["codex", false]]);
+});
+
 test("fresh checks change only the installed flag", () => {
   const fresh = new Map([["claude", false], ["codex", true]]);
   const next = applyFreshInstalled(AGENTS, fresh);

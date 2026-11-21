@@ -476,6 +476,8 @@ export default class AgentManager extends View {
   }
 
   toggleEnabled(row, cx) {
+    // An uninstalled CLI has no availability to change; its switch is locked until it is installed.
+    if (!row.installed) return;
     if (this.managerError) return;
     cx.spawn(async (cx) => {
       const latest = await readTextFile(MANAGER).catch(() => this.managerText);
@@ -605,7 +607,8 @@ export default class AgentManager extends View {
   }
 
   toggle(row, t) {
-    const on = row.enabled;
+    const installed = Boolean(row.installed);
+    const on = installed && row.enabled;
     return div()
       .id(`am-toggle-${row.key}`)
       .w(36)
@@ -616,15 +619,18 @@ export default class AgentManager extends View {
       .p(2)
       .rounded_full()
       .bg(on ? t.accent : t.input)
-      .cursor_pointer()
+      .when(installed, (el) => el.cursor_pointer())
+      .when(!installed, (el) => el.opacity(0.45))
       .role("switch")
       .checked(on)
-      .accessibility_label(`${row.name} availability`)
-      .tooltip(on ? `Disable ${row.name}` : `Enable ${row.name}`)
-      .on_click((_event, cx) => {
-        cx.stop_propagation();
-        this.toggleEnabled(row, cx);
-      })
+      .accessibility_label(installed ? `${row.name} availability` : `${row.name} is unavailable; not installed`)
+      .tooltip(installed ? (on ? `Disable ${row.name}` : `Enable ${row.name}`) : `Install ${row.name} first; this switch is unavailable until its CLI is installed`)
+      .when(installed, (el) =>
+        el.on_click((_event, cx) => {
+          cx.stop_propagation();
+          this.toggleEnabled(row, cx);
+        }),
+      )
       .child(
         h_flex()
           .w_full()
@@ -674,7 +680,7 @@ export default class AgentManager extends View {
     const open = this.expanded.has(row.key);
     const focused = this.focusKey === row.key && this.handle.is_focused();
     const editor = this.editors.get(row.key);
-    const quiet = !row.enabled;
+    const quiet = !row.enabled && row.installed;
     return v_flex()
       .id(`am-row-${row.key}`)
       .relative()
@@ -730,7 +736,7 @@ export default class AgentManager extends View {
                       .on_click((_event, cx) => this.toggleExpand(row, cx))
                       .child(row.name),
                   )
-                  .when(!row.enabled, (el) => el.child(this.badge("Disabled", t, { color: t.blocked, border: true })))
+                  .when(!row.enabled && row.installed, (el) => el.child(this.badge("Disabled", t, { color: t.blocked, border: true })))
                   .when(row.customized, (el) => el.child(this.badge("Customized", t, { color: t.accent, border: true })))
                   .when(row.entryError, (el) => el.child(this.badge("Invalid command", t, { color: t.blocked, border: true }))),
               )
@@ -1109,7 +1115,7 @@ export default class AgentManager extends View {
                   .line_height("18px")
                   .text_color(t.muted)
                   .child(
-                    "Install status for the Agent CLIs Herdr can start. Disabled agents stay installed but are hidden from the Start an agent menu; edit a command when the CLI is outside PATH.",
+                    "Install status for the Agent CLIs Herdr can start. Uninstalled CLIs keep their switch unavailable; disabled installed agents stay installed but are hidden from the Start an agent menu. Edit a command when the CLI is outside PATH.",
                   ),
               )
               .when(this.managerError, (el) =>
@@ -1203,7 +1209,7 @@ export default class AgentManager extends View {
                       .items_center()
                       .child(div().text_size(11).text_color(t.dim).child(timeLabel(this.lastChecked)))
                       .child(div().flex_1())
-                      .child(div().text_size(11).text_color(t.dim).child("↑↓ select · Enter edit · Space enable/disable · R refresh")),
+                      .child(div().text_size(11).text_color(t.dim).child("↑↓ select · Enter edit · Space toggle installed · R refresh")),
                   ),
               ),
           ),
