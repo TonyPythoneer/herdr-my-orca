@@ -748,7 +748,7 @@ export default class Tabs extends View {
     // (layout.rs:551) and there would otherwise be no way back. Orca keeps the control
     // reachable by floating `titlebar-left` over the workspace
     // (AppWorkspaceShell.tsx:163-167).
-    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
+    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
       .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
       .role("button").accessibility_label("Toggle sidebar").tooltip("Toggle sidebar")
       .on_mouse_down("left", stop).on_click(action).child(glyph);
@@ -1030,8 +1030,8 @@ export default class Tabs extends View {
       .when(Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), () => {
         setShared("sidebar.collapsed", false);
         run("layout.show", { id: "sidebar" });
-        // Same x and glyph as orca-chrome's toggle (80, or 8 in full screen) so the button does not jump on collapse.
-      }, w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 80) - leftPad : 6)))
+        // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.
+      }, w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) - leftPad : 6)))
       // Orca hides the strip's native scrollbar (`tab-bar-surface.tsx:164-175`) and paints only
       // its 3px hover thumb (`TabStripScrollIndicator.tsx:196-215`), which Herdr has no
       // primitive for — so no scrollbar is painted and no thumb is faked. The wheel scrolls the
