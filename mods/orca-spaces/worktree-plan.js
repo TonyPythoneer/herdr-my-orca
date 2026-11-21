@@ -134,11 +134,13 @@ export function agentsByRow(rows, agents) {
  * Tabs on a card (its own space plus merged ones) that hold no agent: shells, editors, mods.
  * `agents` is the card's own list from `agentsByRow`, so a tab counts once however many agents it has.
  */
-export function otherTabCount(row, agents) {
+export function otherTabs(row, agents) {
   const withAgent = new Set(agents.map(a => a.tab));
-  const ids = [row.w, ...(row.also ?? []).map(a => a.w)].flatMap(w => (w.tabs ?? []).map(t => t.id));
-  return new Set(ids.filter(id => !withAgent.has(id))).size;
+  const tabs = [row.w, ...(row.also ?? []).map(a => a.w)].flatMap(w => w.tabs ?? []);
+  return [...new Map(tabs.filter(t => !withAgent.has(t.id)).map(t => [t.id, t])).values()];
 }
+
+export const otherTabCount = (row, agents) => otherTabs(row, agents).length;
 
 /**
  * Recent = the newest tab change of the card (`smart-sort.ts:31` reads `lastActivityAt`; Herdr's

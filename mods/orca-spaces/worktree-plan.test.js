@@ -46,6 +46,8 @@ test('other tabs counts tabs without an agent once, across merged spaces', async
   const row = { w: { tabs: [{ id: 'a' }, { id: 'b' }, { id: 'b' }] }, also: [{ w: { tabs: [{ id: 'c' }, { id: 'd' }] } }] };
   assert.equal(otherTabCount(row, [{ tab: 'a' }, { tab: 'a' }, { tab: 'd' }]), 2);
   assert.equal(otherTabCount({ w: {} }, []), 0);
+  const { otherTabs } = await import('./worktree-plan.js');
+  assert.deepEqual(otherTabs(row, [{ tab: 'a' }, { tab: 'd' }]).map(t => t.id), ['b', 'c']);
 });
 
 test('pruning git cache drops only inactive negative entries and preserves projects', async () => {

@@ -35,7 +35,7 @@ function fixture() {
     tip() {}, tipMark() {}, stopsInit() {}, stop: (_owner, _theme, _id, node) => node,
     focusRoot: (_owner, node) => node, enter() {}, within: () => false, onStop() {},
     parseWorktreeList() {}, place: w => w.folder, where() {}, base: () => 'repo', readPair() {}, foldKey() {},
-    projectWorktreePlan() {}, pruneGitCache() {}, agentsByRow() {}, otherTabCount: () => 0, activeReviewKeys() {}, planRenderRows() {},
+    projectWorktreePlan() {}, pruneGitCache() {}, agentsByRow() {}, otherTabs: (row, agents) => (row.w.tabs ?? []).filter(t => !agents.some(a => a.tab === t.id)), activeReviewKeys() {}, planRenderRows() {},
     STATUS_RANK: { blocked: 4, working: 3, done: 2, idle: 1 },
     loadReviewCache() {}, saveReviewCache() {}, isReviewFresh() {}, MAX_INFLIGHT_PR_LOOKUPS: 1, BRANCH_PR_LOOKUP_PAGE_SIZE: 1,
   };
@@ -45,10 +45,10 @@ function fixture() {
     expandedAgents: new Set(), unread: new Set(), reviewOf: () => null,
     toggleAgents() {}, notify() {}, toggleUnread() {}, menu() {},
   });
-  const render = mine => {
+  const render = (mine, tabs = []) => {
     counts.factories = 0;
     counts.images = [];
-    const node = owner.card({ w: { id: 'w', name: 'workspace', status: 'idle', tabs: [] }, g: { branch: 'branch', linked: false } },
+    const node = owner.card({ w: { id: 'w', name: 'workspace', status: 'idle', tabs }, g: { branch: 'branch', linked: false } },
       { chrome: '#000', foreground: '#fff', muted: '#aaa', dim: '#888', hover: '#333' }, [], mine);
     return { node, factories: counts.factories, images: [...counts.images] };
   };
@@ -120,15 +120,27 @@ test('mixed-state summary keeps state order, bounds each icon cluster, and count
   assert.deepEqual(strings(result.node).filter(text => /^\+\d+$/.test(text)), ['+1', '+1', '+1', '+4']);
 });
 
-test('single agent uses its row and expanded summary includes every agent row', () => {
+test('expanded list shows every agent row with a singular or plural label', () => {
   const { owner, render } = fixture();
-  const single = render([agent(0)]);
-  assert.ok(strings(single.node).includes('agent-0'));
-  assert.ok(!strings(single.node).includes('1 agents'));
+  owner.expandedAgents.add('w');
+  const single = strings(render([agent(0)]).node);
+  assert.deepEqual(['1 agent', 'agent-0'].filter(x => !single.includes(x)), []);
+  owner.expandedAgents.delete('w');
 
   const mine = Array.from({ length: 5 }, (_, i) => agent(i));
   owner.expandedAgents.add('w');
   const expanded = render(mine);
   assert.ok(strings(expanded.node).includes('5 agents'));
   for (let i = 0; i < mine.length; i++) assert.ok(strings(expanded.node).includes(`agent-${i}`));
+});
+
+test('a lone agent is a collapsed list; other tabs are only counted, never listed', () => {
+  const { render } = fixture();
+  const tab = { id: 't1', name: '1' };
+  const lone = strings(render([agent(0)], [tab]).node);
+  assert.ok(lone.includes('1 other tab') && !lone.includes('agent-0') && !lone.includes('1'));
+  const header = nodesOfKind(render([agent(0)], [tab]).node, 'h').find(n => n.nodes.some(c => c?.kind === 'svg') && strings(n).includes('1 other tab'));
+  assert.ok(header, 'the count sits in the same row as the agents header');
+  assert.ok(strings(render([], [tab, { id: 't2', name: '2' }]).node).includes('2 other tabs'));
+  assert.equal(strings(render([agent(0)], []).node).some(x => x.includes('other tab')), false);
 });
