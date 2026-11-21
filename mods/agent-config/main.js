@@ -83,6 +83,9 @@ const AGENTS = {
 // (codex#16045), so launch lists them and passes `-c mcp_servers.<name>.enabled=false` for each.
 const CODEX_FLAGS = ["plugins", "apps", "remote_plugin", "plugin_sharing", "browser_use", "browser_use_external", "computer_use", "image_generation", "in_app_browser", "skill_search", "skill_mcp_dependency_install", "mcp"];
 
+const CODEX_ROW_H = 24;
+const CODEX_LIST_H = 6 * (CODEX_ROW_H + 2); // six rows visible, the rest scroll
+
 // Only servers in config.toml: `-c mcp_servers.<name>.enabled=false` on a plugin-provided server
 // (no config.toml entry) leaves an incomplete table and codex refuses to start.
 async function codexMcpOff() {
@@ -867,30 +870,52 @@ export default class AgentConfig extends View {
     );
   }
 
+  setCodexFlags(all, cx) {
+    this.codexOff = new Set(all ? CODEX_FLAGS : []);
+    this.rememberPreset();
+    cx.notify();
+  }
+
   // Codex advanced arguments: tick a feature to launch with `--disable <feature>`.
   codexSection(t) {
+    const link = (id, label, all) =>
+      div().id(id).cursor_pointer().text_size(10).text_color(t.accent).hover((s) => s.opacity(0.7)).on_click((_e, cx) => this.setCodexFlags(all, cx)).child(label);
     return v_flex()
-      .w_full()
-      .gap(2)
-      .child(div().mx(6).pt(2).text_size(10).font_medium().text_color(t.dim).child("ADVANCED ARGUMENTS · DISABLE"))
+      .mx(6)
+      .py(6)
+      .px(10)
+      .gap(4)
+      .rounded(7)
+      .border_1()
+      .border_color(t.input)
+      .bg(t.raised)
       .child(
-        div().mx(6).flex().flex_wrap().gap(4).children(
+        h_flex().gap(8).items_center()
+          .child(div().flex_1().text_size(9).text_color(t.dim).child("DISABLE"))
+          .child(link("codex-off-all", "all", true))
+          .child(link("codex-off-clear", "clear", false)),
+      )
+      // Definite height: gpui does not clamp a content-sized flex item to max-height (see models list).
+      .child(
+        v_flex().id("codex-off-list").h(CODEX_LIST_H).min_h(0).flex_shrink(1).overflow_y_scroll().gap(2).children(
           CODEX_FLAGS.map((f) => {
             const off = this.codexOff.has(f);
             return h_flex()
               .id(`codex-off-${f}`)
-              .h(24)
+              .h(CODEX_ROW_H)
+              .flex_shrink(0)
               .px(8)
               .gap(6)
               .items_center()
               .rounded(6)
-              .border_1()
-              .border_color(off ? t.accent : t.border)
               .cursor_pointer()
               .hover((s) => s.bg(t.hover))
               .text_size(11)
               .on_click((_e, cx) => this.toggleCodexFlag(f, cx))
-              .child(div().text_color(t.accent).w(10).child(off ? "✓" : ""))
+              .child(
+                div().size(14).flex_none().flex().items_center().justify_center().rounded(3).border_1()
+                  .border_color(off ? t.accent : t.muted).text_size(10).text_color(t.accent).child(off ? "✓" : ""),
+              )
               .child(f);
           }),
         ),
