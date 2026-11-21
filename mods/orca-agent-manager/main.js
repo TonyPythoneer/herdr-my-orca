@@ -11,11 +11,10 @@
 // editing an unrelated programs entry does not clear it). The smallest fresh check is the
 // `command -v` probe in state.js, run in the same login shell Herdr uses. If it fails, the
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
-import { View, div, svg, image } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, Link, ScrollHandle, Scrollbar } from "gpui-base";
 import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, settings, writeTextFile } from "herdr";
 import {
-  LIST_HEADER_HEIGHT,
   LIST_ROW_HEIGHT,
   applyFreshInstalled,
   argsEditable,
@@ -46,30 +45,14 @@ import {
   npmManaged,
   uninstallCommand,
 } from "./install.js";
+import { errorText, sameRun, tail, timeLabel } from "./util.js";
+import { badge, banner, empty, icon, section } from "./parts.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
 const CACHE_KEY = "agent-manager.inventory.v1";
 const TERMINALS_PAGE = "main-terminals";
 const POLL_MS = 4000;
-
-function errorText(error) {
-  return String(error?.message ?? error ?? "unknown error");
-}
-
-function tail(text, max = 500) {
-  const value = String(text ?? "").trim();
-  return value.length > max ? `…${value.slice(-max)}` : value;
-}
-
-function timeLabel(at) {
-  if (!at) return "Not checked yet";
-  return `Checked ${new Date(at).toTimeString().slice(0, 8)}`;
-}
-
-function sameRun(a, b) {
-  return a.length === b.length && a.every((part, index) => part === b[index]);
-}
 
 export default class AgentManager extends View {
   init(_props, cx) {
@@ -769,42 +752,6 @@ export default class AgentManager extends View {
 
   // ---- drawing --------------------------------------------------------------
 
-  badge(text, t, options = {}) {
-    const color = options.color ?? t.muted;
-    return div()
-      .h(18)
-      .px(6)
-      .flex_none()
-      .flex()
-      .items_center()
-      .rounded(4)
-      .bg(options.bg ?? "#00000000")
-      .when(options.border, (el) => el.border_1().border_color(t.border))
-      .text_size(10)
-      .font_medium()
-      .text_color(color)
-      .child(text);
-  }
-
-  icon(row, size, t) {
-    if (row.icon) {
-      return row.tint
-        ? svg(row.icon).size(size).flex_none().text_color(t.muted)
-        : image(row.icon).w(size).h(size).flex_none().rounded(3);
-    }
-    return div()
-      .size(size)
-      .flex_none()
-      .rounded(3)
-      .bg(t.raised)
-      .flex()
-      .items_center()
-      .justify_center()
-      .text_size(Math.round(size * 0.55))
-      .text_color(t.muted)
-      .child((row.name ?? "?").slice(0, 1).toUpperCase());
-  }
-
   button(id, label, t, onClick, options = {}) {
     return h_flex()
       .id(id)
@@ -890,20 +837,6 @@ export default class AgentManager extends View {
       .when(viewport, (el) => el.child(Scrollbar.vertical(id).absolute().inset_0()));
   }
 
-  section(title, count, t, note, muted = false) {
-    return h_flex()
-      .w_full()
-      .items_center()
-      .h(LIST_HEADER_HEIGHT)
-      .gap(8)
-      .pt(0)
-      .pb(0)
-      .child(div().text_size(13).font_semibold().text_color(muted ? t.muted : t.foreground).child(title))
-      .child(this.badge(count, t, { border: true, color: muted ? t.muted : t.accent }))
-      .when(note, (el) => el.child(div().text_size(11).text_color(t.dim).child(note)))
-      .child(div().flex_1());
-  }
-
   commandLine(row, t, quiet) {
     const mono = settings()?.font_family ?? "JetBrains Mono";
     const effective = formatArgv(row.run);
@@ -970,7 +903,7 @@ export default class AgentManager extends View {
               .border_color(t.border)
               .bg(t.surface)
               .when(quiet, (el) => el.opacity(0.5))
-              .child(this.icon(row, 18, t)),
+              .child(icon(row, 18, t)),
           )
           .child(
             v_flex()
@@ -997,8 +930,8 @@ export default class AgentManager extends View {
                       .on_click((_event, cx) => this.toggleExpand(row, cx))
                       .child(row.name),
                   )
-                  .when(row.customized, (el) => el.child(this.badge("Customized", t, { color: t.accent, border: true })))
-                  .when(row.entryError, (el) => el.child(this.badge("Invalid command", t, { color: t.blocked, border: true }))),
+                  .when(row.customized, (el) => el.child(badge("Customized", t, { color: t.accent, border: true })))
+                  .when(row.entryError, (el) => el.child(badge("Invalid command", t, { color: t.blocked, border: true }))),
               )
               .child(this.commandLine(row, t, quiet)),
           )
@@ -1356,33 +1289,6 @@ export default class AgentManager extends View {
       );
   }
 
-  banner(text, t, options = {}) {
-    return h_flex()
-      .w_full()
-      .gap(8)
-      .p(10)
-      .rounded(8)
-      .border_1()
-      .border_color(options.border ?? t.blocked)
-      .bg(options.bg ?? "#ef444414")
-      .items_start()
-      .child(div().flex_none().text_size(12).text_color(options.color ?? t.blocked).child("!"))
-      .child(v_flex().flex_1().min_w(0).gap(4).child(div().text_size(12).text_color(options.color ?? t.blocked).child(text)).when(options.actions, (el) => el.child(options.actions)));
-  }
-
-  empty(text, t) {
-    return div()
-      .w_full()
-      .p(16)
-      .rounded(8)
-      .border_1()
-      .border_color(t.border)
-      .border_dashed()
-      .text_size(12)
-      .text_color(t.muted)
-      .child(text);
-  }
-
   render(cx) {
     const t = theme();
     const split = this.allRows();
@@ -1483,7 +1389,7 @@ export default class AgentManager extends View {
               .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
           )
           .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Agents"))
-          .child(this.badge("This computer", t, { border: true }))
+          .child(badge("This computer", t, { border: true }))
           .child(div().flex_1())
           .child(refreshButton),
       )
@@ -1499,21 +1405,21 @@ export default class AgentManager extends View {
       )
       .when(this.managerError, (el) =>
         el.child(
-          this.banner(`agent-manager.json is invalid: ${this.managerError}`, t, {
+          banner(`agent-manager.json is invalid: ${this.managerError}`, t, {
             actions: div().text_size(11).text_color(t.blocked).child("Availability toggles are paused until the file is fixed."),
           }),
         ),
       )
       .when(this.programsError, (el) =>
         el.child(
-          this.banner(this.programsError, t, {
+          banner(this.programsError, t, {
             actions: div().text_size(11).text_color(t.blocked).child("Built-in commands are shown; editing is paused so valid JSON is not destroyed."),
           }),
         ),
       )
       .when(this.detectionError, (el) =>
         el.child(
-          this.banner(this.detectionError, t, {
+          banner(this.detectionError, t, {
             actions: h_flex()
               .gap(8)
               .child(
@@ -1524,7 +1430,7 @@ export default class AgentManager extends View {
       )
       .when(this.freshWarning, (el) =>
         el.child(
-          this.banner(this.freshWarning, t, {
+          banner(this.freshWarning, t, {
             border: t.blocked,
             bg: "#f59e0b14",
             color: t.blocked,
@@ -1532,11 +1438,11 @@ export default class AgentManager extends View {
         ),
       )
       .when(this.writeError && !rows.some((row) => this.editors.get(row.key)?.conflict), (el) =>
-        el.child(this.banner(this.writeError, t)),
+        el.child(banner(this.writeError, t)),
       )
       .when(conflictActions, (el) =>
         el.child(
-          this.banner("programs.json changed on disk while you were editing. Your draft is kept.", t, {
+          banner("programs.json changed on disk while you were editing. Your draft is kept.", t, {
             actions: conflictActions,
           }),
         ),
@@ -1567,7 +1473,7 @@ export default class AgentManager extends View {
       .when(!loading, (el) =>
         el
           .child(
-            this.section(
+            section(
               "Installed",
               `${split.installed.length} detected`,
               t,
@@ -1575,16 +1481,16 @@ export default class AgentManager extends View {
             ),
           )
           .when(split.installed.length === 0, (inner) =>
-            inner.child(this.empty("No agents detected. If one is installed, the probe may have timed out — try Refresh.", t)),
+            inner.child(empty("No agents detected. If one is installed, the probe may have timed out — try Refresh.", t)),
           )
           .when(split.installed.length > 0, (inner) => inner.child(this.catalog(split.installed, t, "installed")))
           .when(split.available.length > 0, (inner) =>
             inner
-              .child(this.section("Available to install", `${split.available.length} agents`, t, null, true))
+              .child(section("Available to install", `${split.available.length} agents`, t, null, true))
               .child(this.catalog(split.available, t, "available")),
           )
           .when(split.available.length === 0 && split.installed.length > 0, (inner) =>
-            inner.child(this.section("Available to install", "0 agents", t, "every supported agent is installed", true)),
+            inner.child(section("Available to install", "0 agents", t, "every supported agent is installed", true)),
           )
           .child(
             h_flex()
