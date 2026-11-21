@@ -6,7 +6,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
-import { run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings } from "herdr";
+import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
 
 const AGENTS = {
   claude: {
@@ -150,6 +150,15 @@ function formatAgents(text) {
 
 // JSON.parse messages differ between engines. Try "line N" first, then
 // "position N" and count newlines. Fall back to line 1.
+function managerDisabled(text) {
+  try {
+    const saved = JSON.parse(text ?? "{}");
+    return new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
 function describeJsonError(error, text) {
   const message = String(error?.message ?? error);
   const line = message.match(/\bline (\d+)\b/i);
@@ -219,6 +228,8 @@ export default class AgentConfig extends View {
       this.promptDirty = this.promptInput.value() !== this.promptSaved;
       cx.notify();
     });
+
+    if (checking()) return;
 
     cx.spawn(async (cx) => {
       try {
@@ -471,9 +482,19 @@ export default class AgentConfig extends View {
     this.remember();
   }
 
-  launch(cx) {
+  async launch(cx) {
     const p = props();
     if (!this.current()) return;
+    // The flyout is sticky; availability may have changed while it was open. Local settings only.
+    const space = spaces().find((candidate) => candidate.id === p.space) ?? spaces().find((candidate) => candidate.active);
+    if (!space?.machine) {
+      const manager = await readTextFile(`${appHome()}/agent-manager.json`).catch(() => null);
+      if (managerDisabled(manager).has(p.key)) {
+        this.error = `${p.name ?? p.key} is disabled in Agent Manager.`;
+        cx?.notify();
+        return;
+      }
+    }
 
     const extra = [];
     // --advisor, --agents and --append-system-prompt are Claude CLI flags; codex rejects them.

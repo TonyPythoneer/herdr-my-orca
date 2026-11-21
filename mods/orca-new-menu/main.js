@@ -5,13 +5,36 @@
 // Opened by orca-tabs, orca-landing and orca-nav.
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared } from "herdr";
+import { checking, theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared, appHome, readTextFile, exec } from "herdr";
 import { MODELS } from "./models.js";
+import { currentInventory, emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory } from "./rows.js";
+import { detectFreebuff } from "./freebuff.js";
 
-// Cache agents so the menu paints immediately on reopen; shared() needs another render (AGENTS.md rule 10).
-let agentsCache = null;
-let agentsFailed = false;
-let agentsLoading = false;
+// Keep one inventory per machine for the first paint, then always ask again on open. The Agent
+// Manager publishes a recent local inventory (fresh install checks and effective runs) in
+// shared(); Herdr's own detection cache can be a minute old, so it is only a fallback.
+const agentsByMachine = new Map();
+const agentsFailedByMachine = new Map();
+const INVENTORY_KEY = "agent-manager.inventory";
+// Agents the person turned off in the Agent Manager (`agent-manager.json`). Orca's equivalent is
+// `disabledTuiAgents`; `isTuiAgentEnabled` keeps a disabled agent installed but out of pickers
+// (`agent-launch/catalog/tui-agent-selection.ts`). A failed read fails open: a broken file never
+// hides every agent. The Agent Manager page writes this file.
+let disabledAgents = new Set();
+const MANAGER_FILE = `${appHome()}/agent-manager.json`;
+
+function parseDisabled(text) {
+  try {
+    const saved = JSON.parse(text ?? "{}");
+    return new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function recentInventory() {
+  return currentInventory(shared(INVENTORY_KEY));
+}
 // A probed model list survives the app; the picker paints it before asking again. Orca serves a
 // saved catalog until it is 10 minutes old (`agent-model-catalog-entry-lifetime.ts:12`).
 const MODELS_KEY = "new-menu.models.v1";
@@ -74,18 +97,96 @@ export default class NewMenu extends View {
     this.input.on("change", (_e, cx) => { this.filter = this.input.value(); this.at = 0; cx.notify(); });
     // The filter owns Enter while it is focused, so a model is chosen through submit.
     this.input.on("submit", (_e, cx) => this.choose(this.at, cx));
-    if (agentsCache || agentsLoading) return;
-    const machine = spaces().find((s) => s.active)?.machine;
-    agentsLoading = true;
+
+    const machine = spaces().find((s) => s.active)?.machine ?? null;
+    this.machine = machine;
+    const key = machine ?? "__local__";
+    const inventory = machine ? null : recentInventory();
+    const cached = agentsByMachine.get(key);
+    this.agents = cached ?? null;
+    this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
+    // The manager file is this computer's. A remote machine must not inherit its disabled list.
+    this.disabled = machine ? new Set() : new Set(Array.isArray(inventory?.disabled) ? inventory.disabled : disabledAgents);
+    this.disabledReady = Boolean(machine);
+    this.freebuff = typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
+
+    if (!machine) {
+      cx.spawn(async (cx) => {
+        const text = await readTextFile(MANAGER_FILE).catch(() => null);
+        this.disabled = parseDisabled(text);
+        disabledAgents = new Set(this.disabled);
+        this.disabledReady = true;
+        cx.notify();
+      });
+    }
+
+    // The one unofficial integration: probe the same login shell its launch command uses.
+    if (!checking()) {
+      cx.spawn(async (cx) => {
+        this.freebuff = await detectFreebuff(exec, machine);
+        cx.notify();
+      });
+    }
+
+    // Always re-read. A cached inventory paints immediately, but it is never the final answer.
     cx.spawn(async (cx) => {
+      let known;
       try {
-        agentsCache = await knownAgents({ on: machine });
+        known = await knownAgents({ on: machine });
       } catch {
-        agentsFailed = true;
+        agentsFailedByMachine.set(key, true);
+        if (this.machine === machine) {
+          this.agentsFailed = true;
+          cx.notify();
+        }
+        return;
       }
-      agentsLoading = false;
-      cx.notify();
+      if (!machine) known = await this.withLocalRuns(known);
+      agentsByMachine.set(key, known);
+      agentsFailedByMachine.set(key, false);
+      if (this.machine === machine) {
+        this.agents = known;
+        this.agentsFailed = false;
+        cx.notify();
+      }
     });
+  }
+
+  // Only local programs.json overrides apply. A remote machine's run comes from its own host.
+  async withLocalRuns(agents) {
+    const text = await readTextFile(`${appHome()}/programs.json`).catch(() => undefined);
+    if (text === undefined) return agents;
+    let root;
+    try { root = JSON.parse(text); } catch { return agents; }
+    return (agents ?? []).map((agent) => {
+      const entry = root?.programs?.[agent.key];
+      const run = entry?.run;
+      if (Array.isArray(run) && run.length && run.every((part) => typeof part === "string")) {
+        return { ...agent, run: [...run] };
+      }
+      return agent;
+    });
+  }
+
+  machineChanged() {
+    return (spaces().find((s) => s.active)?.machine ?? null) !== this.machine;
+  }
+
+  // Read the manager's recent inventory on every render so a Settings change made while this
+  // menu is open (shared() re-renders) takes effect immediately. The manager file and direct
+  // probes are the fallback when the page has not published anything yet.
+  currentState() {
+    const inventory = this.machine ? null : recentInventory();
+    const agents = inventory?.agents
+      ? mergeInventory(this.agents ?? [], inventory.agents)
+      : this.agents;
+    const disabled = new Set(
+      inventory && Array.isArray(inventory.disabled) ? inventory.disabled : this.disabled,
+    );
+    const freebuff = this.freebuff !== undefined
+      ? this.freebuff
+      : typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
+    return { agents, disabled, freebuff, ready: this.disabledReady && Boolean(agents) };
   }
 
   createRows() {
@@ -108,28 +209,46 @@ export default class NewMenu extends View {
         run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 440, height: 260, props: { space: space?.id, folder, action: "new" } }) },
       { label: "Open worktree…", icon: "workflow",
         run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 560, height: 480, props: { space: space?.id, folder, action: "open" } }) },
+      // Agent Settings is reached from the empty agent state and from the sidebar's Agents
+      // button. Keeping a permanent "Manage agents…" row here would give the empty state two
+      // settings actions instead of the one required action.
     ];
   }
 
-  // Orca lists agent pickers above static rows (`TabBarAgentPickerEntry.tsx:19-25`); Herdr uses knownAgents().
+  // Orca lists agent pickers above static rows (`TabBarAgentPickerEntry.tsx:19-25`); Herdr uses
+  // knownAgents(). Only officially supported, installed, enabled agents are rows. Uninstalled and
+  // disabled entries are absent, not greyed out.
   agentRows() {
-    if (!agentsCache) {
-      return [{ label: agentsFailed ? "Could not load agents" : "Checking installed agents…", disabled: true }];
-    }
-    // Show installed agents and up to two installable suggestions.
-    const installed = agentsCache.filter((a) => a.installed);
-    const rows = [...installed, ...agentsCache.filter((a) => !a.installed).slice(0, 2)].map((a) => ({
+    const state = this.currentState();
+    if (!state.ready) return [];
+    const official = installedEnabledAgents(state.agents, state.disabled);
+    const showFreebuff = freebuffVisible(state.freebuff);
+    // Wait for the FreeBuff probe before choosing the empty state; otherwise an empty catalog
+    // would flash "Open Agent Settings" and then change to FreeBuff.
+    if (!official.length && state.freebuff === undefined) return [];
+    const rows = official.map((a) => ({
       label: a.name,
       program: a,
-      disabled: !a.installed,
-      hint: a.installed ? "" : "not installed",
-      // Orca opens model setup from the agent row (`AgentLaunchSetupButton.tsx:27-84`,
-      // `AgentLaunchSetupPanel.tsx:180-283`); this popup has no submenu (`orca-menu/main.js:418`).
+      hint: "",
       ...(MODELS[a.key]?.flyout ? { run: () => this.launchConfigured(a), config: a } : MODELS[a.key] ? { stay: (cx) => this.pickModel(a, cx) } : { run: () => this.launch(a) }),
     }));
-    // Not an Orca agent: no model list, and the login shell finds it on PATH the way a terminal does.
-    const freebuff = { key: "freebuff", name: "freebuff", run: ["zsh", "-lic", "exec freebuff"] };
-    return [...rows, { label: "freebuff", image: "freebuff.png", section: "-- unofficial --", run: () => this.launch(freebuff) }];
+    if (showFreebuff) {
+      const freebuff = { key: "freebuff", name: "FreeBuff CLI", run: freebuffRun(state.agents) };
+      rows.push({
+        label: "FreeBuff CLI",
+        image: "freebuff.png",
+        section: "Unofficial",
+        run: () => this.launch(freebuff, null, true),
+      });
+    }
+    if (emptyAgentState(official.length, showFreebuff)) {
+      return [{
+        label: "Open Agent Settings",
+        icon: "bot",
+        run: () => run("layout.select", { stack: "main", child: "main-agents" }),
+      }];
+    }
+    return rows;
   }
 
   // Orca only adds `--model` after selection (`AgentLaunchTextModelDefault.tsx:23-33`,
@@ -214,11 +333,22 @@ export default class NewMenu extends View {
   // A click on the row itself is the flyout's "Launch terminal": the flyout opens with launchNow and
   // launches with its saved model and effort, then closes.
   launchConfigured(agent) {
-    this.hoverConfig(agent, true, true);
+    const state = this.currentState();
+    const current = installedEnabledAgents(state.agents, state.disabled).find((item) => item.key === agent.key);
+    if (!state.ready || !current || this.machineChanged()) return;
+    this.hoverConfig(current, true, true);
   }
 
   // Permission flags live in programs.json's `run`; the menu only adds the chosen model.
-  launch(agent, model) {
+  launch(agent, model, unofficial = false) {
+    // A menu left open while Settings changed availability cannot launch a removed agent.
+    const state = this.currentState();
+    if (!state.ready || this.machineChanged()) return;
+    if (!unofficial) {
+      agent = installedEnabledAgents(state.agents, state.disabled).find((item) => item.key === agent.key);
+      if (!agent) return;
+    }
+    if (unofficial && !freebuffVisible(state.freebuff)) return;
     const space = spaces().find((s) => s.active);
     const seed = MODELS[agent.key];
     run("tab.new", {
@@ -400,7 +530,9 @@ export default class NewMenu extends View {
   render(cx) {
     const t = theme();
     const picking = this.picking;
+    const agentRows = this.agentRows();
     const headingAt = this.createRows().length;
+    const showAgentHeading = agentRows.length > 0;
     const page = this.wheel(picking ? FIT.models : FIT.list);
     return v_flex()
       .id("orca-new-menu")
@@ -433,8 +565,10 @@ export default class NewMenu extends View {
       .children(page.rows.flatMap((row, j) => {
         const i = page.start + j;
         const node = this.row(row, i, t);
-        const sectioned = row.section ? [this.heading(row.section, t), node] : [node];
-        return !picking && i === headingAt
+        const sectioned = row.section
+          ? [div().mx(6).my(5).h(1).bg(t.border), this.heading(row.section, t), node]
+          : [node];
+        return !picking && i === headingAt && showAgentHeading
           ? [this.heading("Start an agent", t), ...sectioned]
           : sectioned;
       }))

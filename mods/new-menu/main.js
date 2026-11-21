@@ -1,9 +1,21 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, spaces, panes, knownAgents, run, openOverlay, closeOverlay, props, window, keys, shared, setShared } from "herdr";
+import { appHome, theme, spaces, panes, knownAgents, readTextFile, run, openOverlay, closeOverlay, props, window, keys, shared, setShared } from "herdr";
 
 // The last agents each machine reported, shown at once while knownAgents() checks again.
 const KNOWN = "new-menu.agents";
+// shortcut: the catalog is a Herdr version snapshot, update all three lists when Herdr adds agents.
+const OFFICIAL = new Set("claude codex pi opencode cursor copilot amp gemini grok antigravity boldcreate crush dsh-tui empryo goose hermes kimi kiro omp pig qoder swival".split(" "));
+
+// The Agent Manager's on/off list. A disabled agent is still installed, it is just not offered.
+function disabledAgents(text) {
+  try {
+    const root = JSON.parse(String(text ?? ""));
+    return new Set(Array.isArray(root?.disabled) ? root.disabled.filter((key) => typeof key === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
 
 function shortcut(name) {
   const k = keys().find(b => b.section === "global" && b.action === name);
@@ -25,14 +37,27 @@ function shortcut(name) {
 export default class NewMenu extends View {
   init(_props, cx) {
     const machine = spaces().find(s => s.active)?.machine;
+    this.machine = machine ?? null;
     const where = machine ?? "";
     this.agents = shared(KNOWN)?.[where] ?? [];
+    this.disabled = new Set();
+    this.disabledReady = Boolean(machine);
     this.handle = cx.focus_handle();
     this.handle.focus();
+    if (!machine) {
+      cx.spawn(async cx => {
+        const text = await readTextFile(`${appHome()}/agent-manager.json`).catch(() => null);
+        this.disabled = disabledAgents(text);
+        this.disabledReady = true;
+        cx.notify();
+      });
+    }
     cx.spawn(async cx => {
       try {
-        this.agents = await knownAgents({ on: machine });
-        setShared(KNOWN, { ...shared(KNOWN), [where]: this.agents });
+        let known = await knownAgents({ on: machine });
+        known = await this.withLocalRuns(known);
+        this.agents = known;
+        setShared(KNOWN, { ...shared(KNOWN), [where]: known });
       }
       catch { this.failed = true; }
       cx.notify();
@@ -45,17 +70,84 @@ export default class NewMenu extends View {
       .on_click(() => { if (enabled) { closeOverlay(props().overlay); action(); } })
       .child(icon).child(div().flex_1().child(name)).child(div().text_size(11).text_color(t.dim).child(hint));
   }
+  // The Agent Manager's recent local inventory is fresher than Herdr's install cache and carries
+  // the effective command after a programs.json edit. Remote machines never inherit it.
+  recentInventory() {
+    if (this.machine) return null;
+    const inventory = shared("agent-manager.inventory");
+    return inventory && Array.isArray(inventory.agents) && Date.now() - Number(inventory.at) < 120_000 ? inventory : null;
+  }
+
+  mergeInventory(known, inventory) {
+    if (known.length === 0) return inventory;
+    const fresh = new Map(inventory.filter(a => a?.key).map(a => [a.key, a]));
+    return known.map(a => {
+      const current = fresh.get(a.key);
+      if (!current) return a;
+      return {
+        ...a,
+        installed: Boolean(current.installed),
+        run: Array.isArray(current.run) && current.run.length ? [...current.run] : a.run,
+      };
+    });
+  }
+
+  // programs.json is this computer's; a remote machine must launch its own executable.
+  async withLocalRuns(agents) {
+    if (this.machine) return agents;
+    const text = await readTextFile(`${appHome()}/programs.json`).catch(() => undefined);
+    if (text === undefined) return agents;
+    let root;
+    try { root = JSON.parse(text); } catch { return agents; }
+    return (agents ?? []).map(a => {
+      const run = root?.programs?.[a.key]?.run;
+      if (Array.isArray(run) && run.length && run.every(part => typeof part === "string")) {
+        return { ...a, run: [...run] };
+      }
+      return a;
+    });
+  }
+
+  machineChanged() {
+    return (spaces().find(s => s.active)?.machine ?? null) !== this.machine;
+  }
+
+  // Official agents only. FreeBuff is the Orca menu's unofficial integration, not a row here.
+  officialAgents(agents, disabled) {
+    const seen = new Set();
+    return (agents ?? []).filter((agent) => {
+      if (!agent || !OFFICIAL.has(agent.key) || disabled.has(agent.key) || seen.has(agent.key)) return false;
+      if (!agent.installed) return false;
+      seen.add(agent.key);
+      return true;
+    });
+  }
+
+  // Read the Agent Manager's recent inventory at render/action time, so Settings changes while
+  // this menu is open take effect. The manager file read in init is the fallback.
+  currentState() {
+    const fresh = this.recentInventory();
+    const agents = fresh?.agents ? this.mergeInventory(this.agents ?? [], fresh.agents) : this.agents;
+    const disabled = new Set(fresh && Array.isArray(fresh.disabled) ? fresh.disabled : this.disabled);
+    return { agents, disabled, ready: this.disabledReady && Boolean(agents) };
+  }
+
   render() {
     const t = theme();
     const space = spaces().find(s => s.active);
-    const installed = this.agents.filter(a => a.installed);
-    const choices = this.failed ? installed : [...installed, ...this.agents.filter(a => !a.installed).slice(0, 2)];
-    return v_flex().min_h(0).w_full().h(Math.min(491, 167 + Math.max(1, choices.length + (this.failed ? 1 : 0)) * 31)).bg(t.popover).p(5).text_size(12.8)
+    const state = this.currentState();
+    const offered = state.ready ? this.officialAgents(state.agents, state.disabled) : [];
+    const choices = offered;
+    const empty = state.ready && !this.failed && choices.length === 0;
+    const extra = (this.failed ? 1 : 0) + (empty ? 1 : 0);
+    return v_flex().min_h(0).w_full().h(Math.min(491, 184 + Math.max(1, choices.length + extra) * 31)).bg(t.popover).p(5).text_size(12.8)
       .id("new-menu").track_focus(this.handle)
       .on_key_down((e) => {
         if (e.modifiers.control || e.modifiers.platform || e.modifiers.alt) return;
-        const agent = /^[1-9]$/.test(e.key) ? installed[Number(e.key) - 1] : null;
-        if (!agent) return;
+        const s = this.currentState();
+        const selected = /^[1-9]$/.test(e.key) ? choices[Number(e.key) - 1] : null;
+        const agent = this.officialAgents(s.agents, s.disabled).find(a => a.key === selected?.key);
+        if (!agent || !s.ready || s.disabled.has(agent.key) || this.machineChanged()) return;
         closeOverlay(props().overlay);
         run("tab.new", { name: agent.name, space: space?.id, argv: agent.run });
       })
@@ -63,8 +155,17 @@ export default class NewMenu extends View {
       .child(div().px(9).pt(8).pb(4).text_size(11).text_color(t.dim).child("Start an agent"))
       .child(v_flex().flex_1().min_h(0).overflow_y_scrollbar()
         .children(choices.map((a, i) => this.row(a.key, a.tint ? svg(a.icon).size(14).text_color(t.foreground) : image(a.icon).size(14), a.name,
-          () => run("tab.new", { name: a.name, space: space?.id, argv: a.run }), a.installed ? (i < 9 ? String(i + 1) : "") : "not installed", a.installed)))
-        .when(this.failed || this.agents.length === 0, el => el.child(div().px(9).py(6).text_color(t.dim).child(this.failed ? "Could not check installed agents" : "Checking installed agents…"))))
+          () => {
+            const now = this.currentState();
+            const current = this.officialAgents(now.agents, now.disabled).find(item => item.key === a.key);
+            if (now.ready && current && !this.machineChanged()) {
+              run("tab.new", { name: current.name, space: space?.id, argv: current.run });
+            }
+          }, i < 9 ? String(i + 1) : "", true)))
+        .when(empty, el => el.child(this.row("settings", svg("mods/orca-new-menu/bot.svg").size(14).text_color(t.foreground), "Open Agent Settings",
+          () => run("layout.select", { stack: "main", child: "main-agents" }), "", true)))
+        .when(this.failed, el => el.child(div().px(9).py(6).text_color(t.dim).child("Could not check installed agents")))
+        .when(!state.ready && !this.failed, el => el.child(div().px(9).py(6).text_color(t.dim).child("Checking agent availability…"))))
       .child(div().h(1).mx(4).my(5).bg(t.border))
       .child(this.row("space", div().w(14).child("+"), "New space", () => run("space.new"), shortcut("space.new")))
       .child(this.row("worktree", svg("mods/workspace-chrome/branch.svg").size(14), "New worktree…", () => openOverlay({ mod: "worktree", kind: "dialog", width: 460, height: 280, props: { space: space?.id, folder: panes().find(p => p.focused)?.cwd, action: "new" } }), "", Boolean(space)))
