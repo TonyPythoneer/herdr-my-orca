@@ -5,7 +5,7 @@
 //             session is quiet, Anthropic's oauth/usage fills in (and adds per-model windows
 //             such as Fable); its token comes from the macOS keychain and is never written
 //             anywhere. Both live in ~/.cache/herdr-usage/.
-//   Codex     the last rate_limits in its newest session file (each turn appends one)
+//   Codex     the last rate_limits in the newest session file that has them
 //   opencode  no limits: free-model tokens (replies and compactions, cache included) since its daily reset
 // Same reading shape as usage.js; `text` is a chip with no percentage.
 import { clampUsedPercent } from './usage.js';
@@ -31,8 +31,10 @@ fi
 api=$(cat "$c" 2>/dev/null)
 printf '{"live":%s,"api":%s}' "$live" "\${api:-null}"`;
 const CODEX = `[ -s "$HOME/.codex/auth.json" ] || exit 0
-f=$(ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | head -n 1); [ -n "$f" ] || exit 0
-grep '"primary":{' "$f" | tail -n 1 | jq -c '.. | objects | select(has("rate_limits")) | .rate_limits | select(.primary) | {primary, secondary}' 2>/dev/null`;
+ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | while IFS= read -r f; do
+  v=$(grep '"primary":{' "$f" | tail -n 1 | jq -c '.. | objects | select(has("rate_limits")) | .rate_limits | select(.primary) | {primary, secondary}' 2>/dev/null)
+  if [ -n "$v" ]; then printf '%s\n' "$v"; break; fi
+done`;
 // opencode's free-model tokens (cache included, as Claude and Codex are billed) since its last
 // reset. A 429 carries the server's own reset (time + retryAfterMs): the newest one past is the
 // window start while under 24h old, else 9:00 local; the next reset is a future one, else

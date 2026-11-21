@@ -27,7 +27,7 @@ Same core as Orca desktop (MIT, Lovecast Inc.), read from its public source:
   `api.anthropic.com/api/oauth/usage` (15-minute cache) for the same windows plus per-model
   pools such as Fable.
 - **Codex.** Codex appends `token_count`/`rate_limits` to its session JSONL every turn; the bar
-  reads the newest one. (Orca gets the same values from `codex app-server`'s
+  reads the newest session that has them. (Orca gets the same values from `codex app-server`'s
   `account/rateLimits/read`, the chatgpt.com backend, or a hidden `/status` PTY when those fail.)
 - **opencode.** Its SQLite database, tokens since the daily reset.
 

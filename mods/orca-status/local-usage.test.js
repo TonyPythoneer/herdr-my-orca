@@ -79,6 +79,31 @@ test('probeLocal shows an expired codex window as 0% as static 0% / 5h', async (
   assert.equal(week.usedPercent, 68);
 });
 
+test('Codex uses an older session until the newest has rate limits', async () => {
+  const { execFile } = await import('node:child_process');
+  const { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const home = mkdtempSync(join(tmpdir(), 'herdr-codex-'));
+  try {
+    const dir = join(home, '.codex/sessions/2026/11/21');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(home, '.codex/auth.json'), '{}');
+    const older = join(dir, 'older.jsonl'), newer = join(dir, 'newer.jsonl');
+    const limits = (used) => JSON.stringify({ rate_limits: { primary: { window_minutes: 300, used_percent: used } } });
+    writeFileSync(older, limits(23) + '\n');
+    writeFileSync(newer, '{}\n');
+    utimesSync(older, 1, 1);
+    const exec = (_c, args) => new Promise((resolve) => execFile('sh', args, { env: { ...process.env, HOME: home } }, (e, stdout) => resolve({ code: e ? 1 : 0, stdout })));
+    const percentage = async () => (await probeLocal(exec, new Set(['codex'])))[0]?.buckets[0].usedPercent;
+    assert.equal(await percentage(), 23);
+    writeFileSync(newer, limits(45) + '\n');
+    assert.equal(await percentage(), 45);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('probeLocal skips providers whose CLI is not installed', async () => {
   const ran = [];
   const exec = async (_c, [, script]) => { ran.push(script.includes('.codex') ? 'codex' : script.includes('opencode') ? 'opencode' : 'claude'); return { code: 0, stdout: '' }; };
