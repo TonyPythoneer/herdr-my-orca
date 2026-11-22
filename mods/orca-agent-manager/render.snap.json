@@ -5730,7 +5730,7 @@
                                 [
                                  "id",
                                  [
-                                  "am-perm-item-default"
+                                  "am-perm-claude-default"
                                  ]
                                 ],
                                 [
@@ -6070,7 +6070,7 @@
                                 [
                                  "id",
                                  [
-                                  "am-perm-item-ask"
+                                  "am-perm-claude-ask"
                                  ]
                                 ],
                                 [
@@ -6354,7 +6354,7 @@
                                 [
                                  "id",
                                  [
-                                  "am-perm-item-auto"
+                                  "am-perm-claude-auto"
                                  ]
                                 ],
                                 [
@@ -6638,7 +6638,7 @@
                                 [
                                  "id",
                                  [
-                                  "am-perm-item-full-access"
+                                  "am-perm-claude-full-access"
                                  ]
                                 ],
                                 [
@@ -6955,7 +6955,7 @@
                                 [
                                  "id",
                                  [
-                                  "am-perm-item-own"
+                                  "am-perm-claude-own"
                                  ]
                                 ],
                                 [
@@ -11451,7 +11451,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -11791,7 +11791,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -12075,7 +12075,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -12359,7 +12359,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -12676,7 +12676,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -14677,7 +14677,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -15017,7 +15017,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -15301,7 +15301,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -15585,7 +15585,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -15902,7 +15902,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -17621,7 +17621,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -17961,7 +17961,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -18245,7 +18245,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -18529,7 +18529,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -18846,7 +18846,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -20678,7 +20678,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -21018,7 +21018,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -21302,7 +21302,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -21586,7 +21586,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -21903,7 +21903,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -23783,7 +23783,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -24123,7 +24123,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -24407,7 +24407,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -24691,7 +24691,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -25008,7 +25008,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -26828,7 +26828,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -27168,7 +27168,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -27452,7 +27452,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -27736,7 +27736,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -28053,7 +28053,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -29415,7 +29415,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -29755,7 +29755,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -30039,7 +30039,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -30323,7 +30323,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -30640,7 +30640,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -32315,7 +32315,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -32655,7 +32655,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -32939,7 +32939,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -33223,7 +33223,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -33540,7 +33540,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [
@@ -35182,7 +35182,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-default"
+                              "am-perm-claude-default"
                              ]
                             ],
                             [
@@ -35522,7 +35522,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-ask"
+                              "am-perm-claude-ask"
                              ]
                             ],
                             [
@@ -35806,7 +35806,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-auto"
+                              "am-perm-claude-auto"
                              ]
                             ],
                             [
@@ -36090,7 +36090,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-full-access"
+                              "am-perm-claude-full-access"
                              ]
                             ],
                             [
@@ -36407,7 +36407,7 @@
                             [
                              "id",
                              [
-                              "am-perm-item-own"
+                              "am-perm-claude-own"
                              ]
                             ],
                             [

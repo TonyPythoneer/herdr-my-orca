@@ -16,15 +16,6 @@ export const PERMISSION_LABELS = {
   custom: "Custom",
 };
 
-/** Per-agent menu labels: the same choices, worded for one agent's row. */
-export const PERMISSION_AGENT_LABELS = {
-  own: "Its own settings",
-  ask: "Ask for approval",
-  auto: "Approve for me",
-  "full-access": "Full access",
-  custom: "Custom",
-};
-
 export const PERMISSION_SHORT_LABELS = {
   own: "Own",
   ask: "Ask",

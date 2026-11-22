@@ -22,14 +22,14 @@ const AGENT_OWN = "Terminals and chats follow the agent's own permission setting
  * suffix: {choice, label} (the inherited value shown after the label), onPick }.
  * `separator` draws a rule above the item.
  */
-function menuItem(item, active, t) {
+function menuItem(menuId, item, active, t) {
   const tone = item.warn ? t.blocked : t.foreground;
   return v_flex()
     .w_full()
     .when(item.separator, (el) => el.child(div().w_full().h(1).my(4).bg(t.border)))
     .child(
       h_flex()
-        .id(`am-perm-item-${item.id}`)
+        .id(`am-perm-${menuId}-${item.id}`)
         .w_full()
         .px(8)
         .py(6)
@@ -110,7 +110,7 @@ export function permissionSelect(spec, t) {
         .border_1()
         .border_color(t.border)
         .bg(t.popover)
-        .children(spec.items.map((item, index) => menuItem(item, spec.active === index, t))),
+        .children(spec.items.map((item, index) => menuItem(spec.id, item, spec.active === index, t))),
     );
 }
 
@@ -144,7 +144,8 @@ export function defaultPermissionItems(owner, managed) {
 export function agentPermissionItems(owner, row) {
   const choices = permissionChoices(row.key) ?? [];
   const inherited = owner.permissions.default;
-  const following = !row.permissionOverride && row.permission !== "custom";
+  // Following needs a choice to follow: an agent without the all-agents recipe keeps its own settings.
+  const following = choices.includes(inherited) && !row.permissionOverride && row.permission !== "custom";
   const items = [];
   if (choices.includes(inherited)) {
     items.push({
