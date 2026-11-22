@@ -20,7 +20,7 @@ const editorOf = (over = {}) => ({ command: field('claude'), args: field('--x'),
 function owner(state = {}) {
   const o = Object.create(AgentManager.prototype);
   Object.assign(o, { expanded: new Set(), editors: new Map(), uninstall: null, action: null, typing: false, writeError: null, savedKey: null, disabled: new Set(), permissionOpen: null, permissionNotice: null, handle: { focus() {} } }, state);
-  o.currentPermissions = () => ({ default: 'own', overrides: { claude: 'full-access' } });
+  o.permissions = { default: 'own', overrides: { claude: 'full-access' } };
   return o;
 }
 

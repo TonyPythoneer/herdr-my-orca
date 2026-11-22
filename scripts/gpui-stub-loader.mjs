@@ -8,7 +8,7 @@ const STUBS = new Set(["gpui-kit", "gpui-base", "herdr"]);
 const HERDR = { appHome: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
   // File IO goes through `globalThis.__herdrFiles` so a flow test can run a mod's real handlers.
   readTextFile: "async (path) => globalThis.__herdrFiles?.get(path)",
-  writeTextFile: "async (path, text) => { globalThis.__herdrFiles?.set(path, text); }",
+  writeTextFile: "async (path, text) => { await globalThis.__herdrFiles?.set(path, text); }",
   setShared: "() => {}",
   exec: "async () => ({ code: 0, stdout: '', stderr: '' })" };
 
