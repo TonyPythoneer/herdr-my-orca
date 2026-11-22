@@ -832,60 +832,71 @@ export default class AgentConfig extends View {
     const remote = Boolean(space?.machine);
     const enabled = ids.length > 0 && !remote;
     const label = this.providerId === "none" ? "None" : this.providers[this.providerId]?.name ?? "None";
+    // A settings row, not a third big select: the MODEL and EFFORT boxes below keep the weight.
     return v_flex()
       .gap(4)
       .child(
         h_flex()
           .id("provider-select")
           .mx(6)
-          .h(40)
-          .px(10)
+          .h(30)
           .gap(8)
           .items_center()
           .justify_between()
-          .rounded(7)
-          .border_1()
-          .border_color(this.providerOpen ? t.ring : t.input)
-          .bg(t.raised)
-          .when(!enabled, (el) => el.opacity(0.5))
-          .when(enabled, (el) =>
-            el.cursor_pointer().on_click((_e, cx) => {
-              this.providerOpen = !this.providerOpen;
-              this.modelOpen = false;
-              this.effortOpen = false;
-              this.advisorOpen = false;
-              this.styleOpen = false;
-              this.groupOpen = false;
-              cx.notify();
-            }),
-          )
-          .role("button")
-          .accessibility_label(`Model provider: ${label}`)
-          .tooltip(
-            remote
-              ? "A model provider is set up on this computer only"
-              : enabled
-                ? "Choose which model source Codex starts with"
-                : "Set up a model provider in Agent Settings",
-          )
+          .child(div().text_size(10).font_medium().text_color(t.dim).child("MODEL PROVIDER"))
           .child(
-            v_flex()
-              .min_w(0)
-              .child(div().text_size(9).text_color(t.dim).child("MODEL PROVIDER"))
-              .child(div().text_size(12).text_color(enabled ? t.foreground : t.muted).truncate().child(label)),
-          )
-          .child(div().flex_none().text_size(11).text_color(t.muted).child("▾")),
+            h_flex()
+              .w(170)
+              .h(28)
+              .px(9)
+              .gap(6)
+              .flex_none()
+              .items_center()
+              .justify_between()
+              .rounded(6)
+              .border_1()
+              .border_color(this.providerOpen ? t.ring : t.input)
+              .bg(t.raised)
+              .when(!enabled, (el) => el.opacity(0.5))
+              .when(enabled, (el) =>
+                el.cursor_pointer().hover((s) => s.bg(t.hover)).on_click((_e, cx) => {
+                  this.providerOpen = !this.providerOpen;
+                  this.modelOpen = false;
+                  this.effortOpen = false;
+                  this.advisorOpen = false;
+                  this.styleOpen = false;
+                  this.groupOpen = false;
+                  cx.notify();
+                }),
+              )
+              .role("button")
+              .accessibility_label(`Model provider: ${label}`)
+              .tooltip(
+                remote
+                  ? "A model provider is set up on this computer only"
+                  : enabled
+                    ? "Choose which model source Codex starts with"
+                    : "Set up a model provider in Agent Settings",
+              )
+              .child(div().min_w(0).truncate().text_size(12).text_color(enabled ? t.foreground : t.muted).child(label))
+              .child(div().flex_none().text_size(11).text_color(t.muted).child("▾")),
+          ),
       )
       .when(this.providerOpen && enabled, (el) =>
         el.child(
-          v_flex()
+          h_flex()
             .mx(6)
-            .py(4)
-            .rounded(8)
-            .border_1()
-            .border_color(t.border)
-            .bg(t.popover)
-            .child(this.providerList(t)),
+            .justify_end()
+            .child(
+              v_flex()
+                .w(170)
+                .py(4)
+                .rounded(7)
+                .border_1()
+                .border_color(t.border)
+                .bg(t.popover)
+                .child(this.providerList(t)),
+            ),
         ),
       );
   }
