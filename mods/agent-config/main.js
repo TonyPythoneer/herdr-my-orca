@@ -7,6 +7,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
+import { PROVIDER_FILE, launchArgv, parseProviderFile, serializeProviderFile } from "./codex-provider.js";
 
 const AGENTS = {
   claude: {
@@ -212,6 +213,11 @@ export default class AgentConfig extends View {
 
     this.advisorModel = DEFAULT_ADVISOR;
     this.advisorOpen = false;
+    // Model providers (Agent Settings writes them): the flyout only picks one and reads its models.
+    this.providers = {};
+    this.providerId = "none"; // none: today's Codex source
+    this.providerOpen = false;
+    this.cliModel = null; // the Codex model to come back to when the provider goes back to None
     this.codexOff = new Set(); // codex features launched with --disable
     this.outputStyle = "default";
     this.styles = BUILTIN_STYLES;
@@ -265,6 +271,7 @@ export default class AgentConfig extends View {
         this.promptSaved = typeof preset.systemPrompt === "string" ? preset.systemPrompt : DEFAULT_PROMPT;
         this.promptInput.set_value(this.promptSaved);
         this.hidden = new Set(saved.hidden ?? []);
+        await this.loadProviders();
         this.modelGroup = OPENCODE_GROUPS.some((g) => g.id === saved.group)
           ? saved.group
           : saved.onlyFree === false ? "all" : "free";
@@ -320,6 +327,11 @@ export default class AgentConfig extends View {
 
   // Picking a model keeps the effort when the model supports it, else the model's own default.
   choose(model, effort) {
+    if (!model) {
+      this.model = null;
+      this.effort = null;
+      return;
+    }
     this.model = model.id;
     const efforts = model.efforts;
     const fallback = efforts.includes(model.fallbackEffort) ? model.fallbackEffort : efforts[0];
@@ -327,7 +339,55 @@ export default class AgentConfig extends View {
   }
 
   current() {
-    return this.models?.find((m) => m.id === this.model);
+    return this.activeModels()?.find((m) => m.id === this.model);
+  }
+
+  // Model providers live in their own file; a launch re-reads it, so a delete lands at once.
+  async loadProviders() {
+    const text = await readTextFile(`${appHome()}/${PROVIDER_FILE}`).catch(() => null);
+    this.providers = parseProviderFile(text).providers ?? {};
+    if (this.providerId !== "none" && !this.providers[this.providerId]) this.providerId = "none";
+    return this.providers;
+  }
+
+  // With a provider chosen the list is its own models, so a GPT name is never sent to oMLX. Those
+  // models have no effort variants, which is also what hides the EFFORT row.
+  activeModels() {
+    if (this.key !== "codex" || this.providerId === "none") return this.models;
+    const record = this.providers[this.providerId];
+    return (record?.models ?? []).map((id) => ({ id, label: id, efforts: [] }));
+  }
+
+  // None keeps the Codex model; a provider keeps its model in the provider's own record.
+  setProvider(id, cx) {
+    this.providerOpen = false;
+    if (id === this.providerId) return cx.notify();
+    if (this.providerId === "none") this.cliModel = this.model;
+    this.providerId = id;
+    const list = this.activeModels() ?? [];
+    const wanted = id === "none" ? this.cliModel : this.providers[id]?.selectedModel?.[this.key];
+    this.choose(list.find((m) => m.id === wanted) ?? list[0] ?? null);
+    this.remember();
+    cx.notify();
+  }
+
+  // The provider model is remembered per agent (codex) inside the provider record.
+  rememberProviderModel() {
+    const id = this.providerId;
+    const key = this.key;
+    const model = this.model;
+    const file = `${appHome()}/${PROVIDER_FILE}`;
+    this.savingProvider = (this.savingProvider ?? Promise.resolve()).then(async () => {
+      const text = await readTextFile(file).catch(() => null);
+      const parsed = parseProviderFile(text);
+      const record = parsed.providers?.[id];
+      if (!record) return; // deleted while this flyout was open
+      record.selectedModel = { ...(record.selectedModel ?? {}), [key]: model };
+      try {
+        await writeTextFile(file, serializeProviderFile(parsed.providers), text);
+        await exec("chmod", ["600", file]); // the key is in this file
+      } catch {}
+    });
   }
 
   // Writes queue up, so each one builds on the last saved snapshot instead of racing it.
@@ -348,9 +408,12 @@ export default class AgentConfig extends View {
     const key = this.key;
     const { model, effort } = this;
     const hidden = [...this.hidden];
+    // An oMLX model never replaces the Codex model remembered for None.
+    const viaProvider = this.key === "codex" && this.providerId !== "none";
     this.persist((all) => {
-      all[key] = { ...all[key], model, effort, hidden };
+      all[key] = { ...all[key], hidden, ...(viaProvider ? {} : { model, effort }) };
     });
+    if (viaProvider) this.rememberProviderModel();
   }
 
   // The opencode model group is a list preference, saved with the model and effort.
@@ -554,11 +617,31 @@ export default class AgentConfig extends View {
       if (this.codexOff.has("mcp")) extra.push(...(await codexMcpOff()));
     }
 
+    // A provider must still be saved: the file can lose it while the flyout is open.
+    let provider = null;
+    if (this.key === "codex" && this.providerId !== "none") {
+      const file = `${appHome()}/${PROVIDER_FILE}`;
+      const record = parseProviderFile(await readTextFile(file).catch(() => null)).providers?.[this.providerId];
+      if (!record) {
+        this.providerId = "none";
+        this.providerOpen = false;
+        this.error = "Model provider is no longer set up.";
+        this.launching = false;
+        cx?.notify();
+        return;
+      }
+      provider = { ...record, configPath: file };
+    }
+
     this.remember();
     // Launch uses the live editor text and never writes it; both editors stay manual save.
 
     // argv elements, not shell words: no quotes around the JSON or the prompt.
-    let argv = [...p.argv, ...this.agent.argsFor(this.model, this.effort), ...extra];
+    // oMLX wraps Codex in sh so the key comes from the provider file, never from argv, and adds no
+    // effort flag. None keeps today's argv exactly.
+    let argv = provider
+      ? launchArgv([...p.argv, ...extra], provider, this.model)
+      : [...p.argv, ...this.agent.argsFor(this.model, this.effort), ...extra];
     if (this.key === "opencode") {
       // The TUI has no --model flag; the model goes in through its config env var. It must run its
       // own server (--standalone): the background service keeps its own config, so a TUI that
@@ -655,7 +738,7 @@ export default class AgentConfig extends View {
   modelList(t) {
     const all = this.key === "opencode"
       ? (this.models ?? []).filter((m) => this.modelGroup === "all" || (m.group ?? (m.free ? "free" : "paid")) === this.modelGroup)
-      : this.models ?? [];
+      : this.activeModels() ?? [];
     const visible = all.filter((m) => !this.hidden.has(m.id));
     const hiddenModels = all.filter((m) => this.hidden.has(m.id));
     // Rows actually rendered: visible plus (if expanded) hidden ones; the hidden heading counts
@@ -739,6 +822,96 @@ export default class AgentConfig extends View {
               .when(this.showHidden, (inner) => inner.children(hiddenModels.map((m) => this.modelRow(m, t)))),
           ),
       );
+  }
+
+  // The provider row under the title: None, or a provider whose test passed. Greyed out when there
+  // is none to pick, and on another machine (the file and the icon live on this one).
+  providerRow(t) {
+    const ids = Object.keys(this.providers ?? {});
+    const space = spaces().find((candidate) => candidate.id === props()?.space) ?? spaces().find((candidate) => candidate.active);
+    const remote = Boolean(space?.machine);
+    const enabled = ids.length > 0 && !remote;
+    const label = this.providerId === "none" ? "None" : this.providers[this.providerId]?.name ?? "None";
+    return v_flex()
+      .gap(4)
+      .child(
+        h_flex()
+          .id("provider-select")
+          .mx(6)
+          .h(40)
+          .px(10)
+          .gap(8)
+          .items_center()
+          .justify_between()
+          .rounded(7)
+          .border_1()
+          .border_color(this.providerOpen ? t.ring : t.input)
+          .bg(t.raised)
+          .when(!enabled, (el) => el.opacity(0.5))
+          .when(enabled, (el) =>
+            el.cursor_pointer().on_click((_e, cx) => {
+              this.providerOpen = !this.providerOpen;
+              this.modelOpen = false;
+              this.effortOpen = false;
+              this.advisorOpen = false;
+              this.styleOpen = false;
+              this.groupOpen = false;
+              cx.notify();
+            }),
+          )
+          .role("button")
+          .accessibility_label(`Model provider: ${label}`)
+          .tooltip(
+            remote
+              ? "A model provider is set up on this computer only"
+              : enabled
+                ? "Choose which model source Codex starts with"
+                : "Set up a model provider in Agent Settings",
+          )
+          .child(
+            v_flex()
+              .min_w(0)
+              .child(div().text_size(9).text_color(t.dim).child("MODEL PROVIDER"))
+              .child(div().text_size(12).text_color(enabled ? t.foreground : t.muted).truncate().child(label)),
+          )
+          .child(div().flex_none().text_size(11).text_color(t.muted).child("▾")),
+      )
+      .when(this.providerOpen && enabled, (el) =>
+        el.child(
+          v_flex()
+            .mx(6)
+            .py(4)
+            .rounded(8)
+            .border_1()
+            .border_color(t.border)
+            .bg(t.popover)
+            .child(this.providerList(t)),
+        ),
+      );
+  }
+
+  providerList(t) {
+    const options = [
+      { id: "none", label: "None" },
+      ...Object.entries(this.providers ?? {}).map(([id, record]) => ({ id, label: record?.name ?? id })),
+    ];
+    return v_flex().children(
+      options.map((option) =>
+        h_flex()
+          .id(`provider-${option.id}`)
+          .h(30)
+          .mx(6)
+          .px(10)
+          .gap(8)
+          .items_center()
+          .rounded(7)
+          .cursor_pointer()
+          .hover((s) => s.bg(t.hover))
+          .on_click((_e, cx) => this.setProvider(option.id, cx))
+          .child(div().flex_1().min_w(0).truncate().child(option.label))
+          .when(this.providerId === option.id, (el) => el.child(div().flex_none().text_color(t.accent).child("✓"))),
+      ),
+    );
   }
 
   effortList(t) {
@@ -1100,10 +1273,12 @@ export default class AgentConfig extends View {
       .bg(t.popover)
       .text_size(12)
       .when(this.models, (el) => el.child(this.header(t)))
+      .when(this.key === "codex" && this.models, (el) => el.child(this.providerRow(t)))
+      .when(this.key === "codex" && this.models, (el) => el.child(div().h(1).mx(6).my(4).bg(t.border)))
       .when(!this.models && !this.error, (el) => el.child(div().px(14).py(6).text_color(t.muted).child("Loading models…")))
       .when(Boolean(this.error), (el) => el.child(div().px(14).py(6).text_color(t.blocked).child(this.error)))
       .when(this.models, (el) => el.child(this.pickerRow(t)))
-      .child(div().h(1).mx(6).my(4).bg(t.border))
+      .when(this.key !== "codex" || !this.models, (el) => el.child(div().h(1).mx(6).my(4).bg(t.border)))
       .when(this.key === "claude" && this.models, (el) => el.child(this.presetSection(t)))
       .when(this.key === "codex" && this.models, (el) => el.child(this.codexSection(t)))
       .child(
