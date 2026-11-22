@@ -4,5 +4,8 @@
     "enabled": true
   },
   "font_ligatures": false,
-  "minimum_contrast": 1
+  "minimum_contrast": 1,
+  "worktrees": {
+    "directory": "~/git/herdr-my-orca.worktrees"
+  }
 }
