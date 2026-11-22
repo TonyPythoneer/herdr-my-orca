@@ -12,7 +12,7 @@
 // `command -v` probe in state.js, run in the same login shell Herdr uses. If it fails, the
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
+import { v_flex, h_flex, Input, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
 import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, settings, writeTextFile } from "herdr";
 import {
   LIST_ROW_HEIGHT,
@@ -58,9 +58,17 @@ import { errorText, sameRun, tail, timeLabel } from "./util.js";
 import { badge, banner, empty, group, icon, permissionBadge, section } from "./parts.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
 import { agentPermissionItems, defaultPermissionItems, permissionSelect } from "./permission-menu.js";
+import { OMLX, PROVIDER_FILE, judgeModels, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
+// The provider record holds the API key, so the file is 0600 and the icon lives beside it.
+const PROVIDERS = `${appHome()}/${PROVIDER_FILE}`;
+const ICON_DIR = "provider-icons";
+// GitHub avatars are a few KB; anything past this is not one.
+const ICON_MAX_BYTES = 256 * 1024;
+// A GitHub user or organization name.
+const GITHUB_OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 const CACHE_KEY = "agent-manager.inventory.v1";
 const TERMINALS_PAGE = "main-terminals";
 const POLL_MS = 4000;
@@ -99,6 +107,30 @@ export default class AgentManager extends View {
     this.refreshGen = 0;
     this.action = null; // { key, kind, phase, message }
     this.uninstall = null; // { key, phase, status, message }
+    // Model providers: the saved oMLX record and the setup form above it.
+    this.provider = null;
+    this.providerText = undefined; // model-providers.json as read, so a write can replace it safely
+    this.providerStatus = null; // { tone: "blocked" | "done" | "muted", text }
+    this.providerTesting = false;
+    this.providerHost = InputState.new({ placeholder: "http://127.0.0.1:8000/v1" });
+    this.providerKey = InputState.new({ placeholder: "from the oMLX server" });
+    this.providerKey.set_masked(true);
+    this.providerOwner = InputState.new({ placeholder: "optional" });
+    for (const input of [this.providerHost, this.providerKey, this.providerOwner]) {
+      input.on("change", (_event, cx) => {
+        this.providerStatus = null;
+        cx.notify();
+      });
+      input.on("focus", (_event, cx) => {
+        this.typing = true;
+        cx.notify();
+      });
+      input.on("blur", (_event, cx) => {
+        this.typing = false;
+        cx.notify();
+      });
+      input.on("submit", (_event, cx) => this.testAndSaveProvider(cx));
+    }
 
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-manager", props: {expand: "claude"}}`).
@@ -136,6 +168,21 @@ export default class AgentManager extends View {
     if (text === undefined || text === this.programsText) return false;
     this.programsText = text;
     this.programsError = programsTextError(text);
+    return true;
+  }
+
+  // A provider is shown from the file, so a delete or a change made elsewhere lands on the next read.
+  applyProviders(text) {
+    if (text === undefined || text === this.providerText) return false;
+    this.providerText = text;
+    const parsed = parseProviderFile(text);
+    this.provider = parsed.providers?.[OMLX] ?? null;
+    if (parsed.error) this.providerStatus = { tone: "blocked", text: parsed.error };
+    // The form starts from the saved provider; the key stays empty and is reused when it is.
+    if (this.provider) {
+      if (!this.providerHost.value()) this.providerHost.set_value(this.provider.host ?? "");
+      if (!this.providerOwner.value()) this.providerOwner.set_value(this.provider.githubOwner ?? "");
+    }
     return true;
   }
 
@@ -225,14 +272,16 @@ export default class AgentManager extends View {
         let failure = null;
         let programs;
         let manager;
+        let providers;
         try {
-          [known, programs, manager] = await Promise.all([
+          [known, programs, manager, providers] = await Promise.all([
             knownAgents().catch((error) => {
               failure = error;
               return null;
             }),
             readTextFile(PROGRAMS).catch(() => undefined),
             readTextFile(MANAGER).catch(() => undefined),
+            readTextFile(PROVIDERS).catch(() => undefined),
           ]);
         } catch (error) {
           failure = error;
@@ -252,6 +301,7 @@ export default class AgentManager extends View {
           this.externalConflict = true;
         }
         if (!this.persisting) this.applyManager(manager);
+        this.applyProviders(providers);
         if (known) {
           this.agents = known;
           this.fromCache = false;
@@ -988,6 +1038,160 @@ export default class AgentManager extends View {
 
   // ---- keyboard -------------------------------------------------------------
 
+  // ---- model providers ------------------------------------------------------
+
+  // Saves only after a passing test: validate the form, test the server, then write the record,
+  // fix its mode, save the icon and update the page. A failed test writes nothing.
+  async testAndSaveProvider(cx) {
+    if (this.providerTesting) return;
+    const host = validateHost(this.providerHost.value());
+    if (host.error) return this.showProviderStatus(cx, "blocked", host.error);
+    // An empty key means "keep the saved one": only the host or the owner changed.
+    const key = this.providerKey.value().trim() || this.provider?.apiKey || "";
+    if (!key) return this.showProviderStatus(cx, "blocked", "Enter the API key.");
+    const owner = this.providerOwner.value().trim();
+    if (owner && !GITHUB_OWNER.test(owner)) {
+      return this.showProviderStatus(cx, "blocked", "Enter a GitHub user or organization name.");
+    }
+    this.providerTesting = true;
+    this.providerStatus = null;
+    cx.notify();
+    const verdict = await this.testProvider(host.host, key);
+    if (!verdict.ok) {
+      this.providerTesting = false;
+      this.providerStatus = { tone: "blocked", text: verdict.error };
+      cx.notify();
+      return;
+    }
+    const saved = await this.saveProvider({ host: host.host, key, owner, models: verdict.models });
+    this.providerTesting = false;
+    if (saved) {
+      this.provider = saved;
+      this.providerStatus = { tone: "done", text: `Saved · ${saved.models.length} models` };
+    }
+    cx.notify();
+  }
+
+  showProviderStatus(cx, tone, text) {
+    this.providerStatus = { tone, text };
+    this.providerTesting = false;
+    cx?.notify();
+  }
+
+  // `GET <host>/models` with the key in the header; the answer is judged into a fixed message.
+  // The key is an argument of this one call, for five seconds (see the design's risks).
+  async testProvider(host, key) {
+    try {
+      const result = await exec(
+        "curl",
+        ["-sS", "--max-time", "5", "-w", "\n%{http_code}", "-H", `Authorization: Bearer ${key}`, `${host}/models`],
+        { timeout: 5000 },
+      );
+      const text = result.stdout ?? "";
+      const cut = text.lastIndexOf("\n");
+      const status = Number(text.slice(cut + 1).trim());
+      return judgeModels(Number.isFinite(status) ? status : 0, text.slice(0, cut));
+    } catch {
+      return judgeModels(0, "");
+    }
+  }
+
+  async saveProvider({ host, key, owner, models }) {
+    const text = await readTextFile(PROVIDERS).catch(() => null);
+    const parsed = parseProviderFile(text);
+    if (parsed.error) return this.showProviderStatus(null, "blocked", parsed.error);
+    const previous = parsed.providers[OMLX] ?? null;
+    const fetched = owner ? await this.fetchProviderIcon(owner) : null;
+    const iconPath = fetched ?? (owner && previous?.githubOwner === owner ? previous.iconPath : "");
+    const record = {
+      name: "oMLX",
+      host,
+      apiKey: key,
+      githubOwner: owner,
+      iconPath,
+      verifiedAt: new Date().toISOString(),
+      models,
+      // The model Codex had chosen for this provider survives a re-test.
+      selectedModel: previous?.selectedModel ?? {},
+    };
+    parsed.providers[OMLX] = record;
+    const next = serializeProviderFile(parsed.providers);
+    try {
+      await writeTextFile(PROVIDERS, next, text);
+    } catch {
+      return this.showProviderStatus(null, "blocked", "Could not write model-providers.json.");
+    }
+    this.providerText = next;
+    if (!(await this.secureProviderFile())) {
+      return this.showProviderStatus(null, "blocked", "model-providers.json is not private to your user.");
+    }
+    if (previous?.iconPath && previous.iconPath !== iconPath) await exec("rm", ["-f", previous.iconPath]).catch(() => {});
+    return record;
+  }
+
+  async deleteProvider(cx) {
+    const text = await readTextFile(PROVIDERS).catch(() => null);
+    const parsed = parseProviderFile(text);
+    if (parsed.error) return this.showProviderStatus(cx, "blocked", parsed.error);
+    const record = parsed.providers?.[OMLX];
+    if (!record) return this.showProviderStatus(cx, "blocked", "No provider is saved.");
+    delete parsed.providers[OMLX];
+    const next = serializeProviderFile(parsed.providers);
+    try {
+      await writeTextFile(PROVIDERS, next, text);
+    } catch {
+      return this.showProviderStatus(cx, "blocked", "Could not write model-providers.json.");
+    }
+    this.providerText = next;
+    await this.secureProviderFile();
+    // Only a file this page could have written is removed.
+    if (String(record.iconPath ?? "").startsWith(`${appHome()}/${ICON_DIR}/`)) {
+      await exec("rm", ["-f", record.iconPath]).catch(() => {});
+    }
+    this.provider = null;
+    this.providerHost.set_value("");
+    this.providerOwner.set_value("");
+    this.showProviderStatus(cx, "muted", "Deleted.");
+  }
+
+  // writeTextFile replaces the file, which can reset the mode, and the key is in it.
+  async secureProviderFile() {
+    try {
+      await exec("chmod", ["600", PROVIDERS]);
+      const mode = await exec("stat", ["-f", "%Lp", PROVIDERS]);
+      return mode.stdout.trim() === "600";
+    } catch {
+      return false;
+    }
+  }
+
+  // The owner's avatar, saved only when the answer really is a small PNG.
+  async fetchProviderIcon(owner) {
+    const dir = `${appHome()}/${ICON_DIR}`;
+    const path = `${dir}/${OMLX}.png`;
+    const partial = `${path}.download`;
+    try {
+      await exec("mkdir", ["-p", dir]);
+      const result = await exec(
+        "curl",
+        ["-sL", "--max-time", "5", "--max-filesize", String(ICON_MAX_BYTES), "-o", partial, "-w", "\n%{http_code}", `https://github.com/${owner}.png?size=64`],
+        { timeout: 5000 },
+      );
+      const text = result.stdout ?? "";
+      const status = Number(text.slice(text.lastIndexOf("\n") + 1).trim());
+      const head = await exec("xxd", ["-p", "-l", "8", partial]).catch(() => ({ stdout: "" }));
+      if (status !== 200 || !head.stdout.trim().startsWith("89504e47")) {
+        await exec("rm", ["-f", partial]).catch(() => {});
+        return null;
+      }
+      await exec("mv", ["-f", partial, path]);
+      return path;
+    } catch {
+      await exec("rm", ["-f", partial]).catch(() => {});
+      return null;
+    }
+  }
+
   onKey(event, cx) {
     if (this.typing) return false;
     const key = String(event.key ?? "");
@@ -1164,6 +1368,124 @@ export default class AgentManager extends View {
 
   row(row, t, last = false) {
     return rowView(this, row, t, last);
+  }
+
+  /** The oMLX setup card: host, key, optional GitHub owner, and the saved provider. */
+  modelProvidersCard(t) {
+    const provider = this.provider;
+    const field = (id, label, state) =>
+      v_flex()
+        .id(id)
+        .flex_1()
+        .min_w(170)
+        .gap(4)
+        .child(div().text_size(10).font_semibold().text_color(t.dim).child(label))
+        .child(
+          h_flex()
+            .w_full()
+            .h(30)
+            .px(8)
+            .rounded(6)
+            .border_1()
+            .border_color(t.input)
+            .bg(t.background)
+            .child(Input.new(state).w_full().text_size(12).text_color(t.foreground).bg("#00000000")),
+        );
+    const tone = this.providerStatus?.tone === "blocked" ? t.blocked : this.providerStatus?.tone === "done" ? t.done : t.muted;
+    return v_flex()
+      .w_full()
+      .p(12)
+      .gap(10)
+      .rounded(10)
+      .border_1()
+      .border_color(t.border)
+      .bg(t.surface)
+      .child(
+        h_flex()
+          .w_full()
+          .items_start()
+          .gap(16)
+          .child(
+            v_flex()
+              .flex_1()
+              .min_w(0)
+              .gap(3)
+              .child(div().text_size(13).font_semibold().text_color(t.foreground).child("Model providers"))
+              .child(
+                div()
+                  .text_size(11)
+                  .line_height("16px")
+                  .text_color(t.muted)
+                  .child(
+                    "Codex can start against a local oMLX server instead of its own source. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user.",
+                  ),
+              ),
+          ),
+      )
+      .child(
+        h_flex()
+          .w_full()
+          .gap(8)
+          .flex_wrap()
+          .child(field("am-provider-host", "HOST", this.providerHost))
+          .child(field("am-provider-key", "API KEY", this.providerKey))
+          .child(field("am-provider-owner", "GITHUB OWNER · OPTIONAL", this.providerOwner)),
+      )
+      .child(
+        h_flex()
+          .w_full()
+          .gap(10)
+          .items_center()
+          .flex_wrap()
+          .child(
+            this.button(
+              "am-provider-save",
+              this.providerTesting ? "Testing…" : "Test and save",
+              t,
+              (_event, cx) => this.testAndSaveProvider(cx),
+              { height: 26, px: 12, primary: true, disabled: this.providerTesting },
+            ),
+          )
+          .when(this.providerStatus, (el) => el.child(div().flex_1().min_w(120).text_size(11).text_color(tone).child(this.providerStatus.text))),
+      )
+      .when(Boolean(provider), (el) =>
+        el.child(
+          h_flex()
+            .w_full()
+            .p(8)
+            .gap(10)
+            .items_center()
+            .rounded(8)
+            .border_1()
+            .border_color(t.border)
+            .bg(t.raised)
+            .child(icon({ icon: provider.iconPath ? `${ICON_DIR}/${OMLX}.png` : null, name: provider.name ?? "oMLX" }, 24, t))
+            .child(
+              v_flex()
+                .flex_1()
+                .min_w(0)
+                .gap(2)
+                .child(div().text_size(12).font_medium().text_color(t.foreground).child(provider.name ?? "oMLX"))
+                .child(
+                  div()
+                    .min_w(0)
+                    .truncate()
+                    .text_size(11)
+                    .text_color(t.muted)
+                    .child(
+                      `${provider.host} · ${provider.models?.length ?? 0} models · tested ${new Date(provider.verifiedAt).toTimeString().slice(0, 8)}`,
+                    ),
+                ),
+            )
+            .child(
+              this.button("am-provider-delete", "Delete", t, (_event, cx) => this.deleteProvider(cx), {
+                height: 26,
+                px: 10,
+                color: t.blocked,
+              }),
+            ),
+        ),
+      );
   }
 
   /** The all-agents permission: one choice, plus the agents that keep their own. */
@@ -1494,6 +1816,7 @@ export default class AgentManager extends View {
       .when(!loading, (el) =>
         el
           .when(rows.some((row) => row.supports), (inner) => inner.child(this.permissionsCard(rows, t)))
+          .child(this.modelProvidersCard(t))
           .child(group("Official support", "Agents Herdr supports natively", t))
           .child(
             section(
