@@ -1006,7 +1006,10 @@ export default class AgentConfig extends View {
           )),
       )
       .when(this.modelOpen, (el) => el.child(box(this.modelList(t))))
-      .when(hasEfforts && this.effortOpen, (el) => el.child(box(this.effortList(t))));
+      .when(hasEfforts && this.effortOpen, (el) => el.child(box(this.effortList(t))))
+      // Codex puts a bordered box (DISABLE) right here; without the air its edge reads as the
+      // selects' own border.
+      .when(this.key === "codex", (el) => el.pb(10));
   }
 
   header(t) {
