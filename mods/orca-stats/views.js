@@ -942,10 +942,16 @@ export function modelsView(owner, t, data) {
           name: row.name,
           calls: row.calls,
           tokens: row.tokens,
+          input: row.input,
+          output: row.output,
+          cacheRead: row.cacheRead,
+          cacheWrite: row.cacheWrite,
           cost: row.cost,
           oneShot: row.oneShotRate,
           costPerEdit: row.costPerEdit,
           editTurns: row.editTurns,
+          oneShotTurns: row.oneShotTurns,
+          retriesPerEdit: row.retriesPerEdit,
           task: source.topCategory ?? null,
           unpriced: row.cost === 0 && row.calls > 0,
         };
@@ -956,10 +962,16 @@ export function modelsView(owner, t, data) {
         name: row.modelDisplayName ?? row.model ?? "Unknown model",
         calls: Number(row.calls) || 0,
         tokens: Number(row.totalTokens) || sumTokens(row),
+        input: Number(row.inputTokens) || 0,
+        output: Number(row.outputTokens) || 0,
+        cacheRead: Number(row.cacheReadTokens) || 0,
+        cacheWrite: Number(row.cacheWriteTokens) || 0,
         cost: Number(row.costUSD) || 0,
         oneShot: null,
         costPerEdit: null,
         editTurns: 0,
+        oneShotTurns: 0,
+        retriesPerEdit: null,
         task: row.topCategory ?? null,
         unpriced: (Number(row.costUSD) || 0) === 0 && (Number(row.calls) || 0) > 0,
       }))
@@ -1024,7 +1036,8 @@ export function modelsView(owner, t, data) {
     .when(!narrow, (el) => el.child(div().w(62).text_right().child("ONE-SHOT")))
     .when(!narrow, (el) => el.child(div().w(64).text_right().child("$/EDIT")))
     .child(div().w(76).text_right().child("COST"))
-    .when(!narrow, (el) => el.child(div().w(70).child("SHARE")));
+    .when(!narrow, (el) => el.child(div().w(70).child("SHARE")))
+    .child(div().w(16));
 
   return v_flex()
     .w_full()
@@ -1038,94 +1051,104 @@ export function modelsView(owner, t, data) {
             ? v_flex()
                 .w_full()
                 .children(
-                  rows.map((row) =>
-                    h_flex()
-                      .id(`cb-model-${row.id}-${row.name}`)
+                  rows.map((row) => {
+                    const open = owner.expandedModel === row.name;
+                    return v_flex()
                       .w_full()
-                      .items_center()
-                      .gap(10)
-                      .px(10)
-                      .py(9)
-                      .border_b(1)
-                      .border_color(t.border)
-                      .hover((s) => s.bg(t.hover))
+                      .flex_none()
                       .child(
                         h_flex()
-                          .flex_1()
-                          .min_w(0)
+                          .id(`cb-model-${row.id}-${row.name}`)
+                          .w_full()
                           .items_center()
-                          .gap(8)
-                          .child(dot(providerColor(row.id, t.ansi4), 7))
+                          .gap(10)
+                          .px(10)
+                          .py(9)
+                          .border_b(1)
+                          .border_color(t.border)
+                          .cursor_pointer()
+                          .hover((s) => s.bg(t.hover))
+                          .on_click((_e, cx) => owner.toggleModel(row.name, cx))
                           .child(
-                            div()
+                            h_flex()
+                              .flex_1()
                               .min_w(0)
-                              .truncate()
-                              .text_size(12)
-                              .font_medium()
-                              .text_color(t.foreground)
-                              .child(row.name),
+                              .items_center()
+                              .gap(8)
+                              .child(dot(providerColor(row.id, t.ansi4), 7))
+                              .child(
+                                div()
+                                  .min_w(0)
+                                  .truncate()
+                                  .text_size(12)
+                                  .font_medium()
+                                  .text_color(t.foreground)
+                                  .child(row.name),
+                              )
+                              .when(row.unpriced, (el) =>
+                                el.child(pill("unpriced", t, { size: 8, height: 15, color: t.working })),
+                              ),
                           )
-                          .when(row.unpriced, (el) =>
-                            el.child(pill("unpriced", t, { size: 8, height: 15, color: t.working })),
-                          ),
-                      )
-                      .when(!tiny, (el) => el.child(div().w(80).truncate().text_size(10).text_color(t.muted).child(row.provider)))
-                      .when(!tiny, (el) =>
-                        el.child(div().w(52).text_right().text_size(10).text_color(t.muted).child(row.calls.toLocaleString("en-US"))),
-                      )
-                      .when(!tiny, (el) =>
-                        el.child(div().w(60).text_right().text_size(10).text_color(t.muted).child(tokens(row.tokens))),
-                      )
-                      .when(!narrow, (el) =>
-                        el.child(
-                          div()
-                            .w(72)
-                            .truncate()
-                            .text_size(10)
-                            .text_color(t.muted)
-                            .child(row.task ? row.task.charAt(0).toUpperCase() + row.task.slice(1) : "—"),
-                        ),
-                      )
-                      .when(!narrow, (el) =>
-                        el.child(
-                          div()
-                            .w(62)
-                            .text_right()
-                            .text_size(10)
-                            .text_color(row.oneShot == null ? t.dim : t.muted)
-                            .child(row.oneShot == null ? "—" : percent(row.oneShot, 0)),
-                        ),
-                      )
-                      .when(!narrow, (el) =>
-                        el.child(
-                          div()
-                            .w(64)
-                            .text_right()
-                            .text_size(10)
-                            .text_color(t.muted)
-                            .child(row.costPerEdit == null ? "—" : money(row.costPerEdit)),
-                        ),
-                      )
-                      .child(div().w(76).text_right().text_size(12).font_medium().text_color(t.foreground).child(money(row.cost)))
-                      .when(!narrow, (el) => {
-                        const share = sharePct(row.cost, total);
-                        return el.child(
-                          h_flex()
-                            .w(70)
-                            .items_center()
-                            .gap(6)
-                            .child(div().w(26).text_right().text_size(9).text_color(t.dim).child(percent(share, 0)))
-                            .child(
+                          .when(!tiny, (el) => el.child(div().w(80).truncate().text_size(10).text_color(t.muted).child(row.provider)))
+                          .when(!tiny, (el) =>
+                            el.child(div().w(52).text_right().text_size(10).text_color(t.muted).child(row.calls.toLocaleString("en-US"))),
+                          )
+                          .when(!tiny, (el) =>
+                            el.child(div().w(60).text_right().text_size(10).text_color(t.muted).child(tokens(row.tokens))),
+                          )
+                          .when(!narrow, (el) =>
+                            el.child(
                               div()
-                                .flex_1()
-                                .h(4)
-                                .rounded(2)
-                                .bg(t.raised)
-                                .child(div().h(4).rounded(2).bg(providerColor(row.id, t.ansi4)).w(`${share}%`)),
+                                .w(72)
+                                .truncate()
+                                .text_size(10)
+                                .text_color(t.muted)
+                                .child(row.task ? row.task.charAt(0).toUpperCase() + row.task.slice(1) : "—"),
                             ),
-                        );
-                      }),
-                  ),
+                          )
+                          .when(!narrow, (el) =>
+                            el.child(
+                              div()
+                                .w(62)
+                                .text_right()
+                                .text_size(10)
+                                .text_color(row.oneShot == null ? t.dim : t.muted)
+                                .child(row.oneShot == null ? "—" : percent(row.oneShot, 0)),
+                            ),
+                          )
+                          .when(!narrow, (el) =>
+                            el.child(
+                              div()
+                                .w(64)
+                                .text_right()
+                                .text_size(10)
+                                .text_color(t.muted)
+                                .child(row.costPerEdit == null ? "—" : money(row.costPerEdit)),
+                            ),
+                          )
+                          .child(div().w(76).text_right().text_size(12).font_medium().text_color(t.foreground).child(money(row.cost)))
+                          .when(!narrow, (el) => {
+                            const share = sharePct(row.cost, total);
+                            return el.child(
+                              h_flex()
+                                .w(70)
+                                .items_center()
+                                .gap(6)
+                                .child(div().w(26).text_right().text_size(9).text_color(t.dim).child(percent(share, 0)))
+                                .child(
+                                  div()
+                                    .flex_1()
+                                    .h(4)
+                                    .rounded(2)
+                                    .bg(t.raised)
+                                    .child(div().h(4).rounded(2).bg(providerColor(row.id, t.ansi4)).w(`${share}%`)),
+                                ),
+                            );
+                          })
+                          .child(icon(open ? "chevron-down" : "chevron-right", 13, t.dim)),
+                      )
+                      .when(open, (el) => el.child(modelDetail(row, total, t)));
+                  }),
                 )
             : emptyNote("No model usage in this period.", t, { p: 16 }),
           h_flex()
@@ -1146,6 +1169,52 @@ export function modelsView(owner, t, data) {
         t,
         { p: 0, gap: 0 },
       ),
+    );
+}
+
+function modelDetail(row, total, t) {
+  const share = sharePct(row.cost, total);
+  const retries = row.retriesPerEdit == null ? "—" : Number(row.retriesPerEdit).toFixed(1);
+  return v_flex()
+    .w_full()
+    .gap(10)
+    .p(12)
+    .pl(28)
+    .bg(t.background)
+    .border_t(1)
+    .border_b(1)
+    .border_color(t.border)
+    .child(
+      h_flex()
+        .w_full()
+        .gap(16)
+        .flex_wrap()
+        .children([
+          miniStat("One-shot rate", row.oneShot == null ? "—" : percent(row.oneShot, 0), t, { size: 12, color: t.muted }),
+          miniStat("Cost / edit", row.costPerEdit == null ? "—" : money(row.costPerEdit), t, { size: 12, color: t.muted }),
+          miniStat("Retries / edit", retries, t, { size: 12, color: t.muted }),
+          miniStat("Share of spend", percent(share, 1), t, { size: 12, color: t.muted }),
+        ]),
+    )
+    .child(
+      h_flex()
+        .w_full()
+        .gap(16)
+        .flex_wrap()
+        .children([
+          miniStat("Input", tokens(row.input), t, { size: 11, color: t.muted }),
+          miniStat("Output", tokens(row.output), t, { size: 11, color: t.muted }),
+          miniStat("Cache read", tokens(row.cacheRead), t, { size: 11, color: t.muted }),
+          miniStat("Cache write", tokens(row.cacheWrite), t, { size: 11, color: t.muted }),
+        ]),
+    )
+    .child(
+      div()
+        .text_size(10)
+        .text_color(t.dim)
+        .child(
+          `${row.editTurns.toLocaleString("en-US")} edit turns · ${row.oneShotTurns.toLocaleString("en-US")} one-shot · ${row.calls.toLocaleString("en-US")} calls`,
+        ),
     );
 }
 

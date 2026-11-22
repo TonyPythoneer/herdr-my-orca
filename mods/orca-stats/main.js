@@ -117,6 +117,7 @@ export default class CodeBurn extends View {
     this.lastRefresh = null;
     this.error = null;
     this.expanded = new Set();
+    this.expandedModel = null;
     this.findings = new Set();
     this.sessionLimit = 50;
     this.copied = null;
@@ -450,6 +451,11 @@ export default class CodeBurn extends View {
   toggleSession(sessionId, cx) {
     if (this.expanded.has(sessionId)) this.expanded.delete(sessionId);
     else this.expanded.add(sessionId);
+    cx.notify();
+  }
+
+  toggleModel(name, cx) {
+    this.expandedModel = this.expandedModel === name ? null : name;
     cx.notify();
   }
 

@@ -109,8 +109,14 @@ test("modelRows joins provider display names and keeps efficiency data", () => {
   const rows = modelRows(report, [{ modelDisplayName: "Sonnet 5.5", providerDisplayName: "Claude" }]);
   assert.equal(rows[0].provider, "Claude");
   assert.equal(rows[0].tokens, 10);
+  assert.equal(rows[0].input, 1);
+  assert.equal(rows[0].output, 2);
+  assert.equal(rows[0].cacheRead, 3);
+  assert.equal(rows[0].cacheWrite, 4);
   assert.equal(rows[0].oneShotRate, 92.3);
   assert.equal(rows[0].editTurns, 10);
+  assert.equal(rows[0].oneShotTurns, 9);
+  assert.equal(rows[0].costPerEdit, 0.43);
 });
 
 test("quotaRows separates connected plans and finds the tightest window", () => {
