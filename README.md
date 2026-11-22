@@ -20,6 +20,14 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   only automated when the executable belongs to its verified npm-global package; it asks for
   confirmation, refuses while a live session uses it, and never touches settings, sessions or
   command overrides.
+- **CodeBurn**: the chart icon at the right of Agent Settings opens a local spend dashboard
+  (`mods/orca-stats/`). It has the same five views as CodeBurn's desktop app: Overview, Sessions,
+  Models, Optimize and Plans. The panel runs the open-source
+  [CodeBurn](https://github.com/getagentseal/codeburn) CLI against the session files Claude Code,
+  Codex, opencode and the other supported CLIs already write. Nothing is uploaded. On first use it
+  offers a one-click install into `~/.cache/herdr-codeburn` (about 70 MB, Node 22.15+ required); a
+  `codeburn` already on `PATH`, in `~/.local/bin`, Homebrew or npm's global prefix is used instead.
+  The panel refreshes when opened, keeps answers for two minutes, and can refresh on demand.
 - **Start an agent**: the Orca menu shows only installed and enabled official agents. Disabled and
   uninstalled entries are absent, not greyed out. When nothing official and no FreeBuff is
   available it shows one **Open Agent Settings** action. FreeBuff is the only unofficial row and

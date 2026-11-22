@@ -926,6 +926,25 @@ export default class AgentManager extends View {
       )
       .child(this.refreshing ? "Refreshing…" : "Refresh");
 
+    const statsButton = h_flex()
+      .id("am-stats")
+      .size(30)
+      .flex_none()
+      .items_center()
+      .justify_center()
+      .rounded(6)
+      .border_1()
+      .border_color(t.border)
+      .bg("#00000000")
+      .text_color(t.muted)
+      .cursor_pointer()
+      .hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .role("button")
+      .accessibility_label("Spend and usage dashboard")
+      .tooltip("Spend and usage (CodeBurn)")
+      .on_click(() => run("layout.select", { stack: "main", child: "main-stats" }))
+      .child(svg("mods/orca-agent-manager/bar-chart.svg").size(14).flex_none());
+
     const conflictActions =
       this.externalConflict && this.anyDirty()
         ? h_flex()
@@ -996,7 +1015,8 @@ export default class AgentManager extends View {
           .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Agents"))
           .child(badge("This computer", t, { border: true }))
           .child(div().flex_1())
-          .child(refreshButton),
+          .child(refreshButton)
+          .child(statsButton),
       )
       .child(
         div()
