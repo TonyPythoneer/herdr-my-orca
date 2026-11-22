@@ -35,6 +35,13 @@ function readTabColorStore() {
   }
 }
 
+// Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
+// derived from the theme's own foreground, so both the dark and the light theme tint correctly.
+function tint(hex, alpha) {
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255).toString(16).padStart(2, "0");
+  return /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${a}` : hex;
+}
+
 function find(node, id) {
   if (node?.id === id) return node;
   for (const child of node?.children ?? []) {
@@ -885,8 +892,8 @@ export default class Tabs extends View {
     // (layout.rs:551) and there would otherwise be no way back. Orca keeps the control
     // reachable by floating `titlebar-left` over the workspace
     // (AppWorkspaceShell.tsx:163-167).
-    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
-      .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+      .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .role("button").accessibility_label("Toggle sidebar").tooltip("Toggle sidebar")
       .on_mouse_down("left", stop).on_click(action).child(glyph);
     // tab-bar-surface.tsx:221-227 — `ml-2 my-auto flex h-7 w-7 shrink-0 items-center
@@ -894,8 +901,8 @@ export default class Tabs extends View {
     // holding a Lucide `Plus` at `w-3.5 h-3.5` (14px). It is a DropdownMenuTrigger, not a bare
     // action: it opens the new-tab menu, which `orca-new-menu` provides.
     // `rounded-md` resolves to 8px, not 6: --radius .625rem x .8 (main.css:175,195).
-    const tabNew = (action) => div().id("tab-new").ml(8).size(28).flex_none().flex().items_center().justify_center().rounded(8)
-      .text_color(t.muted).hover(s => s.bg("#40404080").text_color(t.foreground))
+    const tabNew = (action) => div().id("tab-new").ml(8).size(28).flex_none().flex().items_center().justify_center().rounded_full()
+      .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .role("button").accessibility_label("New tab").tooltip("New tab")
       .on_mouse_down("left", (e, cx) => { this.plusBounds = e.bounds; stop(e, cx); }).on_click(action)
       .child(svg("mods/orca-tabs/plus.svg").size(14).flex_none());
@@ -906,22 +913,22 @@ export default class Tabs extends View {
     const tabScrollButton = (direction, disabled) => {
       const label = direction === "start" ? "Scroll tabs left" : "Scroll tabs right";
       const glyph = `mods/orca-tabs/chevron-${direction === "start" ? "left" : "right"}.svg`;
-      return div().id(`tab-scroll-${direction}`).mx(2).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(6)
+      return div().id(`tab-scroll-${direction}`).mx(2).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(8)
         .text_color(disabled ? t.dim : t.muted)
-        .when(!disabled, el => el.hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop))
+        .when(!disabled, el => el.hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground)).on_mouse_down("left", stop))
         .role("button").accessibility_label(label).tooltip(label)
         .on_click(() => { if (!disabled) this.scrollTabStrip(direction, cx); })
         .child(svg(glyph).size(14).flex_none());
     };
     const winBtn = (id, label, glyph, action, close) => div().id(id).w(46).h_full().flex_none().flex().items_center().justify_center()
-      .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : t.hover).text_color(close ? "#ffffff" : t.foreground))
+      .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : tint(t.foreground, 0.1)).text_color(close ? "#ffffff" : t.foreground))
       .role("button").accessibility_label(label).tooltip(label)
       .on_mouse_down("left", stop).on_click(action).child(glyph);
     // TitlebarMainStrip.tsx:12-33,76 — `RightSidebarToggle`: `.sidebar-toggle mr-2`
     // (main.css:1213-1230 = 4px/8px padding around the 16px `PanelRight`, so 32x24, radius 4,
     // muted, hover --accent + foreground). Herdr toggles it with `layout.toggle` (commands.rs:77).
-    const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
-      .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+    const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+      .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
       .on_mouse_down("left", stop).on_click(action)
       .child(svg("mods/orca-tabs/panel-right.svg").size(16));
@@ -968,19 +975,19 @@ export default class Tabs extends View {
         ? image(mark).size(12)
         : svg(mark).size(12).text_color(t.muted);
       else if (program?.icon) identity = program.tint ? svg(program.icon).size(12).text_color(t.muted) : image(program.icon).size(12);
-      // Orca's tab: flat, full height, no pill. SortableTab.tsx:214 — h-full px-1.5 text-xs plus
-      // getTabStripBorderClasses (border-t border-r border-border). The slot clamps the tab to
-      // `w-[300px] max-w-[300px] min-w-[144px] flex-1` (tab-width-rules.ts:2, applied at
-      // use-tab-strip-slot-props.ts:16). Dark theme, main.css:428-429: active is 6% foreground
-      // over #171717 (#242424), inactive is #171717; drop-indicator.ts:15-16 — the active bar is
-      // 2px, inset-x-0, bottom. `mr-1` on the leading icon and label
+      // A glass capsule per tab (deliberate divergence from Orca's flat strip,
+      // SortableTab.tsx:214 / getTabStripBorderClasses). The PILL below paints the capsule: 24px
+      // tall inside the 32px bar, 8px radius, a faint foreground-tinted outline; the active one
+      // is a raised frosted fill with a brighter edge and shadow instead of Orca's 2px bottom bar
+      // (drop-indicator.ts:15-16). The slot that wraps it keeps Orca's measured width rules
+      // (`w-[300px] max-w-[300px] min-w-[144px]`, tab-width-rules.ts:2) and the 2px inset that
+      // separates neighbouring capsules. `mr-1` on the leading icon and label
       // (TerminalTabLeadingIcon.tsx:63, SortableTab.tsx:291) is the 4px gap between children.
-      return h_flex().id(`tab-${c.id}${copyId}`).h_full().px(6).gap(4).relative().items_center().flex_none().min_w(144).max_w(300).text_size(12)
-        .bg(c.active ? "#242424" : "#171717").text_color(c.active ? t.foreground : t.muted)
-        .border_t(1).border_color(t.border)
-        .when(!c.active, el => el.hover(s => s.text_color(t.foreground)))
-        .when(i < shown.length - 1, el => el.border_r(1))
-        .when(c.active, el => el.child(div().absolute().bottom(0).left(0).right(0).h(2).bg(t.foreground)))
+      const pill = h_flex().h(24).w_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
+        .rounded(8).border_1().border_color(c.active ? tint(t.foreground, 0.22) : tint(t.foreground, 0.1))
+        .when(c.active, el => el.bg(tint(t.foreground, 0.1)).shadow_md())
+        .text_color(c.active ? t.foreground : t.muted)
+        .when(!c.active, el => el.hover(s => s.bg(tint(t.foreground, 0.06)).text_color(t.foreground)))
         .on_hover((hovered, cx) => {
           const next = hovered ? c.id : this.hoveredTab === c.id ? null : this.hoveredTab;
           if (next === this.hoveredTab) return;
@@ -1107,9 +1114,9 @@ export default class Tabs extends View {
         // Collapse pane — SortableTab.tsx:298-316: shown while the pane is expanded, a 16px box
         // with a 12px `Minimize2`; active tabs always show it, inactive ones on TAB hover
         // (`text-transparent group-hover:text-muted-foreground`). `pane.zoom` collapses.
-        .when(c.zoomed, el => el.child(div().id(`collapse-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
+        .when(c.zoomed, el => el.child(div().id(`collapse-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(8)
           .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
-          .hover(s => s.text_color(t.foreground).bg(t.raised))
+          .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
           .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
           .on_mouse_down("left", stop)
           .on_click((_e, cx) => {
@@ -1123,14 +1130,16 @@ export default class Tabs extends View {
         // button; Herdr's pin analogue is `settled`, TabInfo.settled). The box is `w-4 h-4`
         // (16px), the glyph `w-3` (12px); inactive is `text-transparent` and becomes muted on
         // TAB hover (`group-hover`), not on its own box.
-        .when(!c.settled, el => el.child(div().id(`close-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
+        .when(!c.settled, el => el.child(div().id(`close-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(8)
           .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
-          .hover(s => s.text_color(t.foreground).bg(t.raised))
+          .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
           .on_mouse_down("left", stop).accessibility_label("Close").tooltip("Close")
           .on_click((_e, cx) => { cx.stop_propagation(); this.requestCloseTab(c); })
-          .child(svg("mods/orca-tabs/close.svg").size(12))))
-        // The width of a tab is its label's, so the strip measures the slot rather than guessing
-        // (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
+          .child(svg("mods/orca-tabs/close.svg").size(12))));
+      // The SLOT around the pill keeps its place and its width, so the track stays exactly as long
+      // as the tab list. The width of a tab is its label's, so the strip measures the slot rather
+      // than guessing (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
+      return h_flex().id(`tab-${c.id}${copyId}`).h_full().px(2).items_center().flex_none().min_w(144).max_w(300)
         .when(!mode.overlay, el => el.on_size_change((size, cx) => this.measureTabWidth(c.id, size.width, cx)))
         // The pinned copy: drawn after the track, so it paints above the inactive tabs passing
         // underneath, and given the clamped left the geometry asked for. It is the same tab — its
@@ -1138,10 +1147,10 @@ export default class Tabs extends View {
         .when(Boolean(mode.overlay), el => el.absolute().top(0).left(mode.overlay.visualLeft).w(mode.overlay.width))
         // Sliding, as a pinned tab does, keeps the same share of the arrow's ease as the track.
         .when(Boolean(mode.overlay) && Boolean(mode.sliding), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
-        // The slot itself keeps its place and its width, so the track stays exactly as long as the
-        // tab list; it only stops painting while the pinned copy stands in for it. The pinned copy
+        // The slot only stops painting while the pinned copy stands in for it. The pinned copy
         // always covers the slot's visible part, so no hole shows and no second tab appears.
-        .when(mode.hidden, el => el.opacity(0));
+        .when(mode.hidden, el => el.opacity(0))
+        .child(pill);
     };
     const root = layout();
     const sidebar = find(root, "sidebar");
@@ -1250,8 +1259,8 @@ export default class Tabs extends View {
       // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,
       // use-app-chrome-layout.ts:129; hasTabBar is `tabCount >= 2`). `.titlebar-icon-button` is
       // 4px padding around a 14px glyph with `mr-2`, radius 4 (main.css:1288-1313).
-      .when(shown.length === 1 && shown[0].zoomed, el => el.child(div().id("titlebar-collapse").mr(8).size(22).flex_none().flex().items_center().justify_center().rounded(4)
-        .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+      .when(shown.length === 1 && shown[0].zoomed, el => el.child(div().id("titlebar-collapse").mr(8).size(22).flex_none().flex().items_center().justify_center().rounded_full()
+        .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
         .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
         .on_mouse_down("left", stop)
         .on_click(() => {

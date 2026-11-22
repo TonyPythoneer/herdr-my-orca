@@ -13,6 +13,13 @@ const find = (n, id) => {
   return null;
 };
 
+// Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
+// derived from the theme's own foreground, so both the dark and the light theme tint correctly.
+function tint(hex, alpha) {
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255).toString(16).padStart(2, "0");
+  return /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${a}` : hex;
+}
+
 // Reads write nothing under .git (no index refresh or lock, no fsmonitor cookie):
 // the folder watch would see it, and every refresh would start the next one.
 const READ = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "diff.autoRefreshIndex=false"];
@@ -116,20 +123,21 @@ export default class PanelHead extends View {
     return h_flex().w_full().h_full().items_center().pl(8).pr(4).border_b(1).border_color(t.border)
       .children(tools.map(({ id, icon, title }) => {
         const on = active === id;
-        return div().id(`panel-${id}`).w(32).h_full().flex_none().flex().items_center().justify_center().relative()
+        // Glass chip per icon, the same capsule language as the tab pills: 24px tall, 8px radius,
+        // frosted foreground-tinted fill when active and a fainter one on hover. This replaces
+        // `activity-bar-buttons.tsx:175-177`'s 2px bottom bar, which the capsule supersedes.
+        return div().id(`panel-${id}`).w(32).h(24).flex_none().flex().items_center().justify_center().relative().rounded(8)
           .text_color(on ? t.foreground : "#acacac99")
-          .when(!on, el => el.hover(s => s.text_color(t.muted)))
+          .when(on, el => el.bg(tint(t.foreground, 0.1)))
+          .when(!on, el => el.hover(s => s.bg(tint(t.foreground, 0.06)).text_color(t.muted)))
           .role("button").accessibility_label(title).tooltip(title)
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .on_click(() => run("layout.select", { stack: "panel-body", child: id }))
-          .child(svg(`mods/orca-panel-head/${icon}.svg`).size(16))
-          // `activity-bar-buttons.tsx:175-177`: bottom-0, left/right 25%, h-2px,
-          // bg-foreground, rounded-t. 25% of 32px is 8px.
-          .when(on, el => el.child(div().absolute().bottom(0).left(8).right(8).h(2).bg(t.foreground).rounded_t(4)));
+          .child(svg(`mods/orca-panel-head/${icon}.svg`).size(16));
       }))
       .child(div().flex_1())
-      .child(div().id("panel-toggle").mr(3).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
-        .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+      .child(div().id("panel-toggle").mr(3).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+        .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
         .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .on_click(() => run("layout.toggle", { id: "panel" }))
