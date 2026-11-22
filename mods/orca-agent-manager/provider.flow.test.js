@@ -15,7 +15,7 @@ const MODELS = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM
 
 // The three programs this page runs: the /models curl, the avatar curl, chmod, stat, xxd and the
 // file moves. `answers` decides what the server says.
-function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, magic = "89504e470d0a1a0a", mode = "600" } = {}) {
+function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, magic = "89504e470d0a1a0a", mode = "600", owner: ownerName = "tonyyang" } = {}) {
   const files = new Map();
   if (file !== null) files.set(PROVIDERS, file);
   globalThis.__herdrFiles = files;
@@ -35,16 +35,20 @@ function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, m
   };
   const cx = { notify() {} };
   const owner = Object.create(AgentManager.prototype);
-  const field = (value) => ({ value: () => value, set_value() {} });
+  const field = (value) => {
+    const state = { text: value, value: () => state.text, set_value: (next) => { state.text = next; } };
+    return state;
+  };
   Object.assign(owner, {
     provider: null,
     providerText: undefined,
+    providerWrittenAt: 0,
     providerStatus: null,
     providerTesting: false,
     typing: false,
     providerHost: field("http://127.0.0.1:8000/v1/"),
     providerKey: field(KEY),
-    providerOwner: field("tonyyang"),
+    providerOwner: field(ownerName),
   });
   return { owner, files, calls, cx };
 }
@@ -130,4 +134,36 @@ test("delete never removes a file outside the provider icon folder", async () =>
   owner.provider = record;
   await owner.deleteProvider(cx);
   assert.equal(calls.some((call) => call[0] === "rm"), false);
+});
+
+test("a re-test never removes a file outside the provider icon folder", async () => {
+  const record = { ...savedRecord(), iconPath: "/home/important.txt" };
+  const { owner, files, calls, cx } = harness({ file: `${JSON.stringify({ omlx: record }, null, 2)}\n`, owner: "someone-else" });
+  await owner.testAndSaveProvider(cx);
+  assert.equal(calls.some((call) => call[0] === "rm"), false);
+  // The new record names the avatar it just saved, not the old file.
+  assert.equal(JSON.parse(files.get(PROVIDERS)).omlx.iconPath, ICON);
+});
+
+test("a replaced icon of ours is deleted", async () => {
+  // The owner is cleared, so the saved avatar goes too. It is one of ours.
+  const { owner, calls, cx } = harness({ file: savedFile(), owner: "" });
+  await owner.testAndSaveProvider(cx);
+  assert.ok(calls.some((call) => call[0] === "rm" && call[2] === ICON));
+});
+
+test("a read older than this page's own write never brings a deleted record back", async () => {
+  const { owner, files, cx } = harness({ file: savedFile() });
+  owner.provider = savedRecord();
+  owner.providerText = files.get(PROVIDERS);
+  await owner.deleteProvider(cx);
+  assert.equal(owner.provider, null);
+  assert.equal(owner.providerHost.value(), "");
+  // The page read the file just before the delete and applies just after it: that text is stale.
+  assert.equal(owner.applyProviders(savedFile(), owner.providerWrittenAt - 1), false);
+  assert.equal(owner.provider, null);
+  assert.equal(owner.providerHost.value(), "");
+  // A read that started after the write is news, and it does apply.
+  assert.equal(owner.applyProviders(savedFile(), owner.providerWrittenAt + 1), true);
+  assert.equal(owner.provider.host, "http://127.0.0.1:8000/v1");
 });

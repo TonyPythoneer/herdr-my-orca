@@ -52,7 +52,7 @@ test("judgeModels maps every failure to its fixed message", () => {
 
 // The argv before this feature: the program, then its arguments.
 const baseArgv = ["codex", "--no-daemon", "-c", "disable_paste_burst=true"];
-const provider = { host: "http://127.0.0.1:8000/v1", configPath: `/Users/me/.config/herdr-app/${PROVIDER_FILE}` };
+const provider = { id: "omlx", host: "http://127.0.0.1:8000/v1", configPath: `/Users/me/.config/herdr-app/${PROVIDER_FILE}` };
 
 test("launchArgv keeps today's argv when no provider is chosen", () => {
   assert.deepEqual(launchArgv(baseArgv, null, "gpt-5"), baseArgv);
@@ -67,6 +67,7 @@ test("launchArgv wraps Codex for oMLX and keeps the flag order from the design",
     WRAPPER,
     "--",
     provider.configPath,
+    "omlx",
     "codex",
     "--disable",
     "shell_snapshot",
@@ -86,8 +87,18 @@ test("launchArgv wraps Codex for oMLX and keeps the flag order from the design",
   ]);
   // The wrapper reads the key from the file: no argument carries one.
   assert.equal(argv.filter((part) => part.includes("apiKey=") || part.startsWith("sk-")).length, 0);
-  assert.ok(WRAPPER.includes("$1") && WRAPPER.includes('"$@"') && WRAPPER.includes("shift"));
+  assert.ok(WRAPPER.includes("$1") && WRAPPER.includes("$2") && WRAPPER.includes('"$@"') && WRAPPER.includes("shift 2"));
   assert.equal(OMLX, "omlx");
+});
+
+test("the wrapper reads the key of the record the host came from", () => {
+  // Two records in the file: the one chosen sends its own key, never the other record's.
+  const other = { id: "myllm", host: "http://127.0.0.1:9000/v1", configPath: provider.configPath };
+  const argv = launchArgv(baseArgv, other, "m");
+  assert.equal(argv[5], "myllm", "the record id is what the wrapper looks the key up by");
+  assert.ok(argv.includes('model_providers.omlx.base_url="http://127.0.0.1:9000/v1"'));
+  // A record without an id is the oMLX record.
+  assert.equal(launchArgv(baseArgv, { ...provider, id: undefined }, "m")[5], "omlx");
 });
 
 test("the provider file round-trips and a broken one is refused", () => {

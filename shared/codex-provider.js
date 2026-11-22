@@ -19,10 +19,11 @@ export const TEST_ERRORS = {
 };
 
 /**
- * Runs as `sh -c <WRAPPER> -- <file> <command> ...`: reads the key out of the provider file into
- * OMLX_API_KEY, then becomes the agent. The key never appears in an argument list.
+ * Runs as `sh -c <WRAPPER> -- <file> <id> <command> ...`: reads the key of the `<id>` record out of
+ * the provider file into OMLX_API_KEY, then becomes the agent. The key never appears in an argument
+ * list, and it always comes from the same record as the host.
  */
-export const WRAPPER = `export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["omlx"]["apiKey"])' "$1")"; shift; exec "$@"`;
+export const WRAPPER = `export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
 
 /** A base URL like http://127.0.0.1:8000/v1, or a fixed message. Trailing slashes are dropped. */
 export function validateHost(text) {
@@ -62,7 +63,7 @@ export function judgeModels(status, body) {
 
 /**
  * The argv a Codex launch runs. `baseArgv` is today's argv (the program first, then its arguments);
- * `provider` is a saved record plus `configPath`. With no provider the argv is unchanged.
+ * `provider` is a saved record plus its `id` and `configPath`. With no provider the argv is unchanged.
  */
 export function launchArgv(baseArgv, provider, model) {
   const argv = [...(baseArgv ?? [])];
@@ -74,6 +75,7 @@ export function launchArgv(baseArgv, provider, model) {
     WRAPPER,
     "--",
     provider.configPath,
+    provider.id ?? OMLX,
     command,
     // Without this Codex writes the environment, key included, to ~/.codex/shell_snapshots/.
     "--disable",
@@ -81,6 +83,8 @@ export function launchArgv(baseArgv, provider, model) {
     ...rest,
     "-m",
     model,
+    // The Codex name is a fixed alias, never a record id: nothing from the file is spelled into a
+    // config string. Only the wrapper's argument (data) carries the id.
     "-c",
     'model_provider="omlx"',
     "-c",

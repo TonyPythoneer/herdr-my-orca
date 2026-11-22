@@ -108,11 +108,12 @@ v1 supports Codex only and one provider (oMLX).
 For `oMLX`, the tab runs this argument list. `WRAPPER` is a constant string:
 
 ```text
-WRAPPER = export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["omlx"]["apiKey"])' "$1")"; shift; exec "$@"
+WRAPPER = export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"
 (tested with a key containing ", \, and $: the value arrives intact, and the key is not in argv)
 
 argv = [ "/bin/sh", "-c", WRAPPER, "--",
          "<appHome>/model-providers.json",
+         "<provider id>",
          "codex", "--disable", "shell_snapshot", ...today's args,
          "-m", "<model-id>",
          "-c", 'model_provider="omlx"',
@@ -121,7 +122,10 @@ argv = [ "/bin/sh", "-c", WRAPPER, "--",
          "-c", 'model_providers.omlx.env_key="OMLX_API_KEY"' ]
 ```
 
-*   The key is read inside the shell, so it is not in argv.
+*   The key is read inside the shell, so it is not in argv. The wrapper looks it up by the record's
+    own id, so the key and the host always come from the same record.
+*   The Codex name `omlx` in the `-c` overrides is a fixed alias: no value from the file is ever
+    spelled into a config string.
 *   `None` keeps today's argv exactly.
 *   There is one Codex launch site: `mods/agent-config/main.js` `launch()` (argv built near line 561, `run("tab.new", …)` near line 570).
 

@@ -65,6 +65,8 @@ const MANAGER = `${appHome()}/agent-manager.json`;
 // The provider record holds the API key, so the file is 0600 and the icon lives beside it.
 const PROVIDERS = `${appHome()}/${PROVIDER_FILE}`;
 const ICON_DIR = "provider-icons";
+// Only a file this page wrote inside its own icon folder may be kept in a record and deleted.
+const ownedIcon = (path) => (String(path ?? "").startsWith(`${appHome()}/${ICON_DIR}/`) ? path : null);
 // GitHub avatars are a few KB; anything past this is not one.
 const ICON_MAX_BYTES = 256 * 1024;
 // GitHub serves whatever format the owner uploaded, so the magic bytes are checked for a real
@@ -113,6 +115,7 @@ export default class AgentManager extends View {
     // Model providers: the saved oMLX record and the setup form above it.
     this.provider = null;
     this.providerText = undefined; // model-providers.json as read, so a write can replace it safely
+    this.providerWrittenAt = 0; // when this page last wrote it, so a slower refresh cannot roll it back
     this.providerStatus = null; // { tone: "blocked" | "done" | "muted", text }
     this.providerTesting = false;
     this.providerHost = InputState.new({ placeholder: "http://127.0.0.1:8000/v1" });
@@ -175,8 +178,10 @@ export default class AgentManager extends View {
   }
 
   // A provider is shown from the file, so a delete or a change made elsewhere lands on the next read.
-  applyProviders(text) {
-    if (text === undefined || text === this.providerText) return false;
+  // `readAt` is when the caller read the file: a read older than this page's own write is stale and
+  // must not bring back what was just saved or deleted.
+  applyProviders(text, readAt = Date.now()) {
+    if (text === undefined || text === this.providerText || readAt <= this.providerWrittenAt) return false;
     this.providerText = text;
     const parsed = parseProviderFile(text);
     this.provider = parsed.providers?.[OMLX] ?? null;
@@ -276,6 +281,7 @@ export default class AgentManager extends View {
         let programs;
         let manager;
         let providers;
+        const readAt = Date.now(); // the files are read now; a write this page makes later is newer
         try {
           [known, programs, manager, providers] = await Promise.all([
             knownAgents().catch((error) => {
@@ -304,7 +310,7 @@ export default class AgentManager extends View {
           this.externalConflict = true;
         }
         if (!this.persisting) this.applyManager(manager);
-        this.applyProviders(providers);
+        this.applyProviders(providers, readAt);
         if (known) {
           this.agents = known;
           this.fromCache = false;
@@ -1105,7 +1111,9 @@ export default class AgentManager extends View {
     if (parsed.error) return this.showProviderStatus(null, "blocked", parsed.error);
     const previous = parsed.providers[OMLX] ?? null;
     const fetched = owner ? await this.fetchProviderIcon(owner) : null;
-    const iconPath = fetched ?? (owner && previous?.githubOwner === owner ? previous.iconPath : "");
+    // The icon is kept only while it is one of ours and the owner did not change.
+    const kept = owner && previous?.githubOwner === owner ? ownedIcon(previous.iconPath) : null;
+    const iconPath = fetched ?? kept ?? "";
     const record = {
       name: "oMLX",
       host,
@@ -1125,10 +1133,13 @@ export default class AgentManager extends View {
       return this.showProviderStatus(null, "blocked", "Could not write model-providers.json.");
     }
     this.providerText = next;
+    this.providerWrittenAt = Date.now();
     if (!(await this.secureProviderFile())) {
       return this.showProviderStatus(null, "blocked", "model-providers.json is not private to your user.");
     }
-    if (previous?.iconPath && previous.iconPath !== iconPath) await exec("rm", ["-f", previous.iconPath]).catch(() => {});
+    // The replaced icon is deleted too, but only when it is one of ours.
+    const stale = ownedIcon(previous?.iconPath);
+    if (stale && stale !== iconPath) await exec("rm", ["-f", stale]).catch(() => {});
     return record;
   }
 
@@ -1146,11 +1157,11 @@ export default class AgentManager extends View {
       return this.showProviderStatus(cx, "blocked", "Could not write model-providers.json.");
     }
     this.providerText = next;
+    this.providerWrittenAt = Date.now();
     await this.secureProviderFile();
     // Only a file this page could have written is removed.
-    if (String(record.iconPath ?? "").startsWith(`${appHome()}/${ICON_DIR}/`)) {
-      await exec("rm", ["-f", record.iconPath]).catch(() => {});
-    }
+    const stale = ownedIcon(record.iconPath);
+    if (stale) await exec("rm", ["-f", stale]).catch(() => {});
     this.provider = null;
     this.providerHost.set_value("");
     this.providerOwner.set_value("");

@@ -630,7 +630,7 @@ export default class AgentConfig extends View {
         cx?.notify();
         return;
       }
-      provider = { ...record, configPath: file };
+      provider = { ...record, id: this.providerId, configPath: file };
     }
 
     this.remember();

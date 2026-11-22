@@ -78,6 +78,7 @@ test("oMLX launches through the wrapper, without the key in argv and without an 
     WRAPPER,
     "--",
     PROVIDERS,
+    "omlx",
     "codex",
     "--disable",
     "shell_snapshot",
@@ -101,6 +102,24 @@ test("oMLX launches through the wrapper, without the key in argv and without an 
   assert.equal(argv.filter((part) => part !== WRAPPER).some((part) => part.includes("apiKey")), false);
   // The effort flag belongs to OpenAI models only.
   assert.equal(argvOf(runs).some((part) => part.startsWith("model_reasoning_effort")), false);
+});
+
+test("a record chosen by its own id gets its own host and its own key", async () => {
+  const other = record({ host: "http://127.0.0.1:9000/v1", apiKey: "other-key" });
+  const file = providersFile({ omlx: record(), myllm: other });
+  const { view, runs } = flyout({
+    providerId: "myllm",
+    providers: { omlx: record(), myllm: other },
+    model: OMLX_MODEL,
+    effort: "",
+    files: new Map([[PROVIDERS, file]]),
+  });
+  await view.launch(cx);
+  const argv = argvOf(runs);
+  // The wrapper reads the key of this record, so oMLX's key never goes to the other host.
+  assert.equal(argv[5], "myllm");
+  assert.ok(argv.includes('model_providers.omlx.base_url="http://127.0.0.1:9000/v1"'));
+  assert.equal(argv.some((part) => part.includes("other-key") || part.includes("test-key-value")), false);
 });
 
 test("a provider deleted while the flyout was open blocks the launch", async () => {
