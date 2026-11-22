@@ -1434,6 +1434,9 @@ export default class AgentManager extends View {
           .child(field("am-provider-key", "API KEY", this.providerKey))
           .child(field("am-provider-owner", "GITHUB OWNER · OPTIONAL", this.providerOwner)),
       )
+      .when(Boolean(provider), (el) =>
+        el.child(div().text_size(10).text_color(t.dim).child("Leave API KEY empty to keep the saved key.")),
+      )
       .child(
         h_flex()
           .w_full()
@@ -1446,7 +1449,8 @@ export default class AgentManager extends View {
               this.providerTesting ? "Testing…" : "Test and save",
               t,
               (_event, cx) => this.testAndSaveProvider(cx),
-              { height: 26, px: 12, primary: true, disabled: this.providerTesting },
+              // A bordered accent button, like Delete: the page has no filled button to match.
+              { height: 26, px: 12, color: t.accent, disabled: this.providerTesting },
             ),
           )
           .when(this.providerStatus, (el) => el.child(div().flex_1().min_w(120).text_size(11).text_color(tone).child(this.providerStatus.text))),
