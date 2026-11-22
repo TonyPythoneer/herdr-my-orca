@@ -67,6 +67,9 @@ const PROVIDERS = `${appHome()}/${PROVIDER_FILE}`;
 const ICON_DIR = "provider-icons";
 // GitHub avatars are a few KB; anything past this is not one.
 const ICON_MAX_BYTES = 256 * 1024;
+// GitHub serves whatever format the owner uploaded, so the magic bytes are checked for a real
+// image (PNG or JPEG) instead of trusting the URL or the status.
+const IMAGE_MAGIC = ["89504e47", "ffd8ff"];
 // A GitHub user or organization name.
 const GITHUB_OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 const CACHE_KEY = "agent-manager.inventory.v1";
@@ -1165,7 +1168,7 @@ export default class AgentManager extends View {
     }
   }
 
-  // The owner's avatar, saved only when the answer really is a small PNG.
+  // The owner's avatar, saved only when the answer really is a small image.
   async fetchProviderIcon(owner) {
     const dir = `${appHome()}/${ICON_DIR}`;
     const path = `${dir}/${OMLX}.png`;
@@ -1180,7 +1183,7 @@ export default class AgentManager extends View {
       const text = result.stdout ?? "";
       const status = Number(text.slice(text.lastIndexOf("\n") + 1).trim());
       const head = await exec("xxd", ["-p", "-l", "8", partial]).catch(() => ({ stdout: "" }));
-      if (status !== 200 || !head.stdout.trim().startsWith("89504e47")) {
+      if (status !== 200 || !IMAGE_MAGIC.some((magic) => head.stdout.trim().startsWith(magic))) {
         await exec("rm", ["-f", partial]).catch(() => {});
         return null;
       }

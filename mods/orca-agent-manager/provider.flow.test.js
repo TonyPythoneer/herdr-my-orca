@@ -15,7 +15,7 @@ const MODELS = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM
 
 // The three programs this page runs: the /models curl, the avatar curl, chmod, stat, xxd and the
 // file moves. `answers` decides what the server says.
-function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, png = true, mode = "600" } = {}) {
+function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, magic = "89504e470d0a1a0a", mode = "600" } = {}) {
   const files = new Map();
   if (file !== null) files.set(PROVIDERS, file);
   globalThis.__herdrFiles = files;
@@ -27,7 +27,7 @@ function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, p
       return { code: 0, stdout: `\n${iconStatus}`, stderr: "" };
     }
     if (command === "curl") return { code: 0, stdout: body ? `${body}\n${status}` : `\n${status}`, stderr: "" };
-    if (command === "xxd") return { code: 0, stdout: png ? "89504e470d0a1a0a\n" : "3c68746d6c3e0a\n", stderr: "" };
+    if (command === "xxd") return { code: 0, stdout: `${magic}\n`, stderr: "" };
     if (command === "chmod") return { code: 0, stdout: "", stderr: "" };
     if (command === "stat") return { code: 0, stdout: `${mode}\n`, stderr: "" };
     if (command === "mv" || command === "rm") return { code: 0, stdout: "", stderr: "" };
@@ -93,6 +93,17 @@ test("a 200 that is not a model server writes nothing", async () => {
   await owner.testAndSaveProvider(cx);
   assert.equal(files.has(PROVIDERS), false);
   assert.equal(owner.providerStatus.text, "Not a model server");
+});
+
+test("an avatar in either image format is kept, an HTML error page is not", async () => {
+  for (const magic of ["89504e470d0a1a0a", "ffd8ffdb00840008"]) {
+    const { owner, files, cx } = harness({ magic });
+    await owner.testAndSaveProvider(cx);
+    assert.equal(JSON.parse(files.get(PROVIDERS)).omlx.iconPath, ICON, magic);
+  }
+  const html = harness({ magic: "3c68746d6c3e0a" });
+  await html.owner.testAndSaveProvider(html.cx);
+  assert.equal(JSON.parse(html.files.get(PROVIDERS)).omlx.iconPath, "");
 });
 
 test("a mode that did not take is reported", async () => {
