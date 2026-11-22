@@ -1112,7 +1112,8 @@ export default class AgentManager extends View {
       .border_color(t.border)
       .bg(t.surface)
       .overflow_hidden()
-      .when(viewport, (el) => el.h(viewport))
+      // The inner list stops the wheel only while it moves; at its edge the event would scroll the page behind it.
+      .when(viewport, (el) => el.h(viewport).on_scroll_wheel((_e, cx) => cx.stop_propagation()))
       .child(list)
       .when(viewport, (el) => el.child(Scrollbar.vertical(id).absolute().inset_0()));
   }
