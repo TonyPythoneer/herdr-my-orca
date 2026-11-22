@@ -7,6 +7,15 @@ import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
+import {
+  clampTabStripScroll,
+  revealTabStripSlot,
+  tabStripActiveSlot,
+  tabStripArrowState,
+  tabStripContentWidth,
+  tabStripOffset,
+  tabStripScrollTarget,
+} from "./tab-strip-scroll.js";
 
 // Memoized tab colour store: shared() is the primary source; localStorage is the fallback.
 // Cache the parsed fallback by its raw string so repeated renders skip re-parsing.
@@ -47,6 +56,9 @@ function find(node, id) {
 // that paints the quadrant and takes the release.
 const STATUS_BAR_HEIGHT = 24; // `orca-status` draws this (`layouts/orca.json` node `status`).
 const TAB_STRIP_FALLBACK = 32; // `TAB_GROUP_TAB_STRIP_HEIGHT_PX` (tab-drop-zone.ts:4), the fallback.
+// How long an arrow's slide takes: Orca hands `scrollBy` a `behavior: 'smooth'`, which in Chromium
+// runs about this long.
+const TAB_STRIP_SLIDE_MS = 150;
 const DROP_STILL_TICKS = 20; // ~320ms of a motionless pointer is the release fallback, since the host has no button state.
 const TAB_DRAG_DISTANCE = 12; // `useTabDragSplit.ts:42` — dnd-kit activation distance, and how far down a press must travel before it is a split.
 const DROP_REV = 13; // bumped every time the instrumentation changes
@@ -321,6 +333,17 @@ export default class Tabs extends View {
     // Which tab is under the pointer. Orca's close/collapse reveal is `group-hover` on the
     // tab (SortableTab.tsx:317,323); gpui-kit has no group-hover, so the id is tracked here.
     this.hoveredTab = null;
+    // The tab strip scrolls itself: Herdr has no horizontal scroller a mod can read back
+    // (`ScrollHandle` only takes requests, gpui-kit.d.ts:21331) and no `position: sticky`, so this
+    // offset is the strip's only scroll position and there is no second copy to fall out of step
+    // with. Widths are measured, never assumed: a tab is as wide as its label.
+    this.scrollX = 0;
+    this.viewportWidth = 0;
+    this.contentWidth = 0;
+    this.tabWidths = new Map();
+    this.activeTabId = undefined;
+    this.revealPending = false;
+    this.animatedUntil = 0;
     try {
       const stored = JSON.parse(localStorage.getItem("panels") ?? "{}");
       this.panels = stored && typeof stored === "object" ? stored : {};
@@ -436,6 +459,117 @@ export default class Tabs extends View {
     if (this.panels[space.id] === now) return;
     this.panels[space.id] = now;
     localStorage.setItem("panels", JSON.stringify(this.panels));
+  }
+
+  // --- Tab strip scrolling ---------------------------------------------------
+  // `tab-strip-scroll.js` holds the geometry; what follows are the state changes that use it.
+  // Herdr offers no native scroller a mod can read back and no sticky positioning, so the strip
+  // carries the one scroll offset there is — nothing else can disagree with it (spec §9).
+
+  // `on_size_change` (gpui-kit.d.ts:734-736) is the only measurement a mod gets, so every tab
+  // reports its own width and the strip adds them up. Repainting once per real change keeps a
+  // resize from turning into a render loop.
+  measureTabWidth(id, width, cx) {
+    const known = this.tabWidths.get(id);
+    if (known !== undefined && Math.abs(known - width) < 0.5) return;
+    this.tabWidths.set(id, width);
+    cx.notify();
+  }
+
+  // Real input (a wheel, a trackpad) is not a slide: it moves the strip now.
+  stopSlide() {
+    this.animatedUntil = 0;
+  }
+
+  // Every scroll change goes through here, so the offset is clamped against the real track each
+  // time and a wheel can never leave it past an end.
+  setStripScroll(x, cx) {
+    const next = clampTabStripScroll(x, this.viewportWidth, this.contentWidth);
+    if (next === this.scrollX) return;
+    this.scrollX = next;
+    cx.notify();
+  }
+
+  // Arrow press: `scrollTabStripByStep` (tab-strip-overflow-navigation.ts:22-31) moves three
+  // quarters of the viewport, at least 120px, and `scrollBy({behavior: 'smooth'})` eases the move.
+  // GPUI's own `transition` is that ease — it runs natively between frames, so nothing here needs
+  // a timer. The flag only says "these next changes slide"; it lapses on its own, so a wheel or a
+  // trackpad in between moves the strip directly, the way `scrollBy` is cut short by real input.
+  scrollTabStrip(direction, cx) {
+    const to = tabStripScrollTarget(this.scrollX, this.viewportWidth, this.contentWidth, direction);
+    if (to === this.scrollX) return;
+    this.animatedUntil = Date.now() + TAB_STRIP_SLIDE_MS + 60;
+    this.setStripScroll(to, cx);
+  }
+
+  // Whether this frame's scroll change is an arrow's slide or input's direct move.
+  sliding() {
+    return Boolean(this.animatedUntil) && Date.now() < this.animatedUntil;
+  }
+
+  // `scrollStripSidewaysOnWheel` (tab-strip-scroll-metrics.ts:14-21): a mouse wheel comes in
+  // vertically and turns the strip sideways, while a trackpad's own horizontal delta goes the
+  // way it is pushed. Both land on the same `scrollX` as the arrows, so the sticky behaviour and
+  // the limits are identical whichever the person uses.
+  wheelTabStrip(e, cx) {
+    const dx = Math.abs(e.delta?.x ?? 0) >= Math.abs(e.delta?.y ?? 0) ? e.delta?.x ?? 0 : e.delta?.y ?? 0;
+    if (!dx) return;
+    this.stopSlide();
+    this.setStripScroll(this.scrollX + dx, cx);
+  }
+
+  // Everything the strip needs to know about itself this frame: the measured widths, the real
+  // track limits, which arrows are live, and where the active tab is drawn. The dock never feeds
+  // back into any of it — that is the whole point of §4.
+  stripGeometry(shown) {
+    const ids = shown.map((c) => c.id);
+    for (const id of [...this.tabWidths.keys()]) {
+      if (!ids.includes(id)) this.tabWidths.delete(id);
+    }
+    const widths = ids.map((id) => this.tabWidths.get(id) ?? 0);
+    const contentWidth = tabStripContentWidth(widths);
+    this.contentWidth = contentWidth;
+    const activeIndex = shown.findIndex((c) => c.active);
+    const activeId = activeIndex >= 0 ? ids[activeIndex] : null;
+
+    // A newly selected tab comes on screen with the smallest scroll that shows it — Orca's
+    // `revealTabStripSlot` (tab-strip-slot-geometry.ts:84-107). A tab that is already visible
+    // leaves the strip exactly where the person put it.
+    if (activeId !== this.activeTabId) {
+      this.activeTabId = activeId;
+      this.revealPending = activeId !== null;
+    }
+    const measured = this.viewportWidth > 0 && widths.every((w) => w > 0);
+    if (this.revealPending && activeIndex >= 0 && measured) {
+      this.scrollX = revealTabStripSlot(
+        this.scrollX,
+        this.viewportWidth,
+        contentWidth,
+        tabStripOffset(widths, activeIndex),
+        widths[activeIndex]
+      );
+      this.revealPending = false;
+    }
+    this.scrollX = clampTabStripScroll(this.scrollX, this.viewportWidth, contentWidth);
+
+    const activeWidth = activeIndex >= 0 ? widths[activeIndex] : 0;
+    const slot = tabStripActiveSlot({
+      scrollLeft: this.scrollX,
+      viewportWidth: this.viewportWidth,
+      contentWidth,
+      activeOffset: activeIndex >= 0 ? tabStripOffset(widths, activeIndex) : 0,
+      activeWidth,
+    });
+    return {
+      arrows: tabStripArrowState(this.scrollX, this.viewportWidth, contentWidth),
+      slot,
+      activeTab: activeIndex >= 0 ? shown[activeIndex] : null,
+      activeIndex,
+      activeWidth,
+      // The pinned copy is drawn only while the tab is actually held at an edge; at rest the tab
+      // draws in its own slot exactly as it always did.
+      docked: slot.docked && activeWidth > 0,
+    };
   }
 
   // Official agents resolve through their own report or the program table. An unofficial CLI
@@ -738,6 +872,9 @@ export default class Tabs extends View {
     // Tab colour store, read once per render. orca-menu writes shared("tab.colors")
     // and mirrors to localStorage["tab.colors.v1"]. SortableTab.tsx:293-297 drives the dot below.
     const tabColorStore = readTabColorStore();
+    // Once per frame, before anything reads it: widths, real limits, arrow states and the clamped
+    // position of the active tab (which is where a newly selected tab is also revealed).
+    const geometry = this.stripGeometry(shown);
     const stop = (_e, cx) => cx.stop_propagation();
     // .sidebar-toggle (main.css:1213-1230) — padding 4px 8px around a 16px glyph = 32x24,
     // radius 4, muted, hover --accent. .window-controls-btn (main.css:1145-1168) — 46x36,
@@ -762,6 +899,20 @@ export default class Tabs extends View {
       .role("button").accessibility_label("New tab").tooltip("New tab")
       .on_mouse_down("left", (e, cx) => { this.plusBounds = e.bounds; stop(e, cx); }).on_click(action)
       .child(svg("mods/orca-tabs/plus.svg").size(14).flex_none());
+    // Orca's chevrons (`tab-bar-surface.tsx:124-146`, `:189-211`): a ghost `icon-xs` button, so
+    // `mx-0.5 my-auto h-6 w-5` (2px sides, 24x20) around a 14px `ChevronLeft/Right`, shown only
+    // while the track overflows and disabled only at that end of it. They live outside the
+    // viewport, so the active tab is never behind them (§5).
+    const tabScrollButton = (direction, disabled) => {
+      const label = direction === "start" ? "Scroll tabs left" : "Scroll tabs right";
+      const glyph = `mods/orca-tabs/chevron-${direction === "start" ? "left" : "right"}.svg`;
+      return div().id(`tab-scroll-${direction}`).mx(2).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(6)
+        .text_color(disabled ? t.dim : t.muted)
+        .when(!disabled, el => el.hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop))
+        .role("button").accessibility_label(label).tooltip(label)
+        .on_click(() => { if (!disabled) this.scrollTabStrip(direction, cx); })
+        .child(svg(glyph).size(14).flex_none());
+    };
     const winBtn = (id, label, glyph, action, close) => div().id(id).w(46).h_full().flex_none().flex().items_center().justify_center()
       .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : t.hover).text_color(close ? "#ffffff" : t.foreground))
       .role("button").accessibility_label(label).tooltip(label)
@@ -774,7 +925,7 @@ export default class Tabs extends View {
       .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
       .on_mouse_down("left", stop).on_click(action)
       .child(svg("mods/orca-tabs/panel-right.svg").size(16));
-    const item = (c, i) => {
+    const item = (c, i, mode = {}) => {
       const pane = tabPanes.get(c.id) ?? null;
       const program = pane?.program;
       const unofficial = this.unofficialApp(pane, unofficialPanes);
@@ -807,6 +958,10 @@ export default class Tabs extends View {
       };
       const identityApp = unofficial?.key ?? pane?.app;
       const mark = agentMarks[identityApp];
+      // Two copies of one tab exist only while it is pinned: the slot in the track and the
+      // overlay drawn at the clamped position. Their ids must differ or GPUI treats them as one
+      // element (`gpui-kit.d.ts:1098-1109`).
+      const copyId = mode.overlay ? "-dock" : "";
       let identity = null;
       if (mark === "mono") identity = program?.icon ? svg(program.icon).size(12).text_color(t.muted) : null;
       else if (mark) identity = ownFills.has(identityApp) || !mark.endsWith(".svg")
@@ -820,7 +975,7 @@ export default class Tabs extends View {
       // over #171717 (#242424), inactive is #171717; drop-indicator.ts:15-16 — the active bar is
       // 2px, inset-x-0, bottom. `mr-1` on the leading icon and label
       // (TerminalTabLeadingIcon.tsx:63, SortableTab.tsx:291) is the 4px gap between children.
-      return h_flex().id(`tab-${c.id}`).h_full().px(6).gap(4).relative().items_center().flex_none().min_w(144).max_w(300).text_size(12)
+      return h_flex().id(`tab-${c.id}${copyId}`).h_full().px(6).gap(4).relative().items_center().flex_none().min_w(144).max_w(300).text_size(12)
         .bg(c.active ? "#242424" : "#171717").text_color(c.active ? t.foreground : t.muted)
         .border_t(1).border_color(t.border)
         .when(!c.active, el => el.hover(s => s.text_color(t.foreground)))
@@ -952,7 +1107,7 @@ export default class Tabs extends View {
         // Collapse pane — SortableTab.tsx:298-316: shown while the pane is expanded, a 16px box
         // with a 12px `Minimize2`; active tabs always show it, inactive ones on TAB hover
         // (`text-transparent group-hover:text-muted-foreground`). `pane.zoom` collapses.
-        .when(c.zoomed, el => el.child(div().id(`collapse-${c.id}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
+        .when(c.zoomed, el => el.child(div().id(`collapse-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
           .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
           .hover(s => s.text_color(t.foreground).bg(t.raised))
           .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
@@ -968,12 +1123,25 @@ export default class Tabs extends View {
         // button; Herdr's pin analogue is `settled`, TabInfo.settled). The box is `w-4 h-4`
         // (16px), the glyph `w-3` (12px); inactive is `text-transparent` and becomes muted on
         // TAB hover (`group-hover`), not on its own box.
-        .when(!c.settled, el => el.child(div().id(`close-${c.id}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
+        .when(!c.settled, el => el.child(div().id(`close-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
           .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
           .hover(s => s.text_color(t.foreground).bg(t.raised))
           .on_mouse_down("left", stop).accessibility_label("Close").tooltip("Close")
           .on_click((_e, cx) => { cx.stop_propagation(); this.requestCloseTab(c); })
-          .child(svg("mods/orca-tabs/close.svg").size(12))));
+          .child(svg("mods/orca-tabs/close.svg").size(12))))
+        // The width of a tab is its label's, so the strip measures the slot rather than guessing
+        // (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
+        .when(!mode.overlay, el => el.on_size_change((size, cx) => this.measureTabWidth(c.id, size.width, cx)))
+        // The pinned copy: drawn after the track, so it paints above the inactive tabs passing
+        // underneath, and given the clamped left the geometry asked for. It is the same tab — its
+        // own icon, indicator and close button — so nothing is clipped at the viewport edge.
+        .when(Boolean(mode.overlay), el => el.absolute().top(0).left(mode.overlay.visualLeft).w(mode.overlay.width))
+        // Sliding, as a pinned tab does, keeps the same share of the arrow's ease as the track.
+        .when(Boolean(mode.overlay) && Boolean(mode.sliding), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
+        // The slot itself keeps its place and its width, so the track stays exactly as long as the
+        // tab list; it only stops painting while the pinned copy stands in for it. The pinned copy
+        // always covers the slot's visible part, so no hole shows and no second tab appears.
+        .when(mode.hidden, el => el.opacity(0));
     };
     const root = layout();
     const sidebar = find(root, "sidebar");
@@ -1035,14 +1203,29 @@ export default class Tabs extends View {
       // Orca hides the strip's native scrollbar (`tab-bar-surface.tsx:164-175`) and paints only
       // its 3px hover thumb (`TabStripScrollIndicator.tsx:196-215`), which Herdr has no
       // primitive for — so no scrollbar is painted and no thumb is faked. The wheel scrolls the
-      // strip: Orca does not switch tabs on wheel. Its overflow chevrons
-      // (`tab-bar-surface.tsx:124-146`, `:189-211`) are omitted because gpui-kit exposes no
-      // programmatic scroll for an overflow container (only VirtualListScrollHandle,
-      // gpui-kit.d.ts:21305), so a chevron would be a dead control.
+      // strip (`wheelTabStrip`): Orca does not switch tabs on wheel.
       // `tab-bar-surface.tsx:164-170` — the strip is `w-max … max-w-full shrink`: content-wide,
       // never stretched, so the `+` that follows it sits directly after the last tab. It shrinks
       // (and scrolls) once the tabs outgrow the row, so the `+` and the right-sidebar toggle stay visible.
-      .child(h_flex().id("tab-scroll").flex_shrink(1).min_w(0).h_full().items_center().gap(0).overflow_x_scroll().children(shown.map(item)))
+      //
+      // The viewport clips; the track inside it holds every tab in order at its measured width,
+      // shifted by the strip's own scroll offset. The active tab is drawn twice only while it is
+      // pinned — its slot in the track (unpainted, but still holding the width) and the overlay at
+      // the clamped left — which is what keeps `contentWidth` and the scroll limits independent of
+      // the dock (§4). The arrows sit outside this box, so the pinned tab can never slide under them.
+      .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("start", geometry.arrows.leftDisabled)))
+      .child(div().id("tab-viewport").relative().flex_shrink(1).min_w(0).h_full().overflow_hidden()
+        .on_size_change((size, cx) => {
+          if (Math.abs(size.width - this.viewportWidth) < 0.5) return;
+          this.viewportWidth = size.width;
+          cx.notify();
+        })
+        .on_scroll_wheel((e, cx) => this.wheelTabStrip(e, cx))
+        .child(h_flex().id("tab-track").relative().left(-this.scrollX).h_full().items_center().gap(0).flex_none()
+          .when(this.sliding(), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
+          .children(shown.map((c, i) => item(c, i, { hidden: geometry.docked && i === geometry.activeIndex }))))
+        .when(geometry.docked, el => el.child(item(geometry.activeTab, geometry.activeIndex, { overlay: { ...geometry.slot, width: geometry.activeWidth }, sliding: this.sliding() }))))
+      .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("end", geometry.arrows.rightDisabled)))
       // Orca terminal-tab-strip-drop-target.ts:39-52 — visual drop indicator when a pane is dragged to the tab strip.
       .when(Boolean(paneDrag?.inTabStrip), el =>
         el.child(
