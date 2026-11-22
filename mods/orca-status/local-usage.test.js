@@ -19,7 +19,7 @@ const opencodeDb = async (rows) => {
   const home = mkdtempSync(join(tmpdir(), 'herdr-opencode-'));
   mkdirSync(join(home, '.local/share/opencode'), { recursive: true });
   const sql = ['create table session_message (type text, time_created integer, data text);']
-    .concat(rows.map(({ at, data }) => `insert into session_message values ('assistant', ${Math.round(at)}, '${JSON.stringify(data).replace(/'/g, "''")}');`))
+    .concat(rows.map(({ at, data, type = 'assistant' }) => `insert into session_message values ('${type}', ${Math.round(at)}, '${JSON.stringify(data).replace(/'/g, "''")}');`))
     .join('\n');
   execFileSync('sqlite3', [join(home, '.local/share/opencode/opencode.db')], { input: sql });
   const exec = (_c, args) => new Promise((resolve) => execFile('sh', args, { env: { ...process.env, HOME: home } }, (e, stdout) => resolve({ code: e ? 1 : 0, stdout })));
@@ -181,6 +181,22 @@ test('opencode falls back to the most recent local 9:00 with no 429 at all', asy
     const reading = await db.reading();
     assert.equal(reading.text, '700 tokens');
     assert.equal(reading.resetTime, db.resetTime(nine + DAY));
+  } finally {
+    (await import('node:fs')).rmSync(db.home, { recursive: true, force: true });
+  }
+});
+
+test('opencode counts compaction rows but not other row types', async () => {
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  const boundary = now - 2 * HOUR;
+  const db = await opencodeDb([
+    freeLimit(boundary - DAY, 0),
+    freeUsage(boundary + HOUR, 2000),
+    { ...freeUsage(boundary + HOUR, 500), type: 'compaction' },
+    { ...freeUsage(boundary + HOUR, 7000), type: 'user' }
+  ]);
+  try {
+    assert.equal((await db.reading()).text, '3k tokens', '2000 + 500 compaction, not the user row');
   } finally {
     (await import('node:fs')).rmSync(db.home, { recursive: true, force: true });
   }
