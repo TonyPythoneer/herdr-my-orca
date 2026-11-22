@@ -6,6 +6,33 @@ import { parseClaudeStatusLine, formatTokens, probeLocal } from './local-usage.j
 
 const future = () => Math.floor(Date.now() / 1000) + 3600;
 
+// A throwaway opencode.db under a temp HOME, seeded the way opencode writes it (ms epoch in
+// time_created, JSON in data), and `reading()`: the opencode chip probeLocal draws from it.
+const HOUR = 3_600_000, DAY = 86_400_000;
+const freeUsage = (at, tokens) => ({ at, data: { model: { providerID: 'opencode', id: 'deepseek-v4.1-flash-free' }, tokens: { input: tokens, output: 0, reasoning: 0, cache: { read: 0, write: 0 } } } });
+const freeLimit = (at, retryAfterMs) => ({ at, data: { error: { type: 'provider.free-limit', retryAfterMs } } });
+const opencodeDb = async (rows) => {
+  const { execFile, execFileSync } = await import('node:child_process');
+  const { mkdtempSync, mkdirSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const home = mkdtempSync(join(tmpdir(), 'herdr-opencode-'));
+  mkdirSync(join(home, '.local/share/opencode'), { recursive: true });
+  const sql = ['create table session_message (type text, time_created integer, data text);']
+    .concat(rows.map(({ at, data }) => `insert into session_message values ('assistant', ${Math.round(at)}, '${JSON.stringify(data).replace(/'/g, "''")}');`))
+    .join('\n');
+  execFileSync('sqlite3', [join(home, '.local/share/opencode/opencode.db')], { input: sql });
+  const exec = (_c, args) => new Promise((resolve) => execFile('sh', args, { env: { ...process.env, HOME: home } }, (e, stdout) => resolve({ code: e ? 1 : 0, stdout })));
+  return {
+    home,
+    reading: async () => (await probeLocal(exec, new Set(['opencode']))).find((r) => r.provider === 'opencode'),
+    // The probe reports whole seconds (ms are dropped by the /1000), so expectations are too.
+    resetTime: (ms) => new Date(Math.floor(ms / 1000) * 1000).toISOString()
+  };
+};
+// The most recent local 9:00 at or before `now`, the fallback window start.
+const lastNine = (now) => { const d = new Date(now); d.setHours(9, 0, 0, 0); return d.getTime() > now ? d.getTime() - DAY : d.getTime(); };
+
 test('parseClaudeStatusLine reads the 5h and weekly windows', () => {
   const resets = future();
   const reading = parseClaudeStatusLine({
@@ -101,6 +128,79 @@ test('Codex uses an older session until the newest has rate limits', async () =>
     assert.equal(await percentage(), 45);
   } finally {
     rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('opencode counts from the projected reset, not the 9:00 fallback or an extra day', async () => {
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  // The cycle resets daily; this boundary passed 5h17m ago. The only 429 is 26h old, so its own
+  // reset (boundary - 24h) is past the old 24h window and 9:00-local would win instead.
+  const boundary = now - 5 * HOUR - 17 * 60_000;
+  const db = await opencodeDb([
+    freeLimit(boundary - 26 * HOUR, 2 * HOUR),
+    freeUsage(boundary - 3 * HOUR, 3000),
+    freeUsage(boundary - 1000, 5000),
+    freeUsage(boundary, 400),
+    freeUsage(boundary + 60_000, 200)
+  ]);
+  try {
+    const reading = await db.reading();
+    assert.equal(reading.text, '600 tokens', 'only rows at or after the reset count');
+    assert.equal(reading.resetTime, db.resetTime(boundary + DAY));
+  } finally {
+    (await import('node:fs')).rmSync(db.home, { recursive: true, force: true });
+  }
+});
+
+test('opencode steps the newest 429 back when its reset is still ahead', async () => {
+  // Real shape: a 429 ten minutes ago whose retry lands on tomorrow's boundary.
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  const reset = now - 10 * 60_000 + 23 * HOUR + 50 * 60_000;
+  const db = await opencodeDb([
+    freeLimit(now - 10 * 60_000, 23 * HOUR + 50 * 60_000),
+    freeUsage(reset - DAY - 60_000, 900),
+    freeUsage(reset - DAY + 60_000, 250)
+  ]);
+  try {
+    const reading = await db.reading();
+    assert.equal(reading.text, '250 tokens', 'the window starts 24h before the announced reset');
+    assert.equal(reading.resetTime, db.resetTime(reset), 'next reset is the first one after now');
+  } finally {
+    (await import('node:fs')).rmSync(db.home, { recursive: true, force: true });
+  }
+});
+
+test('opencode falls back to the most recent local 9:00 with no 429 at all', async () => {
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  const nine = lastNine(now);
+  const db = await opencodeDb([
+    freeUsage(nine - HOUR, 4000),
+    freeUsage(nine + Math.floor((now - nine) / 2), 700)
+  ]);
+  try {
+    const reading = await db.reading();
+    assert.equal(reading.text, '700 tokens');
+    assert.equal(reading.resetTime, db.resetTime(nine + DAY));
+  } finally {
+    (await import('node:fs')).rmSync(db.home, { recursive: true, force: true });
+  }
+});
+
+test('opencode reads inactive only for a reset window with no free-model use', async () => {
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  const boundary = now - 2 * HOUR;
+  const used = await opencodeDb([freeLimit(boundary - 26 * HOUR, 2 * HOUR), freeUsage(boundary + 60_000, 5)]);
+  const fresh = await opencodeDb([freeLimit(boundary - 26 * HOUR, 2 * HOUR)]);
+  const bare = await opencodeDb([]);
+  try {
+    assert.equal((await used.reading()).text, '5 tokens');
+    const idle = await fresh.reading();
+    assert.equal(idle.text, 'inactive');
+    assert.equal(idle.resetTime, fresh.resetTime(boundary + DAY), 'the countdown still ends the window');
+    // No 429 ever: no reset evidence, so the chip keeps its (0) count instead of claiming idle.
+    assert.equal((await bare.reading()).text, '0 tokens');
+  } finally {
+    for (const db of [used, fresh, bare]) (await import('node:fs')).rmSync(db.home, { recursive: true, force: true });
   }
 });
 

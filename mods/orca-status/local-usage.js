@@ -36,21 +36,28 @@ ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | while IFS= read -r f; 
   if [ -n "$v" ]; then printf '%s\n' "$v"; break; fi
 done`;
 // opencode's free-model tokens (cache included, as Claude and Codex are billed) since its last
-// reset. A 429 carries the server's own reset (time + retryAfterMs): the newest one past is the
-// window start while under 24h old, else 9:00 local; the next reset is a future one, else
-// start + 24h. Inside that 24h it counts from 0 tokens; past it, with no use since, it is "inactive".
-// shortcut: the reset drifts ~30 min a day, so the next reset is an estimate.
+// reset. A 429 carries the server's own reset (time + retryAfterMs) and those resets are a fixed
+// daily cycle, so the window holding now is the newest one stepped forward in whole 24h cycles
+// until it straddles now (`s <= now < s + 86400000`): the last 429 may be minutes or days old and
+// the answer is the same. Only with no 429 at all does the window fall back to the most recent
+// 9:00 local. The next reset is that window's end, so it is always in the future, and rows at or
+// before the window start are never counted. "inactive" means the window came from that cycle and
+// no free model has run since the reset; without reset evidence the chip shows its count instead.
+// shortcut: the server's cycle drifts ~30 min a day, so its next reset is an estimate.
 const OPENCODE_RESET_HOUR = 9;
 const OPENCODE = `sqlite3 -readonly "$HOME/.local/share/opencode/opencode.db" "
 with x(r) as (select time_created+json_extract(data,'$.error.retryAfterMs') from session_message
     where type='assistant' and json_extract(data,'$.error.type')='provider.free-limit'),
 n(t) as (select strftime('%s','now')*1000),
-w(s) as (select coalesce((select max(r) from x where r<=(select t from n) and r>(select t from n)-86400000),
+b(r) as (select max(r) from x),
+w(s) as (select coalesce(
+    (select r+(case when r<=(select t from n) then ((select t from n)-r)/86400000
+      else -(((r-(select t from n))+86399999)/86400000) end)*86400000 from b),
     strftime('%s', datetime('now','localtime','-${OPENCODE_RESET_HOUR} hours','start of day','+${OPENCODE_RESET_HOUR} hours','utc'))*1000) from n)
 select coalesce(sum(json_extract(data,'$.tokens.input')+json_extract(data,'$.tokens.output')+json_extract(data,'$.tokens.reasoning')
     +coalesce(json_extract(data,'$.tokens.cache.read'),0)+coalesce(json_extract(data,'$.tokens.cache.write'),0)),0),
-  coalesce((select min(r) from x where r>(select t from n)), s+86400000)/1000,
-  exists(select 1 from x where r<=(select t from n) and r>(select t from n)-86400000)
+  (s+86400000)/1000,
+  (select r is not null from b)
 from session_message, w where type in ('assistant','compaction') and time_created >= s
   and json_extract(data,'$.model.providerID')='opencode' and json_extract(data,'$.model.id') like '%-free'" 2>/dev/null`;
 
@@ -169,9 +176,11 @@ export async function probeLocal(execFn, installed = null) {
     codex && reading('codex', [codex.primary, codex.secondary].filter(Boolean)
       .map((w) => bucket(String(w.window_minutes), w.window_minutes, w.used_percent, w.resets_at, w.window_minutes === 300 ? '5h' : w.window_minutes === 10080 ? 'wk' : `${w.window_minutes}m`))),
     Number.isFinite(tokens) && Number.isFinite(resetAt) && {
-      provider: 'opencode', status: 'ok', label: '', buckets: [], ...(tokens || fresh
-        ? { text: `${formatTokens(tokens)} tokens`, resetTime: new Date(resetAt * 1000).toISOString() }
-        : { text: 'inactive', resetTime: null })
+      provider: 'opencode', status: 'ok', label: '', buckets: [],
+      // A window the server's own cycle set and nothing has used since is "inactive"; any other
+      // window reads as its token count, 0 included, with the reset that ends it.
+      text: fresh && !tokens ? 'inactive' : `${formatTokens(tokens)} tokens`,
+      resetTime: new Date(resetAt * 1000).toISOString()
     }
   ];
   return out.filter(Boolean).map((r) => ({ ...r, detail: true }));
