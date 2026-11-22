@@ -40,8 +40,6 @@ import {
   writeRunOverrides,
 } from "./state.js";
 import {
-  PERMISSION_CHOICES,
-  PERMISSION_DESCRIPTIONS,
   PERMISSION_LABELS,
   PERMISSION_SHORT_LABELS,
   permissionChoices,
@@ -58,7 +56,8 @@ import {
 } from "./install.js";
 import { errorText, sameRun, tail, timeLabel } from "./util.js";
 import { badge, banner, empty, group, icon, permissionBadge, section } from "./parts.js";
-import { permissionSelect, rowView, editorView, uninstallSectionView } from "./views.js";
+import { rowView, editorView, uninstallSectionView } from "./views.js";
+import { agentPermissionItems, defaultPermissionItems, permissionSelect } from "./permission-menu.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
@@ -242,7 +241,8 @@ export default class AgentManager extends View {
 
         // A refresh must not replace the snapshot a dirty draft was based on. It becomes a
         // conflict instead; only Reload or the explicit Overwrite action may move the base.
-        const update = programsUpdate(this.programsText, programs, this.anyDirty());
+        // Files read while a permission pick is still being written are older than that pick.
+        const update = this.persisting ? { kind: "same" } : programsUpdate(this.programsText, programs, this.anyDirty());
         if (update.kind === "apply") {
           this.applyPrograms(update.text);
           this.pendingProgramsText = undefined;
@@ -251,7 +251,7 @@ export default class AgentManager extends View {
           this.pendingProgramsText = update.text;
           this.externalConflict = true;
         }
-        this.applyManager(manager);
+        if (!this.persisting) this.applyManager(manager);
         if (known) {
           this.agents = known;
           this.fromCache = false;
@@ -331,10 +331,12 @@ export default class AgentManager extends View {
   // programs.json or agent-manager.json changed outside this page. Dirty drafts are never
   // replaced; they get a conflict banner and an explicit overwrite action instead.
   poll(cx) {
-    if (this.refreshing) return;
+    if (this.refreshing || this.persisting) return;
     cx.spawn(async (cx) => {
       const programs = await readTextFile(PROGRAMS).catch(() => undefined);
       const manager = await readTextFile(MANAGER).catch(() => undefined);
+      // A pick made while the files were being read is newer than what was read.
+      if (this.persisting) return;
       let changed = false;
       const update = programsUpdate(this.programsText, programs, this.anyDirty());
       if (update.kind === "apply") {
@@ -761,11 +763,12 @@ export default class AgentManager extends View {
     return true;
   }
 
-  flashPermission(text, tone, cx) {
-    this.permissionNotice = { text, tone };
+  flashPermission(text, tone, cx, retry = null) {
+    this.permissionNotice = { text, tone, retry };
     cx.notify();
     cx.timer.after(6000, () => {
-      if (this.permissionNotice?.text === text) {
+      // A notice with a retry stays until it is used or replaced.
+      if (this.permissionNotice?.text === text && !this.permissionNotice.retry) {
         this.permissionNotice = null;
         cx.notify();
       }
@@ -785,9 +788,35 @@ export default class AgentManager extends View {
     return true;
   }
 
-  togglePermissionMenu(id, cx) {
-    this.permissionOpen = this.permissionOpen === id ? null : id;
+  /** The Popover reports every open and close (press, outside press, Escape) through here. */
+  setPermissionMenu(id, open, cx) {
+    this.permissionOpen = open ? id : this.permissionOpen === id ? null : this.permissionOpen;
+    this.permissionActive = -1;
     cx.notify();
+  }
+
+  /** The items of the open menu, for the keyboard. */
+  permissionMenuItems() {
+    const rows = this.allRows().all;
+    if (this.permissionOpen === "default") return defaultPermissionItems(this, rows.filter((row) => row.supports));
+    const row = rows.find((candidate) => candidate.key === this.permissionOpen);
+    return row ? agentPermissionItems(this, row) : [];
+  }
+
+  /** Up/Down move the highlight, Enter picks it. Escape and outside presses belong to the Popover. */
+  onPermissionKey(key, cx) {
+    const items = this.permissionMenuItems();
+    if (!items.length) return false;
+    const at = this.permissionActive ?? -1;
+    if (key === "down") this.permissionActive = (at + 1) % items.length;
+    else if (key === "up") this.permissionActive = at <= 0 ? items.length - 1 : at - 1;
+    else if (key === "enter" && at >= 0) {
+      this.permissionOpen = null;
+      items[at].onPick(cx);
+    } else if (key === "escape") this.permissionOpen = null;
+    else return false;
+    cx.notify();
+    return true;
   }
 
   /** Writes runs[agent] = run in one programs.json write; nothing is written on failure. */
@@ -806,7 +835,8 @@ export default class AgentManager extends View {
       this.flashPermission(`Could not save programs.json: ${errorText(error)}. Nothing was changed.`, "blocked", cx);
       return false;
     }
-    this.programsText = written.text;
+    // A newer pick is already in memory; this write must not roll the page back to its text.
+    if (!this.pendingPermissions) this.programsText = written.text;
     this.programsError = null;
     this.pendingProgramsText = undefined;
     this.externalConflict = false;
@@ -826,17 +856,81 @@ export default class AgentManager extends View {
     }
     this.managerText = text;
     this.managerError = null;
-    this.permissions = next;
+    if (!this.pendingPermissions) this.permissions = next;
     this.writeError = null;
     return true;
   }
 
-  /** Re-read what was written so the rows, badges and editors agree without waiting for a poll. */
-  afterPermissionWrite(cx) {
-    this.syncEditors();
-    this.shareInventory();
-    this.refreshing = false;
-    this.refresh(cx);
+  /**
+   * Apply a pick to the page's memory now (the commands in programs.json's text, the stored
+   * choice), so the UI never waits for the disk. `persistPermissions` writes it afterwards.
+   */
+  applyPermissionChange(runs, permissions, cx) {
+    if (runs.size > 0) {
+      const written = writeRunOverrides(this.programsText, [...runs]);
+      if (written.error) {
+        this.flashPermission(written.error, "blocked", cx);
+        return false;
+      }
+      this.applyPrograms(written.text);
+    }
+    this.permissions = permissions;
+    this.pendingRuns ??= new Map();
+    for (const [key, run] of runs) this.pendingRuns.set(key, run); // latest pick per agent wins
+    this.pendingPermissions = permissions;
+    this.persisting = (this.persisting ?? 0) + 1;
+    return true;
+  }
+
+  /**
+   * Writes run on one chain, one flush at a time. A flush takes everything picked so far, so a
+   * pick that lands while an older write is in flight is written after it and the last pick is
+   * what stays on disk. A failed write reloads both files and offers a retry.
+   */
+  persistPermissions(cx, retry) {
+    const flush = async () => {
+      const runs = this.pendingRuns ?? new Map();
+      const permissions = this.pendingPermissions;
+      if (!permissions) return true; // an earlier flush already wrote this pick
+      this.pendingRuns = new Map();
+      this.pendingPermissions = null;
+      return (await this.writePrograms(runs, cx)) && (await this.writePermissions(permissions, cx));
+    };
+    const done = (this.writeChain ?? Promise.resolve()).then(flush);
+    this.writeChain = done.then(() => {}, () => {});
+    return done.then(async (ok) => {
+      this.persisting -= 1;
+      if (!ok) this.persistFailed = true;
+      if (this.persisting > 0) return ok;
+      if (this.persistFailed) {
+        this.persistFailed = false;
+        await this.reloadFromDisk(cx);
+        if (this.permissionNotice) this.permissionNotice.retry = retry;
+      }
+      try {
+        this.syncEditors();
+        this.shareInventory();
+      } catch {}
+      cx.notify();
+      return ok;
+    });
+  }
+
+  /** The disk wins after a failed write: drop the optimistic state and show what is stored. */
+  async reloadFromDisk(cx) {
+    const [programs, manager] = await Promise.all([
+      readTextFile(PROGRAMS).catch(() => undefined),
+      readTextFile(MANAGER).catch(() => undefined),
+    ]);
+    if (programs !== undefined) {
+      this.programsText = undefined;
+      this.applyPrograms(programs);
+    }
+    if (manager !== undefined) {
+      this.managerText = undefined;
+      this.applyManager(manager);
+    }
+    cx.notify();
   }
 
   /**
@@ -863,15 +957,13 @@ export default class AgentManager extends View {
       applied += 1;
       if (!sameRun(next, row.run)) runs.set(row.key, next);
     }
-    if (!(await this.writePrograms(runs, cx))) return false;
     // Every agent that could take the choice now has it, so no per-agent exception is left.
-    if (!(await this.writePermissions({ default: choice, overrides: {} }, cx))) return false;
+    if (!this.applyPermissionChange(runs, { default: choice, overrides: {} }, cx)) return false;
     const notes = [`Applied to ${applied} agent${applied === 1 ? "" : "s"}`];
     if (unsupported > 0) notes.push(`${unsupported} don't support this setting`);
     if (custom > 0) notes.push(`${custom} ${custom === 1 ? "uses" : "use"} custom launch arguments`);
     this.flashPermission(`${notes.join("; ")}.`, "muted", cx);
-    this.afterPermissionWrite(cx);
-    return true;
+    return this.persistPermissions(cx, (retryCx) => this.setDefaultPermission(choice, retryCx));
   }
 
   /** One agent's permission; `\"default\"` clears its exception and follows the all-agents choice. */
@@ -883,14 +975,15 @@ export default class AgentManager extends View {
     if (!(permissionChoices(row.key) ?? []).includes(target)) return false;
     const next = withPermission(row.key, row.run, target);
     const runs = next && !sameRun(next, row.run) ? new Map([[row.key, next]]) : new Map();
-    if (!(await this.writePrograms(runs, cx))) return false;
     const overrides = { ...permissions.overrides };
     if (choice === "default") delete overrides[row.key];
     else overrides[row.key] = choice;
-    if (!(await this.writePermissions({ default: permissions.default, overrides }, cx))) return false;
+    if (!this.applyPermissionChange(runs, { default: permissions.default, overrides }, cx)) return false;
     this.flashPermission(`${row.name} now uses ${PERMISSION_LABELS[target].toLowerCase()}.`, "muted", cx);
-    this.afterPermissionWrite(cx);
-    return true;
+    return this.persistPermissions(cx, (retryCx) => {
+      const fresh = this.allRows().all.find((candidate) => candidate.key === row.key) ?? row;
+      return this.setAgentPermission(fresh, choice, retryCx);
+    });
   }
 
   // ---- keyboard -------------------------------------------------------------
@@ -898,6 +991,7 @@ export default class AgentManager extends View {
   onKey(event, cx) {
     if (this.typing) return false;
     const key = String(event.key ?? "");
+    if (this.permissionOpen && this.onPermissionKey(key, cx)) return true;
     const rows = this.allRows().all;
     if (!rows.length) return false;
     let at = rows.findIndex((row) => row.key === this.focusKey);
@@ -1077,21 +1171,6 @@ export default class AgentManager extends View {
     const managed = rows.filter((row) => row.supports);
     const exceptions = managed.filter((row) => row.permissionOverride);
     const custom = managed.filter((row) => row.permission === "custom");
-    const supporters = (choice) =>
-      managed.filter((row) => (permissionChoices(row.key) ?? []).includes(choice));
-    const items = PERMISSION_CHOICES.map((choice) => {
-      const supported = supporters(choice).map((row) => row.name);
-      const extra = supported.length > 3 ? ` +${supported.length - 3}` : "";
-      return {
-        id: choice,
-        label: PERMISSION_LABELS[choice],
-        description: PERMISSION_DESCRIPTIONS[choice],
-        detail: choice === "own" ? null : supported.length ? `${supported.slice(0, 3).join(", ")}${extra}` : "No installed agent supports this choice",
-        selected: permissions.default === choice,
-        tone: choice === "full-access" ? t.blocked : null,
-        onPick: (cx) => this.setDefaultPermission(choice, cx),
-      };
-    });
     const exceptionLine = exceptions.length
       ? `${exceptions.length === 1 ? "1 agent keeps its" : `${exceptions.length} agents keep their`} own permission: ${exceptions
           .map((row) => `${row.name} (${PERMISSION_LABELS[row.permission]})`)
@@ -1139,11 +1218,13 @@ export default class AgentManager extends View {
               {
                 id: "default",
                 open: this.permissionOpen === "default",
+                active: this.permissionActive,
+                choice: permissions.default,
                 label: PERMISSION_LABELS[permissions.default],
-                tone: permissions.default === "full-access" ? t.blocked : t.foreground,
+                warn: permissions.default === "full-access",
                 width: 340,
-                items,
-                onToggle: (cx) => this.togglePermissionMenu("default", cx),
+                items: defaultPermissionItems(this, managed),
+                onOpenChange: (open, cx) => this.setPermissionMenu("default", open, cx),
               },
               t,
             ),
@@ -1195,10 +1276,27 @@ export default class AgentManager extends View {
       )
       .when(this.permissionNotice, (el) =>
         el.child(
-          div()
-            .text_size(11)
-            .text_color(this.permissionNotice.tone === "blocked" ? t.blocked : t.muted)
-            .child(this.permissionNotice.text),
+          h_flex()
+            .w_full()
+            .gap(10)
+            .items_center()
+            .child(
+              div()
+                .flex_1()
+                .min_w(0)
+                .text_size(11)
+                .text_color(this.permissionNotice.tone === "blocked" ? t.blocked : t.muted)
+                .child(this.permissionNotice.text),
+            )
+            .when(this.permissionNotice.retry, (inner) =>
+              inner.child(
+                this.button("am-permission-retry", "Retry", t, (_event, cx) => {
+                  const retry = this.permissionNotice?.retry;
+                  this.permissionNotice = null;
+                  retry?.(cx);
+                }, { height: 24, px: 8, color: t.blocked }),
+              ),
+            ),
         ),
       );
   }

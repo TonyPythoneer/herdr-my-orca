@@ -165,3 +165,78 @@ test("an unsaved command draft blocks a permission change", async () => {
   assert.deepEqual(runOf(files, "claude"), ["claude"]);
   assert.match(owner.permissionNotice.text, /Save or cancel/);
 });
+
+// A backend whose writes can be delayed or failed, so the UI's independence from storage and the
+// order of writes are checked against the real handlers.
+function slowFiles(files, { delayFor = () => 0, fail = () => false } = {}) {
+  let writes = 0;
+  const slow = new Map(files);
+  slow.set = (key, value) => {
+    const n = (writes += 1);
+    return new Promise((resolve, reject) =>
+      setTimeout(() => (fail(key, n) ? reject(new Error("disk full")) : (Map.prototype.set.call(slow, key, value), resolve())), delayFor(n)),
+    );
+  };
+  globalThis.__herdrFiles = slow;
+  return slow;
+}
+const claudeRow = (owner) => owner.allRows().all.find((row) => row.key === "claude");
+const diskRun = (files) => JSON.parse(Map.prototype.get.call(files, PROGRAMS)).programs.claude?.run;
+
+test("the picked permission is visible before the disk write finishes", async () => {
+  const { owner, files, cx } = harness({ programs: JSON.stringify({ programs: { claude: { run: ["claude"] } } }) });
+  const slow = slowFiles(files, { delayFor: () => 40 });
+  const done = owner.setAgentPermission(claudeRow(owner), "full-access", cx);
+
+  // Synchronously, before any write: the row shows it, the menu is closed, nothing is on disk yet.
+  assert.equal(claudeRow(owner).permission, "full-access");
+  assert.equal(owner.permissionOpen, null);
+  assert.deepEqual(diskRun(slow), ["claude"]);
+  assert.equal(await done, true);
+  assert.deepEqual(diskRun(slow), ["claude", "--dangerously-skip-permissions"]);
+});
+
+test("rapid picks end on the last one even when the first write is slower", async () => {
+  const { owner, files, cx } = harness({ programs: JSON.stringify({ programs: { claude: { run: ["claude"] } } }) });
+  // Write 1 (A's programs.json) takes 60ms, every later write 1ms: unordered writes would let A land last.
+  const slow = slowFiles(files, { delayFor: (n) => (n === 1 ? 60 : 1) });
+  const a = owner.setAgentPermission(claudeRow(owner), "auto", cx);
+  const b = owner.setAgentPermission(claudeRow(owner), "ask", cx);
+  assert.equal(claudeRow(owner).permission, "ask");
+  await Promise.all([a, b]);
+
+  assert.deepEqual(diskRun(slow), ["claude", "--permission-mode", "default"]);
+  assert.equal(JSON.parse(Map.prototype.get.call(slow, MANAGER)).permissions.overrides.claude, "ask");
+  assert.equal(claudeRow(owner).permission, "ask");
+});
+
+test("a failed write reloads the disk state, reports it and can be retried", async () => {
+  const { owner, files, cx } = harness({ programs: JSON.stringify({ programs: { claude: { run: ["claude"] } } }) });
+  let failing = true;
+  const slow = slowFiles(files, { fail: () => failing });
+  const ok = await owner.setAgentPermission(claudeRow(owner), "full-access", cx);
+
+  assert.equal(ok, false);
+  assert.equal(claudeRow(owner).permission, "own"); // reconciled with what is stored
+  assert.match(owner.permissionNotice.text, /Could not save programs\.json/);
+  assert.equal(typeof owner.permissionNotice.retry, "function");
+
+  failing = false;
+  await owner.permissionNotice.retry(cx);
+  assert.deepEqual(diskRun(slow), ["claude", "--dangerously-skip-permissions"]);
+  assert.equal(claudeRow(owner).permission, "full-access");
+});
+
+test("one permission pick runs no agent detection and reads each file once", async () => {
+  const { owner, files, cx } = harness({ programs: JSON.stringify({ programs: { claude: { run: ["claude"] } } }) });
+  let reads = 0;
+  const counted = new Map(files);
+  counted.get = (key) => ((reads += 1), Map.prototype.get.call(counted, key));
+  globalThis.__herdrFiles = counted;
+  let refreshes = 0;
+  owner.refresh = () => (refreshes += 1);
+  await owner.setAgentPermission(claudeRow(owner), "full-access", cx);
+
+  assert.equal(refreshes, 0);
+  assert.equal(reads, 2); // programs.json and agent-manager.json, once each, to write against the latest
+});
