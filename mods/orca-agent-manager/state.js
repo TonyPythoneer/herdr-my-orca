@@ -4,6 +4,8 @@
 // Command source of truth: programs.json's `run` array (executable first, then its arguments).
 // Nothing here splits a shell string, so an argument keeps its spaces, quotes and backslashes.
 
+import { normalizePermissions } from "./permissions.js";
+
 // Herdr's built-in `run` for the agents it offers, read from a clean app home (no programs.json)
 // on Herdr 0.1.16 (`knownAgents()`); a key missing here is a program the user added in
 // programs.json, which has no built-in command to reset to.
@@ -182,36 +184,56 @@ export function readRunOverride(text, key) {
 }
 
 /**
- * Writes one agent's `run` and leaves every other field and entry alone. `run: null` removes the
- * override (and the entry itself when `run` was its only field).
+ * Writes several `run` arrays in one parse, leaving every other field and entry alone. `run: null`
+ * removes the override (and the entry itself when `run` was its only field). Entries are applied in
+ * order; a bad entry changes nothing at all.
  */
-export function writeRunOverride(text, key, run) {
+export function writeRunOverrides(text, entries) {
   const parsed = parseRoot(text);
   if (parsed.error) return { error: parsed.error };
   const root = parsed.root;
   if (root.programs === undefined) root.programs = {};
-  const existing = root.programs[key];
-  if (existing !== undefined && (existing === null || typeof existing !== "object" || Array.isArray(existing))) {
-    return { error: `programs.json's \`${key}\` entry must be an object; nothing was changed.` };
-  }
-  if (run === null) {
-    if (existing === undefined) return { text: text == null ? "" : String(text) };
-    const entry = { ...existing };
-    delete entry.run;
-    if (Object.keys(entry).length === 0) delete root.programs[key];
-    else root.programs[key] = entry;
-  } else {
-    if (!Array.isArray(run) || run.length === 0 || run.some((part) => typeof part !== "string")) {
+  // Validate every entry before touching the tree, so one bad command cannot leave a half write.
+  for (const [key, run] of entries) {
+    const existing = root.programs[key];
+    if (existing !== undefined && (existing === null || typeof existing !== "object" || Array.isArray(existing))) {
+      return { error: `programs.json's \`${key}\` entry must be an object; nothing was changed.` };
+    }
+    if (run !== null && (!Array.isArray(run) || run.length === 0 || run.some((part) => typeof part !== "string"))) {
       return { error: "A command needs an executable and string arguments." };
     }
-    root.programs[key] = { ...(existing ?? {}), run: [...run] };
   }
-  return { text: `${JSON.stringify(root, null, 2)}\n` };
+  let changed = false;
+  for (const [key, run] of entries) {
+    const existing = root.programs[key];
+    if (run === null) {
+      if (existing === undefined) continue;
+      const entry = { ...existing };
+      delete entry.run;
+      if (Object.keys(entry).length === 0) delete root.programs[key];
+      else root.programs[key] = entry;
+      changed = true;
+    } else {
+      root.programs[key] = { ...(existing ?? {}), run: [...run] };
+      changed = true;
+    }
+  }
+  return { text: `${JSON.stringify(root, null, 2)}\n`, changed };
 }
 
-/** `agent-manager.json`: only the agents the person turned off are stored. */
+/** Writes one agent's `run`; see `writeRunOverrides`. */
+export function writeRunOverride(text, key, run) {
+  return writeRunOverrides(text, [[key, run]]);
+}
+
+/**
+ * `agent-manager.json`: the agents the person turned off, and the permission choices. A missing
+ * `permissions` block means every agent uses its own settings.
+ */
 export function parseManagerConfig(text) {
-  if (text == null || String(text).trim() === "") return { disabled: new Set() };
+  if (text == null || String(text).trim() === "") {
+    return { disabled: new Set(), permissions: { default: "own", overrides: {} } };
+  }
   let root;
   try {
     root = JSON.parse(text);
@@ -221,16 +243,29 @@ export function parseManagerConfig(text) {
   if (root === null || typeof root !== "object" || Array.isArray(root)) {
     return { error: "agent-manager.json must contain a JSON object." };
   }
-  if (root.disabled === undefined) return { disabled: new Set() };
-  if (!Array.isArray(root.disabled) || root.disabled.some((key) => typeof key !== "string")) {
-    return { error: "agent-manager.json's `disabled` must be an array of agent keys." };
+  const permissions = normalizePermissions(root.permissions);
+  if (permissions.error) return { error: permissions.error };
+  if (root.disabled !== undefined) {
+    if (!Array.isArray(root.disabled) || root.disabled.some((key) => typeof key !== "string")) {
+      return { error: "agent-manager.json's `disabled` must be an array of agent keys." };
+    }
   }
-  return { disabled: new Set(root.disabled) };
+  return { disabled: new Set(root.disabled ?? []), permissions };
 }
 
-export function serializeManagerConfig(disabled) {
+export function serializeManagerConfig(disabled, permissions = { default: "own", overrides: {} }) {
   const keys = [...disabled].filter((key) => typeof key === "string").sort();
-  return `${JSON.stringify({ version: 1, disabled: keys }, null, 2)}\n`;
+  const root = { version: 1, disabled: keys };
+  const overrides = Object.fromEntries(
+    Object.entries(permissions.overrides ?? {})
+      .filter(([, choice]) => typeof choice === "string")
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+  );
+  // An install that never set a permission keeps the file it already had.
+  if (permissions.default !== "own" || Object.keys(overrides).length > 0) {
+    root.permissions = { default: permissions.default ?? "own", overrides };
+  }
+  return `${JSON.stringify(root, null, 2)}\n`;
 }
 
 /** Installed and Available keep Herdr's order; a disabled installed agent stays installed. */

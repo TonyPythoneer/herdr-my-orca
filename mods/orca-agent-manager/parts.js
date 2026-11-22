@@ -2,6 +2,7 @@
 import { div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { LIST_HEADER_HEIGHT } from "./state.js";
+import { PERMISSION_SHORT_LABELS } from "./permissions.js";
 
 export function badge(text, t, options = {}) {
   const color = options.color ?? t.muted;
@@ -37,6 +38,13 @@ export function icon(row, size, t) {
     .text_size(Math.round(size * 0.55))
     .text_color(t.muted)
     .child((row.name ?? "?").slice(0, 1).toUpperCase());
+}
+
+export function permissionBadge(choice, t) {
+  return badge(PERMISSION_SHORT_LABELS[choice] ?? "Custom", t, {
+    color: choice === "full-access" ? t.blocked : t.muted,
+    border: true,
+  });
 }
 
 export function section(title, count, t, note, muted = false) {

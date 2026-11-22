@@ -1,6 +1,7 @@
 # Plan: ORCA-style agent permissions in the Herdr Agents page
 
-Status: spec, not implemented. Awaiting design approval.
+Status: implemented on `agent-permissions`. See “What shipped” at the end for what differs
+from this spec.
 
 ## What ORCA does (the model worth copying)
 
@@ -185,3 +186,26 @@ predates this work (it also ignores model flags and has stale keys such as
 1. `Each agent's own settings` is a reset, not a no-op: it strips known permission
    flags from recognized agents (custom command lines untouched).
 2. `accept-edits` is omitted from v1.
+
+## What shipped
+
+All nine steps above are done, with three decisions the code settled:
+
+- **A capability is not an exception.** When the all-agents choice is `ask` and an agent has
+  no ask flag (Gemini, OpenCode, …), its unchanged command is not listed as an override. It
+  appears in a separate line instead: “11 agents have no Ask for approval flag and keep their
+  own command: OpenCode, Cursor, Copilot +8.” An agent that *could* follow the default and
+  didn't still counts as an exception.
+- **Custom detection looks past the recipes.** `readPermission` treats a leftover permission
+  carrier (`--permission-mode plan`, `-a never`, Codex `-c approval_policy=…`) as `custom`, so
+  `own` never quietly strips a policy the table doesn't know. A Codex `-c` that is not a
+  permission root (the paste tweak, a model override) still reads as its choice.
+- **Bulk changes wait for drafts.** A permission write rewrites the same `run` a dirty
+  command draft is based on, so it is refused with “Save or cancel your command edits first”
+  until the draft is settled.
+
+Files: `permissions.js` and `permissions.test.js` (new), `permissions.flow.test.js` (new: runs the
+real handlers against in-memory files through `scripts/gpui-stub-loader.mjs`, which now provides
+`readTextFile`/`writeTextFile`), `state.js` (+ its tests), `main.js`, `views.js`, `parts.js`,
+`render.test.js` and `render.snap.json` (re-recorded for the badge and permission row), and the
+README paragraph.

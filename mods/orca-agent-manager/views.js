@@ -5,7 +5,144 @@ import { settings } from "herdr";
 import { LIST_ROW_HEIGHT, argsEditable, draftRun, formatArgv } from "./state.js";
 import { installMethodFor } from "./install.js";
 import { sameRun } from "./util.js";
-import { badge, icon } from "./parts.js";
+import { PERMISSION_AGENT_LABELS, PERMISSION_LABELS, permissionChoices } from "./permissions.js";
+import { badge, icon, permissionBadge } from "./parts.js";
+
+/**
+ * A dropdown built from inline children, so it needs no popup: the trigger reads like an input and
+ * the menu opens straight below it. Items pick through their own handler.
+ */
+export function permissionSelect(spec, t) {
+  const tone = spec.tone ?? t.foreground;
+  return v_flex()
+    .flex_none()
+    .items_end()
+    .gap(6)
+    .child(
+      h_flex()
+        .id(`am-perm-${spec.id}`)
+        .h(28)
+        .px(10)
+        .gap(8)
+        .flex_none()
+        .items_center()
+        .justify_between()
+        .rounded(6)
+        .border_1()
+        .border_color(spec.open ? t.ring : t.input)
+        .bg(t.raised)
+        .cursor_pointer()
+        .role("button")
+        .accessibility_label(`${spec.label}: choose permission`)
+        .tooltip("Choose how much this agent may do without asking")
+        .on_click((_event, cx) => spec.onToggle(cx))
+        .child(
+          h_flex()
+            .min_w(0)
+            .gap(6)
+            .items_center()
+            .child(div().text_size(12).font_medium().text_color(tone).child(spec.label)),
+        )
+        .child(svg("mods/orca-agent-manager/chevron-down.svg").size(12).flex_none().text_color(t.muted)),
+    )
+    .when(spec.open, (el) =>
+      el.child(
+        v_flex()
+          .w(spec.width ?? 320)
+          .p(4)
+          .gap(1)
+          .rounded(8)
+          .border_1()
+          .border_color(t.border)
+          .bg(t.popover)
+          .children(
+            spec.items.map((item) =>
+              v_flex()
+                .id(`am-perm-${spec.id}-${item.id}`)
+                .w_full()
+                .px(8)
+                .py(6)
+                .gap(2)
+                .rounded(6)
+                .cursor_pointer()
+                .hover((style) => style.bg(t.hover))
+                .role("button")
+                .accessibility_label(item.label)
+                .on_click((_event, cx) => item.onPick(cx))
+                .child(
+                  h_flex()
+                    .gap(6)
+                    .items_center()
+                    .child(div().size(5).flex_none().rounded_full().bg(item.selected ? t.foreground : "#00000000"))
+                    .child(div().text_size(12).font_medium().text_color(item.tone ?? t.foreground).child(item.label)),
+                )
+                .when(item.description, (inner) =>
+                  inner.child(div().pl(11).text_size(11).text_color(t.muted).child(item.description)),
+                )
+                .when(item.detail, (inner) =>
+                  inner.child(div().pl(11).text_size(10).text_color(t.dim).child(item.detail)),
+                ),
+            ),
+          ),
+      ),
+    );
+}
+
+/** The effective permission for one agent, right above the command it is written into. */
+export function permissionRow(owner, row, t) {
+  const choices = permissionChoices(row.key) ?? [];
+  const permissions = owner.currentPermissions();
+  const override = Boolean(row.permissionOverride);
+  const items = [];
+  if (override && choices.includes(permissions.default)) {
+    items.push({
+      id: "default",
+      label: `Same as all agents · ${PERMISSION_LABELS[permissions.default]}`,
+      onPick: (cx) => owner.setAgentPermission(row, "default", cx),
+    });
+  }
+  for (const choice of choices) {
+    items.push({
+      id: choice,
+      label: PERMISSION_AGENT_LABELS[choice],
+      selected: row.permission === choice,
+      tone: choice === "full-access" ? t.blocked : null,
+      onPick: (cx) => owner.setAgentPermission(row, choice, cx),
+    });
+  }
+  const note =
+    row.permission === "custom"
+      ? "This command sets its own permission flags; a choice here replaces them."
+      : override
+        ? `Set for this agent; every other agent follows ${PERMISSION_LABELS[permissions.default].toLowerCase()}.`
+        : `Follows all agents (${PERMISSION_LABELS[permissions.default].toLowerCase()}).`;
+  return v_flex()
+    .w_full()
+    .gap(6)
+    .child(div().text_size(10).font_semibold().text_color(t.dim).child("PERMISSION"))
+    .child(
+      h_flex()
+        .w_full()
+        .gap(10)
+        .items_center()
+        .flex_wrap()
+        .child(
+          permissionSelect(
+            {
+              id: row.key,
+              open: owner.permissionOpen === row.key,
+              label: PERMISSION_AGENT_LABELS[row.permission] ?? "Custom",
+              tone: row.permission === "full-access" ? t.blocked : t.foreground,
+              width: 260,
+              items,
+              onToggle: (cx) => owner.togglePermissionMenu(row.key, cx),
+            },
+            t,
+          ),
+        )
+        .child(div().flex_1().min_w(140).text_size(11).text_color(t.muted).child(note)),
+    );
+}
 
 export function rowView(owner, row, t, last = false) {
   const open = owner.expanded.has(row.key);
@@ -71,7 +208,12 @@ export function rowView(owner, row, t, last = false) {
                     .child(row.name),
                 )
                 .when(row.customized, (el) => el.child(badge("Customized", t, { color: t.accent, border: true })))
-                .when(row.entryError, (el) => el.child(badge("Invalid command", t, { color: t.blocked, border: true }))),
+                .when(row.entryError, (el) => el.child(badge("Invalid command", t, { color: t.blocked, border: true })))
+                // A plain `own` is the default, so only a pinned or custom permission gets a badge.
+                .when(
+                  row.supports && (row.permission !== "own" || row.permissionOverride),
+                  (el) => el.child(permissionBadge(row.permission, t)),
+                ),
             )
             .child(owner.commandLine(row, t, quiet)),
         )
@@ -183,6 +325,7 @@ export function editorView(owner, row, editor, t) {
           ),
       ),
     )
+    .when(row.supports, (el) => el.child(permissionRow(owner, row, t)))
     .child(div().text_size(10).font_semibold().text_color(t.dim).child("EXECUTABLE"))
     .child(
       h_flex()

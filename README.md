@@ -16,6 +16,14 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   arguments. Commands are written to `programs.json`; the on/off choice lives in
   `agent-manager.json`. Refresh re-checks this computer by running a login-shell `command -v`
   probe, because `knownAgents()` caches for a minute and offers no force option.
+- **Permissions**: a Permissions card on the same page sets how much every agent may do without
+  asking — Ask for approval, Approve for me, Full access, or each agent's own settings — and each
+  agent row has its own permission menu beside the command. The choice is stored in
+  `agent-manager.json` (`permissions.default` + `permissions.overrides`) and written into
+  `programs.json`'s `run` as that agent's flag recipe (`--permission-mode auto`,
+  `--dangerously-skip-permissions`, `--approve-for-me`, …), so every launcher honors it. Agents
+  that have no permission flag stay on their own settings, and a command that sets unfamiliar
+  permission flags shows as Custom and is never rewritten by an all-agents change.
 - **Install/uninstall**: Install opens the official guide for the user to follow. Uninstall is
   only automated when the executable belongs to its verified npm-global package; it asks for
   confirmation, refuses while a live session uses it, and never touches settings, sessions or

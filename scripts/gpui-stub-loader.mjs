@@ -5,7 +5,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const STUBS = new Set(["gpui-kit", "gpui-base", "herdr"]);
-const HERDR = { appHome: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false" };
+const HERDR = { appHome: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
+  // File IO goes through `globalThis.__herdrFiles` so a flow test can run a mod's real handlers.
+  readTextFile: "async (path) => globalThis.__herdrFiles?.get(path)",
+  writeTextFile: "async (path, text) => { globalThis.__herdrFiles?.set(path, text); }",
+  setShared: "() => {}",
+  exec: "async () => ({ code: 0, stdout: '', stderr: '' })" };
 
 export async function resolve(specifier, context, next) {
   if (!STUBS.has(specifier)) return next(specifier, context);

@@ -25,6 +25,7 @@ import {
   validateDraft,
   validateExecutable,
   writeRunOverride,
+  writeRunOverrides,
 } from "./state.js";
 
 test("arguments keep spaces, quotes and backslashes byte for byte", () => {
@@ -164,6 +165,58 @@ test("manager config stores only disabled keys and rejects damage", () => {
   assert.match(parseManagerConfig("{ nope").error, /not valid JSON/);
   assert.match(parseManagerConfig('{"disabled":"claude"}').error, /array of agent keys/);
   assert.equal(serializeManagerConfig(new Set(["codex", "claude"])), '{\n  "version": 1,\n  "disabled": [\n    "claude",\n    "codex"\n  ]\n}\n');
+});
+
+test("a manager file without permissions reads as each agent's own settings", () => {
+  assert.deepEqual(parseManagerConfig(undefined).permissions, { default: "own", overrides: {} });
+  assert.deepEqual(parseManagerConfig('{"version":1,"disabled":[]}').permissions, { default: "own", overrides: {} });
+  assert.deepEqual(
+    parseManagerConfig('{"permissions":{"default":"ask","overrides":{"claude":"full-access"}}}').permissions,
+    { default: "ask", overrides: { claude: "full-access" } },
+  );
+  assert.match(parseManagerConfig('{"permissions":{"default":"yolo"}}').error, /permissions.default/);
+});
+
+test("permissions round-trip and stay out of the file until they are set", () => {
+  const none = serializeManagerConfig(new Set(), { default: "own", overrides: {} });
+  assert.doesNotMatch(none, /permissions/);
+  assert.equal(none, serializeManagerConfig(new Set()));
+
+  const set = serializeManagerConfig(new Set(["omp"]), { default: "ask", overrides: { claude: "full-access" } });
+  assert.deepEqual(JSON.parse(set), {
+    version: 1,
+    disabled: ["omp"],
+    permissions: { default: "ask", overrides: { claude: "full-access" } },
+  });
+  assert.deepEqual(parseManagerConfig(set).permissions, { default: "ask", overrides: { claude: "full-access" } });
+
+  // Overrides are sorted so two equal states always write the same bytes.
+  const sorted = serializeManagerConfig(new Set(), { default: "own", overrides: { grok: "ask", claude: "ask" } });
+  assert.deepEqual(Object.keys(JSON.parse(sorted).permissions.overrides), ["claude", "grok"]);
+});
+
+test("a batch run write applies every entry in one parse and refuses a half write", () => {
+  const before = JSON.stringify({
+    programs: { claude: { name: "Claude", run: ["claude"] }, codex: { run: ["codex"] } },
+  });
+  const written = writeRunOverrides(before, [
+    ["claude", ["claude", "--permission-mode", "ask"]],
+    ["codex", null],
+  ]);
+  const after = JSON.parse(written.text);
+  assert.deepEqual(after.programs.claude, { name: "Claude", run: ["claude", "--permission-mode", "ask"] });
+  // A run that was an entry's only field takes the entry with it, as a single reset does.
+  assert.equal(after.programs.codex, undefined);
+  assert.equal(written.changed, true);
+
+  // One bad entry leaves the whole file exactly as it was.
+  const refused = writeRunOverrides(before, [
+    ["claude", ["claude"]],
+    ["codex", []],
+  ]);
+  assert.match(refused.error, /needs an executable/);
+  assert.equal(refused.text, undefined);
+  assert.equal(writeRunOverride(before, "claude", ["claude"]).changed, true);
 });
 
 const AGENTS = [

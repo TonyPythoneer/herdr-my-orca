@@ -37,7 +37,19 @@ import {
   serializeManagerConfig,
   splitInventory,
   writeRunOverride,
+  writeRunOverrides,
 } from "./state.js";
+import {
+  PERMISSION_CHOICES,
+  PERMISSION_DESCRIPTIONS,
+  PERMISSION_LABELS,
+  PERMISSION_SHORT_LABELS,
+  permissionChoices,
+  readPermission,
+  reconcilePermissions,
+  supportsPermissions,
+  withPermission,
+} from "./permissions.js";
 import {
   activeSessions,
   installMethodFor,
@@ -45,8 +57,8 @@ import {
   uninstallCommand,
 } from "./install.js";
 import { errorText, sameRun, tail, timeLabel } from "./util.js";
-import { badge, banner, empty, group, icon, section } from "./parts.js";
-import { rowView, editorView, uninstallSectionView } from "./views.js";
+import { badge, banner, empty, group, icon, permissionBadge, section } from "./parts.js";
+import { permissionSelect, rowView, editorView, uninstallSectionView } from "./views.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
@@ -65,6 +77,11 @@ export default class AgentManager extends View {
     this.managerError = null;
     this.writeError = null;
     this.disabled = new Set();
+    // Permission intent lives here; programs.json's `run` is what launchers read, so every change
+    // is written into it. `overrides` is re-derived from the commands on every read (run wins).
+    this.permissions = { default: "own", overrides: {} };
+    this.permissionOpen = null;
+    this.permissionNotice = null;
     this.expanded = new Set();
     this.editors = new Map();
     this.focusKey = null;
@@ -128,7 +145,10 @@ export default class AgentManager extends View {
     this.managerText = text;
     const parsed = parseManagerConfig(text);
     this.managerError = parsed.error ?? null;
-    if (!parsed.error) this.disabled = parsed.disabled;
+    if (!parsed.error) {
+      this.disabled = parsed.disabled;
+      this.permissions = parsed.permissions;
+    }
     this.writeError = null;
     return true;
   }
@@ -141,18 +161,22 @@ export default class AgentManager extends View {
     const parsed = loaded ? readRunOverride(this.programsText, agent.key) : { run: null };
     const override = parsed.error ? null : parsed.run;
     const builtin = defaultRun(agent.key);
+    // KnownAgents' `run` is the effective command, but it is cached for up to a minute, so after
+    // programs.json drops an override it can still carry the old one. The built-in default is
+    // the canonical fallback once the file has been read; before that, Herdr's answer is all
+    // there is (and it avoids showing the default for a user override on the first paint).
+    const run = override ?? (loaded ? builtin ?? agent.run : agent.run);
+    const supports = supportsPermissions(agent.key);
     return {
       override,
       customized: override !== null,
-      // KnownAgents' `run` is the effective command, but it is cached for up to a minute, so after
-      // programs.json drops an override it can still carry the old one. The built-in default is
-      // the canonical fallback once the file has been read; before that, Herdr's answer is all
-      // there is (and it avoids showing the default for a user override on the first paint).
-      run: override ?? (loaded ? builtin ?? agent.run : agent.run),
+      run,
       defaultCmd: builtin,
       builtin: isBuiltinAgent(agent.key),
       homepage: homepageFor(agent.key),
       entryError: this.programsError || !loaded ? null : parsed.error ?? null,
+      supports,
+      permission: supports ? readPermission(agent.key, run) : "own",
     };
   }
 
@@ -168,7 +192,25 @@ export default class AgentManager extends View {
       })
       .map((agent) => ({ ...agent, ...this.rowInfo(agent) }));
     const split = splitInventory(base, this.disabled);
-    return { ...split, all: [...split.installed, ...split.available] };
+    const all = [...split.installed, ...split.available];
+    // A command that disagrees with the stored default is that agent's own permission. A broken
+    // programs.json cannot be trusted for this, so it keeps the stored state instead.
+    const overrides = this.programsError ? this.permissions.overrides : reconcilePermissions(all, this.permissions);
+    const annotate = (row) => ({
+      ...row,
+      permissionOverride: Object.prototype.hasOwnProperty.call(overrides, row.key),
+    });
+    return {
+      installed: split.installed.map(annotate),
+      available: split.available.map(annotate),
+      all: all.map(annotate),
+    };
+  }
+
+  /** The stored default plus the overrides the commands actually show. */
+  currentPermissions() {
+    if (this.programsError) return { default: this.permissions.default, overrides: this.permissions.overrides };
+    return { default: this.permissions.default, overrides: reconcilePermissions(this.allRows().all, this.permissions) };
   }
 
   refresh(cx) {
@@ -398,6 +440,7 @@ export default class AgentManager extends View {
   }
 
   toggleExpand(row, cx) {
+    this.permissionOpen = null;
     if (this.expanded.has(row.key)) {
       this.expanded.delete(row.key);
     } else {
@@ -691,7 +734,7 @@ export default class AgentManager extends View {
       const next = new Set(parsed.disabled);
       if (next.has(row.key)) next.delete(row.key);
       else next.add(row.key);
-      const text = serializeManagerConfig(next);
+      const text = serializeManagerConfig(next, this.permissions);
       try {
         await writeTextFile(MANAGER, text, base === undefined ? null : base);
       } catch (error) {
@@ -706,6 +749,148 @@ export default class AgentManager extends View {
       this.shareInventory();
       cx.notify();
     });
+  }
+
+  // ---- permissions ----------------------------------------------------------
+
+  // A permission change rewrites the same `run` a dirty draft is editing, so it waits for the
+  // draft to be saved or cancelled instead of writing underneath it.
+  permissionBlocked(cx) {
+    if (!this.anyDirty()) return false;
+    this.flashPermission("Save or cancel your command edits first: a permission change rewrites the same command.", "blocked", cx);
+    return true;
+  }
+
+  flashPermission(text, tone, cx) {
+    this.permissionNotice = { text, tone };
+    cx.notify();
+    cx.timer.after(6000, () => {
+      if (this.permissionNotice?.text === text) {
+        this.permissionNotice = null;
+        cx.notify();
+      }
+    });
+  }
+
+  /** A permission change writes both files, so neither may be damaged when it starts. */
+  permissionReady(cx) {
+    if (this.programsError) {
+      this.flashPermission("programs.json is invalid; fix it before changing permissions.", "blocked", cx);
+      return false;
+    }
+    if (this.managerError) {
+      this.flashPermission("agent-manager.json is invalid; fix it before changing permissions.", "blocked", cx);
+      return false;
+    }
+    return true;
+  }
+
+  togglePermissionMenu(id, cx) {
+    this.permissionOpen = this.permissionOpen === id ? null : id;
+    cx.notify();
+  }
+
+  /** Writes runs[agent] = run in one programs.json write; nothing is written on failure. */
+  async writePrograms(runs, cx) {
+    if (!runs || runs.size === 0) return true;
+    const latest = await readTextFile(PROGRAMS).catch(() => this.programsText);
+    const base = latest === undefined ? this.programsText : latest;
+    const written = writeRunOverrides(base, [...runs]);
+    if (written.error) {
+      this.flashPermission(written.error, "blocked", cx);
+      return false;
+    }
+    try {
+      await writeTextFile(PROGRAMS, written.text, base === undefined ? null : base);
+    } catch (error) {
+      this.flashPermission(`Could not save programs.json: ${errorText(error)}. Nothing was changed.`, "blocked", cx);
+      return false;
+    }
+    this.programsText = written.text;
+    this.programsError = null;
+    this.pendingProgramsText = undefined;
+    this.externalConflict = false;
+    this.writeError = null;
+    return true;
+  }
+
+  async writePermissions(next, cx) {
+    const latest = await readTextFile(MANAGER).catch(() => this.managerText);
+    const base = latest === undefined ? this.managerText : latest;
+    const text = serializeManagerConfig(this.disabled, next);
+    try {
+      await writeTextFile(MANAGER, text, base === undefined ? null : base);
+    } catch (error) {
+      this.flashPermission(`Could not save agent-manager.json: ${errorText(error)}. The command change is kept.`, "blocked", cx);
+      return false;
+    }
+    this.managerText = text;
+    this.managerError = null;
+    this.permissions = next;
+    this.writeError = null;
+    return true;
+  }
+
+  /** Re-read what was written so the rows, badges and editors agree without waiting for a poll. */
+  afterPermissionWrite(cx) {
+    this.syncEditors();
+    this.shareInventory();
+    this.refreshing = false;
+    this.refresh(cx);
+  }
+
+  /**
+   * The top-level choice. Every managed agent that can express it gets the recipe and loses its
+   * exception; agents that cannot express it, and commands that set their own flags, are left
+   * alone and counted in the notice.
+   */
+  async setDefaultPermission(choice, cx) {
+    this.permissionOpen = null;
+    if (!this.permissionReady(cx) || this.permissionBlocked(cx)) return false;
+    const rows = this.allRows().all.filter((row) => row.supports);
+    const custom = rows.filter((row) => row.permission === "custom").length;
+    const runs = new Map();
+    let applied = 0;
+    let unsupported = 0;
+    for (const row of rows) {
+      if (row.permission === "custom") continue;
+      const choices = permissionChoices(row.key) ?? [];
+      const next = choices.includes(choice) ? withPermission(row.key, row.run, choice) : null;
+      if (!next) {
+        unsupported += 1;
+        continue;
+      }
+      applied += 1;
+      if (!sameRun(next, row.run)) runs.set(row.key, next);
+    }
+    if (!(await this.writePrograms(runs, cx))) return false;
+    // Every agent that could take the choice now has it, so no per-agent exception is left.
+    if (!(await this.writePermissions({ default: choice, overrides: {} }, cx))) return false;
+    const notes = [`Applied to ${applied} agent${applied === 1 ? "" : "s"}`];
+    if (unsupported > 0) notes.push(`${unsupported} don't support this setting`);
+    if (custom > 0) notes.push(`${custom} ${custom === 1 ? "uses" : "use"} custom launch arguments`);
+    this.flashPermission(`${notes.join("; ")}.`, "muted", cx);
+    this.afterPermissionWrite(cx);
+    return true;
+  }
+
+  /** One agent's permission; `\"default\"` clears its exception and follows the all-agents choice. */
+  async setAgentPermission(row, choice, cx) {
+    this.permissionOpen = null;
+    if (!this.permissionReady(cx) || this.permissionBlocked(cx)) return false;
+    const permissions = this.currentPermissions();
+    const target = choice === "default" ? permissions.default : choice;
+    if (!(permissionChoices(row.key) ?? []).includes(target)) return false;
+    const next = withPermission(row.key, row.run, target);
+    const runs = next && !sameRun(next, row.run) ? new Map([[row.key, next]]) : new Map();
+    if (!(await this.writePrograms(runs, cx))) return false;
+    const overrides = { ...permissions.overrides };
+    if (choice === "default") delete overrides[row.key];
+    else overrides[row.key] = choice;
+    if (!(await this.writePermissions({ default: permissions.default, overrides }, cx))) return false;
+    this.flashPermission(`${row.name} now uses ${PERMISSION_LABELS[target].toLowerCase()}.`, "muted", cx);
+    this.afterPermissionWrite(cx);
+    return true;
   }
 
   // ---- keyboard -------------------------------------------------------------
@@ -884,6 +1069,138 @@ export default class AgentManager extends View {
 
   row(row, t, last = false) {
     return rowView(this, row, t, last);
+  }
+
+  /** The all-agents permission: one choice, plus the agents that keep their own. */
+  permissionsCard(rows, t) {
+    const permissions = this.currentPermissions();
+    const managed = rows.filter((row) => row.supports);
+    const exceptions = managed.filter((row) => row.permissionOverride);
+    const custom = managed.filter((row) => row.permission === "custom");
+    const supporters = (choice) =>
+      managed.filter((row) => (permissionChoices(row.key) ?? []).includes(choice));
+    const items = PERMISSION_CHOICES.map((choice) => {
+      const supported = supporters(choice).map((row) => row.name);
+      const extra = supported.length > 3 ? ` +${supported.length - 3}` : "";
+      return {
+        id: choice,
+        label: PERMISSION_LABELS[choice],
+        description: PERMISSION_DESCRIPTIONS[choice],
+        detail: choice === "own" ? null : supported.length ? `${supported.slice(0, 3).join(", ")}${extra}` : "No installed agent supports this choice",
+        selected: permissions.default === choice,
+        tone: choice === "full-access" ? t.blocked : null,
+        onPick: (cx) => this.setDefaultPermission(choice, cx),
+      };
+    });
+    const exceptionLine = exceptions.length
+      ? `${exceptions.length === 1 ? "1 agent keeps its" : `${exceptions.length} agents keep their`} own permission: ${exceptions
+          .map((row) => `${row.name} (${PERMISSION_LABELS[row.permission]})`)
+          .join(", ")}.`
+      : null;
+    const noChoice = managed.filter(
+      (row) => !(permissionChoices(row.key) ?? []).includes(permissions.default),
+    );
+    const noChoiceLine =
+      permissions.default !== "own" && noChoice.length > 0
+        ? `${noChoice.length === 1 ? `1 agent has` : `${noChoice.length} agents have`} no ${PERMISSION_LABELS[permissions.default]} flag and keep ${noChoice.length === 1 ? "its" : "their"} own command: ${noChoice
+            .slice(0, 3)
+            .map((row) => row.name)
+            .join(", ")}${noChoice.length > 3 ? ` +${noChoice.length - 3}` : ""}.`
+        : null;
+    return v_flex()
+      .w_full()
+      .p(12)
+      .gap(10)
+      .rounded(10)
+      .border_1()
+      .border_color(t.border)
+      .bg(t.surface)
+      .child(
+        h_flex()
+          .w_full()
+          .items_start()
+          .gap(16)
+          .child(
+            v_flex()
+              .flex_1()
+              .min_w(0)
+              .gap(3)
+              .child(div().text_size(13).font_semibold().text_color(t.foreground).child("Permissions"))
+              .child(
+                div()
+                  .text_size(11)
+                  .line_height("16px")
+                  .text_color(t.muted)
+                  .child("How much every agent may do without asking. You can set one agent differently below."),
+              ),
+          )
+          .child(
+            permissionSelect(
+              {
+                id: "default",
+                open: this.permissionOpen === "default",
+                label: PERMISSION_LABELS[permissions.default],
+                tone: permissions.default === "full-access" ? t.blocked : t.foreground,
+                width: 340,
+                items,
+                onToggle: (cx) => this.togglePermissionMenu("default", cx),
+              },
+              t,
+            ),
+          ),
+      )
+      .when(Boolean(exceptionLine) || custom.length > 0, (el) =>
+        el.child(
+          h_flex()
+            .w_full()
+            .gap(10)
+            .items_center()
+            .flex_wrap()
+            .child(
+              v_flex()
+                .flex_1()
+                .min_w(180)
+                .gap(2)
+                .when(Boolean(exceptionLine), (inner) =>
+                  inner.child(div().text_size(11).text_color(t.muted).child(exceptionLine)),
+                )
+                .when(custom.length > 0, (inner) =>
+                  inner.child(
+                    div()
+                      .text_size(11)
+                      .text_color(t.dim)
+                      .child(
+                        `${custom.length === 1 ? "1 agent sets" : `${custom.length} agents set`} permission flags in its own command; changing the default leaves ${custom.length === 1 ? "it" : "them"} alone.`,
+                      ),
+                  ),
+                ),
+            )
+            .when(Boolean(exceptionLine), (inner) =>
+              inner.child(
+                this.button(
+                  "am-permission-use-default",
+                  permissions.default === "own"
+                    ? "Reset every agent to its own settings"
+                    : `Use ${PERMISSION_LABELS[permissions.default]} for all`,
+                  t,
+                  (_event, cx) => this.setDefaultPermission(permissions.default, cx),
+                  { height: 24, px: 8 },
+                ),
+              ),
+            ),
+        ),
+      )
+      .when(Boolean(noChoiceLine), (el) =>
+        el.child(div().text_size(11).text_color(t.dim).child(noChoiceLine)),
+      )
+      .when(this.permissionNotice, (el) =>
+        el.child(
+          div()
+            .text_size(11)
+            .text_color(this.permissionNotice.tone === "blocked" ? t.blocked : t.muted)
+            .child(this.permissionNotice.text),
+        ),
+      );
   }
 
   editor(row, editor, t) {
@@ -1077,6 +1394,7 @@ export default class AgentManager extends View {
       )
       .when(!loading, (el) =>
         el
+          .when(rows.some((row) => row.supports), (inner) => inner.child(this.permissionsCard(rows, t)))
           .child(group("Official support", "Agents Herdr supports natively", t))
           .child(
             section(
