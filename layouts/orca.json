@@ -160,6 +160,13 @@
                       "content": {
                         "mod": "orca-agent-manager"
                       }
+                    },
+                    {
+                      "id": "main-stats",
+                      "type": "block",
+                      "content": {
+                        "mod": "orca-stats"
+                      }
                     }
                   ]
                 }
