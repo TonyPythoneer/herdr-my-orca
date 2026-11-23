@@ -1341,8 +1341,10 @@ export default class Tabs extends View {
       // Herdr skips a hidden node's content (layout.rs:551); Orca keeps the control at the same
       // left slot by floating `titlebar-left` over the workspace
       // (AppWorkspaceShell.tsx:163-167).
-      .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), () => {
-        if (unified) return this.toggleSidebar(cx);
+      .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), (_e, ecx) => {
+        // Same route as the `toggle-sidebar` command: the render consumes the flag with a live render
+        // context. The `cx` captured by this render is dead once the click arrives.
+        if (unified) { this.wantToggle = true; ecx.notify(); return; }
         setShared("sidebar.collapsed", !sidebar?.hidden);
         run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "sidebar" });
         // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.
