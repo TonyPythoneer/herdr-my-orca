@@ -6,6 +6,7 @@ import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme,
 import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
 import { sidebarEase } from "./sidebar-motion.js";
+import { Drawer } from "./drawer.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { closePlan } from "./close-plan.js";
 import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
@@ -298,6 +299,35 @@ function dropResolve(zone, cx) {
 // `DROP_KEY` above, because the overlay's copy of this mod is a separate realm.
 
 export default class Tabs extends View {
+  // Built here rather than in `init()`: the dialog and drag-overlay copies return from `init()`
+  // early and still render, so every instance needs its drawers.
+  constructor(...args) {
+    super(...args);
+    this.initDrawers();
+  }
+
+  // The two animated drawers (drawer.js). Both hold `main` narrow while they move, so the pin and
+  // the header width that computes it live here rather than on a drawer.
+  initDrawers() {
+    this.nativePinned = false;
+    this.nativeHeaderWidth = 0;
+    this.drawers = {
+      sidebar: new Drawer({
+        id: "sidebar", defaultOpen: 259, measure: "measureSidebar",
+        pin: () => (props()?.pinSidebarTerminal && !this.nativePinned && this.nativeHeaderWidth > 0 ? this.nativeHeaderWidth / (settings()?.zoom || 1) : null),
+        after: (target) => setShared("sidebar.collapsed", target === 0),
+      }),
+      panel: new Drawer({
+        id: "panel", defaultOpen: 350, measure: "measurePanel",
+        pin: (open, wasHidden) => {
+          if (!(this.nativeHeaderWidth > 0)) return null;
+          const sb = find(layout(), "sidebar");
+          return this.nativeHeaderWidth / (settings()?.zoom || 1) + (wasHidden ? 0 : open) - (sb?.hidden ? 0 : (sb?.size?.px ?? 0));
+        },
+      }),
+    };
+  }
+
   init(_props, cx) {
     const p = _props?.confirmClose ? _props : props();
     // TEMPORARY: which copy of this mod is actually running. A drag that leaves no trace at all
@@ -365,8 +395,6 @@ export default class Tabs extends View {
     this.animatedUntil = 0;
     this.glideShift = 0;
     this.glideGen = 0;
-    this.sbBusy = false; this.sbToken = 0; this.sbP = 1; this.sbOpenPx = 0;
-    this.panelBusy = false; this.panelToken = 0; this.panelOpenPx = 0;
     try {
       const stored = JSON.parse(localStorage.getItem("panels") ?? "{}");
       this.panels = stored && typeof stored === "object" ? stored : {};
@@ -383,9 +411,10 @@ export default class Tabs extends View {
       if (tries > 0) cx.timer.after(50, (cx) => seed(cx, tries - 1));
     };
     if (!this.windowState) cx.timer.after(0, (cx) => seed(cx, 20));
-    // `orca-tabs.toggle-sidebar` (a key binding or `herdr-app do`) runs the same animated toggle as
-    // the button. Only the unified header listens, so overlay copies never toggle twice.
-    if (props()?.unified) cx.spawn(async (cx) => {
+    // `orca-tabs.toggle-sidebar` / `toggle-panel` (keys.json or `herdr-app do`) run the same
+    // animated toggle as the buttons. The dialog and drag-overlay copies return from `init()`
+    // above, so this is the only copy listening.
+    cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
         if (command === "toggle-sidebar") this.wantToggle = (this.wantToggle ?? 0) + 1;
@@ -535,27 +564,30 @@ export default class Tabs extends View {
   // (measured), not per step. Collapse ends with `hide` and puts the open width back while hidden,
   // so the next `show` returns at that width; expand starts from 1px while hidden.
   toggleSidebar(cx) {
+    // Only the unified layout has the header clock and the content frames, so anywhere else keeps
+    // the plain toggle `keys.json` used to call.
+    if (!props()?.unified) return run("layout.toggle", { id: "sidebar" });
     if (props()?.motion === "native") return this.toggleSidebarNative(cx);
     const sb = find(layout(), "sidebar");
     const hidden = Boolean(sb?.hidden);
-    const open = this.sbOpenPx > 0 ? this.sbOpenPx : 259;
-    const target = this.sbBusy ? (this.sbGoal === 1 ? 0 : 1) : (hidden ? 1 : 0);
-    const token = ++this.sbToken;
-    const from = this.sbBusy ? this.sbP : (hidden ? 0 : Math.min(1, (sb?.size?.px ?? open) / open));
-    this.sbBusy = true; this.sbGoal = target;
+    const open = this.drawers.sidebar.openPx > 0 ? this.drawers.sidebar.openPx : 259;
+    const target = this.drawers.sidebar.busy ? (this.drawers.sidebar.goal === 1 ? 0 : 1) : (hidden ? 1 : 0);
+    const token = ++this.drawers.sidebar.token;
+    const from = this.drawers.sidebar.busy ? this.drawers.sidebar.p : (hidden ? 0 : Math.min(1, (sb?.size?.px ?? open) / open));
+    this.drawers.sidebar.busy = true; this.drawers.sidebar.goal = target;
     cx.spawn(async (cx) => {
       await cx.sleep(1); // leave the render phase: notify() is only legal from a task
-      if (token !== this.sbToken) return;
+      if (token !== this.drawers.sidebar.token) return;
       // Read the node live: a press can land in the tail of a collapse (hide already sent) or in the
       // preamble of an expand (show not yet applied), and `hidden` above may be a frame stale.
       const nowHidden = () => Boolean(find(layout(), "sidebar")?.hidden);
       if (target === 1 && nowHidden()) {
         run("layout.resize", { id: "sidebar", px: 1 });
         await cx.sleep(80);
-        if (token !== this.sbToken) return;
+        if (token !== this.drawers.sidebar.token) return;
         run("layout.show", { id: "sidebar" });
         await cx.sleep(50);
-        if (token !== this.sbToken) return;
+        if (token !== this.drawers.sidebar.token) return;
       }
       const d = Math.abs(target - from);
       const dur = (320 + 120 * d) * (0.5 + 0.5 * d) + 60;
@@ -565,8 +597,8 @@ export default class Tabs extends View {
       let lastPx = -1;
       for (;;) {
         const k = Math.min(1, (Date.now() - t0) / dur);
-        this.sbP = from + (target - from) * (motion === "layout" ? drawerEase(k) : sidebarEase(k));
-        const px = Math.max(1, Math.round(open * this.sbP));
+        this.drawers.sidebar.p = from + (target - from) * (motion === "layout" ? drawerEase(k) : sidebarEase(k));
+        const px = Math.max(1, Math.round(open * this.drawers.sidebar.p));
         if (px !== lastPx) { // each resize repaints the terminals, so never send one that changes nothing
           lastPx = px;
           if (samples) samples.push({ ms: Date.now() - t0, px });
@@ -576,167 +608,48 @@ export default class Tabs extends View {
         }
         if (k >= 1) break;
         await cx.sleep(SIDEBAR_STEP_MS);
-        if (token !== this.sbToken) return;
+        if (token !== this.drawers.sidebar.token) return;
       }
       if (samples) writeTextFile(`/tmp/sidebar-motion-${t0}.json`, JSON.stringify({ motion, open, target, dur, samples }), null).catch(() => {});
       if (target === 0) {
         run("layout.hide", { id: "sidebar" });
         await cx.sleep(80);
-        if (token !== this.sbToken) return;
+        if (token !== this.drawers.sidebar.token) return;
       }
       run("layout.resize", { id: "sidebar", px: open });
       setShared("sidebar.collapsed", target === 0);
-      this.sbBusy = false; this.sbGoal = undefined;
+      this.drawers.sidebar.busy = false; this.drawers.sidebar.goal = undefined;
       cx.notify();
     });
   }
 
-  toggleSidebarNative(cx) {
-    const sidebar = find(layout(), "sidebar");
-    if (!this.sbBusy && !this.sbOpenPx && sidebar?.size?.px >= 120) this.sbOpenPx = sidebar.size.px;
-    const target = this.sbBusy ? 1 - this.sbGoal : (sidebar?.hidden ? 1 : 0);
-    const token = ++this.sbToken;
-    this.sbBusy = true;
-    this.sbGoal = target;
-    this.nativeActive = false;
-    this.nativeFinishing = false;
-    this.nativeLastPx = undefined;
-    this.nativeSamples = props()?.measureSidebar ? [] : null;
-    this.nativeStart = Date.now();
-    cx.spawn(async cx => {
-      await cx.sleep(1);
-      if (token !== this.sbToken) return;
-      if (props()?.pinSidebarTerminal && !this.nativePinned && this.nativeHeaderWidth > 0) {
-        this.nativePinned = true;
-        run("layout.resize", { id: "main", px: this.nativeHeaderWidth / (settings()?.zoom || 1) });
-        await cx.sleep(80);
-        if (token !== this.sbToken) return;
-      }
-      if (target === 1 && find(layout(), "sidebar")?.hidden) {
-        run("layout.resize", { id: "sidebar", px: 1 });
-        await cx.sleep(80);
-        if (token !== this.sbToken) return;
-        run("layout.show", { id: "sidebar" });
-        await cx.sleep(50);
-        if (token !== this.sbToken) return;
-      }
-      this.nativeActive = true;
-      this.nativeWidth = (target ? (this.sbOpenPx || 259) : 1) / (settings()?.zoom || 1);
-      cx.notify();
-      await cx.sleep(650);
-      if (token === this.sbToken && this.sbBusy && !this.nativeFinishing) this.sidebarNativeSize({ width: this.nativeWidth }, cx);
-    });
+  // One implementation for both drawers (drawer.js); each toggle only says which node and how the
+  // terminal is held while it moves.
+  drawerEnv() {
+    return {
+      run, find, layout, props,
+      zoom: () => settings()?.zoom || 1,
+      write: (path, text) => writeTextFile(path, text, null),
+      pin: (px) => { this.nativePinned = true; run("layout.resize", { id: "main", px }); },
+      release: () => this.releaseNativePin(),
+    };
   }
 
-  sidebarNativeSize(size, cx) {
-    if (!this.sbBusy || !this.nativeActive || this.nativeFinishing) return;
-    const open = this.sbOpenPx || 259;
-    const px = Math.max(1, Math.min(open, Math.round(size.width * (settings()?.zoom || 1))));
-    this.sbP = px / open;
-    if (px !== this.nativeLastPx) {
-      this.nativeLastPx = px;
-      if (this.nativeSamples) this.nativeSamples.push({ ms: Date.now() - this.nativeStart, px });
-      run("layout.resize", { id: "sidebar", px });
-    }
-    if (this.sbGoal === 1 && find(layout(), "sidebar")?.hidden) run("layout.show", { id: "sidebar" });
-    if (px !== (this.sbGoal ? open : 1)) return;
-    this.nativeFinishing = true;
-    const token = this.sbToken, target = this.sbGoal, start = this.nativeStart, samples = this.nativeSamples;
-    cx.spawn(async cx => {
-      await cx.sleep(1);
-      if (token !== this.sbToken) return;
-      if (samples) writeTextFile(`/tmp/sidebar-native-${start}.json`, JSON.stringify({ target, open, samples }), null).catch(() => {});
-      if (target === 0) {
-        run("layout.hide", { id: "sidebar" });
-        await cx.sleep(80);
-        if (token !== this.sbToken) return;
-      }
-      run("layout.resize", { id: "sidebar", px: open });
-      setShared("sidebar.collapsed", target === 0);
-      this.sbBusy = false;
-      this.releaseNativePin();
-      this.nativeActive = false;
-      this.nativeLastPx = undefined;
-      cx.notify();
-    });
+  toggleSidebarNative(cx) { this.drawers.sidebar.toggle(cx, this.drawerEnv()); }
+
+  // Only the unified layout renders the panel's clock, so anywhere else keeps the plain toggle.
+  togglePanel(cx) {
+    if (!props()?.unified) return run("layout.toggle", { id: "panel" });
+    this.togglePanelNative(cx);
   }
+
+  togglePanelNative(cx) { this.drawers.panel.toggle(cx, this.drawerEnv()); }
 
   releaseNativePin() {
-    if (this.nativePinned && !this.sbBusy && !this.panelBusy) {
+    if (this.nativePinned && !this.drawers.sidebar.busy && !this.drawers.panel.busy) {
       run("layout.resize", { id: "main", weight: 1 });
       this.nativePinned = false;
     }
-  }
-
-  togglePanelNative(cx) {
-    const panel = find(layout(), "panel");
-    const open = this.panelOpenPx || ((panel?.size?.px ?? 0) >= 120 ? panel.size.px : 350);
-    if (!this.panelBusy) this.panelOpenPx = open;
-    const target = this.panelBusy ? 1 - this.panelGoal : (panel?.hidden ? 1 : 0);
-    const token = ++this.panelToken;
-    this.panelBusy = true;
-    this.panelGoal = target;
-    this.panelActive = false;
-    this.panelFinishing = false;
-    this.panelLastPx = undefined;
-    this.panelSamples = props()?.measurePanel ? [] : null;
-    this.panelStart = Date.now();
-    cx.spawn(async cx => {
-      await cx.sleep(1);
-      if (token !== this.panelToken) return;
-      if (this.nativeHeaderWidth > 0) {
-        this.nativePinned = true;
-        const sidebar = find(layout(), "sidebar");
-        const width = this.nativeHeaderWidth / (settings()?.zoom || 1) + (panel?.hidden ? 0 : open) - (sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0));
-        run("layout.resize", { id: "main", px: width });
-        await cx.sleep(80);
-        if (token !== this.panelToken) return;
-      }
-      if (target === 1 && find(layout(), "panel")?.hidden) {
-        run("layout.resize", { id: "panel", px: 1 });
-        await cx.sleep(80);
-        if (token !== this.panelToken) return;
-        run("layout.show", { id: "panel" });
-        await cx.sleep(50);
-        if (token !== this.panelToken) return;
-      }
-      this.panelActive = true;
-      this.panelWidth = (target ? open : 1) / (settings()?.zoom || 1);
-      cx.notify();
-      await cx.sleep(650);
-      if (token === this.panelToken && this.panelBusy && !this.panelFinishing) this.panelNativeSize({ width: this.panelWidth }, cx);
-    });
-  }
-
-  panelNativeSize(size, cx) {
-    if (!this.panelBusy || !this.panelActive || this.panelFinishing) return;
-    const open = this.panelOpenPx || 350;
-    const px = Math.max(1, Math.min(open, Math.round(size.width * (settings()?.zoom || 1))));
-    if (px !== this.panelLastPx) {
-      this.panelLastPx = px;
-      if (this.panelSamples) this.panelSamples.push({ ms: Date.now() - this.panelStart, px });
-      run("layout.resize", { id: "panel", px });
-    }
-    if (this.panelGoal === 1 && find(layout(), "panel")?.hidden) run("layout.show", { id: "panel" });
-    if (px !== (this.panelGoal ? open : 1)) return;
-    this.panelFinishing = true;
-    const token = this.panelToken, target = this.panelGoal;
-    const samples = this.panelSamples, start = this.panelStart;
-    cx.spawn(async cx => {
-      await cx.sleep(1);
-      if (token !== this.panelToken) return;
-      if (samples) writeTextFile(`/tmp/panel-native-${start}.json`, JSON.stringify({ target, open, samples }), null).catch(() => {});
-      if (target === 0) {
-        run("layout.hide", { id: "panel" });
-        await cx.sleep(80);
-        if (token !== this.panelToken) return;
-      }
-      run("layout.resize", { id: "panel", px: open });
-      this.panelBusy = false;
-      this.panelActive = false;
-      this.releaseNativePin();
-      cx.notify();
-    });
   }
 
   scrollTabStrip(direction, cx) {
@@ -1438,11 +1351,11 @@ export default class Tabs extends View {
     };
     const root = layout();
     const sidebar = find(root, "sidebar");
-    if (unified && !this.sbBusy && !this.panelBusy && !this.nativeRecovering && find(root, "main")?.size?.px != null) {
+    if (unified && !this.drawers.sidebar.busy && !this.drawers.panel.busy && !this.nativeRecovering && find(root, "main")?.size?.px != null) {
       this.nativeRecovering = true;
       cx.spawn(async cx => {
         await cx.sleep(1);
-        if (!this.sbBusy && !this.panelBusy && find(layout(), "main")?.size?.px != null) run("layout.resize", { id: "main", weight: 1 });
+        if (!this.drawers.sidebar.busy && !this.drawers.panel.busy && find(layout(), "main")?.size?.px != null) run("layout.resize", { id: "main", weight: 1 });
         this.nativeRecovering = false;
       });
     }
@@ -1489,24 +1402,24 @@ export default class Tabs extends View {
     const toggleRightX = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
     const sbPx = sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0) / zoomK;
     if (this.wantToggle) { const count = this.wantToggle; this.wantToggle = 0; if (count % 2) this.toggleSidebar(cx); }
-    if (unified && !this.sbBusy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= 120 && this.sbOpenPx !== sidebar.size.px) {
-      this.sbOpenPx = sidebar.size.px;
-      setShared("sidebar.openPx", this.sbOpenPx);
+    if (unified && !this.drawers.sidebar.busy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= 120 && this.drawers.sidebar.openPx !== sidebar.size.px) {
+      this.drawers.sidebar.openPx = sidebar.size.px;
+      setShared("sidebar.openPx", this.drawers.sidebar.openPx);
     }
     gapToCard = unified ? Math.max(sbPx, toggleRightX) - sbPx : 0;
     const flushable = (c, i) => c.active && i === 0 && !geometry.arrows.hasOverflow && this.scrollX <= 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
-    if (this.wantPanelToggle) { const count = this.wantPanelToggle; this.wantPanelToggle = 0; if (count % 2) this.togglePanelNative(cx); }
-    if (unified && !this.panelBusy && !panel?.hidden && (panel?.size?.px ?? 0) >= 120) {
-      this.panelOpenPx = panel.size.px;
+    if (this.wantPanelToggle) { const count = this.wantPanelToggle; this.wantPanelToggle = 0; if (count % 2) this.togglePanel(cx); }
+    if (unified && !this.drawers.panel.busy && !panel?.hidden && (panel?.size?.px ?? 0) >= 120) {
+      this.drawers.panel.openPx = panel.size.px;
       // The panel mods keep their content at this width while the panel narrows (panel-motion.js).
-      setShared("panel.openPx", this.panelOpenPx);
+      setShared("panel.openPx", this.drawers.panel.openPx);
     }
-    if (unified && !this.panelBusy) this.panelWidth = (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK;
+    if (unified && !this.drawers.panel.busy) this.drawers.panel.clockPx = (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK;
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
     this.syncPanel(space, panel, body, enabled);
     this.syncLanding(cx);
-    if (unified && !this.sbBusy) this.nativeWidth = (sidebar?.hidden ? 1 : (sidebar?.size?.px ?? 259)) / zoomK;
+    if (unified && !this.drawers.sidebar.busy) this.drawers.sidebar.clockPx = (sidebar?.hidden ? 1 : (sidebar?.size?.px ?? 259)) / zoomK;
     // `.titlebar`: 36px, border-bottom var(--border), background var(--card) #171717
     // (main.css:1072-1084). Tabs sit flush to each edge of that bar.
     // The Explorer / Source Control activity buttons are NOT here: Orca renders its activity
@@ -1514,10 +1427,10 @@ export default class Tabs extends View {
     // `orca-panel-head` owns. Drawing them twice put two strip icons in the titlebar corner.
     return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(bar)
       .when(unified && props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
-      .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.nativeWidth).transition("width", { duration: 500, easing: "ease-in-out" })
-        .on_size_change((size, cx) => this.sidebarNativeSize(size, cx))))
-      .when(unified, el => el.relative().child(div().id("panel-native-clock").absolute().left(0).top(0).h(1).w(this.panelWidth ?? (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK).transition("width", { duration: 500, easing: "ease-in-out" })
-        .on_size_change((size, cx) => this.panelNativeSize(size, cx))))
+      .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.sidebar.clockPx).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.drawers.sidebar.size(size, cx, this.drawerEnv()))))
+      .when(unified, el => el.relative().child(div().id("panel-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.panel.clockPx ?? (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.drawers.panel.size(size, cx, this.drawerEnv()))))
       .on_mouse_move((e, cx) => {
         if (this.pressed !== null && this.stripBounds) {
           this.triggerSplit(this.stripBounds, e.position, cx);
