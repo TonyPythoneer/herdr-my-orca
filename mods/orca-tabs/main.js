@@ -901,7 +901,10 @@ export default class Tabs extends View {
       else if (cfg.scope === "right") title = "Close tabs to the right?";
       else if (cfg.scope === "left") title = "Close tabs to the left?";
       else title = "Close tabs?";
-      desc = "The selected tabs will be closed. Pinned tabs will stay open.";
+      // Herdr's Close to the Right/Left rows share this dialog, so it says how many tabs it is
+      // about to close; pinned ones were never in `tabIds`.
+      const n = (cfg.tabIds ?? []).length;
+      desc = `${n} ${n === 1 ? "tab" : "tabs"} will be closed. Pinned tabs will stay open.`;
     }
 
     let confirmLabel = "Stop and Close";
@@ -1353,8 +1356,9 @@ export default class Tabs extends View {
         })
         // `orca-menu` owns the tab menu (it already has the "tab" case); pointing at Herdr's
         // shipped `menu` made this mod depend on a mod outside the package.
-        // SortableTabContextMenu.tsx:155 — `min-w-[13rem]` (208).
-        .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openOverlay({ mod: "orca-menu", kind: "popup", width: 208, props: { tab: "tab", target: { id: c.id, space: space.id } } }); })
+        // SortableTabContextMenu.tsx:155 — `min-w-[13rem]` (208) is Orca's; Herdr's longest row
+        // ("Move Tab to Split Right") plus its shortcut chip needs 272, or its label ellipses.
+        .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openOverlay({ mod: "orca-menu", kind: "popup", width: 272, props: { tab: "tab", target: { id: c.id, space: space.id } } }); })
         // ORDER — SortableTab.tsx:249-351. Left to right inside a tab:
         //   TerminalTabLeadingIcon (the agent/shell icon)  :249 — size={12} (TerminalTabLeadingIcon.tsx:42,100)
         //   Pin (size-3 = 12px, mr-1)                      :258-259  [pinned only]

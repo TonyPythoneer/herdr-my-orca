@@ -10,6 +10,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, hc, home, shared, setShared } from "herdr";
 import { copyText } from "./clip.js";
 import { buildBoundedSessionTranscript } from "./transcript.js";
+import { closeSideTabs } from "./close-sides.js";
 
 // Orca's palette (`SortableTabContextMenu.tsx:15-80`), in its order; `null` is "None".
 const TAB_COLORS = [["None", null], ["Blue", "#3b82f6"], ["Purple", "#a855f7"], ["Pink", "#ec4899"],
@@ -177,6 +178,15 @@ function items(p, git) {
         // SortableTabContextMenu.tsx:213 — inset, disabled when `tabCount <= 1`; with one tab
         // the loop in choose() would close nothing, so leave the row out.
         ...(list.length > 1 ? [["Close Others", "orca-menu.close-others", { id: tg.id }]] : []),
+        // Herdr's own, not an Orca port (SortableTabContextMenu.tsx has no such rows): the same
+        // inset block as Close Others, one side of this tab at a time, and left out on a side
+        // that has no unpinned tab - the rule Close Others follows with `tabCount <= 1`.
+        ...(closeSideTabs(own, tg.id, "right").length
+          ? [["Close Tabs to the Right", "orca-menu.close-right", { id: tg.id }]]
+          : []),
+        ...(closeSideTabs(own, tg.id, "left").length
+          ? [["Close Tabs to the Left", "orca-menu.close-left", { id: tg.id }]]
+          : []),
         // Close split pane (CloseSplitPaneMenuItem.tsx:21-24) closes other panes in the split group
         ...(mine.length > 1 ? [["Close split pane", "orca-menu.close-split-panes", { id: tg.id }]] : []),
         // SortableTabContextMenu.tsx:218-222 — Change Title.
@@ -374,6 +384,57 @@ function shortcut(name, args) {
   return k ? k.keys : "";
 }
 
+// The key the way the tab menu writes it: `keys()` spells a chord `cmd-shift-d`, and a person
+// reads it ⇧⌘D (ShortcutKeyCombo.tsx:52-66 shows one cap per key). A key with no modifier keeps
+// its own name, so f2 stays f2, and an unbound command keeps the empty string, which draws
+// nothing.
+const MODIFIER_GLYPHS = [["ctrl", "⌃"], ["alt", "⌥"], ["shift", "⇧"], ["cmd", "⌘"]];
+function keyHint(chord) {
+  let rest = String(chord ?? "");
+  const held = new Set();
+  for (let m; (m = /^(cmd|ctrl|alt|shift)-/.exec(rest));) {
+    held.add(m[1]);
+    rest = rest.slice(m[0].length);
+  }
+  if (held.size === 0) return rest;
+  return MODIFIER_GLYPHS.filter(([name]) => held.has(name)).map(([, glyph]) => glyph).join("") + rest.toUpperCase();
+}
+
+// The tab menu's own header: which tab these rows act on. A right-click can land on a background
+// tab, while Orca's menu belongs to the tab it acts on (SortableTabContextMenu.tsx), so Herdr
+// needs to say it. It is not a row - ↑/↓ skip it and Enter never runs it.
+function contextHeader(p, colors, t) {
+  const tg = p?.target ?? {};
+  const space = spaces().find((s) => s.id === tg.space) ??
+    spaces().find((s) => (s.tabs ?? []).some((x) => x.id === tg.id));
+  const tab = (space?.tabs ?? []).find((x) => x.id === tg.id);
+  if (!tab) return div();
+  // SortableTab.tsx:130-131 — a named tab shows its name, an unnamed one shows what runs in it.
+  const mine = panes().filter((x) => x.tab === tab.id);
+  const pane = mine.find((x) => x.program?.agent) ?? mine[0];
+  const label = tab.named ? (tab.name ?? "Terminal") : (pane?.title || pane?.program?.name || tab.name || "Terminal");
+  const color = colors[tab.id] ?? null;
+  const where = [space?.name, space?.branch].filter(Boolean).join(" · ");
+  return v_flex().px(8).pt(6).pb(8).gap(3)
+    .child(h_flex().items_center().gap(7)
+      // SortableTab.tsx:293-297 — the tab's colour, size-2 rounded-full.
+      .when(Boolean(color), (el) => el.child(div().size(7).rounded(4).flex_none().bg(color)))
+      .child(div().flex_1().min_w(0).truncate().text_size(13).font_semibold().text_color(t.foreground).child(label))
+      // Pinned: Herdr's `settled`, the state the Pin/Unpin row below toggles.
+      .when(Boolean(tab.settled), (el) => el.child(h_flex().flex_none().items_center().justify_center()
+        .p(4).rounded(5).border_1().border_color(t.border)
+        .child(svg("mods/orca-menu/pin.svg").size(10).text_color(t.muted)))))
+    .when(Boolean(where), (el) => el.child(div().truncate().text_size(10).text_color(t.muted).child(where)));
+}
+
+// Orca's tab Close is plain there (SortableTabContextMenu.tsx:208) and Herdr closes several tabs
+// from one menu, so these rows wear Orca's destructive colour only while they are the current row
+// (hover, ↑/↓): the red is a warning about what Enter is about to do, not decoration.
+function closeRow(p, it) {
+  return p?.tab === "tab" && (it[1] === "tab.close" || it[1] === "orca-menu.close-others" ||
+    it[1] === "orca-menu.close-right" || it[1] === "orca-menu.close-left");
+}
+
 export default class Menu extends View {
   init(_props, cx) {
     this.at = 0;
@@ -462,6 +523,32 @@ export default class Menu extends View {
               confirmClose: {
                 kind: "bulk",
                 scope: "others",
+                tabIds: targetIds,
+              }
+            }
+          });
+        }
+        closeOverlay(overlayId);
+        return;
+      }
+      // Herdr's own rows (Orca has none). The same confirmation as Close Others, and the ids are
+      // read again here rather than taken from the row, so a tab closed or pinned while the menu
+      // was open is honored.
+      if (it[1] === "orca-menu.close-right" || it[1] === "orca-menu.close-left") {
+        const side = it[1] === "orca-menu.close-right" ? "right" : "left";
+        const owner = spaces().find((s) => (s.tabs ?? []).some((x) => x.id === it[2].id));
+        const targetIds = closeSideTabs(owner, it[2].id, side);
+        if (targetIds.length > 0) {
+          openOverlay({
+            mod: "orca-tabs",
+            kind: "dialog",
+            modal: true,
+            width: 384,
+            height: 180,
+            props: {
+              confirmClose: {
+                kind: "bulk",
+                scope: side,
                 tabIds: targetIds,
               }
             }
@@ -722,7 +809,10 @@ export default class Menu extends View {
       .w_full()
       .min_h(0)
       // Content: rounded-[11px] border p-[4px] min-w-[11rem] (dropdown-menu.tsx:80). The
-      // overlay frame owns radius, border and shadow; a mod cannot set them.
+      // overlay frame owns radius, border and shadow, and it stays that way on purpose:
+      // `frame: "none"` hands them to this mod, but a popup's window is exactly its content box,
+      // so a `.shadow_*()` here is clipped away (measured) and the menu would end up flat and out
+      // of step with the pane, space and group menus, which keep the host frame.
       .p(4)
       .bg(t.popover)
       .text_size(13)
@@ -745,20 +835,28 @@ export default class Menu extends View {
         ...(p?.tab === "space" && p?.multi
           ? [div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child("Workspace")]
           : []),
+        ...(p?.tab === "tab" ? [contextHeader(p, tabColors, t)] : []),
         ...list.map((it, i) => {
           const off = Boolean(it[2]?.disabled);
           const red = !off && isDestructive(p, it);
+          const current = i === this.at && !off;
+          // A close row turns red only as the current row (see closeRow).
+          const warn = closeRow(p, it) && current;
           // Orca's Copy Tab ID and Close Others are `inset`: no icon, 32px left pad
-          // (CopyTabIdMenuItem.tsx:24, SortableTabContextMenu.tsx:208).
-          const inset = it[1] === "orca-menu.copy-tab-id" || it[1] === "orca-menu.close-others";
+          // (CopyTabIdMenuItem.tsx:24, SortableTabContextMenu.tsx:208). Herdr's Close to the
+          // Right/Left sit in the same block.
+          const inset = it[1] === "orca-menu.copy-tab-id" || it[1] === "orca-menu.close-others" ||
+            it[1] === "orca-menu.close-right" || it[1] === "orca-menu.close-left";
           return v_flex()
             // Separator: mx-2.5 my-[5px] h-px (dropdown-menu.tsx:208).
             .when(section(p, list, i), (el) => el.child(div().mx(10).my(5).h(1).bg(t.border)))
             .child(h_flex()
             .id(`mi-${i}`)
             // Item: gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 = 24px row
-            // (dropdown-menu.tsx:115); icon 3.5 = 14.
-            .h(24)
+            // (dropdown-menu.tsx:115); icon 3.5 = 14. The tab menu is Herdr's only menu whose
+            // rows carry a title, a shortcut and long labels ("Move Tab to Split Right"), so it
+            // gets 30px rows; the others keep Orca's 24.
+            .h(p?.tab === "tab" ? 30 : 24)
             .px(10)
             .when(inset, (el) => el.pl(32))
             .gap(8)
@@ -769,26 +867,30 @@ export default class Menu extends View {
             // Orca's rows are whitespace-nowrap (TerminalContextMenu.tsx:265,273); the label
             // gives way with an ellipsis rather than wrapping inside the fixed popup.
             .whitespace_nowrap()
-            .text_color(red ? bad : off ? t.muted : t.foreground)
+            .text_color(red || warn ? bad : off ? t.muted : t.foreground)
             // One current row: pointer hover moves `this.at`, so hover, keyboard and Enter
             // agree (dropdown-menu.tsx:115 data-[current=true]).
-            .when(i === this.at && !off, (el) => el.bg(red ? `${bad}1a` : t.selected))
+            .when(current, (el) => el.bg(red || warn ? `${bad}1a` : t.selected))
             .on_hover((hovered, cx) => { if (hovered && !off && this.at !== i) { this.at = i; cx.notify(); } })
             .on_click((_e, cx) => this.choose(i, cx))
-            .when(!inset, (el) => el.child(svg(menuIcon(it, zoomed)).size(14).flex_none().text_color(red ? bad : t.muted)))
+            .when(!inset, (el) => el.child(svg(menuIcon(it, zoomed)).size(14).flex_none()
+              .text_color(red || warn ? bad : t.muted)))
             .child(div().flex_1().min_w(0).truncate().child(it[0]))
             // Shortcut: ml-auto shrink-0 whitespace-nowrap pl-4 text-muted-foreground
-            // (dropdown-menu.tsx:219).
-            .child(div().pl(16).flex_none().whitespace_nowrap().text_color(t.muted).child(shortcut(it[1], it[2]))));
+            // (dropdown-menu.tsx:219). The tab menu writes the chord as a person reads it
+            // (⌘W, ⇧⌘D, f2); the other menus keep Herdr's own spelling.
+            .child(div().pl(16).flex_none().whitespace_nowrap().text_color(t.muted)
+              .child(p?.tab === "tab" ? keyHint(shortcut(it[1], it[2])) : shortcut(it[1], it[2]))));
         }),
         ...(p?.tab === "tab"
           ? [
-              // SortableTabContextMenu.tsx:223-250: compact Tab Color palette (16px circular swatches).
+              // SortableTabContextMenu.tsx:223-250: compact Tab Color palette (16px circular
+              // swatches), staying at the bottom of the menu.
               v_flex()
-                .pt(6)
+                .pt(8)
                 .pr(10)
-                .pb(6)
-                .pl(32)
+                .pb(2)
+                .pl(10)
                 .child(div().text_size(10).font_semibold().text_color(t.muted).mb(6).child("Tab Color"))
                 .child(
                   h_flex()
