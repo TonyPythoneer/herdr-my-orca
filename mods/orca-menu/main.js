@@ -217,6 +217,10 @@ function items(p, git) {
         // `space.close` needs `confirmed` (the host refuses it otherwise), and a group closes
         // as one command (close-space.js).
         ...closeRows(groupIds),
+        // A project with no open space is only the sidebar's catalog entry: nothing to close,
+        // so Orca's Remove Project (`repo-header-project-actions.tsx:204`) is the row that
+        // makes its cards go away. With a space open, close that instead.
+        ...(tg.repo && groupIds.length === 0 ? [["Remove Project from Sidebar", "orca-menu.forget-project", { repo: tg.repo }]] : []),
       ];
     }
     case "space": {
@@ -253,6 +257,9 @@ function items(p, git) {
         // Every unpinned tab on this worktree's spaces; greyed out when there is none.
         ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: [tg.id], disabled: !unpinnedTabs([tg.id]).length }],
         ...(open ? closeRows([tg.id], "Close") : []),
+        // The card has no space of its own: its project's catalog entry is what draws it, so
+        // the same Remove Project row the group header has takes the project out of the list.
+        ...(!open && tg.repo ? [["Remove Project from Sidebar", "orca-menu.forget-project", { repo: tg.repo }]] : []),
       ];
     }
     default:
@@ -291,6 +298,8 @@ function unpinnedTabs(ids) {
 
 function menuIcon(it, zoomed) {
   const [, command, args] = it;
+  // Orca's Remove Project is the trash glyph (repo-header-project-actions.tsx:204).
+  if (command === "orca-menu.forget-project") return "mods/orca-menu/trash.svg";
   if (it[0] === "Clear Pane Title") return "mods/orca-menu/x.svg";
   if (command === "mod.open" && args?.name === "orca-split-menu") return "mods/orca-menu/panel-right-close.svg";
   if (command === "pane.split") return `mods/orca-menu/${args?.direction === "down" ? "panel-bottom-close" : "panel-right-close"}.svg`;
@@ -358,10 +367,13 @@ function section(p, list, i) {
     if (it[1] === "terminal.open") return true;
     if (it[1] === "orca-menu.toggle-unread") return true;
     if (it[1] === "worktree" && prev[1] !== "worktree") return true;
+    // Orca's Remove Project closes the menu with a destructive block of its own.
+    if (it[1] === "orca-menu.forget-project") return true;
   }
   if (p?.tab === "group") {
     if (it[1] === "orca-menu.copy-path") return true;
     if (it[1] === "space.rename") return true;
+    if (it[1] === "orca-menu.forget-project") return true;
   }
   // The global list is Herdr's own; keep its rows apart as before.
   if (!p?.tab || p.tab === "global") return it[1] === "app.help" || (it[1] === "app.theme" && prev[1] !== "app.theme");
@@ -377,7 +389,7 @@ function destructive() {
 // Orca marks pane close, close split pane (CloseSplitPaneMenuItem.tsx:21-24), and workspace close rows destructive;
 // the tab's Close is plain (TerminalContextMenu.tsx:351, WorktreeContextMenuView.tsx:353, SortableTabContextMenu.tsx:208, repo-header-project-actions.tsx:181).
 function isDestructive(p, it) {
-  return it[1] === "pane.close" || (p?.tab === "pane" && it[1] === "tab.close") || it[1] === "orca-menu.close-split-panes" || it[1] === "orca-menu.delete-all-tabs" || ((p?.tab === "space" || p?.tab === "group") && (it[1] === "space.close" || it[1] === "orca-menu.close-group"));
+  return it[1] === "pane.close" || (p?.tab === "pane" && it[1] === "tab.close") || it[1] === "orca-menu.close-split-panes" || it[1] === "orca-menu.delete-all-tabs" || it[1] === "orca-menu.forget-project" || ((p?.tab === "space" || p?.tab === "group") && (it[1] === "space.close" || it[1] === "orca-menu.close-group"));
 }
 
 // The key bound to a command, for the hint on the right.
@@ -492,6 +504,17 @@ export default class Menu extends View {
       if (it[1] === "orca-menu.close-group") {
         for (const id of (it[2]?.ids ?? [])) {
           run("space.close", { id, confirmed: true });
+        }
+        closeOverlay(overlayId);
+        return;
+      }
+      // Remove Project from Sidebar: the catalog and the rows drawn from it belong to
+      // orca-spaces, so hand the repo over through the shared store and ping its loop
+      // (setShared alone does not wake another mod, AGENTS.md rule 10).
+      if (it[1] === "orca-menu.forget-project") {
+        if (it[2]?.repo) {
+          setShared("orca-spaces.forget", { repo: it[2].repo, at: Date.now() });
+          run("orca-spaces.forget-project");
         }
         closeOverlay(overlayId);
         return;

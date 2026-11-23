@@ -63,6 +63,28 @@ export function groupSpaceIds(group, live) {
   return ids;
 }
 
+/**
+ * Forgets a repo's catalog entries (`git.cache.v2`) and returns how many it removed.
+ *
+ * The sidebar draws every repo the cache has ever read: a main checkout and each worktree
+ * stay listed after their spaces close, and only `pruneGitCache` ever drops an entry, one
+ * that is `null` and holds no space. A person who no longer wants a project in the list
+ * (Orca's "Remove Project") asks for this: the rows go, nothing on disk is touched, and the
+ * next space opened there seeds the cache again. A key a live space still sits on is kept,
+ * so a group with an open space never loses the row it draws from.
+ */
+export function forgetProject(cache, repo, liveKeys = []) {
+  if (!repo) return 0;
+  const live = new Set(liveKeys);
+  let removed = 0;
+  for (const key of Object.keys(cache ?? {})) {
+    if (cache[key]?.repo !== repo || live.has(key)) continue;
+    delete cache[key];
+    removed++;
+  }
+  return removed;
+}
+
 export function pruneGitCache(cache, spaces, checked = {}) {
   const active = new Set(spaces.map(s => where(s)));
   const remove = key => { delete cache[key]; delete checked[key]; };
