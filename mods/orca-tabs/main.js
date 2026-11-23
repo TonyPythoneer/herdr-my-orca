@@ -940,6 +940,7 @@ export default class Tabs extends View {
       .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
       .on_mouse_down("left", stop).on_click(action)
       .child(svg("mods/orca-tabs/panel-right.svg").size(16));
+    let gapToCard = 0; // set once the sidebar is known, before any tab is drawn
     const item = (c, i, mode = {}) => {
       const pane = tabPanes.get(c.id) ?? null;
       const program = pane?.program;
@@ -994,8 +995,10 @@ export default class Tabs extends View {
       // is the 4px gap between children.
       // shortcut: a fillet is a 14px square of terminal colour holding a bar-coloured square with
       // one rounded corner; it assumes the bar is `bar`, so change both together.
+      const flush = flushable(c, i);
+      const flare = flush ? Math.min(1, gapToCard / 14) : 1;
       const fillet = (side) => div().absolute().bottom(0).size(14).bg(t.background)
-        .when(side === "left", el => el.left(-14)).when(side === "right", el => el.right(-14))
+        .when(side === "left", el => el.left(-14).opacity(flare)).when(side === "right", el => el.right(-14))
         .child(div().size(14).bg(bar)
           .when(side === "left", el => el.rounded_br(14)).when(side === "right", el => el.rounded_bl(14)));
       const pill = h_flex().w_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
@@ -1155,7 +1158,7 @@ export default class Tabs extends View {
       // than guessing (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
       return h_flex().id(`tab-${c.id}${copyId}`)// The active tab's fillets reach 14px into its neighbours; padding that side keeps a
       // neighbour's hover pill from sitting under (or over) them as a dark square.
-      .h_full().pl(i > 0 && shown[i - 1].active ? 14 : 2).pr(shown[i + 1]?.active ? 14 : 2).relative().items_center().flex_none().min_w(144).max_w(300)
+      .h_full().pl(i > 0 && shown[i - 1].active ? 14 : flush && gapToCard <= 0 ? 0 : 2).pr(shown[i + 1]?.active ? 14 : 2).relative().items_center().flex_none().min_w(144).max_w(300)
         .when(!mode.overlay, el => el.on_size_change((size, cx) => this.measureTabWidth(c.id, size.width, cx)))
         // The pinned copy: drawn after the track, so it paints above the inactive tabs passing
         // underneath, and given the clamped left the geometry asked for. It is the same tab — its
@@ -1207,6 +1210,16 @@ export default class Tabs extends View {
     const leftPad = w.platform === "macos" && w.titlebar === "none" && !w.fullscreen && lights?.length
       ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (unified || sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 0;
+    // Where the strip starts against the card's left edge (the sidebar's right edge): a first tab that
+    // lands exactly on it is flush and needs no left flare; the further it sits, the more flare shows.
+    // In the old layout the strip starts on the card, so the gap is 0. The card's own rounded
+    // top-left corner is NOT drawn: this block cannot paint into the terminal block below it
+    // (tried, clipped), and a static pane radius would leave a notch under a flush first tab.
+    const zoomK = settings()?.zoom || 1;
+    const toggleRightX = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
+    const sbPx = sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0) / zoomK;
+    gapToCard = unified ? Math.max(sbPx, toggleRightX) - sbPx : 0;
+    const flushable = (c, i) => c.active && i === 0 && !geometry.arrows.hasOverflow && this.scrollX <= 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
     this.syncPanel(space, panel, body, enabled);

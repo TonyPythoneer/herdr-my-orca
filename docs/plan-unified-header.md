@@ -45,7 +45,7 @@ Reference video: `~/Downloads/s4pSbu2qb9QTaHlD.mp4`. Motion prototype (user-appr
 |---|---|---|
 | 0 | Read-only checks + clone-layout probes (D1 resize-while-hidden, D2 min floor, D3 content reflow, D4 PTY reflow) | D1, D2 done; D3, D4, block-clipping, key scoping open |
 | 1 | Static unified header in `orca-unified`, snap collapse; retest drop-to-split, window drag, traffic-light pad, old `orca` | DONE (drop-to-split and window drag not exercised by hand; code paths unchanged: `panelRect` left=sidebar px still right, header block keeps `window_drag`) |
-| 2 | First-tab flush merge + card corner piece | todo |
+| 2 | First-tab flush merge + card corner piece | DONE except the corner: header block cannot paint into the terminal block (tried, clipped); static pane radius would notch under a flush first tab. Card keeps a square corner. Tell the user. |
 | 3 | Layout-driven synced animation + key rebinding (needs D4 go) | todo |
 | 4 | Sliding active-tab indicator + hover pill opacity | todo |
 
@@ -55,3 +55,4 @@ Each phase ends usable and revertible: check, diff, haiku copy, `check`, `status
 
 - 2026-11-23: plan written. Checkpoint 0ba0499. Phase 0 partially done (see above).
 - Phase 1: `layouts/orca-unified.json` = orca.json with `brand` removed, `sidebar.min` 0, new `left` column [tabs(header, props unified), under row[sidebar, work-body]]. `orca-tabs` `props().unified`: bar colour `t.chrome`, leftPad ignores sidebar px, toggle always drawn, `unified-gap` spacer keeps the strip on the sidebar's right edge, strip glide off. Verified by screenshot (shown/hidden) and `layout.switch orca` unchanged. Bar is `chrome` not `surface` (right panel head stays `surface`: small tone step at the panel boundary).
+- Phase 2: `flushable(c,i)` = active, index 0, no overflow arrows, scrollX<=0; `gapToCard` = max(sidebarPx, toggleRight 111) - sidebarPx (0 in old layout). Left fillet opacity = min(1,gap/14), slot pl 0 when gap<=0. Verified by screenshot: first tab flush on the card edge with sidebar shown; with sidebar hidden the flare is back. Card corner piece removed (clipped).
