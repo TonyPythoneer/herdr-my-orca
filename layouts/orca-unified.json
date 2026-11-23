@@ -1,0 +1,302 @@
+{
+  "id": "root",
+  "type": "column",
+  "titlebar": "none",
+  "traffic_lights": [
+    12,
+    8
+  ],
+  "background": "canvas",
+  "terminal_padding": [
+    14,
+    12
+  ],
+  "divider": {
+    "width": 1,
+    "color": "border"
+  },
+  "preview": "layouts/orca.svg",
+  "theme": "orca-dark",
+  "terminal_menu": "orca-menu",
+  "children": [
+    {
+      "id": "body",
+      "type": "row",
+      "floating": [
+        {
+          "id": "float-workspace",
+          "content": {
+            "mod": "orca-float"
+          },
+          "edge": "bottom",
+          "align": "end"
+        }
+      ],
+      "children": [
+        {
+          "id": "left",
+          "type": "column",
+          "resizable": false,
+          "children": [
+            {
+              "id": "tabs",
+              "type": "block",
+              "size": {
+                "px": 32
+              },
+              "window_drag": true,
+              "content": {
+                "mod": "orca-tabs",
+                "props": {
+                  "unified": true,
+                  "motion": "native",
+                  "pinSidebarTerminal": true
+                }
+              }
+            },
+            {
+              "id": "under",
+              "type": "row",
+              "children": [
+                {
+                  "id": "sidebar",
+                  "type": "column",
+                  "size": {
+                    "px": 280
+                  },
+                  "min": 0,
+                  "max": 500,
+                  "background": "surface",
+                  "resizable": false,
+                  "children": [
+                    {
+                      "id": "nav",
+                      "type": "column",
+                      "resizable": false,
+                      "children": [
+                        {
+                          "id": "nav-top",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-nav",
+                            "props": {
+                              "unified": true
+                            }
+                          },
+                          "size": {
+                            "px": 86
+                          }
+                        },
+                        {
+                          "id": "spaces",
+                          "type": "block",
+                          "size": {
+                            "weight": 1
+                          },
+                          "content": {
+                            "mod": "orca-spaces",
+                            "props": {
+                              "unified": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "sidebar-footer",
+                      "type": "block",
+                      "size": {
+                        "px": 32
+                      },
+                      "content": {
+                        "mod": "orca-chrome",
+                        "props": {
+                          "footer": true,
+                          "unified": true
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "work-body",
+                  "type": "row",
+                  "children": [
+                    {
+                      "id": "main",
+                      "type": "stack",
+                      "active": "main-terminals",
+                      "children": [
+                        {
+                          "id": "main-terminals",
+                          "type": "block",
+                          "movable": false,
+                          "content": {
+                            "tab": "active",
+                            "pane": {
+                              "gap": 0,
+                              "radius": 0,
+                              "background": "background",
+                              "lone": false,
+                              "header": {
+                                "content": {
+                                  "mod": "orca-pane"
+                                },
+                                "height": 32,
+                                "position": "top"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "main-landing",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-landing"
+                          }
+                        },
+                        {
+                          "id": "main-agents",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-agent-manager"
+                          }
+                        },
+                        {
+                          "id": "main-providers",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-agent-manager",
+                            "props": {
+                              "page": "providers"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "panel",
+          "type": "column",
+          "size": {
+            "px": 350
+          },
+          "min": 0,
+          "max": 900,
+          "children": [
+            {
+              "id": "panel-head",
+              "type": "block",
+              "size": {
+                "px": 31
+              },
+              "content": {
+                "mod": "orca-panel-head",
+                "props": { "unified": true }
+              },
+              "window_drag": true
+            },
+            {
+              "id": "panel-body",
+              "type": "stack",
+              "active": "files",
+              "children": [
+                {
+                  "id": "files",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-files"
+                  }
+                },
+                {
+                  "id": "vault",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-agents"
+                  }
+                },
+                {
+                  "id": "workspaces",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-panel-gap",
+                    "props": {
+                      "tab": "workspaces"
+                    }
+                  }
+                },
+                {
+                  "id": "pr-checks",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-panel-gap",
+                    "props": {
+                      "tab": "pr-checks"
+                    }
+                  }
+                },
+                {
+                  "id": "changes",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-changes"
+                  }
+                },
+                {
+                  "id": "checks",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-panel-gap",
+                    "props": {
+                      "tab": "checks"
+                    }
+                  }
+                },
+                {
+                  "id": "ports",
+                  "type": "block",
+                  "content": {
+                    "mod": "orca-panel-gap",
+                    "props": {
+                      "tab": "ports"
+                    }
+                  }
+                },
+                {
+                  "id": "skillshare",
+                  "type": "block",
+                  "content": {
+                    "mod": "skillshare"
+                  }
+                }
+              ],
+              "size": {
+                "weight": 1
+              }
+            }
+          ],
+          "background": "surface",
+          "border": {
+            "width": 1,
+            "color": "border"
+          }
+        }
+      ]
+    },
+    {
+      "id": "status",
+      "type": "block",
+      "size": {
+        "px": 20
+      },
+      "content": {
+        "mod": "orca-status"
+      }
+    }
+  ]
+}

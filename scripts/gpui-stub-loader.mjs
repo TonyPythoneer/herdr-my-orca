@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const STUBS = new Set(["gpui-kit", "gpui-base", "herdr"]);
 const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => globalThis.__herdrProps?.() ?? ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
   spaces: "() => globalThis.__herdrSpaces?.() ?? []",
+  layout: "() => globalThis.__herdrLayout?.()",
   // Commands go through `globalThis.__herdrRun` so a flow test can read what a mod asks of the app.
   run: "(command, args) => globalThis.__herdrRun?.(command, args)",
   // File IO goes through `globalThis.__herdrFiles` so a flow test can run a mod's real handlers.
@@ -19,7 +20,7 @@ const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() =
 export async function resolve(specifier, context, next) {
   if (!STUBS.has(specifier)) return next(specifier, context);
   const source = readFileSync(fileURLToPath(context.parentURL), "utf8");
-  const names = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"([^"]+)"/g)].filter((m) => m[2] === specifier).flatMap((m) => m[1].split(",").map((n) => n.trim()).filter(Boolean));
+  const names = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"([^"]+)"/g)].filter((m) => m[2] === specifier).flatMap((m) => m[1].split(",").map((n) => n.trim().split(/\s+as\s+/)[0]).filter(Boolean));
   return { url: `stub:${specifier}?names=${[...new Set(names)].join(",")}&parent=${encodeURIComponent(context.parentURL)}`, shortCircuit: true };
 }
 

@@ -2,9 +2,10 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile } from "herdr";
+import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile, nextCommand } from "herdr";
 import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
+import { sidebarEase } from "./sidebar-motion.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
 import {
@@ -35,6 +36,13 @@ function readTabColorStore() {
   }
 }
 
+// Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
+// derived from the theme's own foreground, so both the dark and the light theme tint correctly.
+function tint(hex, alpha) {
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255).toString(16).padStart(2, "0");
+  return /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${a}` : hex;
+}
+
 function find(node, id) {
   if (node?.id === id) return node;
   for (const child of node?.children ?? []) {
@@ -59,6 +67,16 @@ const TAB_STRIP_FALLBACK = 32; // `TAB_GROUP_TAB_STRIP_HEIGHT_PX` (tab-drop-zone
 // How long an arrow's slide takes: Orca hands `scrollBy` a `behavior: 'smooth'`, which in Chromium
 // runs about this long.
 const TAB_STRIP_SLIDE_MS = 150;
+// The reference design's sidebar collapse is 300ms.
+const SIDEBAR_GLIDE_MS = 300;
+const SIDEBAR_STEP_MS = 16; // one step per frame (60fps); steps that would not change the width are skipped
+// The reference design's drawer curve, cubic-bezier(.32,.72,0,1), solved by bisection.
+const drawerEase = (() => {
+  const [x1, y1, x2, y2] = [.32, .72, 0, 1];
+  const bx = t => 3 * x1 * t * (1 - t) ** 2 + 3 * x2 * t * t * (1 - t) + t ** 3;
+  const by = t => 3 * y1 * t * (1 - t) ** 2 + 3 * y2 * t * t * (1 - t) + t ** 3;
+  return (x) => { let lo = 0, hi = 1, t = x; for (let i = 0; i < 24; i++) { if (bx(t) < x) lo = t; else hi = t; t = (lo + hi) / 2; } return by(t); };
+})();
 const DROP_STILL_TICKS = 20; // ~320ms of a motionless pointer is the release fallback, since the host has no button state.
 const TAB_DRAG_DISTANCE = 12; // `useTabDragSplit.ts:42` — dnd-kit activation distance, and how far down a press must travel before it is a split.
 const DROP_REV = 13; // bumped every time the instrumentation changes
@@ -344,6 +362,10 @@ export default class Tabs extends View {
     this.activeTabId = undefined;
     this.revealPending = false;
     this.animatedUntil = 0;
+    this.glideShift = 0;
+    this.glideGen = 0;
+    this.sbBusy = false; this.sbToken = 0; this.sbP = 1; this.sbOpenPx = 0;
+    this.panelBusy = false; this.panelToken = 0; this.panelOpenPx = 0;
     try {
       const stored = JSON.parse(localStorage.getItem("panels") ?? "{}");
       this.panels = stored && typeof stored === "object" ? stored : {};
@@ -360,6 +382,16 @@ export default class Tabs extends View {
       if (tries > 0) cx.timer.after(50, (cx) => seed(cx, tries - 1));
     };
     if (!this.windowState) cx.timer.after(0, (cx) => seed(cx, 20));
+    // `orca-tabs.toggle-sidebar` (a key binding or `herdr-app do`) runs the same animated toggle as
+    // the button. Only the unified header listens, so overlay copies never toggle twice.
+    if (props()?.unified) cx.spawn(async (cx) => {
+      for (;;) {
+        const command = await nextCommand();
+        if (command === "toggle-sidebar") this.wantToggle = (this.wantToggle ?? 0) + 1;
+        if (command === "toggle-panel") this.wantPanelToggle = (this.wantPanelToggle ?? 0) + 1;
+        if (command === "toggle-sidebar" || command === "toggle-panel") cx.notify();
+      }
+    });
   }
 
   // useTabDragSplit.ts:42 — TAB_DRAG_ACTIVATION_DISTANCE_PX = 12. Once downward travel reaches
@@ -495,6 +527,212 @@ export default class Tabs extends View {
   // GPUI's own `transition` is that ease — it runs natively between frames, so nothing here needs
   // a timer. The flag only says "these next changes slide"; it lapses on its own, so a wheel or a
   // trackpad in between moves the strip directly, the way `scrollBy` is cut short by real input.
+  // Unified layout: the toggle steps the sidebar's width itself, so the strip, the sidebar content
+  // and the terminals move in the same frames (only `layout.resize` can move a layout node). The
+  // loop owns just the target width; everything drawn is derived from the width `layout()` reports.
+  // A second press while it runs reverses from where it is. The PTY is resized once at the end
+  // (measured), not per step. Collapse ends with `hide` and puts the open width back while hidden,
+  // so the next `show` returns at that width; expand starts from 1px while hidden.
+  toggleSidebar(cx) {
+    if (props()?.motion === "native") return this.toggleSidebarNative(cx);
+    const sb = find(layout(), "sidebar");
+    const hidden = Boolean(sb?.hidden);
+    const open = this.sbOpenPx > 0 ? this.sbOpenPx : 259;
+    const target = this.sbBusy ? (this.sbGoal === 1 ? 0 : 1) : (hidden ? 1 : 0);
+    const token = ++this.sbToken;
+    const from = this.sbBusy ? this.sbP : (hidden ? 0 : Math.min(1, (sb?.size?.px ?? open) / open));
+    this.sbBusy = true; this.sbGoal = target;
+    cx.spawn(async (cx) => {
+      await cx.sleep(1); // leave the render phase: notify() is only legal from a task
+      if (token !== this.sbToken) return;
+      // Read the node live: a press can land in the tail of a collapse (hide already sent) or in the
+      // preamble of an expand (show not yet applied), and `hidden` above may be a frame stale.
+      const nowHidden = () => Boolean(find(layout(), "sidebar")?.hidden);
+      if (target === 1 && nowHidden()) {
+        run("layout.resize", { id: "sidebar", px: 1 });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+        run("layout.show", { id: "sidebar" });
+        await cx.sleep(50);
+        if (token !== this.sbToken) return;
+      }
+      const d = Math.abs(target - from);
+      const dur = (320 + 120 * d) * (0.5 + 0.5 * d) + 60;
+      const t0 = Date.now();
+      const motion = props()?.motion === "layout" ? "layout" : "smooth";
+      const samples = props()?.measureSidebar ? [] : null;
+      let lastPx = -1;
+      for (;;) {
+        const k = Math.min(1, (Date.now() - t0) / dur);
+        this.sbP = from + (target - from) * (motion === "layout" ? drawerEase(k) : sidebarEase(k));
+        const px = Math.max(1, Math.round(open * this.sbP));
+        if (px !== lastPx) { // each resize repaints the terminals, so never send one that changes nothing
+          lastPx = px;
+          if (samples) samples.push({ ms: Date.now() - t0, px });
+          run("layout.resize", { id: "sidebar", px });
+          if (target === 1 && nowHidden()) run("layout.show", { id: "sidebar" }); // the hide of a reversed collapse landed late
+          cx.notify();
+        }
+        if (k >= 1) break;
+        await cx.sleep(SIDEBAR_STEP_MS);
+        if (token !== this.sbToken) return;
+      }
+      if (samples) writeTextFile(`/tmp/sidebar-motion-${t0}.json`, JSON.stringify({ motion, open, target, dur, samples }), null).catch(() => {});
+      if (target === 0) {
+        run("layout.hide", { id: "sidebar" });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+      }
+      run("layout.resize", { id: "sidebar", px: open });
+      setShared("sidebar.collapsed", target === 0);
+      this.sbBusy = false; this.sbGoal = undefined;
+      cx.notify();
+    });
+  }
+
+  toggleSidebarNative(cx) {
+    const sidebar = find(layout(), "sidebar");
+    if (!this.sbBusy && !this.sbOpenPx && sidebar?.size?.px >= 120) this.sbOpenPx = sidebar.size.px;
+    const target = this.sbBusy ? 1 - this.sbGoal : (sidebar?.hidden ? 1 : 0);
+    const token = ++this.sbToken;
+    this.sbBusy = true;
+    this.sbGoal = target;
+    this.nativeActive = false;
+    this.nativeFinishing = false;
+    this.nativeLastPx = undefined;
+    this.nativeSamples = props()?.measureSidebar ? [] : null;
+    this.nativeStart = Date.now();
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.sbToken) return;
+      if (props()?.pinSidebarTerminal && !this.nativePinned && this.nativeHeaderWidth > 0) {
+        this.nativePinned = true;
+        run("layout.resize", { id: "main", px: this.nativeHeaderWidth / (settings()?.zoom || 1) });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+      }
+      if (target === 1 && find(layout(), "sidebar")?.hidden) {
+        run("layout.resize", { id: "sidebar", px: 1 });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+        run("layout.show", { id: "sidebar" });
+        await cx.sleep(50);
+        if (token !== this.sbToken) return;
+      }
+      this.nativeActive = true;
+      this.nativeWidth = (target ? (this.sbOpenPx || 259) : 1) / (settings()?.zoom || 1);
+      cx.notify();
+      await cx.sleep(650);
+      if (token === this.sbToken && this.sbBusy && !this.nativeFinishing) this.sidebarNativeSize({ width: this.nativeWidth }, cx);
+    });
+  }
+
+  sidebarNativeSize(size, cx) {
+    if (!this.sbBusy || !this.nativeActive || this.nativeFinishing) return;
+    const open = this.sbOpenPx || 259;
+    const px = Math.max(1, Math.min(open, Math.round(size.width * (settings()?.zoom || 1))));
+    this.sbP = px / open;
+    if (px !== this.nativeLastPx) {
+      this.nativeLastPx = px;
+      if (this.nativeSamples) this.nativeSamples.push({ ms: Date.now() - this.nativeStart, px });
+      run("layout.resize", { id: "sidebar", px });
+    }
+    if (this.sbGoal === 1 && find(layout(), "sidebar")?.hidden) run("layout.show", { id: "sidebar" });
+    if (px !== (this.sbGoal ? open : 1)) return;
+    this.nativeFinishing = true;
+    const token = this.sbToken, target = this.sbGoal, start = this.nativeStart, samples = this.nativeSamples;
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.sbToken) return;
+      if (samples) writeTextFile(`/tmp/sidebar-native-${start}.json`, JSON.stringify({ target, open, samples }), null).catch(() => {});
+      if (target === 0) {
+        run("layout.hide", { id: "sidebar" });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+      }
+      run("layout.resize", { id: "sidebar", px: open });
+      setShared("sidebar.collapsed", target === 0);
+      this.sbBusy = false;
+      this.releaseNativePin();
+      this.nativeActive = false;
+      this.nativeLastPx = undefined;
+      cx.notify();
+    });
+  }
+
+  releaseNativePin() {
+    if (this.nativePinned && !this.sbBusy && !this.panelBusy) {
+      run("layout.resize", { id: "main", weight: 1 });
+      this.nativePinned = false;
+    }
+  }
+
+  togglePanelNative(cx) {
+    const panel = find(layout(), "panel");
+    const open = this.panelOpenPx || ((panel?.size?.px ?? 0) >= 120 ? panel.size.px : 350);
+    if (!this.panelBusy) this.panelOpenPx = open;
+    const target = this.panelBusy ? 1 - this.panelGoal : (panel?.hidden ? 1 : 0);
+    const token = ++this.panelToken;
+    this.panelBusy = true;
+    this.panelGoal = target;
+    this.panelActive = false;
+    this.panelFinishing = false;
+    this.panelLastPx = undefined;
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.panelToken) return;
+      if (this.nativeHeaderWidth > 0) {
+        this.nativePinned = true;
+        const sidebar = find(layout(), "sidebar");
+        const width = this.nativeHeaderWidth / (settings()?.zoom || 1) + (panel?.hidden ? 0 : open) - (sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0));
+        run("layout.resize", { id: "main", px: width });
+        await cx.sleep(80);
+        if (token !== this.panelToken) return;
+      }
+      if (target === 1 && find(layout(), "panel")?.hidden) {
+        run("layout.resize", { id: "panel", px: 1 });
+        await cx.sleep(80);
+        if (token !== this.panelToken) return;
+        run("layout.show", { id: "panel" });
+        await cx.sleep(50);
+        if (token !== this.panelToken) return;
+      }
+      this.panelActive = true;
+      this.panelWidth = (target ? open : 1) / (settings()?.zoom || 1);
+      cx.notify();
+      await cx.sleep(650);
+      if (token === this.panelToken && this.panelBusy && !this.panelFinishing) this.panelNativeSize({ width: this.panelWidth }, cx);
+    });
+  }
+
+  panelNativeSize(size, cx) {
+    if (!this.panelBusy || !this.panelActive || this.panelFinishing) return;
+    const open = this.panelOpenPx || 350;
+    const px = Math.max(1, Math.min(open, Math.round(size.width * (settings()?.zoom || 1))));
+    if (px !== this.panelLastPx) {
+      this.panelLastPx = px;
+      run("layout.resize", { id: "panel", px });
+    }
+    if (this.panelGoal === 1 && find(layout(), "panel")?.hidden) run("layout.show", { id: "panel" });
+    if (px !== (this.panelGoal ? open : 1)) return;
+    this.panelFinishing = true;
+    const token = this.panelToken, target = this.panelGoal;
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.panelToken) return;
+      if (target === 0) {
+        run("layout.hide", { id: "panel" });
+        await cx.sleep(80);
+        if (token !== this.panelToken) return;
+      }
+      run("layout.resize", { id: "panel", px: open });
+      this.panelBusy = false;
+      this.panelActive = false;
+      this.releaseNativePin();
+      cx.notify();
+    });
+  }
+
   scrollTabStrip(direction, cx) {
     const to = tabStripScrollTarget(this.scrollX, this.viewportWidth, this.contentWidth, direction);
     if (to === this.scrollX) return;
@@ -865,6 +1103,10 @@ export default class Tabs extends View {
 
     const paneDrag = shared("orca-tabs.pane-drag");
     const t = theme();
+    // `unified`: this block is the single header over the sidebar AND the work column
+    // (layouts/orca-unified.json); the sidebar there is `surface` too, so bar, sidebar and fillets match.
+    const unified = Boolean(p?.unified);
+    const bar = t.surface;
     const space = (spaces() ?? []).find(p => p.active);
     const shown = space?.tabs ?? [];
     const tabPanes = selectTabPanes(panes() ?? []);
@@ -885,8 +1127,8 @@ export default class Tabs extends View {
     // (layout.rs:551) and there would otherwise be no way back. Orca keeps the control
     // reachable by floating `titlebar-left` over the workspace
     // (AppWorkspaceShell.tsx:163-167).
-    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
-      .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+      .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .role("button").accessibility_label("Toggle sidebar").tooltip("Toggle sidebar")
       .on_mouse_down("left", stop).on_click(action).child(glyph);
     // tab-bar-surface.tsx:221-227 — `ml-2 my-auto flex h-7 w-7 shrink-0 items-center
@@ -894,8 +1136,8 @@ export default class Tabs extends View {
     // holding a Lucide `Plus` at `w-3.5 h-3.5` (14px). It is a DropdownMenuTrigger, not a bare
     // action: it opens the new-tab menu, which `orca-new-menu` provides.
     // `rounded-md` resolves to 8px, not 6: --radius .625rem x .8 (main.css:175,195).
-    const tabNew = (action) => div().id("tab-new").ml(8).size(28).flex_none().flex().items_center().justify_center().rounded(8)
-      .text_color(t.muted).hover(s => s.bg("#40404080").text_color(t.foreground))
+    const tabNew = (action) => div().id("tab-new").ml(8).size(28).flex_none().flex().items_center().justify_center().rounded_full()
+      .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .role("button").accessibility_label("New tab").tooltip("New tab")
       .on_mouse_down("left", (e, cx) => { this.plusBounds = e.bounds; stop(e, cx); }).on_click(action)
       .child(svg("mods/orca-tabs/plus.svg").size(14).flex_none());
@@ -906,25 +1148,26 @@ export default class Tabs extends View {
     const tabScrollButton = (direction, disabled) => {
       const label = direction === "start" ? "Scroll tabs left" : "Scroll tabs right";
       const glyph = `mods/orca-tabs/chevron-${direction === "start" ? "left" : "right"}.svg`;
-      return div().id(`tab-scroll-${direction}`).mx(2).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(6)
+      return div().id(`tab-scroll-${direction}`).mx(2).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(8)
         .text_color(disabled ? t.dim : t.muted)
-        .when(!disabled, el => el.hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop))
+        .when(!disabled, el => el.hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground)).on_mouse_down("left", stop))
         .role("button").accessibility_label(label).tooltip(label)
         .on_click(() => { if (!disabled) this.scrollTabStrip(direction, cx); })
         .child(svg(glyph).size(14).flex_none());
     };
     const winBtn = (id, label, glyph, action, close) => div().id(id).w(46).h_full().flex_none().flex().items_center().justify_center()
-      .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : t.hover).text_color(close ? "#ffffff" : t.foreground))
+      .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : tint(t.foreground, 0.1)).text_color(close ? "#ffffff" : t.foreground))
       .role("button").accessibility_label(label).tooltip(label)
       .on_mouse_down("left", stop).on_click(action).child(glyph);
     // TitlebarMainStrip.tsx:12-33,76 — `RightSidebarToggle`: `.sidebar-toggle mr-2`
     // (main.css:1213-1230 = 4px/8px padding around the 16px `PanelRight`, so 32x24, radius 4,
     // muted, hover --accent + foreground). Herdr toggles it with `layout.toggle` (commands.rs:77).
-    const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(4)
-      .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+    const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+      .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
       .on_mouse_down("left", stop).on_click(action)
       .child(svg("mods/orca-tabs/panel-right.svg").size(16));
+    let gapToCard = 0; // set once the sidebar is known, before any tab is drawn
     const item = (c, i, mode = {}) => {
       const pane = tabPanes.get(c.id) ?? null;
       const program = pane?.program;
@@ -968,19 +1211,47 @@ export default class Tabs extends View {
         ? image(mark).size(12)
         : svg(mark).size(12).text_color(t.muted);
       else if (program?.icon) identity = program.tint ? svg(program.icon).size(12).text_color(t.muted) : image(program.icon).size(12);
-      // Orca's tab: flat, full height, no pill. SortableTab.tsx:214 — h-full px-1.5 text-xs plus
-      // getTabStripBorderClasses (border-t border-r border-border). The slot clamps the tab to
-      // `w-[300px] max-w-[300px] min-w-[144px] flex-1` (tab-width-rules.ts:2, applied at
-      // use-tab-strip-slot-props.ts:16). Dark theme, main.css:428-429: active is 6% foreground
-      // over #171717 (#242424), inactive is #171717; drop-indicator.ts:15-16 — the active bar is
-      // 2px, inset-x-0, bottom. `mr-1` on the leading icon and label
-      // (TerminalTabLeadingIcon.tsx:63, SortableTab.tsx:291) is the 4px gap between children.
-      return h_flex().id(`tab-${c.id}${copyId}`).h_full().px(6).gap(4).relative().items_center().flex_none().min_w(144).max_w(300).text_size(12)
-        .bg(c.active ? "#242424" : "#171717").text_color(c.active ? t.foreground : t.muted)
-        .border_t(1).border_color(t.border)
+      // The reference design's tab strip (deliberate divergence from Orca's flat strip,
+      // SortableTab.tsx:214): the ACTIVE tab is joined to the terminal below it. It is as tall as
+      // the bar, fills with the terminals' own `background` (what lies under the bar), rounds its
+      // top corners at 14 and flares into the terminal through two concave 14px fillets, so there
+      // is no bottom bar and no border. An inactive tab is bare text; only hover raises a 24px
+      // pill (radius 10). The slot that wraps it keeps Orca's measured width rules
+      // (`w-[300px] max-w-[300px] min-w-[144px]`, tab-width-rules.ts:2) and its 2px inset.
+      // `mr-1` on the leading icon and label (TerminalTabLeadingIcon.tsx:63, SortableTab.tsx:291)
+      // is the 4px gap between children.
+      // shortcut: a fillet is a 14px square of terminal colour holding a bar-coloured square with
+      // one rounded corner; it assumes the bar is `bar`, so change both together.
+      const flush = flushable(c, i);
+      const flare = flush ? Math.min(1, gapToCard / 14) : 1;
+      // A fillet is only the concave wedge, drawn as a ring: a 56px circle with a 14px terminal-coloured
+      // border, centred on the corner of a clipped 14px square, leaves exactly the part outside a
+      // 14px-radius circle. It paints nothing else, so it works over the bar AND over a neighbour's
+      // hover pill (the earlier two-square version painted a bar-coloured square over the pill).
+      const fillet = (side) => div().absolute().bottom(0).size(14).overflow_hidden()
+        .when(side === "left", el => el.left(-14).opacity(flare)).when(side === "right", el => el.right(-14))
+        .child(div().absolute().top(-28).size(56).rounded_full().border(14).border_color(t.background)
+          .when(side === "left", el => el.left(-28)).when(side === "right", el => el.left(-14)));
+      // Both surfaces are layers that every tab always carries and that only change `opacity`, under a
+      // stable id: a transition animates changes made after the element carried it, so switching tab
+      // crossfades the joined shape (old fades out, new fades in) and hover fades the pill in and out.
+      // (`.hover()` styles cannot animate; the strip already tracks `hoveredTab`.)
+      const fade = { duration: 160, easing: "ease-out" };
+      // Nothing here may depend on which tab is active in a way that moves layout: slot padding is
+      // constant, so a click moves no pixel and re-measures no width. Only these two layers react.
+      // The active layer is instant (click feedback). The hover pill is never inset: the neighbour's
+      // fillet wedge paints over its corner, which is the intended Chrome-style bite.
+      const activeLayer = div().id(`tab-active-${c.id}${copyId}`).absolute().top(0).bottom(0)
+        .left(flush && gapToCard <= 0 ? -2 : 0).right(0)
+        .rounded_t(14).bg(t.background).opacity(c.active ? 1 : 0)
+        .child(fillet("left")).child(fillet("right"));
+      const hoverLayer = div().id(`tab-hover-${c.id}${copyId}`).absolute().top(4).bottom(4)
+        .left(0).right(0)
+        .rounded(10).bg(tint(t.foreground, 0.08)).opacity(!c.active && this.hoveredTab === c.id ? 1 : 0).transition("opacity", fade);
+      const pill = h_flex().w_full().h_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
+        .child(hoverLayer).child(activeLayer)
+        .text_color(c.active ? t.foreground : t.muted)
         .when(!c.active, el => el.hover(s => s.text_color(t.foreground)))
-        .when(i < shown.length - 1, el => el.border_r(1))
-        .when(c.active, el => el.child(div().absolute().bottom(0).left(0).right(0).h(2).bg(t.foreground)))
         .on_hover((hovered, cx) => {
           const next = hovered ? c.id : this.hoveredTab === c.id ? null : this.hoveredTab;
           if (next === this.hoveredTab) return;
@@ -989,7 +1260,9 @@ export default class Tabs extends View {
         })
         // SortableTab.tsx:214 — cursor-pointer: tab rest hover is a pointer hand, not grab.
         .cursor_pointer()
-        .when(this.pressed === i, el => el.cursor_grabbing().opacity(0.8))
+        // Dim and grab only once the pointer has left this tab (a real drag), not on every mouse-down:
+        // dimming at the press made a plain click look half-highlighted.
+        .when(this.pressed === i && this.overTab !== null && this.overTab !== c.id, el => el.cursor_grabbing().opacity(0.8))
         // SortableTab.tsx:231-243 — onAuxClick button === 1 (middle-click) closes tab.
         .on_mouse_down("middle", (_e, cx) => {
           cx.stop_propagation();
@@ -1107,9 +1380,9 @@ export default class Tabs extends View {
         // Collapse pane — SortableTab.tsx:298-316: shown while the pane is expanded, a 16px box
         // with a 12px `Minimize2`; active tabs always show it, inactive ones on TAB hover
         // (`text-transparent group-hover:text-muted-foreground`). `pane.zoom` collapses.
-        .when(c.zoomed, el => el.child(div().id(`collapse-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
-          .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
-          .hover(s => s.text_color(t.foreground).bg(t.raised))
+        .when(c.zoomed, el => el.child(div().id(`collapse-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(8)
+          .text_color(c.active || this.hoveredTab === c.id ? t.muted : t.dim)
+          .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
           .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
           .on_mouse_down("left", stop)
           .on_click((_e, cx) => {
@@ -1123,14 +1396,16 @@ export default class Tabs extends View {
         // button; Herdr's pin analogue is `settled`, TabInfo.settled). The box is `w-4 h-4`
         // (16px), the glyph `w-3` (12px); inactive is `text-transparent` and becomes muted on
         // TAB hover (`group-hover`), not on its own box.
-        .when(!c.settled, el => el.child(div().id(`close-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(2)
-          .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
-          .hover(s => s.text_color(t.foreground).bg(t.raised))
+        .when(!c.settled, el => el.child(div().id(`close-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(8)
+          .text_color(c.active || this.hoveredTab === c.id ? t.muted : t.dim)
+          .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
           .on_mouse_down("left", stop).accessibility_label("Close").tooltip("Close")
           .on_click((_e, cx) => { cx.stop_propagation(); this.requestCloseTab(c); })
-          .child(svg("mods/orca-tabs/close.svg").size(12))))
-        // The width of a tab is its label's, so the strip measures the slot rather than guessing
-        // (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
+          .child(svg("mods/orca-tabs/close.svg").size(12))));
+      // The SLOT around the pill keeps its place and its width, so the track stays exactly as long
+      // as the tab list. The width of a tab is its label's, so the strip measures the slot rather
+      // than guessing (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
+      return h_flex().id(`tab-${c.id}${copyId}`).h_full().px(2).relative().items_center().flex_none().min_w(144).max_w(300)
         .when(!mode.overlay, el => el.on_size_change((size, cx) => this.measureTabWidth(c.id, size.width, cx)))
         // The pinned copy: drawn after the track, so it paints above the inactive tabs passing
         // underneath, and given the clamped left the geometry asked for. It is the same tab — its
@@ -1138,35 +1413,92 @@ export default class Tabs extends View {
         .when(Boolean(mode.overlay), el => el.absolute().top(0).left(mode.overlay.visualLeft).w(mode.overlay.width))
         // Sliding, as a pinned tab does, keeps the same share of the arrow's ease as the track.
         .when(Boolean(mode.overlay) && Boolean(mode.sliding), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
-        // The slot itself keeps its place and its width, so the track stays exactly as long as the
-        // tab list; it only stops painting while the pinned copy stands in for it. The pinned copy
+        // The slot only stops painting while the pinned copy stands in for it. The pinned copy
         // always covers the slot's visible part, so no hole shows and no second tab appears.
-        .when(mode.hidden, el => el.opacity(0));
+        .when(mode.hidden, el => el.opacity(0))
+        .child(pill)
+        // 1px divider between neighbouring inactive tabs, hidden beside the active or hovered one.
+        .when(!c.active && !mode.overlay && i < shown.length - 1 && !shown[i + 1].active && this.hoveredTab !== c.id && this.hoveredTab !== shown[i + 1].id,
+          el => el.child(div().absolute().right(0).top(0).bottom(0).flex().items_center().child(div().w(1).h(14).bg(tint(t.foreground, 0.14)))));
     };
     const root = layout();
     const sidebar = find(root, "sidebar");
+    if (unified && !this.sbBusy && !this.panelBusy && !this.nativeRecovering && find(root, "main")?.size?.px != null) {
+      this.nativeRecovering = true;
+      cx.spawn(async cx => {
+        await cx.sleep(1);
+        if (!this.sbBusy && !this.panelBusy && find(layout(), "main")?.size?.px != null) run("layout.resize", { id: "main", weight: 1 });
+        this.nativeRecovering = false;
+      });
+    }
     // Live read keeps maximize/restore current (Orca subscribes to onMaximizeChanged,
     // WindowControls.tsx:15); the cached seed covers the first paint, when `window()` is null.
     const live = appWindow();
     if (live) this.windowState = live;
     const w = live ?? this.windowState ?? {};
+    // The layout moves the strip's left edge in one step when the sidebar hides or shows, so the
+    // strip is drawn where it was and eased home: render 1 holds the old spot, a moment later
+    // render 2 lets `left` go to 0 under a transition. A transition only animates changes made
+    // after the element carried it, so each glide gets fresh element ids (`-g<n>`): render 1
+    // creates them already at the old spot, render 2 moves the same elements home. Only the tabs
+    // glide; the toggle stays put.
+    // shortcut: the column and the terminals still jump, since a mod cannot move layout nodes.
+    const sidebarHidden = Boolean(sidebar?.hidden);
+    if (!unified && this.lastSidebarHidden !== undefined && sidebarHidden !== this.lastSidebarHidden) {
+      const stripStartHidden = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
+      const jump = (sidebar?.size?.px ?? 280) - stripStartHidden;
+      this.glideShift = sidebarHidden ? jump : -jump;
+      this.glideGen = (this.glideGen ?? 0) + 1;
+      cx.spawn(async (cx) => {
+        await cx.sleep(40);
+        this.glideShift = 0;
+        cx.notify();
+      });
+    }
+    this.lastSidebarHidden = sidebarHidden;
+    const glide = (el, id) => el.id(`${id}-g${this.glideGen ?? 0}`).relative().left(this.glideShift)
+      .transition("left", { duration: SIDEBAR_GLIDE_MS, easing: "ease-out" });
     // .titlebar has no horizontal padding (main.css:1072-1084), so the strip is flush from the
     // left; only macOS traffic lights that land over this column reserve space. Old saved rails
     // and a dragged-narrow sidebar can be smaller than the window buttons.
     const lights = root?.traffic_lights;
     const leftPad = w.platform === "macos" && w.titlebar === "none" && !w.fullscreen && lights?.length
-      ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
+      ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (unified || sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 0;
+    // Where the strip starts against the card's left edge (the sidebar's right edge): a first tab that
+    // lands exactly on it is flush and needs no left flare; the further it sits, the more flare shows.
+    // In the old layout the strip starts on the card, so the gap is 0. The card's own rounded
+    // top-left corner is NOT drawn: this block cannot paint into the terminal block below it
+    // (tried, clipped), and a static pane radius would leave a notch under a flush first tab.
+    const zoomK = settings()?.zoom || 1;
+    const toggleRightX = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
+    const sbPx = sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0) / zoomK;
+    if (this.wantToggle) { const count = this.wantToggle; this.wantToggle = 0; if (count % 2) this.toggleSidebar(cx); }
+    if (unified && !this.sbBusy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= 120 && this.sbOpenPx !== sidebar.size.px) {
+      this.sbOpenPx = sidebar.size.px;
+      setShared("sidebar.openPx", this.sbOpenPx);
+    }
+    gapToCard = unified ? Math.max(sbPx, toggleRightX) - sbPx : 0;
+    const flushable = (c, i) => c.active && i === 0 && !geometry.arrows.hasOverflow && this.scrollX <= 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
+    if (this.wantPanelToggle) { const count = this.wantPanelToggle; this.wantPanelToggle = 0; if (count % 2) this.togglePanelNative(cx); }
+    if (unified && !this.panelBusy && !panel?.hidden && (panel?.size?.px ?? 0) >= 120) this.panelOpenPx = panel.size.px;
+    if (unified && !this.panelBusy) this.panelWidth = (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK;
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
     this.syncPanel(space, panel, body, enabled);
     this.syncLanding(cx);
+    if (unified && !this.sbBusy) this.nativeWidth = (sidebar?.hidden ? 1 : (sidebar?.size?.px ?? 259)) / zoomK;
     // `.titlebar`: 36px, border-bottom var(--border), background var(--card) #171717
     // (main.css:1072-1084). Tabs sit flush to each edge of that bar.
     // The Explorer / Source Control activity buttons are NOT here: Orca renders its activity
     // bar only inside the right sidebar (`right-sidebar-top-activity-bar.tsx:40`), which
     // `orca-panel-head` owns. Drawing them twice put two strip icons in the titlebar corner.
-    return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(t.surface).border_b(1).border_color(t.border)
+    return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(bar)
+      .when(unified && props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
+      .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.nativeWidth).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.sidebarNativeSize(size, cx))))
+      .when(unified, el => el.relative().child(div().id("panel-native-clock").absolute().left(0).top(0).h(1).w(this.panelWidth ?? (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.panelNativeSize(size, cx))))
       .on_mouse_move((e, cx) => {
         if (this.pressed !== null && this.stripBounds) {
           this.triggerSplit(this.stripBounds, e.position, cx);
@@ -1195,11 +1527,21 @@ export default class Tabs extends View {
       // Herdr skips a hidden node's content (layout.rs:551); Orca keeps the control at the same
       // left slot by floating `titlebar-left` over the workspace
       // (AppWorkspaceShell.tsx:163-167).
-      .when(Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), () => {
-        setShared("sidebar.collapsed", false);
-        run("layout.show", { id: "sidebar" });
+      .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), (_e, ecx) => {
+        // Same route as the `toggle-sidebar` command: the render consumes the flag with a live render
+        // context. The `cx` captured by this render is dead once the click arrives.
+        if (unified) { this.wantToggle = (this.wantToggle ?? 0) + 1; ecx.notify(); return; }
+        setShared("sidebar.collapsed", !sidebar?.hidden);
+        run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "sidebar" });
         // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.
       }, w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) - leftPad : 6)))
+      // Unified: the tab strip starts on the card's left edge, i.e. at the sidebar's right edge
+      // (or right after the toggle while the sidebar is hidden, or narrower than that).
+      .when(unified && !sidebar?.hidden, el => {
+        const zoom = settings()?.zoom || 1;
+        const toggleRight = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
+        return el.child(div().id("unified-gap").w(Math.max(0, (sidebar?.size?.px ?? 0) / zoom - toggleRight)).h(1).flex_none());
+      })
       // Orca hides the strip's native scrollbar (`tab-bar-surface.tsx:164-175`) and paints only
       // its 3px hover thumb (`TabStripScrollIndicator.tsx:196-215`), which Herdr has no
       // primitive for — so no scrollbar is painted and no thumb is faked. The wheel scrolls the
@@ -1213,8 +1555,8 @@ export default class Tabs extends View {
       // pinned — its slot in the track (unpainted, but still holding the width) and the overlay at
       // the clamped left — which is what keeps `contentWidth` and the scroll limits independent of
       // the dock (§4). The arrows sit outside this box, so the pinned tab can never slide under them.
-      .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("start", geometry.arrows.leftDisabled)))
-      .child(div().id("tab-viewport").relative().flex_shrink(1).min_w(0).h_full().overflow_hidden()
+      .when(geometry.arrows.hasOverflow, el => el.child(glide(tabScrollButton("start", geometry.arrows.leftDisabled), "tab-scroll-start")))
+      .child(glide(div(), "tab-viewport").flex_shrink(1).min_w(0).h_full().overflow_hidden()
         .on_size_change((size, cx) => {
           if (Math.abs(size.width - this.viewportWidth) < 0.5) return;
           this.viewportWidth = size.width;
@@ -1225,7 +1567,7 @@ export default class Tabs extends View {
           .when(this.sliding(), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
           .children(shown.map((c, i) => item(c, i, { hidden: geometry.docked && i === geometry.activeIndex }))))
         .when(geometry.docked, el => el.child(item(geometry.activeTab, geometry.activeIndex, { overlay: { ...geometry.slot, width: geometry.activeWidth }, sliding: this.sliding() }))))
-      .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("end", geometry.arrows.rightDisabled)))
+      .when(geometry.arrows.hasOverflow, el => el.child(glide(tabScrollButton("end", geometry.arrows.rightDisabled), "tab-scroll-end")))
       // Orca terminal-tab-strip-drop-target.ts:39-52 — visual drop indicator when a pane is dragged to the tab strip.
       .when(Boolean(paneDrag?.inTabStrip), el =>
         el.child(
@@ -1244,14 +1586,14 @@ export default class Tabs extends View {
         )
       )
       // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-      .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: this.newMenuAt() })))
+      .child(glide(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: this.newMenuAt() })), "tab-new"))
       .child(div().flex_1())
       // TitlebarMainStrip.tsx:58-69 — the single-tab case gets a `Minimize2`
       // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,
       // use-app-chrome-layout.ts:129; hasTabBar is `tabCount >= 2`). `.titlebar-icon-button` is
       // 4px padding around a 14px glyph with `mr-2`, radius 4 (main.css:1288-1313).
-      .when(shown.length === 1 && shown[0].zoomed, el => el.child(div().id("titlebar-collapse").mr(8).size(22).flex_none().flex().items_center().justify_center().rounded(4)
-        .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+      .when(shown.length === 1 && shown[0].zoomed, el => el.child(div().id("titlebar-collapse").mr(8).size(22).flex_none().flex().items_center().justify_center().rounded_full()
+        .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
         .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
         .on_mouse_down("left", stop)
         .on_click(() => {
@@ -1262,7 +1604,7 @@ export default class Tabs extends View {
       // TitlebarMainStrip.tsx:76 — Orca's `RightSidebarToggle` moves into the panel header
       // while the panel is open (`right-sidebar/index.tsx:124-144`); `orca-panel-head` draws it
       // there, so this copy shows only while the panel is hidden (a hidden node draws nothing).
-      .when(find(layout(), "panel")?.hidden, el => el.child(panelToggle(() => run("layout.toggle", { id: "panel" }))))
+      .when(find(layout(), "panel")?.hidden, el => el.child(panelToggle((_e, cx) => { if (unified) { this.wantPanelToggle = (this.wantPanelToggle ?? 0) + 1; cx.notify(); } else run("layout.toggle", { id: "panel" }); })))
       // WindowControls.tsx:27-30,42-49,60-67 — Orca replaces native chrome on Linux and Windows
       // with the same 10x10 SVG paths; only macOS keeps its traffic lights. Herdr reports
       // `buttons: false` here (the compositor owns decorations) but draws none of its own, so

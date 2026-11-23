@@ -7,7 +7,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar } from "gpui-base";
-import { spaces, machines, panes, agents, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, props, nextCommand } from "herdr";
+import { spaces, machines, panes, agents, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, props, nextCommand, layout } from "herdr";
 import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar, avatarFile } from "./project.js";
 
 import { getProjectGroupHeaderPaddingLeft } from "./indentation.js";
@@ -24,6 +24,28 @@ import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUP
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
+
+// Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
+// keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
+// Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
+// Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
+function sidebarFrame(inner) {
+  const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
+  if (!props()?.unified) return inner;
+  const open = shared("sidebar.openPx");
+  const px = find(layout(), "sidebar")?.size?.px;
+  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
+  const k = px / open;
+  // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat
+  // cover in the sidebar's own colour, with the alpha the fade needs, is one blended quad.
+  const bg = theme().surface;
+  const cover = Math.max(0, Math.min(1, 1 - (k - 0.15) / 0.85));
+  const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
+  return div().size_full().overflow_hidden().relative()
+    .child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner))
+    .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
+}
+
 export default class Spaces extends View {
   init(_props, cx) {
     stopsInit(this, cx, "entry");
@@ -856,7 +878,7 @@ export default class Spaces extends View {
       // the buttons join the Tab order (`stop` per control), the title is never re-truncated,
       // and the sidebar-coloured bg masks the title behind it. The row is 28px and the slots
       // 20px, so top-4 is `top-1/2 -translate-y-1/2` for this row.
-      .child(h_flex().absolute().right(4).top(4).flex_none().items_center().gap(2).rounded(6).bg(t.chrome).pl(4)
+      .child(h_flex().absolute().right(4).top(4).flex_none().items_center().gap(2).rounded(6).bg(props()?.unified ? t.surface : t.chrome).pl(4)
         .opacity(this.hoveredRepo === key || this.menuKey === key ||
           within(this, [id, `space-fold-${w.id}`, `space-more-${w.id}`, `space-new-${w.id}`]) ? 1 : 0)
         // ORDER, from SectionHeader.tsx:355-414 — the collapse chevron comes FIRST in
@@ -911,7 +933,9 @@ export default class Spaces extends View {
     return r.head ? [this.header(r, t, ps), this.card(r, t, ps, mine)] : [this.card(r, t, ps, mine)];
   }
 
-  render(cx) {
+  render(cx) { return sidebarFrame(this.renderBody(cx)); }
+
+  renderBody(cx) {
     const t = theme();
     const sp = spaces();
     // Unread workspace state (`spaces.unread.v1`): orca-menu writes shared store on toggle;
@@ -1004,7 +1028,7 @@ export default class Spaces extends View {
             .child(svg("mods/orca-spaces/trash.svg").size(10)));
       });
 
-    return focusRoot(this, v_flex().size_full().min_h(0).bg(t.chrome).text_size(13)
+    return focusRoot(this, v_flex().size_full().min_h(0).bg(props()?.unified ? t.surface : t.chrome).text_size(13)
       // Orca's sidebar bar is an 8px webkit scrollbar with `padding-right: 4px`
       // (`main.css:767-781`), transparent until the sidebar is hovered (`:781-800`). A webkit
       // bar takes layout width, so no row sits under it. Herdr's placed bar fills the box it is

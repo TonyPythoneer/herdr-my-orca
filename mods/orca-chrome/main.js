@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { theme, run, props, window, setShared, layout } from "herdr";
+import { theme, run, props, window, setShared, shared, layout } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -21,6 +21,27 @@ const sidebarHidden = () => Boolean(find(layout(), "sidebar")?.hidden);
 function toggleSidebar() {
   setShared("sidebar.collapsed", !sidebarHidden());
   run(sidebarHidden() ? "layout.show" : "layout.hide", { id: "sidebar" });
+}
+
+// Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
+// keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
+// Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
+// Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
+function sidebarFrame(inner) {
+  const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
+  if (!props()?.unified) return inner;
+  const open = shared("sidebar.openPx");
+  const px = find(layout(), "sidebar")?.size?.px;
+  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
+  const k = px / open;
+  // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat
+  // cover in the sidebar's own colour, with the alpha the fade needs, is one blended quad.
+  const bg = theme().surface;
+  const cover = Math.max(0, Math.min(1, 1 - (k - 0.15) / 0.85));
+  const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
+  return div().size_full().overflow_hidden().relative()
+    .child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner))
+    .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
 }
 
 // Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
@@ -48,7 +69,7 @@ export default class WorkspaceChrome extends View {
       const row = (id, icon, label, action) => div().id(id).size(24).flex_none().flex().items_center().justify_center().rounded(8)
         .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
         .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
-      return h_flex().size_full().items_center().justify_between().bg(t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
+      const footerBar = h_flex().size_full().items_center().justify_between().bg(props()?.unified ? t.surface : t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
         .child(h_flex().items_center().gap(4)
           // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
           // while the Agents page lives in the `main` stack (`main-agents`).
@@ -58,6 +79,7 @@ export default class WorkspaceChrome extends View {
           // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
           // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).
           .child(row("help", "circle-help", "Help", () => run("app.palette"))));
+      return sidebarFrame(footerBar);
         // Orca's right cluster holds Reveal active workspace and Workspace board
         // (SidebarToolbar.tsx:76-112); neither has a Herdr command, so nothing is drawn.
         // The Herdr-only `+` (Add machine) that sat here is gone: Orca's footer has no plus.

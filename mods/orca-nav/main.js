@@ -127,6 +127,28 @@ function labelOf(choices, value) {
   return choices.find(([id]) => id === value)?.[1] ?? choices[0][1];
 }
 
+
+// Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
+// keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
+// Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
+// Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
+function sidebarFrame(inner) {
+  const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
+  if (!props()?.unified) return inner;
+  const open = shared("sidebar.openPx");
+  const px = find(layout(), "sidebar")?.size?.px;
+  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
+  const k = px / open;
+  // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat
+  // cover in the sidebar's own colour, with the alpha the fade needs, is one blended quad.
+  const bg = theme().surface;
+  const cover = Math.max(0, Math.min(1, 1 - (k - 0.15) / 0.85));
+  const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
+  return div().size_full().overflow_hidden().relative()
+    .child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner))
+    .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
+}
+
 export default class Nav extends View {
   // The placed nav is not focusable; the popup copy is. Its keyboard list starts at the first row
   // (dropdown-menu.tsx:115 data-[current=true]), and Esc closes it (SidebarWorkspaceOptionsMenu
@@ -139,7 +161,9 @@ export default class Nav extends View {
     this.handle.focus();
   }
 
-  render(cx) {
+  render(cx) { return sidebarFrame(this.renderBody(cx)); }
+
+  renderBody(cx) {
     if (props()?.navMenu === "workspace-options") return this.optionsView(cx);
     const t = theme();
     // orca-spaces owns the fold set, so it publishes whether every project is closed;
@@ -177,7 +201,7 @@ export default class Nav extends View {
       .on_click(() => { pushHistory(page); run("layout.select", { stack: "main", child: page }); })
       .child(svg(`mods/orca-nav/${icon}.svg`).size(16).flex_none().text_color(shown === page ? t.accent_foreground : "#f0f0f04d"))
       .child(div().flex_1().truncate().child(label));
-    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(t.chrome)
+    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(props()?.unified ? t.surface : t.chrome)
       .child(search)
       // Projects header — SidebarHeader.tsx:60-63: `group/sidebar-header mt-2 flex h-8 min-w-0
       // shrink-0 items-center justify-between gap-1.5 px-2`; title `pl-2 pr-0.5 text-xs
