@@ -1066,10 +1066,20 @@ export default class Tabs extends View {
         .when(side === "left", el => el.left(-14).opacity(flare)).when(side === "right", el => el.right(-14))
         .child(div().size(14).bg(bar)
           .when(side === "left", el => el.rounded_br(14)).when(side === "right", el => el.rounded_bl(14)));
-      const pill = h_flex().w_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
-        .when(c.active, el => el.h_full().rounded_t(14).bg(t.background).child(fillet("left")).child(fillet("right")))
-        .when(!c.active, el => el.h(24).rounded(10).hover(s => s.bg(tint(t.foreground, 0.08)).text_color(t.foreground)))
+      // Both surfaces are layers that every tab always carries and that only change `opacity`, under a
+      // stable id: a transition animates changes made after the element carried it, so switching tab
+      // crossfades the joined shape (old fades out, new fades in) and hover fades the pill in and out.
+      // (`.hover()` styles cannot animate; the strip already tracks `hoveredTab`.)
+      const fade = { duration: 160, easing: "ease-out" };
+      const activeLayer = div().id(`tab-active-${c.id}${copyId}`).absolute().top(0).bottom(0).left(0).right(0)
+        .rounded_t(14).bg(t.background).opacity(c.active ? 1 : 0).transition("opacity", fade)
+        .child(fillet("left")).child(fillet("right"));
+      const hoverLayer = div().id(`tab-hover-${c.id}${copyId}`).absolute().top(4).bottom(4).left(0).right(0)
+        .rounded(10).bg(tint(t.foreground, 0.08)).opacity(!c.active && this.hoveredTab === c.id ? 1 : 0).transition("opacity", fade);
+      const pill = h_flex().w_full().h_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
+        .child(hoverLayer).child(activeLayer)
         .text_color(c.active ? t.foreground : t.muted)
+        .when(!c.active, el => el.hover(s => s.text_color(t.foreground)))
         .on_hover((hovered, cx) => {
           const next = hovered ? c.id : this.hoveredTab === c.id ? null : this.hoveredTab;
           if (next === this.hoveredTab) return;

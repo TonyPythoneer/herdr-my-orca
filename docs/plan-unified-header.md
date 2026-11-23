@@ -47,7 +47,7 @@ Reference video: `~/Downloads/s4pSbu2qb9QTaHlD.mp4`. Motion prototype (user-appr
 | 1 | Static unified header in `orca-unified`, snap collapse; retest drop-to-split, window drag, traffic-light pad, old `orca` | DONE (drop-to-split and window drag not exercised by hand; code paths unchanged: `panelRect` left=sidebar px still right, header block keeps `window_drag`) |
 | 2 | First-tab flush merge + card corner piece | DONE except the corner: header block cannot paint into the terminal block (tried, clipped); static pane radius would notch under a flush first tab. Card keeps a square corner. Tell the user. |
 | 3 | Layout-driven synced animation + key rebinding (needs D4 go) | DONE for the toggle button and `herdr-app do orca-tabs.toggle-sidebar`; keys.json NOT rebound (see Log) |
-| 4 | Sliding active-tab indicator + hover pill opacity | todo |
+| 4 | Sliding active-tab indicator + hover pill opacity | DONE as a crossfade, not a slide (a slide needs scroll/dock coordinates; risky). Every tab carries an active layer and a hover layer that only change `opacity` under stable ids (160ms ease-out). |
 
 Each phase ends usable and revertible: check, diff, haiku copy, `check`, `status`, then record the result below.
 
@@ -60,3 +60,5 @@ Each phase ends usable and revertible: check, diff, haiku copy, `check`, `status
   Gotchas found: (1) calling `cx.notify()` synchronously inside the `cx.spawn` body runs in the render phase and throws; start the loop with `await cx.sleep(1)`. (2) PTY gets ONE resize at the end of the animation (measured by polling `stty size`), not per step. (3) Header block cannot paint into the terminal block, so no card corner. (4) live `orca-chrome` carried an unmerged line from another worktree ("Model providers" row): patched live in place instead of copying; repo and live differ only by that line.
   Verified by 20-25fps screen recordings: collapse and expand both animate, strip follows the card edge, sidebar content fades and slides, no squeeze, final state back to 259px.
   NOT done: keys.json (`cmd-b`, `ctrl-shift-b` still `layout.toggle:sidebar`, instant). Rebinding to `orca-tabs.toggle-sidebar` is global and would make cmd-b a no-op in layouts without the unified header (win98, terminals, old orca): user decision.
+- Phase 4: crossfade verified in a recording (active tab text dims and the layer fades out while the hover pill fades in on the same tab). Old `orca` layout re-checked: unchanged. Left the user on `orca-unified`; revert with `herdr-app do layout.switch --name orca`.
+- Open for the user: keys.json rebinding, bar colour (unified bar is `chrome`, lower contrast vs the joined tab than the old `surface` bar), card corner (not drawable), unmeasured: hover pill over the right fillet, tab drag-to-split in the unified layout (code path unchanged, not exercised by hand).
