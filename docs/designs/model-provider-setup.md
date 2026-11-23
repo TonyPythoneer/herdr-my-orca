@@ -127,7 +127,7 @@ argv = [ "/bin/sh", "-c", WRAPPER, "--",
 *   The Codex name `omlx` in the `-c` overrides is a fixed alias: no value from the file is ever
     spelled into a config string.
 *   `None` keeps today's argv exactly.
-*   There is one Codex launch site: `mods/agent-config/main.js` `launch()` (argv built near line 561, `run("tab.new", …)` near line 570).
+*   There is one launch site for every flyout agent: `mods/agent-config/main.js` `buildLaunch()` builds the argv from the agent's spec (`shared/agent-flyout.js`), and `launch()` hands it to `run("tab.new", …)`. The provider case is the branch of `buildLaunch()` that skips the spec's model and effort options and passes the rest through `launchArgv`.
 
 ## Risks
 
@@ -154,7 +154,7 @@ argv = [ "/bin/sh", "-c", WRAPPER, "--",
 
 ## Implementation Files
 
-1.  `mods/agent-config/main.js` (modify): `launch()` argv for oMLX; Codex flyout row and divider; read `model-providers.json`.
+1.  `mods/agent-config/main.js` (modify): `buildLaunch()` argv for a provider; the Model source section (a select, like MODEL and EFFORT); read `model-providers.json`. The sections and controls are drawn from the agent's spec in `shared/agent-flyout.js`.
 2.  `mods/orca-agent-manager/` (modify): "Model providers" section in Agent Settings; save order (test, write file, chmod, icon); delete.
 3.  `mods/agent-config/codex-provider.js` (create): pure functions: `validateHost`, `judgeModels(status, body)`, `launchArgv(baseArgv, provider, model)`. Imported by the mods.
 4.  `mods/agent-config/codex-provider.test.js` (create): unit tests for the functions above.
