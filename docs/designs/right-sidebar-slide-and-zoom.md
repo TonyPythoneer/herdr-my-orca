@@ -1,7 +1,7 @@
 # 右側欄滑動，中間畫面縮放
 
 *   **Author:** Tony Yang
-*   **Status:** Draft（選項 B 已實作：`panel-motion.js` 與五個 panel mod；`orca-panel-head` 待定，見 Decisions）
+*   **Status:** Draft（選項 B 已實作並同步到 live；`orca-panel-head` 待定，見 Decisions）
 *   **Date:** 2026-11-23
 
 --------------------------------------------------------------------------------
@@ -17,8 +17,17 @@
 *   **D2 31px 圖示列（`orca-panel-head`）暫不包。** 作者的描述是「按下去後，icon 左邊出現
     一組關於這個右側欄子畫面的操作」——那是新的互動（每個子畫面的操作群組），不是這次滑動
     的一部分。待作者確認範圍後再決定它要不要一起滑（Q2 改寫如下）。
-*   **D3 不做的**：離散跳段縮放（C）、卡片內縮錯覺、`keys.json` 的瞬間鍵（`cmd-l`、
-    `ctrl-shift-e`）。
+*   **D3 不做的**：離散跳段縮放（C）、卡片內縮錯覺。
+*   **D4 鍵盤換成動畫版。** `cmd-b`、`ctrl-shift-b`、`cmd-l`、`ctrl-shift-e` 改綁
+    `orca-tabs.toggle-sidebar` / `toggle-panel`。沒有 unified header 的版面（舊 `orca`、
+    win98、terminals）由 `orca-tabs` 自己退回 `layout.toggle`，所以舊版面行為不變；沒有載入
+    這個 mod 的版面，鍵等於沒有作用（這是已知取捨）。命令監聽不再只限 `props().unified`
+    ——對話框與拖曳 overlay 的副本在 `init()` 就 return，不會重複切換。
+*   **D5 動畫 API 收斂成一個。** 新增 `mods/orca-tabs/drawer.js`：一個 `Drawer` 類別擁有
+    整台狀態機（preamble、中途反向的 token、寬度去重、釘住 `main`、收尾），差異用 spec
+    表達（`id`、`defaultOpen`、`pin(open, wasHidden)`、`after(target)`、`measure`），環境用
+    `env`（`run`/`find`/`layout`/`props`/`zoom`/`write`/`pin`/`release`）。左右兩份各約 60 行
+    的重複實作已刪除，`motion: "layout" | "smooth"` 的計時器版本保留為對照組（同一組狀態）。
 
 --------------------------------------------------------------------------------
 
@@ -231,7 +240,14 @@ Tabs.render() 消費旗標 ──▶ togglePanelNative(cx)
           結束：收合 → layout.hide + 隱藏狀態下 resize 回開啟寬；再 releaseNativePin()
 ```
 
-### 選項 B 的增量（建議的下一步）
+### 已上線的增量（2026-11-23）
+
+`shared/panel-motion.js` + 五個 panel mod 的 `render()` 包一層；`orca-tabs` 發佈
+`shared("panel.openPx")`、`measurePanel` 取樣、`drawer.js` 一台動畫機；`keys.json` 四個鍵改
+走動畫。全部已複製到 `~/.config/herdr-app`，六個 mod `herdr-app check` 通過，
+`herdr-app status` 的 `errors` 為空。
+
+### 選項 B 的增量（原始提案，供對照）
 
 1.  **`shared/panel-motion.js`**（新檔，由 `scripts/sync-shared.mjs` 複製）
     *   `panelFrame(inner)`：讀 `shared("panel.openPx")` 與 `layout()` 的 panel px；
