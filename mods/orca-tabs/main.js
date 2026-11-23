@@ -876,6 +876,10 @@ export default class Tabs extends View {
 
     const paneDrag = shared("orca-tabs.pane-drag");
     const t = theme();
+    // `unified`: this block is the single header over the sidebar AND the work column
+    // (layouts/orca-unified.json); the bar then shares the sidebar's `chrome` colour.
+    const unified = Boolean(p?.unified);
+    const bar = unified ? t.chrome : t.surface;
     const space = (spaces() ?? []).find(p => p.active);
     const shown = space?.tabs ?? [];
     const tabPanes = selectTabPanes(panes() ?? []);
@@ -989,10 +993,10 @@ export default class Tabs extends View {
       // `mr-1` on the leading icon and label (TerminalTabLeadingIcon.tsx:63, SortableTab.tsx:291)
       // is the 4px gap between children.
       // shortcut: a fillet is a 14px square of terminal colour holding a bar-coloured square with
-      // one rounded corner; it assumes the bar is `t.surface`, so change both together.
+      // one rounded corner; it assumes the bar is `bar`, so change both together.
       const fillet = (side) => div().absolute().bottom(0).size(14).bg(t.background)
         .when(side === "left", el => el.left(-14)).when(side === "right", el => el.right(-14))
-        .child(div().size(14).bg(t.surface)
+        .child(div().size(14).bg(bar)
           .when(side === "left", el => el.rounded_br(14)).when(side === "right", el => el.rounded_bl(14)));
       const pill = h_flex().w_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
         .when(c.active, el => el.h_full().rounded_t(14).bg(t.background).child(fillet("left")).child(fillet("right")))
@@ -1182,7 +1186,7 @@ export default class Tabs extends View {
     // glide; the toggle stays put.
     // shortcut: the column and the terminals still jump, since a mod cannot move layout nodes.
     const sidebarHidden = Boolean(sidebar?.hidden);
-    if (this.lastSidebarHidden !== undefined && sidebarHidden !== this.lastSidebarHidden) {
+    if (!unified && this.lastSidebarHidden !== undefined && sidebarHidden !== this.lastSidebarHidden) {
       const stripStartHidden = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
       const jump = (sidebar?.size?.px ?? 280) - stripStartHidden;
       this.glideShift = sidebarHidden ? jump : -jump;
@@ -1201,7 +1205,7 @@ export default class Tabs extends View {
     // and a dragged-narrow sidebar can be smaller than the window buttons.
     const lights = root?.traffic_lights;
     const leftPad = w.platform === "macos" && w.titlebar === "none" && !w.fullscreen && lights?.length
-      ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
+      ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (unified || sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
@@ -1212,7 +1216,7 @@ export default class Tabs extends View {
     // The Explorer / Source Control activity buttons are NOT here: Orca renders its activity
     // bar only inside the right sidebar (`right-sidebar-top-activity-bar.tsx:40`), which
     // `orca-panel-head` owns. Drawing them twice put two strip icons in the titlebar corner.
-    return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(t.surface)
+    return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(bar)
       .on_mouse_move((e, cx) => {
         if (this.pressed !== null && this.stripBounds) {
           this.triggerSplit(this.stripBounds, e.position, cx);
@@ -1241,11 +1245,18 @@ export default class Tabs extends View {
       // Herdr skips a hidden node's content (layout.rs:551); Orca keeps the control at the same
       // left slot by floating `titlebar-left` over the workspace
       // (AppWorkspaceShell.tsx:163-167).
-      .when(Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), () => {
-        setShared("sidebar.collapsed", false);
-        run("layout.show", { id: "sidebar" });
+      .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), () => {
+        setShared("sidebar.collapsed", !sidebar?.hidden);
+        run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "sidebar" });
         // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.
       }, w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) - leftPad : 6)))
+      // Unified: the tab strip starts on the card's left edge, i.e. at the sidebar's right edge
+      // (or right after the toggle while the sidebar is hidden, or narrower than that).
+      .when(unified && !sidebar?.hidden, el => {
+        const zoom = settings()?.zoom || 1;
+        const toggleRight = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
+        return el.child(div().id("unified-gap").w(Math.max(0, (sidebar?.size?.px ?? 0) / zoom - toggleRight)).h(1).flex_none());
+      })
       // Orca hides the strip's native scrollbar (`tab-bar-surface.tsx:164-175`) and paints only
       // its 3px hover thumb (`TabStripScrollIndicator.tsx:196-215`), which Herdr has no
       // primitive for — so no scrollbar is painted and no thumb is faked. The wheel scrolls the
