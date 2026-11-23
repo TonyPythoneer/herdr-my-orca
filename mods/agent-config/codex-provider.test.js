@@ -8,9 +8,14 @@ import {
   TEST_ERRORS,
   WRAPPER,
   judgeModels,
+  keyHint,
+  linkInfo,
   launchArgv,
   parseProviderFile,
+  presetFor,
+  recordLink,
   serializeProviderFile,
+  slugId,
   validateHost,
 } from "./codex-provider.js";
 
@@ -107,4 +112,52 @@ test("the provider file round-trips and a broken one is refused", () => {
   assert.deepEqual(parseProviderFile(null), { providers: {} });
   assert.ok(parseProviderFile("{").error);
   assert.ok(parseProviderFile("[]").error);
+});
+
+test("linkInfo names a GitHub link by its repo and takes the owner's avatar", () => {
+  assert.deepEqual(linkInfo("https://github.com/jundot/omlx"), { link: "https://github.com/jundot/omlx", name: "omlx", iconUrl: "https://github.com/jundot.png?size=64" });
+  assert.deepEqual(linkInfo("github.com/jundot/omlx.git?tab=x"), { link: "https://github.com/jundot/omlx", name: "omlx", iconUrl: "https://github.com/jundot.png?size=64" });
+  assert.deepEqual(linkInfo("https://github.com/jundot"), { link: "https://github.com/jundot", name: "jundot", iconUrl: "https://github.com/jundot.png?size=64" });
+});
+
+test("linkInfo names any other https link by its site and takes its favicon", () => {
+  assert.deepEqual(linkInfo("https://models.example.com/docs/x"), { link: "https://models.example.com", name: "example", iconUrl: "https://models.example.com/favicon.ico" });
+  assert.deepEqual(linkInfo("example.org"), { link: "https://example.org", name: "example", iconUrl: "https://example.org/favicon.ico" });
+});
+
+test("linkInfo: empty is no link, anything else that is not https or a site is an error", () => {
+  assert.deepEqual(linkInfo("  "), { link: "", name: "", iconUrl: "" });
+  assert.deepEqual(linkInfo(undefined), { link: "", name: "", iconUrl: "" });
+  for (const bad of ["http://example.com", "ftp://example.com", "omlx", "https://a:b@example.com", "https://github.com/", "https://github.com/a$b", "a b"]) {
+    assert.ok(linkInfo(bad).error, bad);
+  }
+});
+
+test("recordLink reads the link, or the owner an older record kept", () => {
+  assert.equal(recordLink({ link: "https://example.com" }), "https://example.com");
+  assert.equal(recordLink({ githubOwner: "jundot" }), "https://github.com/jundot");
+  assert.equal(recordLink({}), "");
+});
+
+test("presetFor suggests only for a local server on a known port", () => {
+  assert.equal(presetFor("http://127.0.0.1:8000/v1").name, "oMLX");
+  assert.equal(presetFor("http://localhost:11434/v1").name, "Ollama");
+  assert.equal(presetFor("http://example.com:8000/v1"), null);
+  assert.equal(presetFor("http://127.0.0.1:9000/v1"), null);
+  assert.equal(presetFor("nope"), null);
+});
+
+test("slugId makes a unique, safe id", () => {
+  assert.equal(slugId("oMLX", []), "omlx");
+  assert.equal(slugId("oMLX", ["omlx"]), "omlx-2");
+  assert.equal(slugId("   ", []), "provider");
+  assert.equal(slugId("constructor", []), "constructor-2");
+  assert.equal(slugId("None", []), "none-2", "none is the flyout's word for no provider");
+  assert.equal(slugId("My Server!", ["my-server"]), "my-server-2");
+});
+
+test("keyHint shows dots and the last four characters", () => {
+  assert.equal(keyHint("sk-abcdef1234"), "••••••••••••1234");
+  assert.equal(keyHint("short"), "••••••••••••");
+  assert.equal(keyHint(undefined), "••••••••••••");
 });

@@ -12,16 +12,16 @@ Herdr can start the Codex CLI against a second model source: oMLX, a local serve
 
 The user sets up oMLX once in Herdr. Setup is saved only after a live test passes. Then each Codex launch can use `None` (the original OpenAI source, unchanged) or `oMLX`.
 
-v1 supports Codex only and one provider (oMLX).
+v1 supports Codex only. Several providers can be saved; each is one record with its own host, key, name and icon.
 
 ## Decisions
 
 *   **D1 Name**: "Model provider".
-*   **D2 Storage**: one plain JSON file, `appHome()/model-providers.json`, mode 0600. It holds the host, the API key, the GitHub owner for the icon, the model list, and the verified time. No Keychain, no pipes. This follows how pi (`~/.pi/agent/models.json`) and opencode (`~/.config/opencode/opencode.jsonc`) already store oMLX settings.
+*   **D2 Storage**: one plain JSON file, `appHome()/model-providers.json`, mode 0600. It holds the host, the API key, the project link, the icon path, the model list, and the verified time. No Keychain, no pipes. This follows how pi (`~/.pi/agent/models.json`) and opencode (`~/.config/opencode/opencode.jsonc`) already store oMLX settings.
 *   **D3 Accepted risk**: the key is readable by any process running as the same user. It is also visible in the Codex session files if the environment is captured (see Risks). The author accepted this.
-*   **D4 Setup location**: the "Model providers" section of the Agent Settings page (`mods/orca-agent-manager`).
+*   **D4 Setup location**: its own "Model providers" page in the main stack (`main-providers`, the hard-drive button in the sidebar footer), drawn by `mods/orca-agent-manager` with `props.page = "providers"`. The page is a list of provider cards plus a dashed "Add provider" card. A card opens into an editor (name, host, key, project link, Test and save, Delete).
 *   **D5 Flyout row**: the Codex flyout (`mods/agent-config`) gets a "Model provider" dropdown directly under the "Codex" title, then a divider, then MODEL and EFFORT. The row is greyed out and shows `None` when no provider has passed its test.
-*   **D6 Icon**: GitHub only. The owner's avatar is saved from `https://github.com/<owner>.png?size=64`. There is no website-link option.
+*   **D6 Name and icon from one project link** (optional). A GitHub link names the provider by its repo and takes the owner's avatar (`https://github.com/<owner>.png?size=64`). Any other https link names it by its site and takes `<origin>/favicon.ico` (converted to PNG with `sips`). The name field stays editable: a link only fills it while it is empty or still holds the earlier suggestion. The icon is downloaded once into `appHome()/provider-icons/icon-<unique>.png` and read from there; a new link fetches again when its field is left, or at save if that has not happened. No link, or a failed fetch, means the default drive icon. A well-known local port (8000, 11434) offers a name and link as a suggestion.
 *   **D7 Test**: `curl` with the key in an `Authorization` header, 5-second timeout. Passes on HTTP 200 with a non-empty `data` array. No timers, no polling.
 *   **D8 No `shell_snapshot`**: Codex is started with `--disable shell_snapshot`. Without it, Codex writes the environment, including `OMLX_API_KEY`, into `~/.codex/shell_snapshots/` as plain text (tested).
 *   **D9 Model choice per provider**: the chosen model is stored per (agent, provider), so a GPT model name is never sent to oMLX.
@@ -29,7 +29,7 @@ v1 supports Codex only and one provider (oMLX).
 
 ## Goals
 
-*   G1. Setup screen: host, key, GitHub owner (optional), "Test and save".
+*   G1. Setup page: a card per provider with name, host, key (shown as dots and its last four characters until Replace), project link (optional), "Test and save".
 *   G2. Save only after the test passes. A failed test writes nothing.
 *   G3. Codex flyout shows the "Model provider" row (D5).
 *   G4. `None` launches Codex exactly as today.
@@ -41,7 +41,7 @@ v1 supports Codex only and one provider (oMLX).
 
 *   Claude, opencode, or other agents (v1 is Codex only).
 *   Merging OpenAI and oMLX models into one Codex `/model` list.
-*   Ollama, LM Studio, or more than one provider in the UI. The file format allows a list, but the UI handles one provider.
+*   Provider kinds other than an OpenAI-compatible `/models` server. 
 *   Key rotation UI beyond "edit and test again".
 *   Remote Herdr spaces (`machine` set): the row is greyed out there.
 
@@ -50,7 +50,7 @@ v1 supports Codex only and one provider (oMLX).
 ### CUJ 1: Set up oMLX
 
 *   **Given**: oMLX runs at `http://127.0.0.1:8000/v1` and requires a key.
-*   **When**: The user enters host and key in Agent Settings, optionally a GitHub owner, and presses "Test and save".
+*   **When**: The user enters host and key on the Model providers page, optionally a project link, and presses "Test and save".
 *   **Then**: The test passes (HTTP 200, non-empty `data`). The icon is saved under `appHome()/provider-icons/`. `model-providers.json` is written. The Codex flyout row now lists oMLX.
 
 ### CUJ 2: Test fails
@@ -86,12 +86,12 @@ v1 supports Codex only and one provider (oMLX).
 
 ```json
 {
-  "omlx": {
+  "<provider id, a slug of the name, never changed>": {
     "name": "oMLX",
     "host": "http://127.0.0.1:8000/v1",
     "apiKey": "<key>",
-    "githubOwner": "<owner or empty>",
-    "iconPath": "<appHome()>/provider-icons/omlx.png",
+    "link": "<normalized project link or empty>",
+    "iconPath": "<appHome()>/provider-icons/icon-<unique>.png or empty",
     "verifiedAt": "2026-11-22T10:00:00Z",
     "models": ["<model-id>", "..."],
     "selectedModel": { "codex": "<model-id>" }

@@ -38,6 +38,70 @@ export function validateHost(text) {
   return { host };
 }
 
+const GITHUB_OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+const GITHUB_REPO = /^[A-Za-z0-9._-]{1,100}$/;
+const LINK_ERROR = "Enter a link like https://github.com/owner/repo or https://example.com";
+
+/**
+ * What a pasted project link gives: `{ link, name, iconUrl }` (all empty for no link) or `{ error }`.
+ * A GitHub link names the repo and takes the owner's avatar; any other https link names its site
+ * and takes `/favicon.ico`. `link` is the normalized form, so two spellings compare equal.
+ */
+export function linkInfo(text) {
+  const value = String(text ?? "").trim();
+  if (value === "") return { link: "", name: "", iconUrl: "" };
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`);
+  } catch {
+    return { error: LINK_ERROR };
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  if (url.protocol !== "https:" || url.username || url.password || !host.includes(".")) return { error: LINK_ERROR };
+  if (host === "github.com") {
+    const [owner, rawRepo] = url.pathname.split("/").filter(Boolean);
+    if (!owner || !GITHUB_OWNER.test(owner)) return { error: LINK_ERROR };
+    const repo = rawRepo?.replace(/\.git$/, "");
+    const named = repo && GITHUB_REPO.test(repo) ? repo : "";
+    return { link: `https://github.com/${owner}${named ? `/${named}` : ""}`, name: named || owner, iconUrl: `https://github.com/${owner}.png?size=64` };
+  }
+  return { link: `https://${url.host}`, name: host.split(".").at(-2), iconUrl: `https://${url.host}/favicon.ico` };
+}
+
+/** The link a saved record stands for. Older records kept only a GitHub owner. */
+export function recordLink(record) {
+  return record?.link ?? (record?.githubOwner ? `https://github.com/${record.githubOwner}` : "");
+}
+
+/** A name and link to offer for a well-known local server, by its port. Only ever a suggestion. */
+export function presetFor(host) {
+  let url;
+  try {
+    url = new URL(host);
+  } catch {
+    return null;
+  }
+  if (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") return null;
+  if (url.port === "8000") return { name: "oMLX", link: "https://github.com/jundot/omlx" };
+  if (url.port === "11434") return { name: "Ollama", link: "https://github.com/ollama/ollama" };
+  return null;
+}
+
+/** An id for a new record: the name as a slug, unique among `taken`, never an Object.prototype key. */
+export function slugId(name, taken) {
+  const base = String(name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "provider";
+  let id = base;
+  // "none" is the flyout's own word for "no provider".
+  for (let n = 2; taken.includes(id) || id in {} || id === "none"; n += 1) id = `${base}-${n}`;
+  return id;
+}
+
+/** What a saved key looks like on screen: dots and its last four characters. */
+export function keyHint(key) {
+  const text = String(key ?? "");
+  return text.length >= 8 ? `${"•".repeat(12)}${text.slice(-4)}` : "•".repeat(12);
+}
+
 /**
  * What a `GET <host>/models` answer means: `{ ok: true, models }` or `{ ok: false, error }` with
  * one of TEST_ERRORS. `status` is the HTTP status, 0 when the request never reached a server.

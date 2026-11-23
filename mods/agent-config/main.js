@@ -4,10 +4,10 @@
 // The agent's permission flags stay in programs.json's `run`; this only adds the model and effort.
 // The flyout is sticky: it stays after the pointer leaves and closes on launch.
 
-import { View, div, svg } from "gpui-kit";
+import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
-import { PROVIDER_FILE, launchArgv, parseProviderFile, serializeProviderFile } from "./codex-provider.js";
+import { PROVIDER_FILE, launchArgv, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
 
 const AGENTS = {
   claude: {
@@ -622,7 +622,8 @@ export default class AgentConfig extends View {
     if (this.key === "codex" && this.providerId !== "none") {
       const file = `${appHome()}/${PROVIDER_FILE}`;
       const record = parseProviderFile(await readTextFile(file).catch(() => null)).providers?.[this.providerId];
-      if (!record) {
+      // The host goes into a config string, so a hand-edited one is checked again here.
+      if (!record || validateHost(record.host).error) {
         this.providerId = "none";
         this.providerOpen = false;
         this.error = "Model provider is no longer set up.";
@@ -824,6 +825,15 @@ export default class AgentConfig extends View {
       );
   }
 
+  // A provider's icon is the file saved in this app's folder; without one, the default drive.
+  providerIcon(record, t) {
+    const home = `${appHome()}/`;
+    const path = String(record?.iconPath ?? "");
+    return path.startsWith(home)
+      ? image(path.slice(home.length)).w(16).h(16).flex_none().rounded(3)
+      : svg("mods/agent-config/hard-drive.svg").size(14).flex_none().text_color(t.muted);
+  }
+
   // The provider row under the title: None, or a provider whose test passed. Greyed out when there
   // is none to pick, and on another machine (the file and the icon live on this one).
   providerRow(t) {
@@ -878,7 +888,8 @@ export default class AgentConfig extends View {
                     ? "Choose which model source Codex starts with"
                     : "Set up a model provider in Agent Settings",
               )
-              .child(div().min_w(0).truncate().text_size(12).text_color(enabled ? t.foreground : t.muted).child(label))
+              .when(this.providerId !== "none" && this.providers[this.providerId], (el) => el.child(this.providerIcon(this.providers[this.providerId], t)))
+              .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(enabled ? t.foreground : t.muted).child(label))
               .child(div().flex_none().text_size(11).text_color(t.muted).child("▾")),
           ),
       )
@@ -919,6 +930,7 @@ export default class AgentConfig extends View {
           .cursor_pointer()
           .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => this.setProvider(option.id, cx))
+          .when(option.id !== "none", (el) => el.child(this.providerIcon(this.providers[option.id], t)))
           .child(div().flex_1().min_w(0).truncate().child(option.label))
           .when(this.providerId === option.id, (el) => el.child(div().flex_none().text_color(t.accent).child("✓"))),
       ),

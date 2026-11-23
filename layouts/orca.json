@@ -160,6 +160,16 @@
                       "content": {
                         "mod": "orca-agent-manager"
                       }
+                    },
+                    {
+                      "id": "main-providers",
+                      "type": "block",
+                      "content": {
+                        "mod": "orca-agent-manager",
+                        "props": {
+                          "page": "providers"
+                        }
+                      }
                     }
                   ]
                 }
