@@ -171,6 +171,13 @@
                               "page": "providers"
                             }
                           }
+                        },
+                        {
+                          "id": "main-tasks",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-tasks"
+                          }
                         }
                       ]
                     }

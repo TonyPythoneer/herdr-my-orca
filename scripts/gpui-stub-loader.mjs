@@ -14,6 +14,7 @@ const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() =
   readTextFile: "async (path) => globalThis.__herdrFiles?.get(path)",
   writeTextFile: "async (path, text) => { await globalThis.__herdrFiles?.set(path, text); }",
   setShared: "() => {}",
+  shared: "(key) => globalThis.__herdrShared?.(key)",
   // Programs go through `globalThis.__herdrExec` too, so a flow test can answer curl, chmod and stat.
   exec: "async (cmd, args, options) => globalThis.__herdrExec ? globalThis.__herdrExec(cmd, args, options) : ({ code: 0, stdout: '', stderr: '' })" };
 
