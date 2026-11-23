@@ -318,6 +318,11 @@ export default class Nav extends View {
     const push = (row) => rows.push(row);
     // WorkspaceOptionsMenuItems (:299-307): the title label, then sections separated by rules.
     push({ kind: "label", text: "Workspace options" });
+    // Not an Orca row. Orca's sidebar rescans a repo whenever a dialog asks (the visibility
+    // dialog's Refresh scans again), so it needs no manual one; Herdr learns a project's
+    // branches from orca-spaces' own git read, whose fallback is 60 s and which a checkout in
+    // another app can outrun. This asks orca-spaces for the same pass on purpose.
+    push({ kind: "action", command: "refresh", label: "Refresh branches", value: "All projects" });
     // Show — getShownWorkspaceViewSections SHOWN (workspace-view-options.ts:120-141):
     // hosts only with another host, projects only with more than one project.
     if (hosts.length > 1 || o.visibleWorkspaceHostIds !== null) {
@@ -375,6 +380,11 @@ export default class Nav extends View {
   act(row, cx) {
     const o = readOptions();
     if (row.kind === "gap") return;
+    if (row.kind === "action") {
+      run(`orca-spaces.${row.command}`);
+      closeOverlay(props()?.overlay);
+      return;
+    }
     if (row.kind === "back") { this.page = null; this.at = -1; cx.notify(); return; }
     if (row.kind === "page") { this.page = row.page; this.at = -1; cx.notify(); return; }
     if (row.kind === "toggle") { writeOptions({ [row.key]: !o[row.key] }); cx.notify(); return; }
@@ -423,7 +433,7 @@ export default class Nav extends View {
       .child(div().flex_1().min_w(0).truncate().child(row.label))
       // Right value: `ml-auto text-[11px] font-medium text-muted-foreground` (:93-147).
       .child(div().flex_none().max_w(150).truncate().text_size(11).font_medium().text_color(t.muted)
-        .child(row.kind === "page" ? `${row.value} ›` : row.kind === "gap" ? "Unavailable" : row.kind === "projectClear" ? "" : ""));
+        .child(row.kind === "page" ? `${row.value} ›` : row.kind === "action" ? row.value : row.kind === "gap" ? "Unavailable" : row.kind === "projectClear" ? "" : ""));
   }
 
   // SidebarGroupByToggle.tsx: `h-6 w-full`, each item `h-6 grow basis-0 px-1 text-[10px]`,

@@ -244,7 +244,10 @@ function items(p, git) {
         ["Copy Worktree Name", "orca-menu.copy-name", { id: tg.id, name: tg.branch ?? null, folder }],
         // WorktreeContextMenuView.tsx:203-214 — Mark Read / Mark Unread
         ["Mark " + (tg.unread ? "Read" : "Unread"), "orca-menu.toggle-unread", { id: tg.id }],
-        ...(repo ? [["New worktree", "worktree", { ...args, action: "new" }], ["Open worktree", "worktree", { ...args, action: "open" }]] : []),
+        // Not an Orca row: Orca's card menu has no branch switch because Source Control owns it,
+        // and this layout ports no Source Control. The dialog ports that picker's behaviour — one
+        // checkout, in place, behind the agent and uncommitted-change blockers.
+        ...(repo ? [["New worktree", "worktree", { ...args, action: "new" }], ["Open worktree", "worktree", { ...args, action: "open" }], ["Checkout branch", "worktree", { ...args, action: "switch" }]] : []),
         ...(linked ? [["Remove worktree", "worktree", { ...args, action: "remove" }]] : []),
         // Every unpinned tab on this worktree's spaces; greyed out when there is none.
         ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: [tg.id], disabled: !unpinnedTabs([tg.id]).length }],
@@ -296,7 +299,7 @@ function menuIcon(it, zoomed) {
   if (command === "orca-menu.unsplit-to-tab") return "mods/orca-menu/plus.svg";
   if (command === "pane.swap") return `mods/orca-menu/arrow-${args?.direction ?? "right"}.svg`;
   if (command === "pane.zoom") return `mods/orca-menu/${zoomed ? "minimize-2" : "maximize-2"}.svg`;
-  if (command === "worktree") return `mods/orca-menu/${args?.action === "new" ? "git-branch-plus" : args?.action === "open" ? "workflow" : "unlink"}.svg`;
+  if (command === "worktree") return `mods/orca-menu/${args?.action === "new" ? "git-branch-plus" : args?.action === "open" ? "workflow" : args?.action === "switch" ? "git-fork" : "unlink"}.svg`;
   if (command === "tab.move") return `mods/orca-menu/${it[0] === "Move Left" ? "arrow-left" : "arrow-right"}.svg`;
   if (command === "orca-menu.close-others" || command === "orca-menu.delete-all-tabs" || command === "orca-menu.close-split-panes") return "mods/orca-menu/x.svg";
   if (command === "tab.settle" || command === "tab.unsettle") return `mods/orca-menu/${command === "tab.unsettle" ? "pin-off" : "pin"}.svg`;
@@ -726,7 +729,7 @@ export default class Menu extends View {
       return;
     }
     if (it[1] === "worktree") {
-      openOverlay({ mod: "orca-worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
+      openOverlay({ mod: "orca-worktree", kind: "dialog", ...(it[2].action === "open" || it[2].action === "switch" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
       closeOverlay(overlayId);
     } else if (it[1] === "tab.close") {
       // Close tab confirmation — terminal-tab-actions.ts:121-131 & running-terminal-close-guard.ts:56-97

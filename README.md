@@ -17,6 +17,19 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   The watcher is `orca-status/wt-follow.js` in the always-mounted bottom bar: it reads each agent's
   own process folder (`hc get` → `foreground.cwd`) and polls every 3 s.
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
+- **Refresh branches**: the Projects header's Workspace options popup starts with it. It asks
+  `orca-spaces` (`orca-spaces.refresh`) to re-read every project it knows — open or closed —
+  instead of waiting for the 60-second fallback or a filesystem wake: each project's branch and
+  its `git worktree list`, so a checkout or worktree changed elsewhere shows up. Rows are still
+  worktrees, as in Orca, so a branch with no checkout (say `main` while the main checkout sits on
+  a feature branch) has no card; only a space of its own brings one.
+- **Checkout branch**: a card's right-click menu has Checkout branch, which lists the repo's local
+  branches and runs `git switch` in that checkout. Orca switches from its Source Control panel,
+  which this layout does not port, so the dialog ports that picker's rules instead: the current
+  branch and a branch another worktree holds are not offered, and a working agent or uncommitted
+  changes stop the switch with the reason shown (Git is re-checked on every attempt). The card's
+  branch follows the switch, so returning the main checkout to `main` after a merge needs no
+  terminal.
 - **Agent Manager**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
   5.5 rows. It lists the Agent CLIs Herdr detects,
   turns availability on/off for installed CLIs, and edits each CLI's executable and launch

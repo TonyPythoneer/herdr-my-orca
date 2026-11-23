@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ROOT, tilde, slug, ago, place, inside, spaceOf } from "./helpers.js";
+import { ROOT, tilde, slug, ago, place, inside, spaceOf, branchRows, switchBlocker } from "./helpers.js";
 
 test("ROOT, tilde, slug keep their display semantics", () => {
   assert.equal(ROOT("/home/u"), "/home/u/.herdr/worktrees");
@@ -39,4 +39,25 @@ test("spaceOf picks the deepest matching checkout and respects host", () => {
   assert.equal(spaceOf("/repo/nested", all, "host-x", spaces, paneList).id, "c");
   assert.equal(inside("/repo/nested", "/repo"), true);
   assert.equal(inside("/repository", "/repo"), false);
+});
+
+test("branch rows put the current branch first, then newest commit, and name the worktree holding one", () => {
+  const rows = branchRows(
+    [{ branch: 'main', at: 10 }, { branch: 'feat', at: 30 }, { branch: 'old', at: 1 }],
+    [{ path: '/w/old', branch: 'old' }, { path: '/w/feat', branch: 'feat' }],
+    'feat',
+  );
+  assert.deepEqual(rows.map((r) => r.branch), ['feat', 'main', 'old']);
+  assert.equal(rows[0].current, true);
+  assert.equal(rows[0].held, null); // the checkout it is already in is not "held"
+  assert.equal(rows.find((r) => r.branch === 'old').held, '/w/old');
+  assert.equal(rows.find((r) => r.branch === 'main').held, null);
+});
+
+test("a switch is blocked by a working agent, then unreadable changes, then a dirty tree", () => {
+  assert.match(switchBlocker({ agentWorking: true, dirtyCount: 3 }), /agent is working/);
+  assert.match(switchBlocker({ statusKnown: false }), /couldn't read/i);
+  assert.match(switchBlocker({ dirtyCount: 1 }), /1 changed file before/);
+  assert.match(switchBlocker({ dirtyCount: 2 }), /2 changed files before/);
+  assert.equal(switchBlocker({}), '');
 });

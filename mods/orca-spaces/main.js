@@ -97,6 +97,10 @@ export default class Spaces extends View {
         // The options menu writes "workspace.options.v1" and pings this loop; ordered() re-reads
         // the key on the next render. setShared alone does not wake another mod (AGENTS.md rule 10).
         else if (cmd === "options-changed") this.notify(cx);
+        // Workspace options' Refresh (orca-nav): re-read git now, not on the 60s fallback or a
+        // filesystem wake. Orca reads a repo's worktrees when a dialog asks; a person who just
+        // checked out or added one here has no such trigger.
+        else if (cmd === "refresh") this.refreshAll(cx);
       }
     });
     // where() -> { name, branch, owner, repo, linked }, null: not a repo.
@@ -390,6 +394,16 @@ export default class Spaces extends View {
     });
   }
 
+  // Workspace options ▸ Refresh: every project the list knows, open or closed, is asked again.
+  // Keys come from the open spaces plus the git cache, because a project's worktree list is
+  // carried by any one of its places (`check` writes it to every entry of the same repo); a
+  // repo whose only space was closed would otherwise keep its old branches forever.
+  refreshAll(cx) {
+    this.refreshingAll = true;
+    this.refreshGit(new Set([...spaces().map((s) => where(s, panes())), ...Object.keys(this.git)]), cx);
+    this.notify(cx);
+  }
+
   // Runs git checks concurrently across hosts, matching startup-worktree-refresh.ts:51-68
   // Promise.allSettled. A serial queue caused rows to stall behind earlier repositories.
   refreshGit(keys, cx) {
@@ -405,6 +419,7 @@ export default class Spaces extends View {
       const used = new Set(Object.values(this.git).filter(Boolean).map((g) => readPair(g.repo)).filter(([on]) => !on).map(([, repo]) => repo));
       for (const repo of this.watching) if (!used.has(repo)) this.watching.delete(repo);
       this.refreshing = false;
+      this.refreshingAll = false;
       this.loaded = true;
       // The refresh is the only writer, so one write per completed pass is enough.
       pruneGitCache(this.git, spaces(), this.checked);
@@ -1065,10 +1080,10 @@ export default class Spaces extends View {
           .child(v_flex().id("space-content").w_full().flex_none().pr(12).pb(8)
             // StartupWorktreeRefreshStatus.tsx:22-29 status row with mx-3 mb-2 gap-2 text-xs text-muted-foreground.
             // StartupWorktreeRefreshStatus.tsx:14-16 delays 200ms before showing; omitted because Herdr has no frame timer.
-            .when(!this.loaded, el => el.child(h_flex().flex_none().mx(12).mb(8).gap(8).items_center()
+            .when(!this.loaded || this.refreshingAll, el => el.child(h_flex().flex_none().mx(12).mb(8).gap(8).items_center()
               .text_size(12).text_color(t.muted)
               .child(svg("mods/orca-spaces/loader-circle.svg").size(16).flex_none().spin(1000))
-              .child(div().child("Loading workspaces\u2026"))))
+              .child(div().child(this.loaded ? "Refreshing workspaces\u2026" : "Loading workspaces\u2026"))))
             // EmptyState.tsx:22-27 renders "No workspaces found" when rows are empty.
             // EmptyState.tsx:14 and WorktreeList.tsx:285-287 gate this on startupWorktreeRefreshCompleted.
             .when(this.loaded && rows.length === 0, el => el.child(div().flex().flex_col().items_center().gap(8).px(16).py(24).w_full()
