@@ -1143,10 +1143,11 @@ export default class Tabs extends View {
     // while that column is hidden, because Herdr skips a hidden node's content
     // (layout.rs:551) and there would otherwise be no way back. Orca keeps the control
     // reachable by floating `titlebar-left` over the workspace
-    // (AppWorkspaceShell.tsx:163-167).
-    const sidebarToggle = (glyph, action, ml) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+    // (AppWorkspaceShell.tsx:163-167). Its glyph names what the click does (`PanelLeftClose` while
+    // the column is open, `PanelLeftOpen` while it is hidden), and the label follows the glyph.
+    const sidebarToggle = (glyph, action, ml, label) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
       .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-      .role("button").accessibility_label("Toggle sidebar").tooltip("Toggle sidebar")
+      .role("button").accessibility_label(label).tooltip(label)
       .on_mouse_down("left", stop).on_click(action).child(glyph);
     // tab-bar-surface.tsx:221-227 — `ml-2 my-auto flex h-7 w-7 shrink-0 items-center
     // justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground`,
@@ -1179,11 +1180,13 @@ export default class Tabs extends View {
     // TitlebarMainStrip.tsx:12-33,76 — `RightSidebarToggle`: `.sidebar-toggle mr-2`
     // (main.css:1213-1230 = 4px/8px padding around the 16px `PanelRight`, so 32x24, radius 4,
     // muted, hover --accent + foreground). Herdr toggles it with `layout.toggle` (commands.rs:77).
+    // The panel's own icon state: this copy only ever draws while the panel is hidden, so it always
+    // offers `PanelRightOpen` (the arrow points back in), and `orca-panel-head` offers the close one.
     const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
       .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-      .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
+      .role("button").accessibility_label("Expand right sidebar").tooltip("Expand right sidebar")
       .on_mouse_down("left", stop).on_click(action)
-      .child(svg("mods/orca-tabs/panel-right.svg").size(16));
+      .child(svg("mods/orca-tabs/panel-right-open.svg").size(16));
     let gapToCard = 0; // set once the sidebar is known, before any tab is drawn
     const item = (c, i, mode = {}) => {
       const pane = tabPanes.get(c.id) ?? null;
@@ -1545,14 +1548,14 @@ export default class Tabs extends View {
       // Herdr skips a hidden node's content (layout.rs:551); Orca keeps the control at the same
       // left slot by floating `titlebar-left` over the workspace
       // (AppWorkspaceShell.tsx:163-167).
-      .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), (_e, ecx) => {
+      .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg(`mods/orca-chrome/panel-left-${sidebar?.hidden ? "open" : "close"}.svg`).size(16), (_e, ecx) => {
         // Same route as the `toggle-sidebar` command: the render consumes the flag with a live render
         // context. The `cx` captured by this render is dead once the click arrives.
         if (unified) { this.wantToggle = (this.wantToggle ?? 0) + 1; ecx.notify(); return; }
         setShared("sidebar.collapsed", !sidebar?.hidden);
         run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "sidebar" });
         // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.
-      }, w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) - leftPad : 6)))
+      }, w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) - leftPad : 6, sidebar?.hidden ? "Expand sidebar" : "Collapse sidebar")))
       // Unified: the tab strip starts on the card's left edge, i.e. at the sidebar's right edge
       // (or right after the toggle while the sidebar is hidden, or narrower than that).
       .when(unified && !sidebar?.hidden, el => {
