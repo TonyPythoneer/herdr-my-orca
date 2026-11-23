@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { theme, run, layout, panes, spaces, focused, exec, nextCommand } from "herdr";
+import { theme, run, layout, panes, spaces, focused, exec, nextCommand, props } from "herdr";
 import { visibleTools, fallbackChild } from "./panel-gating.js";
 import { viewCommands } from "./panel-views.js";
 
@@ -140,7 +140,7 @@ export default class PanelHead extends View {
         .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
         .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .on_click(() => run("layout.toggle", { id: "panel" }))
+        .on_click(() => props()?.unified ? run("orca-tabs.toggle-panel") : run("layout.toggle", { id: "panel" }))
         .child(svg("mods/orca-panel-head/panel-right.svg").size(16)));
   }
 }

@@ -186,7 +186,7 @@
           "size": {
             "px": 350
           },
-          "min": 220,
+          "min": 0,
           "max": 900,
           "children": [
             {
@@ -196,7 +196,8 @@
                 "px": 31
               },
               "content": {
-                "mod": "orca-panel-head"
+                "mod": "orca-panel-head",
+                "props": { "unified": true }
               },
               "window_drag": true
             },

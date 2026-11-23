@@ -40,3 +40,23 @@ test("native motion pins the terminal and restores its flexible width", async ()
   delete globalThis.__herdrProps;
   delete globalThis.__herdrLayout;
 });
+
+
+test("right panel holds the terminal width until both animations finish", async () => {
+  const calls = [], tasks = [];
+  globalThis.__herdrRun = (name, args) => calls.push([name, args]);
+  globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px: 350 }, hidden: false }, { id: "sidebar", size: { px: 259 }, hidden: false }] });
+  const tabs = new Tabs();
+  Object.assign(tabs, { panelBusy: false, panelToken: 0, panelOpenPx: 350, nativeHeaderWidth: 800, sbBusy: true });
+  const cx = { spawn: fn => tasks.push(fn), sleep: async () => {}, notify() {} };
+  tabs.togglePanelNative(cx);
+  await tasks[0](cx);
+  assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.px === 891));
+  await tasks[1](cx);
+  assert.equal(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.weight === 1), false);
+  tabs.sbBusy = false;
+  tabs.releaseNativePin();
+  assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.weight === 1));
+  delete globalThis.__herdrRun;
+  delete globalThis.__herdrLayout;
+});

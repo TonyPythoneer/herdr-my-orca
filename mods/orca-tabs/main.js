@@ -365,6 +365,7 @@ export default class Tabs extends View {
     this.glideShift = 0;
     this.glideGen = 0;
     this.sbBusy = false; this.sbToken = 0; this.sbP = 1; this.sbOpenPx = 0;
+    this.panelBusy = false; this.panelToken = 0; this.panelOpenPx = 0;
     try {
       const stored = JSON.parse(localStorage.getItem("panels") ?? "{}");
       this.panels = stored && typeof stored === "object" ? stored : {};
@@ -385,7 +386,10 @@ export default class Tabs extends View {
     // the button. Only the unified header listens, so overlay copies never toggle twice.
     if (props()?.unified) cx.spawn(async (cx) => {
       for (;;) {
-        if (await nextCommand() === "toggle-sidebar") { this.wantToggle = (this.wantToggle ?? 0) + 1; cx.notify(); }
+        const command = await nextCommand();
+        if (command === "toggle-sidebar") this.wantToggle = (this.wantToggle ?? 0) + 1;
+        if (command === "toggle-panel") this.wantPanelToggle = (this.wantPanelToggle ?? 0) + 1;
+        if (command === "toggle-sidebar" || command === "toggle-panel") cx.notify();
       }
     });
   }
@@ -647,14 +651,84 @@ export default class Tabs extends View {
         if (token !== this.sbToken) return;
       }
       run("layout.resize", { id: "sidebar", px: open });
-      if (this.nativePinned) {
-        run("layout.resize", { id: "main", weight: 1 });
-        this.nativePinned = false;
-      }
       setShared("sidebar.collapsed", target === 0);
       this.sbBusy = false;
+      this.releaseNativePin();
       this.nativeActive = false;
       this.nativeLastPx = undefined;
+      cx.notify();
+    });
+  }
+
+  releaseNativePin() {
+    if (this.nativePinned && !this.sbBusy && !this.panelBusy) {
+      run("layout.resize", { id: "main", weight: 1 });
+      this.nativePinned = false;
+    }
+  }
+
+  togglePanelNative(cx) {
+    const panel = find(layout(), "panel");
+    const open = this.panelOpenPx || ((panel?.size?.px ?? 0) >= 120 ? panel.size.px : 350);
+    if (!this.panelBusy) this.panelOpenPx = open;
+    const target = this.panelBusy ? 1 - this.panelGoal : (panel?.hidden ? 1 : 0);
+    const token = ++this.panelToken;
+    this.panelBusy = true;
+    this.panelGoal = target;
+    this.panelActive = false;
+    this.panelFinishing = false;
+    this.panelLastPx = undefined;
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.panelToken) return;
+      if (this.nativeHeaderWidth > 0) {
+        this.nativePinned = true;
+        const sidebar = find(layout(), "sidebar");
+        const width = this.nativeHeaderWidth / (settings()?.zoom || 1) + (panel?.hidden ? 0 : open) - (sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0));
+        run("layout.resize", { id: "main", px: width });
+        await cx.sleep(80);
+        if (token !== this.panelToken) return;
+      }
+      if (target === 1 && find(layout(), "panel")?.hidden) {
+        run("layout.resize", { id: "panel", px: 1 });
+        await cx.sleep(80);
+        if (token !== this.panelToken) return;
+        run("layout.show", { id: "panel" });
+        await cx.sleep(50);
+        if (token !== this.panelToken) return;
+      }
+      this.panelActive = true;
+      this.panelWidth = (target ? open : 1) / (settings()?.zoom || 1);
+      cx.notify();
+      await cx.sleep(650);
+      if (token === this.panelToken && this.panelBusy && !this.panelFinishing) this.panelNativeSize({ width: this.panelWidth }, cx);
+    });
+  }
+
+  panelNativeSize(size, cx) {
+    if (!this.panelBusy || !this.panelActive || this.panelFinishing) return;
+    const open = this.panelOpenPx || 350;
+    const px = Math.max(1, Math.min(open, Math.round(size.width * (settings()?.zoom || 1))));
+    if (px !== this.panelLastPx) {
+      this.panelLastPx = px;
+      run("layout.resize", { id: "panel", px });
+    }
+    if (this.panelGoal === 1 && find(layout(), "panel")?.hidden) run("layout.show", { id: "panel" });
+    if (px !== (this.panelGoal ? open : 1)) return;
+    this.panelFinishing = true;
+    const token = this.panelToken, target = this.panelGoal;
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.panelToken) return;
+      if (target === 0) {
+        run("layout.hide", { id: "panel" });
+        await cx.sleep(80);
+        if (token !== this.panelToken) return;
+      }
+      run("layout.resize", { id: "panel", px: open });
+      this.panelBusy = false;
+      this.panelActive = false;
+      this.releaseNativePin();
       cx.notify();
     });
   }
@@ -1349,11 +1423,11 @@ export default class Tabs extends View {
     };
     const root = layout();
     const sidebar = find(root, "sidebar");
-    if (unified && !this.sbBusy && !this.nativeRecovering && find(root, "main")?.size?.px != null) {
+    if (unified && !this.sbBusy && !this.panelBusy && !this.nativeRecovering && find(root, "main")?.size?.px != null) {
       this.nativeRecovering = true;
       cx.spawn(async cx => {
         await cx.sleep(1);
-        if (!this.sbBusy && find(layout(), "main")?.size?.px != null) run("layout.resize", { id: "main", weight: 1 });
+        if (!this.sbBusy && !this.panelBusy && find(layout(), "main")?.size?.px != null) run("layout.resize", { id: "main", weight: 1 });
         this.nativeRecovering = false;
       });
     }
@@ -1407,6 +1481,9 @@ export default class Tabs extends View {
     gapToCard = unified ? Math.max(sbPx, toggleRightX) - sbPx : 0;
     const flushable = (c, i) => c.active && i === 0 && !geometry.arrows.hasOverflow && this.scrollX <= 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
+    if (this.wantPanelToggle) { const count = this.wantPanelToggle; this.wantPanelToggle = 0; if (count % 2) this.togglePanelNative(cx); }
+    if (unified && !this.panelBusy && !panel?.hidden && (panel?.size?.px ?? 0) >= 120) this.panelOpenPx = panel.size.px;
+    if (unified && !this.panelBusy) this.panelWidth = (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK;
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
     this.syncPanel(space, panel, body, enabled);
     this.syncLanding(cx);
@@ -1420,6 +1497,8 @@ export default class Tabs extends View {
       .when(unified && props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
       .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.nativeWidth).transition("width", { duration: 500, easing: "ease-in-out" })
         .on_size_change((size, cx) => this.sidebarNativeSize(size, cx))))
+      .when(unified, el => el.relative().child(div().id("panel-native-clock").absolute().left(0).top(0).h(1).w(this.panelWidth ?? (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.panelNativeSize(size, cx))))
       .on_mouse_move((e, cx) => {
         if (this.pressed !== null && this.stripBounds) {
           this.triggerSplit(this.stripBounds, e.position, cx);
@@ -1525,7 +1604,7 @@ export default class Tabs extends View {
       // TitlebarMainStrip.tsx:76 — Orca's `RightSidebarToggle` moves into the panel header
       // while the panel is open (`right-sidebar/index.tsx:124-144`); `orca-panel-head` draws it
       // there, so this copy shows only while the panel is hidden (a hidden node draws nothing).
-      .when(find(layout(), "panel")?.hidden, el => el.child(panelToggle(() => run("layout.toggle", { id: "panel" }))))
+      .when(find(layout(), "panel")?.hidden, el => el.child(panelToggle((_e, cx) => { if (unified) { this.wantPanelToggle = (this.wantPanelToggle ?? 0) + 1; cx.notify(); } else run("layout.toggle", { id: "panel" }); })))
       // WindowControls.tsx:27-30,42-49,60-67 — Orca replaces native chrome on Linux and Windows
       // with the same 10x10 SVG paths; only macOS keeps its traffic lights. Herdr reports
       // `buttons: false` here (the compositor owns decorations) but draws none of its own, so
