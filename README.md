@@ -9,6 +9,13 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   Claude Code's own `rate_limits` statusline feed, with Anthropic's usage API only as the idle
   fallback (its token is read from the macOS Keychain and never written anywhere). Cached in
   `~/.cache/herdr-usage/`.
+- **Follow into a worktree**: an agent CLI that takes its own process into a linked git worktree
+  (`claude --worktree`, `codex --worktree`, or a `cd` inside the CLI) takes its tab with it: the
+  tab moves into that worktree's space, so the sidebar lists it under the branch, and the agent
+  keeps running (`terminal.park` → `terminal.keep`, no restart). A space left without tabs gets
+  one, a named tab keeps its name, and the window only follows when the moved tab was on screen.
+  The watcher is `orca-status/wt-follow.js` in the always-mounted bottom bar: it reads each agent's
+  own process folder (`hc get` → `foreground.cwd`) and polls every 3 s.
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
 - **Agent Manager**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
   5.5 rows. It lists the Agent CLIs Herdr detects,

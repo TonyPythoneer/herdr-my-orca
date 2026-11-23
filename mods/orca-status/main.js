@@ -6,8 +6,9 @@
 // visibility-menu trigger last.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand } from "herdr";
+import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand, panes, spaces, hc, setShared, checking, notify } from "herdr";
 import { probeLocal } from "./local-usage.js";
+import { FOLLOW_EVERY_MS, FOLLOW_STATE_KEY, planFollow, parseCheckout } from "./wt-follow.js";
 import { probeAllProviders, getTightestUsageBucket, formatBucketChipLabel } from "./usage.js";
 
 // Every provider the cluster can draw a mark for, keyed by the id its quota source reports.
@@ -59,6 +60,8 @@ const WATCHED_DIRS = (h) => [
 // covered by the next event or the timer.
 const MIN_REFRESH_MS = 2000;
 const FALLBACK_MS = 300000;
+// A folder's checkout and branch change rarely; the worktree poll reads them for every space.
+const FOLLOW_TTL_MS = 60000;
 
 export default class OrcaStatus extends View {
 
@@ -69,6 +72,7 @@ export default class OrcaStatus extends View {
     this.lastRefresh = 0;
     this.refreshUsage(cx);
     this.watch(cx);
+    this.followIntoWorktree(cx);
     // A direct push from the agent's own event: Claude Code's statusLine script writes the
     // live windows and then runs `herdr-app do orca-status.refresh`, which lands here as a
     // command — no file watch, no timer, just the CLI event reaching the mod (run() delivers
@@ -97,6 +101,109 @@ export default class OrcaStatus extends View {
         }
       });
     }
+  }
+
+  // --- A tab follows its agent into a worktree (wt-follow.js) -------------------------------
+  // The bottom bar is always mounted, which is what a watcher needs: a mod only runs while a
+  // block of it is in the layout. An agent CLI takes its own process into a worktree
+  // (`claude --worktree`, `codex --worktree`, a `cd` inside the CLI) while Herdr keeps the tab
+  // in the space it was started in. This puts the tab under the worktree's branch, with
+  // `terminal.park` → `terminal.keep`, so the agent itself keeps running.
+  followIntoWorktree(cx) {
+    if (checking()) return;
+    this.wtBusy = false;
+    this.wtCheckouts = new Map(); // folder -> { at, value }
+    cx.timer.every(FOLLOW_EVERY_MS, (cx) => this.followTick(cx));
+  }
+
+  // `git -C <folder> rev-parse ...` as one record, cached for a minute. Null when not a repo.
+  async wtCheckout(folder) {
+    const hit = this.wtCheckouts?.get(folder);
+    if (hit && Date.now() - hit.at < FOLLOW_TTL_MS) return hit.value;
+    let value = null;
+    try {
+      const r = await exec("git", ["-C", folder, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir", "--abbrev-ref", "HEAD"]);
+      if (r.code === 0) value = parseCheckout(r.stdout);
+    } catch {}
+    this.wtCheckouts?.set(folder, { at: Date.now(), value });
+    return value;
+  }
+
+  followTick(cx) {
+    if (this.wtBusy) return;
+    const agentPanes = (panes() ?? []).filter((p) => p.terminal && p.program?.agent);
+    if (!agentPanes.length) return;
+    this.wtBusy = true;
+    cx.spawn(async (cx) => {
+      try {
+        // Where each agent's own process is now: `foreground.cwd`, not the pane's `cwd` — the
+        // pane's is the shell's folder, which does not move when the program chdirs.
+        const cwds = {};
+        for (const pane of agentPanes) {
+          cwds[pane.terminal] = null;
+          try {
+            const r = await hc(["get", pane.terminal, "--json"]);
+            if (r.code === 0) cwds[pane.terminal] = JSON.parse(r.stdout)?.foreground?.cwd ?? null;
+          } catch {}
+        }
+        const cwdCheckouts = {};
+        for (const cwd of new Set(Object.values(cwds).filter(Boolean))) cwdCheckouts[cwd] = await this.wtCheckout(cwd);
+        const known = [];
+        for (const space of spaces() ?? []) known.push({ ...space, checkout: space.machine ? null : await this.wtCheckout(space.folder) });
+        const move = planFollow({ spaces: known, panes: agentPanes, cwds, cwdCheckouts, moved: shared(FOLLOW_STATE_KEY) ?? {} });
+        if (move) await this.followMove(move, known, cx);
+      } finally {
+        this.wtBusy = false;
+      }
+    });
+  }
+
+  async followMove(move, known, cx) {
+    const till = async (ok, ms = 4000) => {
+      for (let i = 0; i < ms / 50; i++) { if (ok()) return true; await cx.sleep(50); }
+      return ok();
+    };
+    const before = (spaces() ?? []).find((s) => s.active)?.id ?? null;
+    // `run` returns nothing (herdr.d.ts:91), so the ids are read back from the model: the new
+    // space is the one on this folder, and its first tab is the shell that came with it.
+    let target = known.find((s) => s.checkout?.top === move.to);
+    let spareTab = null;
+    if (!target) {
+      run("space.new", { folder: move.to, focus: false });
+      await till(() => (spaces() ?? []).some((s) => s.folder === move.to));
+      target = (spaces() ?? []).find((s) => s.folder === move.to);
+      if (!target) return;
+      spareTab = (target.tabs ?? [])[0]?.id ?? null;
+    }
+    const source = (spaces() ?? []).find((s) => s.id === move.from.space);
+    // A space closes with its last tab, so a space whose only terminal is this one gets a tab.
+    if (move.from.onlyTerminal && source) run("tab.new", { space: source.id, folder: source.folder, focus: false });
+    // `terminal.keep` gives the tab to the space that is shown, so show the worktree's first.
+    run("space.select", { id: target.id });
+    await till(() => (spaces() ?? []).find((s) => s.active)?.id === target.id);
+    run("terminal.park", { terminal: move.terminal });
+    await till(() => !(panes() ?? []).some((p) => p.terminal === move.terminal));
+    run("terminal.keep", { terminal: move.terminal, place: "tab" });
+    // The tab must land in the worktree's space before the shell tab is closed, or the close is
+    // refused for being the space's only tab.
+    const landedTab = () => {
+      const tab = (panes() ?? []).find((p) => p.terminal === move.terminal)?.tab;
+      const space = (spaces() ?? []).find((s) => s.id === target.id);
+      return tab && (space?.tabs ?? []).some((t) => t.id === tab) ? tab : null;
+    };
+    let tabId = landedTab();
+    if (!tabId) { await till(() => Boolean(landedTab())); tabId = landedTab(); }
+    if (!tabId) {
+      notify({ title: `${move.app} lost its pane`, body: "It is still running without one; keep it from the Agents list.", level: "error" });
+      return;
+    }
+    run("tab.rename", { id: tabId, name: move.from.tabName || move.app });
+    // The space was made for this tab; the shell it came with is not wanted.
+    if (spareTab && spareTab !== tabId) run("tab.close", { id: spareTab });
+    setShared(FOLLOW_STATE_KEY, { ...(shared(FOLLOW_STATE_KEY) ?? {}), [move.terminal]: move.to });
+    // A tab that moves while the person works elsewhere must not take the window with it.
+    if (!move.from.active && before) run("space.select", { id: before });
+    notify({ title: `${move.app} is in ${move.branch || move.to.split("/").pop()}`, body: `Its tab moved to ${move.to}.`, level: "success" });
   }
 
   refreshUsage(cx, force = false) {
