@@ -3,9 +3,9 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
-import { run, props, closeOverlay, theme, spaces, panes, exec, home } from "herdr";
+import { run, props, closeOverlay, theme, spaces, panes, agents, exec, home } from "herdr";
 import { removeWorktree, REMOVE_UNAVAILABLE } from "./remove.js";
-import { ROOT, tilde, slug, ago, spaceOf } from "./helpers.js";
+import { ROOT, tilde, slug, ago, spaceOf, branchRows, switchBlocker } from "./helpers.js";
 
 // Every checkout of a repo (`git worktree list`), the main one first, then
 // the most recently committed: { path, branch, main, at }.
@@ -46,10 +46,17 @@ export default class Worktree extends View {
     this.on = this.initialIdentity.on;
     this.userHome = this.on ? null : home();
     this.opening = props()?.action === "open";
+    // Orca switches branches in place from its source control (`WorkspaceBranchPicker`); Herdr has
+    // no source control panel, so the card menu opens this dialog for that one checkout.
+    this.switching = props()?.action === "switch";
     this.text = props()?.branch ?? "";
-    this.list = undefined; // open: the checkouts, once read
+    this.list = undefined; // open and switch: the checkouts, once read
+    this.branches = undefined; // switch: the local branches, once read
+    this.current = null; // switch: the branch HEAD is on
+    this.blocker = ""; // switch: why Git must not be asked to switch
     this.at = 0;
-    this.input = InputState.new({ value: this.text, placeholder: this.opening ? "filter worktrees" : "branch name" });
+    const placeholder = this.opening ? "filter worktrees" : this.switching ? "filter branches" : "branch name";
+    this.input = InputState.new({ value: this.text, placeholder });
     this.input.on("change", (_e, cx) => { this.text = this.input.value(); this.error = ""; this.at = 0; cx.notify(); });
     this.input.on("submit", (_e, cx) => this.go(cx));
     this.inputFocused = true;
@@ -73,7 +80,9 @@ export default class Worktree extends View {
         this.folder = this.initialIdentity.folder || this.userHome;
         // The repo is set last: Enter does nothing until the warnings it consents to are known.
         const repo = await repoOf(this.folder, this.on);
-        if (repo && this.opening) this.list = await checkouts(repo, this.on);
+        if (repo && (this.opening || this.switching)) this.list = await checkouts(repo, this.on);
+        // Read before `this.repo` lands, so the first frame that can draw the list knows the blocker.
+        if (repo && this.switching) await this.loadBranches(repo);
         this.repo = repo;
         cx.notify();
         // The list (and with it the filter input) only mounts once loading is
@@ -103,6 +112,8 @@ export default class Worktree extends View {
 
   go(cx) {
     if (this.busy || !this.repo || props()?.action === "remove") return;
+    // Enter takes the highlighted branch; in this mode the input only filters, it names nothing new.
+    if (this.switching) return this.act(this.visible()[this.at], cx);
     cx.spawn(async (cx) => this.work(cx));
   }
 
@@ -141,6 +152,63 @@ export default class Worktree extends View {
     return (this.list ?? []).filter((c) => !f || `${c.branch ?? ""} ${c.path}`.toLowerCase().includes(f));
   }
 
+  branchList() {
+    const f = this.text.trim().toLowerCase();
+    return (this.branches ?? []).filter((b) => !f || b.branch.toLowerCase().includes(f));
+  }
+
+  // The mode's rows: checkouts to open, or branches to switch to.
+  visible() {
+    return this.opening ? this.shown() : this.switching ? this.branchList() : [];
+  }
+
+  act(row, cx) {
+    if (this.opening) this.open(row);
+    else if (this.switching) void this.switchTo(row, cx);
+  }
+
+  // Every branch this checkout could move to, plus whether Git may be asked right now. Read when
+  // the dialog opens so its rows can say which branch is current and which another worktree holds.
+  async loadBranches(repo) {
+    const head = await git(this.folder, ["symbolic-ref", "--quiet", "--short", "HEAD"], this.on);
+    const refs = await git(repo.main, ["for-each-ref", "--format=%(refname:short)%09%(committerdate:unix)", "refs/heads"], this.on);
+    const list = refs.ok && refs.out
+      ? refs.out.split("\n").map((line) => line.split("\t")).map(([branch, at]) => ({ branch, at: Number(at) || 0 }))
+      : [];
+    this.current = head.ok ? head.out : null;
+    this.branches = branchRows(list, this.list ?? [], this.current);
+    this.blocker = await this.blockerNow();
+  }
+
+  // Read again on every attempt: a turn can start, or a file can change, while the dialog is open
+  // (`WorkspaceBranchPicker`: "the host re-checks on switch").
+  async blockerNow() {
+    const status = await git(this.folder, ["status", "--porcelain"], this.on);
+    const tabs = new Set((this.space()?.tabs ?? []).map((tab) => tab.id));
+    const agentWorking = agents().some((a) => tabs.has(a.tab) && (a.status === "working" || a.status === "blocked"));
+    const dirtyCount = status.ok ? status.out.split("\n").filter(Boolean).length : 0;
+    return switchBlocker({ agentWorking, statusKnown: status.ok, dirtyCount });
+  }
+
+  async switchTo(row, cx) {
+    if (!row || row.current || row.held || this.busy) return;
+    this.busy = true;
+    this.error = "";
+    cx.notify();
+    const blocker = await this.blockerNow();
+    if (blocker) {
+      this.busy = false;
+      this.blocker = this.error = blocker;
+      cx.notify();
+      return;
+    }
+    const r = await git(this.folder, ["switch", row.branch], this.on);
+    this.busy = false;
+    if (!r.ok) this.error = r.err || "git switch failed.";
+    else this.close();
+    cx.notify();
+  }
+
   open(c) {
     if (!c) return;
     this.close();
@@ -155,9 +223,10 @@ export default class Worktree extends View {
 
   key(e, cx) {
     if (e.key === "escape") return this.close();
-    if (this.opening) {
-      const n = this.shown().length;
-      if (e.key === "enter") this.open(this.shown()[this.at]);
+    if (this.opening || this.switching) {
+      const rows = this.visible();
+      const n = rows.length;
+      if (e.key === "enter") this.act(rows[this.at], cx);
       else if ((e.key === "down" || e.key === "up") && n) this.at = (this.at + (e.key === "down" ? 1 : n - 1)) % n;
       else return;
       cx.stop_propagation();
@@ -232,9 +301,80 @@ export default class Worktree extends View {
       .child(h_flex().justify_end().text_size(11).text_color(t.dim).child("\u2191\u2193 choose \u00b7 \u21b5 open \u00b7 esc close"));
   }
 
+  // A checkout, not a new worktree: this moves HEAD in the folder the space already has, which is
+  // why the agent and uncommitted-change blockers come before the list (Orca's picker order).
+  renderSwitch(t) {
+    const r = this.repo;
+    const rows = this.blocker ? [] : this.branchList();
+    const all = this.branches ?? [];
+    const count = rows.length === all.length ? `${all.length} branches` : `${rows.length}/${all.length} branches`;
+    const row = (b, i) => {
+      const on = i === this.at && !this.blocker;
+      const disabled = b.current || Boolean(b.held);
+      return h_flex()
+        .id(`br-${i}`)
+        .flex_none()
+        .h(32)
+        .px(10)
+        .gap(8)
+        .items_center()
+        .rounded(7)
+        .when(on && !disabled, (el) => el.bg(t.selected))
+        .when(!on && !disabled, (el) => el.hover((s) => s.bg(t.hover)))
+        .when(disabled, (el) => el.opacity(0.45))
+        .when(!disabled, (el) => el.cursor_pointer().on_click((_e, cx) => void this.switchTo(b, cx)))
+        .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(b.branch))
+        .child(div().flex_none().text_size(11).text_color(b.current ? t.accent : t.dim)
+          .child(b.current ? "current" : b.held ? `in ${b.held.split("/").pop()}` : ""));
+    };
+    const name = this.space()?.name || r?.name || "this checkout";
+    const detail = r === undefined
+      ? "\u2026"
+      : r === null
+        ? `${this.folder ? tilde(this.folder, this.userHome) : "This folder"} is not in a git repository.`
+        : this.blocker || `Moves ${tilde(this.folder, this.userHome ?? "")} to the branch you pick.`;
+    return v_flex()
+      .id("worktree")
+      .track_focus(this.handle)
+      .on_key_down((e, cx) => this.key(e, cx))
+      .size_full()
+      .p(16)
+      .gap(10)
+      .bg(t.popover)
+      .text_size(13)
+      .child(h_flex().child(div().flex_1().font_semibold().text_color(t.foreground).child(`Checkout branch in ${name}`)).child(div().text_size(11).text_color(t.dim).child(this.blocker ? "" : count)))
+      .when(r === undefined || (r && this.branches === undefined), (el) => el.child(div().text_color(t.muted).child("\u2026")))
+      .when(Boolean(r) && this.branches !== undefined, (el) => el.child(div().text_color(this.blocker ? t.blocked : t.muted).child(detail)))
+      .when(Boolean(r && this.branches && !this.blocker), (el) =>
+        el
+          .child(Input.new(this.input).h(32).px(10).items_center().rounded(6).border(1).border_color(this.inputFocused ? t.accent : t.input).bg(t.background).text_color(t.foreground))
+          .child(
+            div()
+              .relative()
+              .flex_1()
+              .min_h(0)
+              .child(
+                v_flex()
+                  .id("br-list")
+                  .size_full()
+                  .overflow_y_scroll()
+                  .children(rows.map(row))
+                  .when(rows.length === 0, (el) => el.child(div().p(10).text_color(t.dim).child("No matching branches."))),
+              )
+              .child(Scrollbar.vertical("br-list").absolute().inset_0()),
+          ),
+      )
+      .when(Boolean(this.error) && this.error !== this.blocker, (el) => el.child(div().text_color(t.blocked).child(this.error)))
+      .child(div().flex_1())
+      .child(h_flex().justify_end().text_size(11).text_color(t.dim).gap(6)
+        .when(this.busy, (el) => el.child(div().frames(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], 90)))
+        .child(this.busy ? "switching\u2026" : this.blocker ? "esc close" : "\u2191\u2193 choose \u00b7 \u21b5 checkout \u00b7 esc close"));
+  }
+
   render(cx) {
     const t = theme();
     if (this.opening) return this.renderOpen(t);
+    if (this.switching) return this.renderSwitch(t);
     const remove = props()?.action === "remove";
     const s = this.space();
     const r = this.repo;

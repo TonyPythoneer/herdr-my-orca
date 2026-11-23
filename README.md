@@ -16,6 +16,13 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   its `git worktree list`, so a checkout or worktree changed elsewhere shows up. Rows are still
   worktrees, as in Orca, so a branch with no checkout (say `main` while the main checkout sits on
   a feature branch) has no card; only a space of its own brings one.
+- **Checkout branch**: a card's right-click menu has Checkout branch, which lists the repo's local
+  branches and runs `git switch` in that checkout. Orca switches from its Source Control panel,
+  which this layout does not port, so the dialog ports that picker's rules instead: the current
+  branch and a branch another worktree holds are not offered, and a working agent or uncommitted
+  changes stop the switch with the reason shown (Git is re-checked on every attempt). The card's
+  branch follows the switch, so returning the main checkout to `main` after a merge needs no
+  terminal.
 - **Agent Manager**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
   5.5 rows. It lists the Agent CLIs Herdr detects,
   turns availability on/off for installed CLIs, and edits each CLI's executable and launch
