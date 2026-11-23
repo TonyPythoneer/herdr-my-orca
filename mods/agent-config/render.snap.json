@@ -8766,6 +8766,77 @@
                     ]
                    }
                   ]
+                 ],
+                 [
+                  "child",
+                  [
+                   {
+                    "n": "div",
+                    "a": [],
+                    "c": [
+                     [
+                      "id",
+                      [
+                       "refresh-models"
+                      ]
+                     ],
+                     [
+                      "mx",
+                      [
+                       6
+                      ]
+                     ],
+                     [
+                      "px",
+                      [
+                       4
+                      ]
+                     ],
+                     [
+                      "h",
+                      [
+                       30
+                      ]
+                     ],
+                     [
+                      "flex",
+                      []
+                     ],
+                     [
+                      "items_center",
+                      []
+                     ],
+                     [
+                      "text_size",
+                      [
+                       11
+                      ]
+                     ],
+                     [
+                      "text_color",
+                      [
+                       null
+                      ]
+                     ],
+                     [
+                      "cursor_pointer",
+                      []
+                     ],
+                     [
+                      "on_click",
+                      [
+                       "fn"
+                      ]
+                     ],
+                     [
+                      "child",
+                      [
+                       "↻ Refresh list"
+                      ]
+                     ]
+                    ]
+                   }
+                  ]
                  ]
                 ]
                }
@@ -23321,6 +23392,77 @@
                     ]
                    }
                   ]
+                 ],
+                 [
+                  "child",
+                  [
+                   {
+                    "n": "div",
+                    "a": [],
+                    "c": [
+                     [
+                      "id",
+                      [
+                       "refresh-models"
+                      ]
+                     ],
+                     [
+                      "mx",
+                      [
+                       6
+                      ]
+                     ],
+                     [
+                      "px",
+                      [
+                       4
+                      ]
+                     ],
+                     [
+                      "h",
+                      [
+                       30
+                      ]
+                     ],
+                     [
+                      "flex",
+                      []
+                     ],
+                     [
+                      "items_center",
+                      []
+                     ],
+                     [
+                      "text_size",
+                      [
+                       11
+                      ]
+                     ],
+                     [
+                      "text_color",
+                      [
+                       null
+                      ]
+                     ],
+                     [
+                      "cursor_pointer",
+                      []
+                     ],
+                     [
+                      "on_click",
+                      [
+                       "fn"
+                      ]
+                     ],
+                     [
+                      "child",
+                      [
+                       "↻ Refresh list"
+                      ]
+                     ]
+                    ]
+                   }
+                  ]
                  ]
                 ]
                }
@@ -25146,6 +25288,77 @@
                          ]
                         }
                        ]
+                      ]
+                     ]
+                    ]
+                   }
+                  ]
+                 ],
+                 [
+                  "child",
+                  [
+                   {
+                    "n": "div",
+                    "a": [],
+                    "c": [
+                     [
+                      "id",
+                      [
+                       "refresh-models"
+                      ]
+                     ],
+                     [
+                      "mx",
+                      [
+                       6
+                      ]
+                     ],
+                     [
+                      "px",
+                      [
+                       4
+                      ]
+                     ],
+                     [
+                      "h",
+                      [
+                       30
+                      ]
+                     ],
+                     [
+                      "flex",
+                      []
+                     ],
+                     [
+                      "items_center",
+                      []
+                     ],
+                     [
+                      "text_size",
+                      [
+                       11
+                      ]
+                     ],
+                     [
+                      "text_color",
+                      [
+                       null
+                      ]
+                     ],
+                     [
+                      "cursor_pointer",
+                      []
+                     ],
+                     [
+                      "on_click",
+                      [
+                       "fn"
+                      ]
+                     ],
+                     [
+                      "child",
+                      [
+                       "↻ Refresh list"
                       ]
                      ]
                     ]

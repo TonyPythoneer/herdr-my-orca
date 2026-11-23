@@ -327,7 +327,8 @@ export const PARSERS = {
           id: `${m.providerID}/${m.modelID ?? m.id}`,
           label: m.name ?? m.modelID ?? m.id,
           group: m.providerID === "omlx" ? "omlx" : free ? "free" : "paid",
-          efforts: (m.variants ?? []).map((v) => v.id),
+          // "" first: the model's own level, no variant (opencode's "default").
+          efforts: (m.variants ?? []).length ? ["", ...m.variants.map((v) => v.id)] : [],
           fallbackEffort: "high",
           free,
         };

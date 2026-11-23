@@ -32,7 +32,7 @@ const NEW_STYLE = "+ New style…";
 const styleDir = () => `${home()}/.claude/output-styles`;
 const styleTemplate = (name) => `---\nname: ${name}\ndescription: Describe this output style\n---\n\nYou are an interactive CLI tool that helps users with software engineering tasks.\n`;
 // Bump when the cached model shape changes (opencode gained providers/groups).
-const CATALOG_SCHEMA = 2;
+const CATALOG_SCHEMA = 3;
 // Reuse a cache for ten minutes; the CLI and the upstream list are checked again after that.
 const CATALOG_TTL_MS = 10 * 60_000;
 const SETTINGS = `${appHome()}/agent-config.json`;
@@ -447,6 +447,31 @@ export default class AgentConfig extends View {
     });
   }
 
+  // Refresh: drop the saved model list and ask the CLI again, so a stale list never has to be
+  // cleared by hand. A failure keeps the list on screen and shows the error.
+  refresh(cx) {
+    if (this.refreshing) return;
+    this.refreshing = true;
+    this.error = "";
+    const key = this.key;
+    this.persist((all) => { if (all.catalog) delete all.catalog[key]; });
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        const [version, models] = await Promise.all([cliVersion(this.spec.command).catch(() => null), this.listModels()]);
+        if (!models.length) throw new Error("no models available");
+        this.models = models;
+        const pick = models.find((m) => m.id === this.model) ?? models[0];
+        this.choose(pick, this.effort);
+        this.saveCatalog(version, models);
+      } catch (e) {
+        this.error = `Could not list models: ${e?.message ?? e}`;
+      }
+      this.refreshing = false;
+      cx.notify();
+    });
+  }
+
   toggleHidden(id) {
     if (this.hidden.has(id)) this.hidden.delete(id);
     else this.hidden.add(id);
@@ -533,13 +558,14 @@ export default class AgentConfig extends View {
   // opencode keeps the chosen effort in ~/.local/state/opencode/model.json `variant`; write it
   // before launch. Best effort only: a failure must not block the launch.
   async rememberVariant() {
-    if (!this.effort) return;
+    if (this.effort == null) return;
     const file = `${home()}/.local/state/opencode/model.json`;
     try {
       const current = await readTextFile(file).catch(() => null);
       const all = current ? JSON.parse(current) : {};
       const variant = all.variant && typeof all.variant === "object" ? all.variant : {};
-      variant[this.model] = this.effort;
+      if (this.effort) variant[this.model] = this.effort;
+      else delete variant[this.model]; // Default: no saved variant
       all.variant = variant;
       await writeTextFile(file, `${JSON.stringify(all, null, 2)}\n`, current);
     } catch {}
@@ -665,7 +691,21 @@ export default class AgentConfig extends View {
             ))),
         )),
       )
-      .child(this.scrollList("agent-config-models", rows));
+      .child(this.scrollList("agent-config-models", rows))
+      .child(
+        div()
+          .id("refresh-models")
+          .mx(6)
+          .px(4)
+          .h(ROW.height)
+          .flex()
+          .items_center()
+          .text_size(11)
+          .text_color(t.muted)
+          .cursor_pointer()
+          .on_click((_e, cx) => this.refresh(cx))
+          .child(this.refreshing ? "Refreshing…" : "↻ Refresh list"),
+      );
   }
 
   // A provider's icon sits in a small tile: the file saved in this app's folder, else the default
