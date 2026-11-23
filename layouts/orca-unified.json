@@ -210,14 +210,20 @@
                   "id": "files",
                   "type": "block",
                   "content": {
-                    "mod": "orca-files"
+                    "mod": "orca-files",
+                    "props": {
+                      "unified": true
+                    }
                   }
                 },
                 {
                   "id": "vault",
                   "type": "block",
                   "content": {
-                    "mod": "orca-agents"
+                    "mod": "orca-agents",
+                    "props": {
+                      "unified": true
+                    }
                   }
                 },
                 {
@@ -226,6 +232,7 @@
                   "content": {
                     "mod": "orca-panel-gap",
                     "props": {
+                      "unified": true,
                       "tab": "workspaces"
                     }
                   }
@@ -236,6 +243,7 @@
                   "content": {
                     "mod": "orca-panel-gap",
                     "props": {
+                      "unified": true,
                       "tab": "pr-checks"
                     }
                   }
@@ -244,7 +252,10 @@
                   "id": "changes",
                   "type": "block",
                   "content": {
-                    "mod": "orca-changes"
+                    "mod": "orca-changes",
+                    "props": {
+                      "unified": true
+                    }
                   }
                 },
                 {
@@ -253,6 +264,7 @@
                   "content": {
                     "mod": "orca-panel-gap",
                     "props": {
+                      "unified": true,
                       "tab": "checks"
                     }
                   }
@@ -263,6 +275,7 @@
                   "content": {
                     "mod": "orca-panel-gap",
                     "props": {
+                      "unified": true,
                       "tab": "ports"
                     }
                   }
@@ -271,7 +284,10 @@
                   "id": "skillshare",
                   "type": "block",
                   "content": {
-                    "mod": "skillshare"
+                    "mod": "skillshare",
+                    "props": {
+                      "unified": true
+                    }
                   }
                 }
               ],

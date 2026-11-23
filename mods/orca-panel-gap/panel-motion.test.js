@@ -19,7 +19,7 @@ const clear = () => {
   delete globalThis.__herdrLayout; delete globalThis.__herdrTheme;
 };
 
-test("leaves the content alone at the open width, with no shared width, or outside the unified layout", () => {
+test("leaves the content alone at the open width, with no shared width, or in an overlay copy", () => {
   const content = inner();
   at(undefined, 200);
   assert.equal(panelFrame(content), content);
@@ -28,7 +28,7 @@ test("leaves the content alone at the open width, with no shared width, or outsi
   at(350, 400);
   assert.equal(panelFrame(content), content);
   at(350, 175);
-  globalThis.__herdrProps = () => ({});
+  globalThis.__herdrProps = () => ({ overlay: true });
   assert.equal(panelFrame(content), content);
   clear();
 });

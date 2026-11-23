@@ -4,8 +4,9 @@
 // keeps the OPEN width and only slides out and fades, so nothing reflows or truncates on the way.
 // The panel is anchored to the right edge, so the inner frame is too and the content leaves
 // through the left; the 28px shift and the clamp((k-.15)/.85) fade are the left side's numbers.
-// Untouched (`inner`) at the open width, with no shared open width, outside the unified layout,
-// or in an overlay copy (those carry their own props, so `unified` is absent).
+// Untouched (`inner`) at the open width, with no shared open width, or in an overlay copy of the
+// same mod (the file menu and the diff popup are not the panel). The gate is the shared open width
+// rather than a layout prop, so a layout that forgets to pass one still gets the frame.
 import { div } from "gpui-kit";
 import { theme, layout, props, shared } from "herdr";
 
@@ -16,7 +17,7 @@ function find(n, id) {
 }
 
 export function panelFrame(inner) {
-  if (!props()?.unified) return inner;
+  if (props()?.overlay) return inner;
   const open = shared("panel.openPx");
   const px = find(layout(), "panel")?.size?.px;
   if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
