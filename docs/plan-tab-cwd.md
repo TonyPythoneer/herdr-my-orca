@@ -1,7 +1,7 @@
 # New tabs open at the space's work directory
 
 - **Worktree:** `wt-tab-cwd` (branch `feature/wt-tab-cwd`, based on `main` @ `d01e931`)
-- **Status:** Plan only. No code changed yet.
+- **Status:** Implemented and verified in the live app (see Verification); plan text kept as the record.
 - **Ask:** "If I open a tab, it should always go to the work directory — the worktree for a worktree space, the project root for the main space — not somewhere else."
 
 ## The problem (verified on this machine, live app)
@@ -172,6 +172,15 @@ run("tab.new", {
 - Spaces created without a folder (`space.new {}`) have `folder: ""`; the fallback keeps today's behavior.
 - Remote spaces: `space.folder` is a path on that space's machine, and the host routes by `space` — the same shape `close-plan.js` already relies on.
 - The space's `folder` is its creation folder, not a live location (verified above). If a checkout is moved, the host already retries at home; this change does not make that worse.
+
+## Verification (done)
+
+- `node --test mods/orca-tabs` → 35/35 pass (includes `new-tab.test.js`).
+- `node --test mods/orca-new-menu mods/agent-config mods/orca-float` → 68/68 pass.
+- `herdr-app check` on `orca-tabs`, `orca-new-menu`, `agent-config`, `orca-float` → all pass; `herdr-app status` → no errors.
+- Live, space `wt-panel-slide-zoom`, focused shell `cd /tmp`, then `herdr-app do orca-tabs.new-tab` (the ⌘T command): the new terminal opened at `/Users/tonyyang/git/herdr-my-orca.worktrees/wt-panel-slide-zoom`, not `/tmp`.
+- The probe tab was closed and the shell put back at the worktree root.
+- `node --test mods scripts` still reports the same pre-existing failures it reports on `main` (virtual-list and `scripts/titlebar-height.test.js`); none are in the changed files.
 
 ## Flow (required before editing mods)
 

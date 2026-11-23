@@ -549,7 +549,11 @@ export default class AgentConfig extends View {
     // Launch uses the live editor text and never writes it; editors stay manual save.
     // argv elements, not shell words: no quotes around the JSON or the prompt.
     if (this.spec.wrap?.after === "opencodeVariant") await this.rememberVariant();
-    run("tab.new", { space: p.space, argv: built.argv });
+    run("tab.new", {
+      space: space?.id,
+      ...(space?.folder ? { folder: space.folder } : {}),
+      argv: built.argv,
+    });
     setShared("agent-config", null);
     closeOverlay(p.overlay);
     closeOverlay(p.menu);

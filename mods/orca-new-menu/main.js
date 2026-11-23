@@ -200,8 +200,9 @@ export default class NewMenu extends View {
     const folder = pane?.cwd;
     return [
       // tab-bar-static-create-menu.tsx:213-225 — New Terminal (TerminalSquare).
-      { label: "New Terminal", icon: "square-terminal", hint: shortcut("tab.new"),
-        run: () => run("tab.new", space ? { space: space.id } : {}) },
+      // Pinned to the space's work directory: `tab.new` alone follows the focused shell's cwd.
+      { label: "New Terminal", icon: "square-terminal", hint: shortcut("orca-tabs.new-tab"),
+        run: () => run("tab.new", space ? { space: space.id, ...(space.folder ? { folder: space.folder } : {}) } : {}) },
       // Unsupported: omnibox (TabBarCreateEntry.tsx:317-350), browser and Markdown rows
       // (tab-bar-static-create-menu.tsx:227,239,283), plugins, and emulator (:266).
       ...(pane ? [{ label: "New File Browser", icon: "folder-open",
@@ -358,6 +359,7 @@ export default class NewMenu extends View {
     const seed = MODELS[agent.key];
     run("tab.new", {
       space: space?.id,
+      ...(space?.folder ? { folder: space.folder } : {}),
       argv: seed && model ? [...agent.run, seed.flag, model] : agent.run,
     });
   }

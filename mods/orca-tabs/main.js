@@ -8,6 +8,7 @@ import { edgeZone } from "./drop-zone.js";
 import { sidebarEase } from "./sidebar-motion.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { closePlan } from "./close-plan.js";
+import { newTabArgs } from "./new-tab.js";
 import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
 import {
   clampTabStripScroll,
@@ -383,11 +384,18 @@ export default class Tabs extends View {
       if (tries > 0) cx.timer.after(50, (cx) => seed(cx, tries - 1));
     };
     if (!this.windowState) cx.timer.after(0, (cx) => seed(cx, 20));
-    // `orca-tabs.toggle-sidebar` (a key binding or `herdr-app do`) runs the same animated toggle as
-    // the button. Only the unified header listens, so overlay copies never toggle twice.
-    if (props()?.unified) cx.spawn(async (cx) => {
+    // Commands sent to this mod (`<mod>.<command>` from a key binding or `herdr-app do`).
+    // `new-tab` exists in every layout: it is the ⌘T path and pins the tab to the shown
+    // space's work directory (docs/plan-tab-cwd.md). The drawer toggles stay unified-only.
+    // `init()` returns early for the dialog and drag-overlay copies, so one instance listens.
+    cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
+        if (command === "new-tab") {
+          run("tab.new", newTabArgs(spaces().find((s) => s.active)));
+          continue;
+        }
+        if (!props()?.unified) continue;
         if (command === "toggle-sidebar") this.wantToggle = (this.wantToggle ?? 0) + 1;
         if (command === "toggle-panel") this.wantPanelToggle = (this.wantPanelToggle ?? 0) + 1;
         if (command === "toggle-sidebar" || command === "toggle-panel") cx.notify();
