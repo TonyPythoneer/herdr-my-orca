@@ -10,6 +10,12 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   fallback (its token is read from the macOS Keychain and never written anywhere). Cached in
   `~/.cache/herdr-usage/`.
 - **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
+- **Refresh branches**: the Projects header's Workspace options popup starts with it. It asks
+  `orca-spaces` (`orca-spaces.refresh`) to re-read every project it knows — open or closed —
+  instead of waiting for the 60-second fallback or a filesystem wake: each project's branch and
+  its `git worktree list`, so a checkout or worktree changed elsewhere shows up. Rows are still
+  worktrees, as in Orca, so a branch with no checkout (say `main` while the main checkout sits on
+  a feature branch) has no card; only a space of its own brings one.
 - **Agent Manager**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
   5.5 rows. It lists the Agent CLIs Herdr detects,
   turns availability on/off for installed CLIs, and edits each CLI's executable and launch

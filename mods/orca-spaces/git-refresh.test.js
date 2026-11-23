@@ -105,3 +105,40 @@ test('a transient first status failure records an uncertain negative for paced r
   assert.equal(view.git[key], null);
   assert.equal(view.unsure.has(key), true);
 });
+
+test('the workspace options Refresh asks git again for every project it knows', () => {
+  const method = source.slice(source.indexOf('  refreshAll(cx) {'), source.indexOf('\n  // Runs git checks concurrently'));
+  const open = { id: 'here', folder: '/repo', machine: null, tabs: [] };
+  const closed = where({ folder: '/closed' });
+  const view = {
+    git: { [where(open)]: { repo: 'r' }, [closed]: { repo: 'r' } },
+    refreshed: null,
+    notified: 0,
+    notify() { this.notified++; },
+    refreshGit(keys) { this.refreshed = [...keys].sort(); },
+  };
+  const refreshAll = new Function('spaces', 'panes', 'where', `return ({ ${method} }).refreshAll`)(() => [open], () => [], where);
+  refreshAll.call(view, {});
+  // A closed project still re-reads, because its cached place can rebuild its worktree list.
+  assert.deepEqual(view.refreshed, [closed, where(open)].sort());
+  assert.equal(view.refreshingAll, true);
+  assert.equal(view.notified, 1);
+});
+
+test('a manual refresh ends its loading row when the git pass commits', async () => {
+  const method = source.slice(source.indexOf('  refreshGit(keys, cx) {'), source.indexOf('\n  // One place\'s git'));
+  const view = {
+    pending: new Set(), refreshing: false, refreshingAll: true, loaded: false, git: {}, watching: new Set(),
+    notified: 0,
+    notify() { this.notified++; },
+    async check() {},
+  };
+  let pass;
+  const cx = { spawn(task) { pass = task(cx); } };
+  const refreshGit = new Function('readPair', 'pruneGitCache', 'spaces', 'localStorage', `return ({ ${method} }).refreshGit`)(readPair, () => {}, () => [], { setItem() {} });
+  refreshGit.call(view, ['k'], cx);
+  await pass;
+  assert.equal(view.refreshingAll, false);
+  assert.equal(view.loaded, true);
+  assert.equal(view.notified, 1);
+});
