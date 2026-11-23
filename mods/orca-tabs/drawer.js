@@ -18,7 +18,10 @@
 //   measure      the props flag that turns on /tmp/<id>-native-<t>.json sampling
 // and `env`, which is what the drawer needs from the app:
 //   { run, find, layout, props, zoom, write, pin, release }
-const FALLBACK_MS = 650; // no endpoint callback: a clamped clock, or a node that stopped drawing
+const FALLBACK_MS = 650;   // the clock started but never reached the end
+const CLOCK_GUARD_MS = 120; // no clock step by now: the native transition is not interpolating
+const STEP_MS = 16;        // the guard's own timer step, when the clock stays silent
+const DURATION_MS = 500;
 
 export class Drawer {
   constructor(spec) {
@@ -73,10 +76,34 @@ export class Drawer {
       this.active = true;
       this.clockPx = (target ? open : 1) / env.zoom();
       cx.notify();
+      await cx.sleep(CLOCK_GUARD_MS);
+      if (token !== this.token || !this.busy || this.finishing) return;
+      // A native transition that is not interpolating delivers nothing, and the drawer would then
+      // sit still until the fallback jumped it to the end. Step the node from a timer instead, so
+      // the work area's edge always moves; `size()` is the same path either way.
+      if (this.lastPx === undefined) return this.stepByTimer(cx, env, token, target, open);
       // The clock's own endpoint callback finishes the drawer. This timer only covers the case
       // where no callback comes.
       await cx.sleep(FALLBACK_MS);
       if (token === this.token && this.busy && !this.finishing) this.size({ width: this.clockPx }, cx, env);
+    });
+  }
+
+  // The clock never reported: step the node from a timer along the same curve the left sidebar's
+  // timer mode uses (smoothstep), feeding `size()` so there is one path for dedupe, hide and finish.
+  stepByTimer(cx, env, token, target, open) {
+    const to = target ? open : 1;
+    const from = Math.max(1, Math.min(open, Math.round(env.find(env.layout(), this.id)?.size?.px ?? to)));
+    const ticks = Math.max(1, Math.round(DURATION_MS / STEP_MS));
+    cx.spawn(async (cx) => {
+      for (let i = 1; i <= ticks; i++) {
+        const k = i / ticks;
+        const eased = k * k * (3 - 2 * k);
+        this.size({ width: (from + (to - from) * eased) / env.zoom() }, cx, env);
+        if (this.finishing) return;
+        await cx.sleep(STEP_MS);
+        if (token !== this.token) return;
+      }
     });
   }
 

@@ -317,14 +317,9 @@ export default class Tabs extends View {
         pin: () => (props()?.pinSidebarTerminal && !this.nativePinned && this.nativeHeaderWidth > 0 ? this.nativeHeaderWidth / (settings()?.zoom || 1) : null),
         after: (target) => setShared("sidebar.collapsed", target === 0),
       }),
-      panel: new Drawer({
-        id: "panel", defaultOpen: 350, measure: "measurePanel",
-        pin: (open, wasHidden) => {
-          if (!(this.nativeHeaderWidth > 0)) return null;
-          const sb = find(layout(), "sidebar");
-          return this.nativeHeaderWidth / (settings()?.zoom || 1) + (wasHidden ? 0 : open) - (sb?.hidden ? 0 : (sb?.size?.px ?? 0));
-        },
-      }),
+      // No pin for the panel: the work area's right edge is what moves, and the terminal has to
+      // move with it (it reflows at each step; that is the point — the middle is what shrinks).
+      panel: new Drawer({ id: "panel", defaultOpen: 350, measure: "measurePanel" }),
     };
   }
 

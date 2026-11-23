@@ -35,7 +35,8 @@ test("native motion pins the terminal and restores its flexible width", async ()
   tabs.toggleSidebarNative(cx);
   await tasks[0](cx);
   assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.px === 1000));
-  await tasks[1](cx);
+  await tasks[1](cx); // the silent clock's timer steps the node to the end
+  await tasks[2](cx); // then the drawer finishes and releases the pin
   assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.weight === 1));
   assert.equal(tabs.nativePinned, false);
   delete globalThis.__herdrRun;
@@ -43,23 +44,22 @@ test("native motion pins the terminal and restores its flexible width", async ()
   delete globalThis.__herdrLayout;
 });
 
-test("right panel holds the terminal width until both animations finish", async () => {
+test("the panel lets the work area shrink with it, so nothing is pinned", async () => {
   const calls = [], tasks = [];
   globalThis.__herdrRun = (name, args) => calls.push([name, args]);
   globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px: 350 }, hidden: false }, { id: "sidebar", size: { px: 259 }, hidden: false }] });
-  const tabs = new Tabs(); tabs.initDrawers();
+  const tabs = new Tabs();
   Object.assign(tabs.drawers.panel, { openPx: 350 });
-  tabs.drawers.sidebar.busy = true;
   tabs.nativeHeaderWidth = 800;
   const cx = cxOf(tasks);
   tabs.togglePanelNative(cx);
   await tasks[0](cx);
-  assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.px === 891));
+  assert.equal(calls.some(([name, args]) => name === "layout.resize" && args.id === "main"), false);
   await tasks[1](cx);
+  const widths = calls.filter(([name, args]) => name === "layout.resize" && args.id === "panel").map(([, args]) => args.px);
+  assert.ok(new Set(widths).size > 10, "the work area's right edge moves in steps");
+  await tasks[2](cx);
   assert.equal(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.weight === 1), false);
-  tabs.drawers.sidebar.busy = false;
-  tabs.releaseNativePin();
-  assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.weight === 1));
   delete globalThis.__herdrRun;
   delete globalThis.__herdrLayout;
 });
