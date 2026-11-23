@@ -3,6 +3,7 @@
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { theme, run, props, window, setShared, shared, layout } from "herdr";
+import { startTaskRunner } from "./runner.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -52,6 +53,12 @@ function tint(hex, alpha) {
 }
 
 export default class WorkspaceChrome extends View {
+  // The Tasks page is a stack child, so its own copy only starts once it is first shown; the
+  // schedule has to run from a block that is always in the layout. This footer copy is it.
+  init(_props, cx) {
+    if (props()?.footer) startTaskRunner(cx);
+  }
+
   // `.titlebar-icon-button` is padding 4 + a 14px glyph = 22 (main.css:1288);
   // `.sidebar-toggle` is padding 4px 8px + a 16px glyph = 32x24 (main.css:1219).
   button(id, label, action, w = 22, h = 22) {
@@ -75,6 +82,8 @@ export default class WorkspaceChrome extends View {
           // while the Agents page lives in the `main` stack (`main-agents`).
           .child(row("agents", "bot", "Agents", () => run("layout.select", { stack: "main", child: "main-agents" })))
           .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
+          // Schedules: the reset ping and anything else the person adds (orca-tasks).
+          .child(row("tasks", "clock", "Tasks", () => run("layout.select", { stack: "main", child: "main-tasks" })))
           .child(row("settings", "settings", "Settings", () => run("app.settings")))
           // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
           // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).
