@@ -15,6 +15,7 @@ import {
   cloneUrl, installResult, newerVersion, panelUpdate, updateState, ago, auditMessage, parseDiscover, parseAudit,
 } from "./model.js";
 import { createRunner, withShell } from "./jobs.js";
+import { panelFrame } from "./panel-motion.js";
 import { createChannel, EVERY } from "./channel.js";
 import { operate } from "./operations.js";
 import { findProject, loadResources, loadChecks, loadMachine, loadLatestRelease, loadPreview, loadFile } from "./loader.js";
@@ -434,6 +435,11 @@ export default class Skillshare extends View {
   render(cx) {
     if (this.role === "toggle") return toggle();
     if (this.role !== "panel") return this.renderDialog(cx);
+    // Unified layout: a narrowing panel keeps this content at its open width (see panel-motion.js).
+    return panelFrame(this.renderPanel(cx));
+  }
+
+  renderPanel(cx) {
     const t = theme();
 
     // Follow the shown space; a new place starts over.

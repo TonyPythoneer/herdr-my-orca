@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const STUBS = new Set(["gpui-kit", "gpui-base", "herdr"]);
-const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => globalThis.__herdrProps?.() ?? ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
+const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => globalThis.__herdrProps?.() ?? ({})", theme: "() => globalThis.__herdrTheme?.() ?? ({})", terminals: "() => []", checking: "() => false",
   spaces: "() => globalThis.__herdrSpaces?.() ?? []",
   layout: "() => globalThis.__herdrLayout?.()",
   // Commands go through `globalThis.__herdrRun` so a flow test can read what a mod asks of the app.
@@ -14,6 +14,7 @@ const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() =
   readTextFile: "async (path) => globalThis.__herdrFiles?.get(path)",
   writeTextFile: "async (path, text) => { await globalThis.__herdrFiles?.set(path, text); }",
   setShared: "() => {}",
+  // Shared values go through `globalThis.__herdrShared`, so a test can show what another mod published.
   shared: "(key) => globalThis.__herdrShared?.(key)",
   // Programs go through `globalThis.__herdrExec` too, so a flow test can answer curl, chmod and stat.
   exec: "async (cmd, args, options) => globalThis.__herdrExec ? globalThis.__herdrExec(cmd, args, options) : ({ code: 0, stdout: '', stderr: '' })" };

@@ -15,6 +15,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Input, InputState } from "gpui-base";
 import { agents, spaces, run, theme, exec } from "herdr";
+import { panelFrame } from "./panel-motion.js";
 
 function fade(color, factor) {
   if (!color || typeof color !== "string") return "#00000000";
@@ -452,7 +453,10 @@ export default class AgentsPanel extends View {
       ));
   }
 
-  render(cx) {
+  // Unified layout: a narrowing panel keeps this content at its open width (see panel-motion.js).
+  render(cx) { return panelFrame(this.renderBody(cx)); }
+
+  renderBody(cx) {
     const t = theme();
     const rawList = agents() ?? [];
     const sp = spaces() ?? [];

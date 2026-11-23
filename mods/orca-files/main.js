@@ -10,6 +10,7 @@ import { mutateFile } from "./file-mutation.js";
 import { queueSave } from "./save-queue.js";
 import { canEditPath, writeEditorFile } from "./editor-path.js";
 import { resolveTreeKey } from "./tree-nav.js";
+import { panelFrame } from "./panel-motion.js";
 
 const plat = () => (typeof window === "function" ? window()?.platform : null);
 
@@ -1307,7 +1308,10 @@ export default class Files extends View {
       .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child(match.text));
   }
 
-  render(cx) {
+  // Unified layout: a narrowing panel keeps this content at its open width (see panel-motion.js).
+  render(cx) { return panelFrame(this.renderBody(cx)); }
+
+  renderBody(cx) {
     // A task's error is reported, not thrown into the paint: a failed refresh
     // must never replace the pane with the shell's "could not be re-rendered" bar.
     //
