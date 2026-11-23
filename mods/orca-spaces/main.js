@@ -24,6 +24,21 @@ import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUP
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
+
+// The open spaces a sidebar group covers: every row's own space (and any other space merged onto
+// the same checkout). Unopened worktrees (`wt:...`) have no tabs, so they are skipped. Reads the
+// plan the sidebar already computed, so a project's tabs are found without git or a path match.
+function groupSpaceIds(g) {
+  const ids = [];
+  for (const r of g?.rows ?? []) {
+    for (const w of [r.w, ...(r.also ?? []).map((a) => a.w)]) {
+      if (!w?.id || w.id.startsWith("wt:") || ids.includes(w.id)) continue;
+      ids.push(w.id);
+    }
+  }
+  return ids;
+}
+
 export default class Spaces extends View {
   init(_props, cx) {
     stopsInit(this, cx, "entry");
@@ -832,12 +847,15 @@ export default class Spaces extends View {
     const key = foldKey({ w, g });
     const folded = this.foldedRepos.has(key);
     const id = `space-head-${w.id}`;
+    // One list serves both the right-click and the ellipsis menu; the menu turns it into a project
+    // "Delete all tabs" (it covers linked worktrees, which a folder-prefix match would miss).
+    const groupSpaces = groupSpaceIds((this.plan?.groups ?? []).find((x) => x.key === key));
     return stop(this, t, id, h_flex()
       .id(id)
       .h(28).flex_none().w_full().pl(getProjectGroupHeaderPaddingLeft(0)).pr(8).gap(6).items_center().mt(4)
       .role("button").accessibility_label(g?.name ?? w.name)
       // SectionHeader.tsx:355-414 & repo-header-project-actions.tsx:113: right click opens group actions menu
-      .on_mouse_down("right", () => openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 220, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null } } }))
+      .on_mouse_down("right", () => openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces } } }))
       .on_click((_e, cx) => this.toggleRepo(key, cx))
       .on_hover((on, cx) => {
         if (on) this.hoveredRepo = key;
@@ -883,11 +901,11 @@ export default class Spaces extends View {
               this.menuKey = key;
               // RepoHeaderProjectActionsMenu's DropdownMenuContent has no width class, so Orca's
               // dropdown-menu.tsx:80 `min-w-[11rem]` (176) applies.
-              openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 220, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null } } });
+              openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces } } });
               this.notify(cx);
             })
             .child(svg("mods/orca-spaces/ellipsis.svg").size(14).flex_none()),
-          6, { enter: () => { this.menuKey = key; openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 220, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null } } }); } }))
+          6, { enter: () => { this.menuKey = key; openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces } } }); } }))
         .child(stop(this, t, `space-new-${w.id}`,
           div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
             .role("button").accessibility_label("New space")

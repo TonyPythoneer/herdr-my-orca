@@ -198,6 +198,9 @@ function items(p, git) {
         ["Open worktree", "worktree", { ...args, action: "open" }],
         ["Copy Path", "orca-menu.copy-path", { path: folder, id: tg.id }],
         ...(openSpace ? [["Rename workspace", "space.rename", { id: openSpace.id }]] : []),
+        // Every unpinned tab of the project: the main checkout and every linked worktree, from the
+        // sidebar's own grouping (`spaces`), which knows worktrees outside the project folder.
+        ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: tg.spaces ?? [], disabled: !unpinnedTabs(tg.spaces ?? []).length }],
         ...(groupSpaces.length === 1
           ? [["Close workspace", "space.close", { id: groupSpaces[0].id }]]
           : groupSpaces.length > 1
@@ -234,7 +237,7 @@ function items(p, git) {
         ...(repo ? [["New worktree", "worktree", { ...args, action: "new" }], ["Open worktree", "worktree", { ...args, action: "open" }]] : []),
         ...(linked ? [["Remove worktree", "worktree", { ...args, action: "remove" }]] : []),
         // Every unpinned tab on this worktree's spaces; greyed out when there is none.
-        ["Delete all tabs", "orca-menu.delete-all-tabs", { id: tg.id, disabled: !unpinnedTabs(tg.id).length }],
+        ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: [tg.id], disabled: !unpinnedTabs([tg.id]).length }],
         ...(open ? [["Close", "space.close", { id: tg.id }]] : []),
       ];
     }
@@ -251,13 +254,25 @@ function items(p, git) {
 }
 
 // Orca's lucide glyph for each row, taken from the component named in the citation.
-// Tabs of the space and of any other space on the same checkout (one card), minus pinned ones.
-function unpinnedTabs(id) {
+// Tabs of those spaces and of any other space on the same checkout (one card), minus pinned
+// ones, without duplicates. Takes one id or a list of ids: a card, or a whole project group.
+function unpinnedTabs(ids) {
   const all = spaces();
-  const me = all.find((s) => s.id === id);
-  if (!me) return [];
-  return all.filter((s) => s.machine === me.machine && place(s) === place(me))
-    .flatMap((s) => s.tabs ?? []).filter((t) => !t.settled).map((t) => t.id);
+  const out = [];
+  const seen = new Set();
+  for (const id of Array.isArray(ids) ? ids : ids == null ? [] : [ids]) {
+    const me = all.find((s) => s.id === id);
+    if (!me) continue;
+    for (const s of all) {
+      if (s.machine !== me.machine || place(s) !== place(me)) continue;
+      for (const t of s.tabs ?? []) {
+        if (t.settled || seen.has(t.id)) continue;
+        seen.add(t.id);
+        out.push(t.id);
+      }
+    }
+  }
+  return out;
 }
 
 function menuIcon(it, zoomed) {
@@ -458,10 +473,19 @@ export default class Menu extends View {
       // Same confirmation as Close Others; pinned tabs were left out of `tabIds` already.
       if (it[1] === "orca-menu.delete-all-tabs") {
         // Spaces may have changed since the menu opened: ask again, not the list it carried.
-        const ids = unpinnedTabs(it[2].id);
+        const ids = unpinnedTabs(it[2].ids ?? [it[2].id]);
         if (ids.length > 0) {
+          // A project group spans several checkouts; say so in the dialog. One checkout needs no
+          // extra line, since the worktree-level dialog says the same thing.
+          const wanted = new Set(ids);
+          const owners = new Set();
+          for (const s of spaces()) {
+            if ((s.tabs ?? []).some((t) => wanted.has(t.id)))
+              owners.add(`${s.machine ?? ""}\u0000${place(s)}`);
+          }
+          const detail = owners.size > 1 ? `${ids.length} tabs in ${owners.size} worktrees` : undefined;
           openOverlay({ mod: "orca-tabs", kind: "dialog", modal: true, width: 384, height: 180,
-            props: { confirmClose: { kind: "bulk", scope: "all", tabIds: ids } } });
+            props: { confirmClose: { kind: "bulk", scope: "all", tabIds: ids, ...(detail ? { detail } : {}) } } });
         }
         closeOverlay(overlayId);
         return;

@@ -6,6 +6,7 @@ import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme,
 import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
+import { closePlan } from "./close-plan.js";
 import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
 import {
   clampTabStripScroll,
@@ -684,7 +685,9 @@ export default class Tabs extends View {
       if (cfg.tabId) {
         run("tab.close", { id: cfg.tabId });
       } else if (cfg.tabIds) {
-        for (const id of cfg.tabIds) run("tab.close", { id });
+        // A space that would lose every tab gets a fresh one first, so the host never turns the
+        // last close into `space.close` and asks "Close space?".
+        for (const [command, args] of closePlan(spaces(), cfg.tabIds)) run(command, args);
       }
     };
 
@@ -718,6 +721,9 @@ export default class Tabs extends View {
         v_flex().gap(4)
           .child(div().text_size(14).font_semibold().text_color(t.foreground).child(title))
           .child(div().text_size(12).text_color(t.muted).child(desc))
+          // The project-level close says how much it covers ("N tabs in M worktrees").
+          .when(Boolean(cfg.detail), el =>
+            el.child(div().text_size(12).text_color(t.muted).child(cfg.detail)))
       )
       // CloseTerminalDialog.tsx:132-139.
       .when(isAgent, el =>
