@@ -1070,10 +1070,14 @@ export default class Tabs extends View {
       // one rounded corner; it assumes the bar is `bar`, so change both together.
       const flush = flushable(c, i);
       const flare = flush ? Math.min(1, gapToCard / 14) : 1;
-      const fillet = (side) => div().absolute().bottom(0).size(14).bg(t.background)
+      // A fillet is only the concave wedge, drawn as a ring: a 56px circle with a 14px terminal-coloured
+      // border, centred on the corner of a clipped 14px square, leaves exactly the part outside a
+      // 14px-radius circle. It paints nothing else, so it works over the bar AND over a neighbour's
+      // hover pill (the earlier two-square version painted a bar-coloured square over the pill).
+      const fillet = (side) => div().absolute().bottom(0).size(14).overflow_hidden()
         .when(side === "left", el => el.left(-14).opacity(flare)).when(side === "right", el => el.right(-14))
-        .child(div().size(14).bg(bar)
-          .when(side === "left", el => el.rounded_br(14)).when(side === "right", el => el.rounded_bl(14)));
+        .child(div().absolute().top(-28).size(56).rounded_full().border(14).border_color(t.background)
+          .when(side === "left", el => el.left(-28)).when(side === "right", el => el.left(-14)));
       // Both surfaces are layers that every tab always carries and that only change `opacity`, under a
       // stable id: a transition animates changes made after the element carried it, so switching tab
       // crossfades the joined shape (old fades out, new fades in) and hover fades the pill in and out.
@@ -1081,15 +1085,14 @@ export default class Tabs extends View {
       const fade = { duration: 160, easing: "ease-out" };
       // Nothing here may depend on which tab is active in a way that moves layout: slot padding is
       // constant, so a click moves no pixel and re-measures no width. Only these two layers react.
-      // The active layer is instant (click feedback). A hover pill inset 12px on the side that faces
-      // the active tab keeps clear of that tab's 14px fillet, which reaches 12px into its neighbour.
-      const prevActive = i > 0 && shown[i - 1].active, nextActive = Boolean(shown[i + 1]?.active);
+      // The active layer is instant (click feedback). The hover pill is never inset: the neighbour's
+      // fillet wedge paints over its corner, which is the intended Chrome-style bite.
       const activeLayer = div().id(`tab-active-${c.id}${copyId}`).absolute().top(0).bottom(0)
         .left(flush && gapToCard <= 0 ? -2 : 0).right(0)
         .rounded_t(14).bg(t.background).opacity(c.active ? 1 : 0)
         .child(fillet("left")).child(fillet("right"));
       const hoverLayer = div().id(`tab-hover-${c.id}${copyId}`).absolute().top(4).bottom(4)
-        .left(prevActive ? 12 : 0).right(nextActive ? 12 : 0)
+        .left(0).right(0)
         .rounded(10).bg(tint(t.foreground, 0.08)).opacity(!c.active && this.hoveredTab === c.id ? 1 : 0).transition("opacity", fade);
       const pill = h_flex().w_full().h_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
         .child(hoverLayer).child(activeLayer)
