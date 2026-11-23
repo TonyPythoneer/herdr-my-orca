@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const STUBS = new Set(["gpui-kit", "gpui-base", "herdr"]);
-const HERDR = { appHome: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => globalThis.__herdrProps?.() ?? ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
+const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => globalThis.__herdrProps?.() ?? ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
   spaces: "() => globalThis.__herdrSpaces?.() ?? []",
   // Commands go through `globalThis.__herdrRun` so a flow test can read what a mod asks of the app.
   run: "(command, args) => globalThis.__herdrRun?.(command, args)",

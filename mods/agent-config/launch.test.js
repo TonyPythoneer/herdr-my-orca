@@ -7,6 +7,7 @@ import { register } from "node:module";
 register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
 const { default: Flyout } = await import("./main.js");
 const { WRAPPER } = await import("./codex-provider.js");
+const { SPECS, defaultValues, sectionsOf } = await import("./agent-flyout.js");
 
 const SETTINGS = "/home/agent-config.json";
 const PROVIDERS = "/home/model-providers.json";
@@ -37,15 +38,14 @@ function flyout({ providerId = "none", providers = {}, model = "gpt-5.6-sol", ef
   const view = Object.create(Flyout.prototype);
   Object.assign(view, {
     key: "codex",
-    agent: { argsFor: (id, level) => ["-m", id, "-c", `model_reasoning_effort=${level}`] },
+    spec: SPECS.codex,
+    values: { ...defaultValues(SPECS.codex), model, effort },
+    editors: {},
     models: MODELS,
-    model,
-    effort,
     hidden: new Set(),
-    codexOff: new Set(),
     providerId,
     providers,
-    providerOpen: false,
+    open: null,
     cliModel: null,
     launching: false,
     error: "",
@@ -167,7 +167,20 @@ test("a saved provider is selectable, and its models hide the EFFORT select", ()
   assert.ok(text(view.providerRow(t)).includes("oMLX"));
   assert.ok(text(view.providerRow(t)).includes("on_click"));
   // oMLX models have no effort variants, so the picker is MODEL alone.
-  const picker = text(view.pickerRow(t));
+  const picker = text(view.sectionBody(sectionsOf(SPECS.codex)[1], t));
   assert.ok(picker.includes("MODEL"));
   assert.equal(picker.includes("EFFORT"), false);
+});
+
+test("the flyout is split into sections: Codex has a model source, Claude does not", () => {
+  const codex = text(flyout({ providers: {} }).view.render());
+  for (const head of ["MODEL SOURCE", "HARNESS CLI ARGUMENTS", "HARNESS CLI ADVANCED ARGUMENTS"]) assert.ok(codex.includes(head), head);
+  assert.ok(codex.indexOf("MODEL SOURCE") < codex.indexOf("HARNESS CLI ARGUMENTS"));
+  assert.ok(codex.indexOf("HARNESS CLI ARGUMENTS") < codex.indexOf("HARNESS CLI ADVANCED ARGUMENTS"));
+  const view = flyout({ providers: {} }).view;
+  const input = { value: () => "", set_value() {}, set_soft_wrap() {}, on() {} };
+  Object.assign(view, { key: "claude", spec: SPECS.claude, values: { ...defaultValues(SPECS.claude), model: "m", effort: "high" }, styles: ["default"], naming: false, nameError: false, styleInput: input, editors: { agents: { input, dirty: false, error: null }, systemPrompt: { input, dirty: false, error: null } } });
+  const claude = text(view.render());
+  assert.equal(claude.includes("MODEL SOURCE"), false);
+  assert.ok(claude.includes("HARNESS CLI ARGUMENTS") && claude.includes("HARNESS CLI ADVANCED ARGUMENTS"));
 });
