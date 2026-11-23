@@ -17,18 +17,6 @@ test('spaces instances do not share mutable cached state', async () => {
   assert.equal(second.reconnecting.remote.busy, false);
 });
 
-test('failed tab color persistence does not mutate the cached fallback', async () => {
-  const source = await readFile(new URL('../orca-menu/main.js', import.meta.url), 'utf8');
-  const helper = source.slice(source.indexOf('const _storedCache ='), source.indexOf('\n// Where a space is:'));
-  const method = source.slice(source.indexOf('  setTabColor(tabId, color) {'), source.indexOf('\n  render(cx) {'));
-  const storage = { getItem: () => '{"old":"blue"}', setItem: () => { throw Error('disk full'); } };
-  const make = new Function('localStorage', 'shared', 'setShared', 'props', 'closeOverlay', `${helper}\nreturn { stored, ${method} };`);
-  const view = make(storage, () => null, () => {}, () => ({}), () => {});
-  view.setTabColor('new', 'red');
-  assert.deepEqual(view.stored('tab.colors.v1', {}), { old: 'blue' });
-});
-
-
 test('stored reads and workspace options invalidate when another mod writes', async () => {
   const values = new Map();
   globalThis.localStorage = { getItem: key => values.get(key) ?? null };

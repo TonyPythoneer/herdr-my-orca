@@ -13,12 +13,6 @@ import { buildBoundedSessionTranscript } from "./transcript.js";
 import { closeSideTabs } from "./close-sides.js";
 import { closeRows } from "./close-space.js";
 
-// Orca's palette (`SortableTabContextMenu.tsx:15-80`), in its order; `null` is "None".
-const TAB_COLORS = [["None", null], ["Blue", "#3b82f6"], ["Purple", "#a855f7"], ["Pink", "#ec4899"],
-  ["Red", "#ef4444"], ["Orange", "#f97316"], ["Yellow", "#eab308"], ["Green", "#22c55e"],
-  ["Teal", "#14b8a6"], ["Gray", "#9ca3af"]];
-
-// Herdr has no tab colour field, so the menu writes the store orca-tabs reads.
 const _storedCache = new Map();
 function stored(key, fallback) {
   try {
@@ -145,7 +139,9 @@ function items(p, git) {
       // TabSessionSurfaceSwitchMenuItems rows (:179-185), separator (:186), Pin/Unpin
       // (:187-196), Allow Auto-Close (:197-205), Copy Tab ID (:206), separator (:207),
       // Close (:208-212), Close Others (:213-215), Close split pane (:216, CloseSplitPaneMenuItem.tsx:21-24), separator (:217),
-      // Change Title (:218-222), Tab Color (:223-250). The chat-view and session-switch rows
+      // Change Title (:218-222). Orca's Tab Color palette (:223-250) is left out: the tab takes
+      // its colour from the strip's own state, and this menu no longer writes one. The chat-view
+      // and session-switch rows
       // stay out: Herdr has no chat. Allow Auto-Close has no counterpart either: Herdr keeps a
       // tab until `tab.close`, and `hc keep --off` ends a lost terminal but closes no tab.
       const own = spaces().find((s) => (s.tabs ?? []).some((x) => x.id === tg.id));
@@ -408,7 +404,7 @@ function keyHint(chord) {
 // The tab menu's own header: which tab these rows act on. A right-click can land on a background
 // tab, while Orca's menu belongs to the tab it acts on (SortableTabContextMenu.tsx), so Herdr
 // needs to say it. It is not a row - ↑/↓ skip it and Enter never runs it.
-function contextHeader(p, colors, t) {
+function contextHeader(p, t) {
   const tg = p?.target ?? {};
   const space = spaces().find((s) => s.id === tg.space) ??
     spaces().find((s) => (s.tabs ?? []).some((x) => x.id === tg.id));
@@ -418,12 +414,9 @@ function contextHeader(p, colors, t) {
   const mine = panes().filter((x) => x.tab === tab.id);
   const pane = mine.find((x) => x.program?.agent) ?? mine[0];
   const label = tab.named ? (tab.name ?? "Terminal") : (pane?.title || pane?.program?.name || tab.name || "Terminal");
-  const color = colors[tab.id] ?? null;
   const where = [space?.name, space?.branch].filter(Boolean).join(" · ");
   return v_flex().px(8).pt(6).pb(8).gap(3)
     .child(h_flex().items_center().gap(7)
-      // SortableTab.tsx:293-297 — the tab's colour, size-2 rounded-full.
-      .when(Boolean(color), (el) => el.child(div().size(7).rounded(4).flex_none().bg(color)))
       .child(div().flex_1().min_w(0).truncate().text_size(13).font_semibold().text_color(t.foreground).child(label))
       // Pinned: Herdr's `settled`, the state the Pin/Unpin row below toggles.
       .when(Boolean(tab.settled), (el) => el.child(h_flex().flex_none().items_center().justify_center()
@@ -788,23 +781,9 @@ export default class Menu extends View {
     }
   }
 
-  setTabColor(tabId, color) {
-    if (!tabId) return;
-    const cur = shared("tab.colors");
-    const all = { ...(cur && typeof cur === "object" ? cur : stored("tab.colors.v1", {})) };
-    if (color) all[tabId] = color;
-    else delete all[tabId];
-    try { localStorage.setItem("tab.colors.v1", JSON.stringify(all)); } catch {}
-    setShared("tab.colors", all);
-    closeOverlay(props()?.overlay);
-  }
-
   render(cx) {
     const t = theme();
     const p = props();
-    const tabId = p?.tab === "tab" ? (p.target?.id ?? null) : null;
-    const tabColors = tabId ? (shared("tab.colors") ?? stored("tab.colors.v1", {})) : {};
-    const activeTabColor = tabColors[tabId] ?? null;
     const list = items(p, this.git);
     const zoomed = panes().find((x) => x.pane === p?.target?.pane)?.zoomed;
     const bad = destructive();
@@ -840,7 +819,7 @@ export default class Menu extends View {
         ...(p?.tab === "space" && p?.multi
           ? [div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child("Workspace")]
           : []),
-        ...(p?.tab === "tab" ? [contextHeader(p, tabColors, t)] : []),
+        ...(p?.tab === "tab" ? [contextHeader(p, t)] : []),
         ...list.map((it, i) => {
           const off = Boolean(it[2]?.disabled);
           const red = !off && isDestructive(p, it);
@@ -887,51 +866,6 @@ export default class Menu extends View {
             .child(div().pl(16).flex_none().whitespace_nowrap().text_color(t.muted)
               .child(p?.tab === "tab" ? keyHint(shortcut(it[1], it[2])) : shortcut(it[1], it[2]))));
         }),
-        ...(p?.tab === "tab"
-          ? [
-              // SortableTabContextMenu.tsx:223-250: compact Tab Color palette (16px circular
-              // swatches), staying at the bottom of the menu.
-              v_flex()
-                .pt(8)
-                .pr(10)
-                .pb(2)
-                .pl(10)
-                .child(div().text_size(10).font_semibold().text_color(t.muted).mb(6).child("Tab Color"))
-                .child(
-                  h_flex()
-                    .flex_wrap()
-                    .gap(8)
-                    .children(
-                      TAB_COLORS.map(([name, val]) => {
-                        const isSelected = activeTabColor === val;
-                        return div()
-                          .id(`tab-color-${name.toLowerCase()}`)
-                          .size(16)
-                          .rounded(8)
-                          .cursor_pointer()
-                          .tooltip(name)
-                          .hover((s) => s.opacity(0.8))
-                          .when(Boolean(val), (el) =>
-                            el
-                              .bg(val)
-                              .border(isSelected ? 2 : 1)
-                              .border_color(isSelected ? t.foreground : "#00000000")
-                          )
-                          .when(!val, (el) =>
-                            el
-                              .border(isSelected ? 2 : 1)
-                              .border_color(isSelected ? t.foreground : t.muted)
-                              .flex()
-                              .items_center()
-                              .justify_center()
-                              .child(div().w(8).h(1).bg(t.muted))
-                          )
-                          .on_click((_e, _cx) => this.setTabColor(tabId, val));
-                      })
-                    )
-                ),
-            ]
-          : []),
       ]);
   }
 }
