@@ -23,12 +23,19 @@ function toggleSidebar() {
   run(sidebarHidden() ? "layout.show" : "layout.hide", { id: "sidebar" });
 }
 
+// Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
+// derived from the theme's own foreground, so both the dark and the light theme tint correctly.
+function tint(hex, alpha) {
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255).toString(16).padStart(2, "0");
+  return /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${a}` : hex;
+}
+
 export default class WorkspaceChrome extends View {
   // `.titlebar-icon-button` is padding 4 + a 14px glyph = 22 (main.css:1288);
   // `.sidebar-toggle` is padding 4px 8px + a 16px glyph = 32x24 (main.css:1219).
   button(id, label, action, w = 22, h = 22) {
     const t = theme();
-    return div().id(id).w(w).h(h).mr(4).flex_none().flex().items_center().justify_center().rounded(4).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+    return div().id(id).w(w).h(h).mr(4).flex_none().flex().items_center().justify_center().rounded(8).text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_click(action).child(label);
   }
   render() {
@@ -46,6 +53,7 @@ export default class WorkspaceChrome extends View {
           // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
           // while the Agents page lives in the `main` stack (`main-agents`).
           .child(row("agents", "bot", "Agents", () => run("layout.select", { stack: "main", child: "main-agents" })))
+          .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
           .child(row("settings", "settings", "Settings", () => run("app.settings")))
           // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
           // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).

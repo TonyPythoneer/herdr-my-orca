@@ -15,12 +15,13 @@
 //    (`agent-session-option-catalog-gemini-cursor.ts:105-119`), so a bare id is not what its CLI receives.
 //  - muse, codebuddy: Orca seeds no models and lists none without a live agent session
 //    (`agent-session-option-catalog-muse.ts:41`, `agent-session-option-catalog-codebuddy.ts:37`). They start with their own default.
-//    opencode has a chevron flyout too (model/effort live in agent-config); its list is the
-//    live `/api/model` catalog, with an "Only free" switch (free by default).
+//    claude, codex, opencode and pi have a chevron flyout (agent-flyout.js); the others pick a
+//    model inline from the lists below.
 //  - Effort, fast mode, service tier and permission rows (`AgentLaunchSetupPanel.tsx:283-399`)
 //    are not ported: they need a session to apply them mid-run and a draft store to remember
 //    the pick. A launch choice here is the model only; permission flags live in programs.json's `run`.
 import { exec, home } from "herdr";
+import { SPECS } from "./agent-flyout.js";
 
 // The app's own PATH is not the login shell's: `omp` installs to ~/.bun/bin, which a desktop
 // launch misses, while `knownAgents()` checks the login shell and still calls it installed.
@@ -68,10 +69,9 @@ async function agyModels() {
 }
 
 export const MODELS = {
-  // Model and effort lists live in agent-config/main.js; `flyout` only marks the row's chevron.
-  claude: { flyout: true },
-  codex: { flyout: true },
-  opencode: { flyout: true },
+  // Every agent with a flyout spec (agent-flyout.js, drawn by agent-config) gets the row's chevron;
+  // its model list and options live in the spec, not here.
+  ...Object.fromEntries(Object.keys(SPECS).map((key) => [key, { flyout: true }])),
   gemini: {
     flag: "-m",
     models: [

@@ -11,6 +11,9 @@ export const USES = {
   "clip.js": ["orca-changes", "orca-files", "orca-handoff", "orca-menu"],
   "transcript.js": ["orca-handoff", "orca-menu"],
   "review-store.js": ["orca-spaces"],
+  "codex-provider.js": ["agent-config", "orca-agent-manager"],
+  "agent-flyout.js": ["agent-config", "orca-new-menu"],
+  "list-viewport.js": ["agent-config", "orca-agent-manager"],
 };
 const header = (name) => `// Generated from shared/${name} by scripts/sync-shared.mjs. Edit that file, not this copy.\n`;
 

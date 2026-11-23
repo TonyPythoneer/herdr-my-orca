@@ -5,12 +5,16 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const STUBS = new Set(["gpui-kit", "gpui-base", "herdr"]);
-const HERDR = { appHome: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
+const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => globalThis.__herdrProps?.() ?? ({})", theme: "() => ({})", terminals: "() => []", checking: "() => false",
+  spaces: "() => globalThis.__herdrSpaces?.() ?? []",
+  // Commands go through `globalThis.__herdrRun` so a flow test can read what a mod asks of the app.
+  run: "(command, args) => globalThis.__herdrRun?.(command, args)",
   // File IO goes through `globalThis.__herdrFiles` so a flow test can run a mod's real handlers.
   readTextFile: "async (path) => globalThis.__herdrFiles?.get(path)",
   writeTextFile: "async (path, text) => { await globalThis.__herdrFiles?.set(path, text); }",
   setShared: "() => {}",
-  exec: "async () => ({ code: 0, stdout: '', stderr: '' })" };
+  // Programs go through `globalThis.__herdrExec` too, so a flow test can answer curl, chmod and stat.
+  exec: "async (cmd, args, options) => globalThis.__herdrExec ? globalThis.__herdrExec(cmd, args, options) : ({ code: 0, stdout: '', stderr: '' })" };
 
 export async function resolve(specifier, context, next) {
   if (!STUBS.has(specifier)) return next(specifier, context);

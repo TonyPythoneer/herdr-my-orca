@@ -5,6 +5,7 @@
 // Nothing here splits a shell string, so an argument keeps its spaces, quotes and backslashes.
 
 import { normalizePermissions } from "./permissions.js";
+import { FULL_ROWS, VISIBLE_ROWS, viewportHeight } from "./list-viewport.js";
 
 // Herdr's built-in `run` for the agents it offers, read from a clean app home (no programs.json)
 // on Herdr 0.1.16 (`knownAgents()`); a key missing here is a program the user added in
@@ -300,11 +301,12 @@ export function isFish(shellPath) {
 // Each group shows up to five full rows and half of the next one.
 export const LIST_ROW_HEIGHT = 56;
 export const LIST_HEADER_HEIGHT = 42;
-export const LIST_VISIBLE_ROWS = 5.5;
+export const LIST_VISIBLE_ROWS = VISIBLE_ROWS;
 
 /** Cap each group's rows independently; expanded editors also stay inside the group. */
 export function listViewportHeight(rowCount, expanded = false) {
-  return rowCount > LIST_VISIBLE_ROWS || expanded ? LIST_VISIBLE_ROWS * LIST_ROW_HEIGHT + 2 : null;
+  // The shared list rule (list-viewport.js) plus the group border.
+  return rowCount > FULL_ROWS || expanded ? viewportHeight(FULL_ROWS + 1, LIST_ROW_HEIGHT) + 2 : null;
 }
 
 /** A single `command -v` probe; the command is positional, never interpolated into the script. */

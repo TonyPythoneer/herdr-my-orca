@@ -84,6 +84,7 @@ test("fish gets no extra $0 argument and POSIX keeps its placeholder", () => {
 test("each agent group is capped at 5.5 rows", () => {
   assert.equal(listViewportHeight(5), null);
   assert.equal(listViewportHeight(0), null);
+  assert.equal(listViewportHeight(6), 310, "the same height Agent Settings has always had: 5.5 rows of 56 plus the border");
   assert.equal(listViewportHeight(6), 5.5 * 56 + 2);
   assert.equal(listViewportHeight(20), 5.5 * 56 + 2);
   assert.equal(listViewportHeight(2, true), 5.5 * 56 + 2);

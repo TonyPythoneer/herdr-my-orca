@@ -12,7 +12,7 @@
 // `command -v` probe in state.js, run in the same login shell Herdr uses. If it fails, the
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
+import { v_flex, h_flex, Input, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
 import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, settings, writeTextFile } from "herdr";
 import {
   LIST_ROW_HEIGHT,
@@ -58,9 +58,28 @@ import { errorText, sameRun, tail, timeLabel } from "./util.js";
 import { badge, banner, empty, group, icon, permissionBadge, section } from "./parts.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
 import { agentPermissionItems, defaultPermissionItems, permissionSelect } from "./permission-menu.js";
+import { PROVIDER_FILE, judgeModels, keyHint, linkInfo, parseProviderFile, presetFor, recordLink, serializeProviderFile, slugId, validateHost } from "./codex-provider.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
+// The provider record holds the API key, so the file is 0600 and the icon lives beside it.
+const PROVIDERS = `${appHome()}/${PROVIDER_FILE}`;
+const ICON_DIR = "provider-icons";
+// Only a file this page wrote inside its own icon folder may be kept in a record and deleted.
+// Directly inside the icon folder: a `..` or a deeper path is not ours.
+const ownedIcon = (path) => {
+  const prefix = `${appHome()}/${ICON_DIR}/`;
+  const rest = String(path ?? "").slice(prefix.length);
+  return String(path ?? "").startsWith(prefix) && rest !== "" && !rest.includes("/") && rest !== ".." ? path : null;
+};
+// GitHub avatars are a few KB; anything past this is not one.
+const ICON_MAX_BYTES = 256 * 1024;
+// A site serves whatever it likes at its icon URL, so the magic bytes are checked for a real image
+// (PNG, JPEG or .ico) instead of trusting the URL or the status.
+const ICO_MAGIC = "00000100";
+const IMAGE_MAGIC = ["89504e47", "ffd8ff", ICO_MAGIC];
+// An icon is drawn from its path inside this app's folder.
+const iconSrc = (path) => (String(path).startsWith(`${appHome()}/`) ? String(path).slice(appHome().length + 1) : path);
 const CACHE_KEY = "agent-manager.inventory.v1";
 const TERMINALS_PAGE = "main-terminals";
 const POLL_MS = 4000;
@@ -99,12 +118,30 @@ export default class AgentManager extends View {
     this.refreshGen = 0;
     this.action = null; // { key, kind, phase, message }
     this.uninstall = null; // { key, phase, status, message }
+    // Model providers (their own page): the saved records and one card for each, see makeCard.
+    this.providers = {};
+    this.providersError = null;
+    this.cards = new Map();
+    this.adding = null; // the card for a provider being added
+    this.providerText = undefined; // model-providers.json as read, so a write can replace it safely
+    this.providerWrittenAt = 0; // when this page last wrote it, so a slower refresh cannot roll it back
 
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-manager", props: {expand: "claude"}}`).
     const expand = props()?.expand;
     if (typeof expand === "string") this.expanded.add(expand);
 
+    // The Model providers page is the same mod with `props.page`: only the provider card, no detection.
+    this.providersPage = props()?.page === "providers";
+    if (this.providersPage) {
+      if (!checking()) {
+        cx.spawn(async (cx) => {
+          this.applyProviders(await readTextFile(PROVIDERS).catch(() => undefined));
+          cx.notify();
+        });
+      }
+      return;
+    }
     this.restoreCache();
     if (checking()) return;
     this.refresh(cx);
@@ -988,6 +1025,281 @@ export default class AgentManager extends View {
 
   // ---- keyboard -------------------------------------------------------------
 
+  // ---- model providers ------------------------------------------------------
+  // The page keeps one card per saved provider (`this.cards`, by id) and one for the provider being
+  // added (`this.adding`). A card holds its inputs and what the user is doing; the record lives in
+  // model-providers.json and is written only after a passing test.
+
+  makeCard(id, record) {
+    const card = {
+      id,
+      open: false,
+      touched: false, // the user typed here, so a file change must not overwrite the inputs
+      testing: false,
+      status: null, // { tone: "blocked" | "done" | "muted", text }
+      replacing: false, // a saved key is shown as a hint until Replace is pressed
+      reveal: false,
+      autoName: "", // the name the link suggested last, so a later link may replace it but a typed one stays
+      iconWork: Promise.resolve(),
+      name: InputState.new({ placeholder: "Name" }),
+      host: InputState.new({ placeholder: "http://127.0.0.1:8000/v1" }),
+      key: InputState.new({ placeholder: "API key" }),
+      link: InputState.new({ placeholder: "https://github.com/owner/repo" }),
+    };
+    card.key.set_masked(true);
+    this.fillCard(card, record);
+    for (const input of [card.name, card.host, card.key, card.link]) {
+      input.on("change", (_event, cx) => {
+        card.touched = true;
+        card.status = null;
+        cx.notify();
+      });
+      input.on("focus", (_event, cx) => {
+        this.typing = true;
+        cx.notify();
+      });
+      input.on("blur", (_event, cx) => {
+        this.typing = false;
+        cx.notify();
+      });
+      input.on("submit", (_event, cx) => this.saveCard(card, cx));
+    }
+    // Leaving the link field looks for the icon now, so it shows before anything is saved.
+    card.link.on("blur", (_event, cx) => this.linkChanged(card, cx));
+    return card;
+  }
+
+  fillCard(card, record) {
+    card.name.set_value(record?.name ?? "");
+    card.host.set_value(record?.host ?? "");
+    card.key.set_value("");
+    const link = recordLink(record);
+    card.link.set_value(link);
+    const info = linkInfo(link);
+    // The icon on screen is the one the link stands for: its link and the local file it was saved to.
+    card.fetched = { link: info.error ? "" : info.link, path: record?.iconPath ?? "" };
+  }
+
+  // A provider is shown from the file, so a delete or a change made elsewhere lands on the next read.
+  // `readAt` is when the caller read the file: a read older than this page's own write is stale and
+  // must not bring back what was just saved or deleted.
+  applyProviders(text, readAt = Date.now()) {
+    if (text === undefined || text === this.providerText || readAt <= this.providerWrittenAt) return false;
+    this.providerText = text;
+    const parsed = parseProviderFile(text);
+    this.providers = parsed.providers ?? {};
+    this.providersError = parsed.error ?? null;
+    for (const id of [...this.cards.keys()]) if (!Object.hasOwn(this.providers, id)) this.cards.delete(id);
+    for (const [id, record] of Object.entries(this.providers)) {
+      const card = this.cards.get(id);
+      if (!card) this.cards.set(id, this.makeCard(id, record));
+      else if (!card.touched) this.fillCard(card, record);
+    }
+    return true;
+  }
+
+  showCardStatus(card, cx, tone, text) {
+    card.status = { tone, text };
+    card.testing = false;
+    cx?.notify();
+  }
+
+  // The link field was left: suggest a name, then look for the icon.
+  async linkChanged(card, cx) {
+    const info = linkInfo(card.link.value());
+    if (info.error) return this.showCardStatus(card, cx, "blocked", info.error);
+    const name = card.name.value().trim();
+    if (info.name && (name === "" || name === card.autoName)) {
+      card.name.set_value(info.name);
+      card.autoName = info.name;
+    }
+    card.status = info.iconUrl ? { tone: "muted", text: "Finding the icon…" } : null;
+    cx?.notify();
+    await this.refreshIcon(card, info);
+    if (card.status?.text === "Finding the icon…") card.status = null;
+    cx?.notify();
+  }
+
+  // Saves only after a passing test: validate the card, test the server, then write the record, fix
+  // its mode and save the icon. A failed test writes nothing.
+  async saveCard(card, cx) {
+    if (card.testing) return;
+    const host = validateHost(card.host.value());
+    if (host.error) return this.showCardStatus(card, cx, "blocked", host.error);
+    const previous = card.id ? this.providers[card.id] : null;
+    // Nothing typed in the key box means "keep the saved key".
+    const key = card.key.value().trim() || previous?.apiKey || "";
+    if (!key) return this.showCardStatus(card, cx, "blocked", "Enter the API key.");
+    const info = linkInfo(card.link.value());
+    if (info.error) return this.showCardStatus(card, cx, "blocked", info.error);
+    const name = card.name.value().trim() || info.name || new URL(host.host).hostname;
+    card.testing = true;
+    card.status = null;
+    cx?.notify();
+    const verdict = await this.testProvider(host.host, key);
+    if (!verdict.ok) return this.showCardStatus(card, cx, "blocked", verdict.error);
+    await this.refreshIcon(card, info);
+    const saved = await this.saveProvider(card, { name, host: host.host, key, link: info.link, models: verdict.models });
+    card.testing = false;
+    if (saved) {
+      if (!card.id) {
+        // The new card becomes the saved provider's own card.
+        this.adding = null;
+        this.cards.set(saved.id, card);
+        card.id = saved.id;
+      }
+      card.touched = false;
+      card.replacing = false;
+      card.reveal = false;
+      card.key.set_masked(true);
+      card.key.set_value("");
+      card.status = saved.error ? { tone: "blocked", text: saved.error } : { tone: "done", text: `Saved · ${saved.record.models.length} models` };
+    }
+    cx?.notify();
+  }
+
+  // `GET <host>/models` with the key in the header; the answer is judged into a fixed message.
+  // The key is an argument of this one call, for five seconds (see the design's risks).
+  async testProvider(host, key) {
+    try {
+      const result = await exec(
+        "curl",
+        ["-sS", "--max-time", "5", "-w", "\n%{http_code}", "-H", `Authorization: Bearer ${key}`, `${host}/models`],
+        { timeout: 5000 },
+      );
+      const text = result.stdout ?? "";
+      const cut = text.lastIndexOf("\n");
+      const status = Number(text.slice(cut + 1).trim());
+      return judgeModels(Number.isFinite(status) ? status : 0, text.slice(0, cut));
+    } catch {
+      return judgeModels(0, "");
+    }
+  }
+
+  async saveProvider(card, { name, host, key, link, models }) {
+    const text = await readTextFile(PROVIDERS).catch(() => null);
+    const parsed = parseProviderFile(text);
+    if (parsed.error) return this.showCardStatus(card, null, "blocked", parsed.error);
+    const id = card.id ?? slugId(name, Object.keys(parsed.providers));
+    const previous = Object.hasOwn(parsed.providers, id) ? parsed.providers[id] : null;
+    // The icon is the one fetched for this very link; a link with no icon (or none) has none.
+    const iconPath = card.fetched.link === link ? card.fetched.path : "";
+    const record = {
+      name,
+      host,
+      apiKey: key,
+      link,
+      iconPath,
+      verifiedAt: new Date().toISOString(),
+      models,
+      // The model Codex had chosen for this provider survives a re-test.
+      selectedModel: previous?.selectedModel ?? {},
+    };
+    parsed.providers[id] = record;
+    const next = serializeProviderFile(parsed.providers);
+    try {
+      await writeTextFile(PROVIDERS, next, text);
+    } catch {
+      return this.showCardStatus(card, null, "blocked", "Could not write model-providers.json.");
+    }
+    this.providerText = next;
+    this.providerWrittenAt = Date.now();
+    this.providers = parsed.providers;
+    // The record is written by now, so a mode that did not take is reported but the card still owns it.
+    const error = (await this.secureProviderFile()) ? null : "model-providers.json is not private to your user.";
+    // The replaced icon is deleted too, but only when it is one of ours.
+    const stale = ownedIcon(previous?.iconPath);
+    if (stale && stale !== iconPath) await exec("rm", ["-f", stale]).catch(() => {});
+    return { id, record, error };
+  }
+
+  async deleteProvider(card, cx) {
+    if (card.testing) return; // a save in flight would write the record back
+    const text = await readTextFile(PROVIDERS).catch(() => null);
+    const parsed = parseProviderFile(text);
+    if (parsed.error) return this.showCardStatus(card, cx, "blocked", parsed.error);
+    const record = Object.hasOwn(parsed.providers, card.id) ? parsed.providers[card.id] : null;
+    if (!record) return this.showCardStatus(card, cx, "blocked", "No provider is saved.");
+    delete parsed.providers[card.id];
+    const next = serializeProviderFile(parsed.providers);
+    try {
+      await writeTextFile(PROVIDERS, next, text);
+    } catch {
+      return this.showCardStatus(card, cx, "blocked", "Could not write model-providers.json.");
+    }
+    this.providerText = next;
+    this.providerWrittenAt = Date.now();
+    this.providers = parsed.providers;
+    await this.secureProviderFile();
+    // Only a file this page could have written is removed, and an unsaved preview goes with it.
+    for (const path of new Set([record.iconPath, card.fetched.path])) {
+      const stale = ownedIcon(path);
+      if (stale) await exec("rm", ["-f", stale]).catch(() => {});
+    }
+    this.cards.delete(card.id);
+    cx?.notify();
+  }
+
+  // writeTextFile replaces the file, which can reset the mode, and the key is in it.
+  async secureProviderFile() {
+    try {
+      await exec("chmod", ["600", PROVIDERS]);
+      const mode = await exec("stat", ["-f", "%Lp", PROVIDERS]);
+      return mode.stdout.trim() === "600";
+    } catch {
+      return false;
+    }
+  }
+
+  // Looks for the icon of `info.link` unless that is the one already on the card. Work on one card
+  // runs one at a time, so a quick second blur cannot race the first.
+  refreshIcon(card, info) {
+    card.iconWork = card.iconWork.then(async () => {
+      if (card.fetched.link === info.link) return;
+      const path = info.iconUrl ? await this.fetchProviderIcon(info.iconUrl) : null;
+      // An unsaved preview goes when it is replaced; the saved icon goes when the save lands.
+      const old = ownedIcon(card.fetched.path);
+      if (old && old !== ownedIcon(this.providers[card.id]?.iconPath)) await exec("rm", ["-f", old]).catch(() => {});
+      card.fetched = { link: info.link, path: path ?? "" };
+    });
+    return card.iconWork;
+  }
+
+  // Downloads the icon once into this app's folder, under a name no earlier icon had, so nothing
+  // keeps showing a cached older picture. Saved only when the answer really is a small image.
+  async fetchProviderIcon(url) {
+    const dir = `${appHome()}/${ICON_DIR}`;
+    const path = `${dir}/icon-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.png`;
+    const partial = `${path}.download`;
+    const drop = () => exec("rm", ["-f", partial]).catch(() => {});
+    try {
+      await exec("mkdir", ["-p", dir]);
+      const result = await exec(
+        "curl",
+        ["-sL", "--max-time", "5", "--max-filesize", String(ICON_MAX_BYTES), "-o", partial, "-w", "\n%{http_code}", url],
+        { timeout: 5000 },
+      );
+      const text = result.stdout ?? "";
+      const status = Number(text.slice(text.lastIndexOf("\n") + 1).trim());
+      const head = (await exec("xxd", ["-p", "-l", "8", partial]).catch(() => ({ stdout: "" }))).stdout.trim();
+      if (status !== 200 || !IMAGE_MAGIC.some((magic) => head.startsWith(magic))) {
+        await drop();
+        return null;
+      }
+      if (head.startsWith(ICO_MAGIC)) {
+        // The app draws PNG and JPEG, not .ico: macOS converts it.
+        const converted = await exec("sips", ["-s", "format", "png", partial, "--out", path]);
+        await drop();
+        return converted.code ? null : path;
+      }
+      await exec("mv", ["-f", partial, path]);
+      return path;
+    } catch {
+      await drop();
+      return null;
+    }
+  }
+
   onKey(event, cx) {
     if (this.typing) return false;
     const key = String(event.key ?? "");
@@ -1166,6 +1478,319 @@ export default class AgentManager extends View {
     return rowView(this, row, t, last);
   }
 
+  // The Model providers page: a back arrow, a title and the card, nothing else.
+  providersView() {
+    const t = theme();
+    return v_flex()
+      .id("am-root")
+      .size_full()
+      .min_h(0)
+      .overflow_hidden()
+      .bg(t.background)
+      .text_size(12)
+      .child(
+        h_flex()
+          .w_full()
+          .max_w(760)
+          .mx_auto()
+          .px(24)
+          .pt(20)
+          .pb(12)
+          .items_center()
+          .gap(8)
+          .child(
+            div()
+              .id("am-back")
+              .size(28)
+              .flex_none()
+              .flex()
+              .items_center()
+              .justify_center()
+              .rounded(6)
+              .text_color(t.muted)
+              .cursor_pointer()
+              .hover((s) => s.bg(t.hover).text_color(t.foreground))
+              .role("button")
+              .accessibility_label("Back to terminals")
+              .tooltip("Back to terminals")
+              .on_click(() => run("layout.select", { stack: "main", child: TERMINALS_PAGE }))
+              .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
+          )
+          .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Model providers")),
+      )
+      .child(
+        v_flex()
+          .id("am-providers")
+          .w_full()
+          .min_h(0)
+          .flex_1()
+          .overflow_y_scrollbar()
+          .child(v_flex().w_full().max_w(760).mx_auto().px(24).pb(24).child(this.modelProvidersCard(t))),
+      );
+  }
+
+  // One saved provider, or the one being added (`card.id` is null): a header that opens an editor.
+  providerCard(card, t) {
+    const record = card.id ? this.providers[card.id] : null;
+    const info = linkInfo(card.link.value());
+    const preview = card.fetched.path ? { icon: iconSrc(card.fetched.path) } : { icon: "mods/orca-agent-manager/hard-drive.svg", tint: true };
+    const tone = card.status?.tone === "blocked" ? t.blocked : card.status?.tone === "done" ? t.done : t.muted;
+    const field = (id, label, state, extra) =>
+      v_flex()
+        .id(id)
+        .flex_1()
+        .min_w(170)
+        .gap(4)
+        .child(div().text_size(10).font_semibold().text_color(t.dim).child(label))
+        .child(
+          h_flex()
+            .w_full()
+            .h(32)
+            .px(8)
+            .gap(6)
+            .items_center()
+            .rounded(6)
+            .border_1()
+            .border_color(t.input)
+            .bg(t.background)
+            .when(extra?.before, (el) => el.child(extra.before))
+            .child(Input.new(state).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"))
+            .when(extra?.after, (el) => el.child(extra.after)),
+        );
+    const keyField =
+      record && !card.replacing
+        ? v_flex()
+            .id(`am-key-${card.id}`)
+            .flex_1()
+            .min_w(170)
+            .gap(4)
+            .child(div().text_size(10).font_semibold().text_color(t.dim).child("API KEY"))
+            .child(
+              h_flex()
+                .w_full()
+                .h(32)
+                .px(8)
+                .gap(6)
+                .items_center()
+                .rounded(6)
+                .border_1()
+                .border_color(t.input)
+                .bg(t.background)
+                .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child(keyHint(record.apiKey)))
+                .child(
+                  this.button(`am-key-replace-${card.id}`, "Replace", t, (_event, cx) => {
+                    card.replacing = true;
+                    cx.notify();
+                  }, { height: 22, px: 8, color: t.muted }),
+                ),
+            )
+        : field(`am-key-${card.id ?? "new"}`, "API KEY", card.key, {
+            after: div()
+              .id(`am-key-eye-${card.id ?? "new"}`)
+              .size(22)
+              .flex_none()
+              .flex()
+              .items_center()
+              .justify_center()
+              .rounded(5)
+              .cursor_pointer()
+              .hover((s) => s.bg(t.hover))
+              .role("button")
+              .accessibility_label(card.reveal ? "Hide key" : "Show key")
+              .tooltip(card.reveal ? "Hide key" : "Show key")
+              .on_click((_event, cx) => {
+                card.reveal = !card.reveal;
+                card.key.set_masked(!card.reveal);
+                cx.notify();
+              })
+              .child(svg(card.reveal ? "mods/orca-agent-manager/eye-off.svg" : "mods/orca-agent-manager/eye.svg").size(14).text_color(t.muted)),
+          });
+    const preset = presetFor(card.host.value());
+    const offer =
+      preset && (card.name.value().trim() === "" || card.link.value().trim() === "")
+        ? h_flex()
+            .gap(8)
+            .items_center()
+            .child(div().text_size(11).text_color(t.dim).child("Looks like"))
+            .child(
+              div()
+                .id(`am-offer-${card.id ?? "new"}`)
+                .px(8)
+                .py(2)
+                .rounded(99)
+                .border_1()
+                .border_color(t.accent)
+                .text_size(11)
+                .text_color(t.accent)
+                .cursor_pointer()
+                .hover((s) => s.bg(t.hover))
+                .on_click((_event, cx) => {
+                  if (card.name.value().trim() === "") card.name.set_value(preset.name);
+                  if (card.link.value().trim() === "") card.link.set_value(preset.link);
+                  this.linkChanged(card, cx);
+                })
+                .child(`${preset.name} · ${preset.link.replace("https://", "")}`),
+            )
+        : null;
+    const title = record?.name ?? "New provider";
+    const saved = record ? String(record.host ?? "").replace(/^https?:\/\//, "") : "";
+    return v_flex()
+      .id(`am-provider-${card.id ?? "new"}`)
+      .w_full()
+      .rounded(10)
+      .border_1()
+      .border_color(card.id ? t.border : t.accent)
+      .bg(t.raised)
+      .child(
+        h_flex()
+          .id(`am-provider-head-${card.id ?? "new"}`)
+          .w_full()
+          .p(10)
+          .gap(10)
+          .items_center()
+          .when(card.id, (el) =>
+            el.cursor_pointer().on_click((_event, cx) => {
+              card.open = !card.open;
+              cx.notify();
+            }),
+          )
+          .child(icon(record?.iconPath ? { icon: iconSrc(record.iconPath) } : { icon: "mods/orca-agent-manager/hard-drive.svg", tint: true }, 32, t))
+          .child(
+            v_flex()
+              .flex_1()
+              .min_w(0)
+              .gap(1)
+              .child(div().text_size(13).font_medium().text_color(t.foreground).child(title))
+              .child(div().min_w(0).truncate().text_size(11).text_color(t.muted).child(saved || "Not saved yet")),
+          )
+          .when(record, (el) =>
+            el
+              .child(div().flex_none().text_size(11).text_color(t.muted).child(`${record.models?.length ?? 0} models`))
+              .child(div().flex_none().text_size(11).text_color(t.done).child(`● ${new Date(record.verifiedAt).toTimeString().slice(0, 5)}`))
+              .child(div().flex_none().text_size(11).text_color(t.dim).child(card.open ? "▾" : "▸")),
+          ),
+      )
+      .when(card.open || !card.id, (el) =>
+        el.child(
+          v_flex()
+            .w_full()
+            .p(12)
+            .gap(10)
+            .border_t(1)
+            .border_color(t.border)
+            .child(
+              h_flex()
+                .w_full()
+                .gap(8)
+                .flex_wrap()
+                .child(field(`am-name-${card.id ?? "new"}`, "NAME", card.name))
+                .child(field(`am-host-${card.id ?? "new"}`, "HOST", card.host)),
+            )
+            .when(offer, (inner) => inner.child(offer))
+            .child(
+              h_flex()
+                .w_full()
+                .gap(8)
+                .flex_wrap()
+                .child(keyField)
+                .child(
+                  field(`am-link-${card.id ?? "new"}`, "PROJECT LINK · OPTIONAL (NAME AND ICON)", card.link, {
+                    before: icon(preview, 20, t),
+                  }),
+                ),
+            )
+            .child(
+              div()
+                .text_size(10)
+                .text_color(t.dim)
+                .child(
+                  info.error
+                    ? ""
+                    : "A GitHub link gives the repo name and the owner's avatar; any other https link gives its site name and favicon. The icon is downloaded once.",
+                ),
+            )
+            .child(
+              h_flex()
+                .w_full()
+                .gap(10)
+                .items_center()
+                .flex_wrap()
+                .child(
+                  this.button(`am-save-${card.id ?? "new"}`, card.testing ? "Testing…" : "Test and save", t, (_event, cx) => this.saveCard(card, cx), {
+                    height: 26,
+                    px: 12,
+                    color: t.accent,
+                    disabled: card.testing,
+                  }),
+                )
+                .when(!card.id, (inner) =>
+                  inner.child(
+                    this.button("am-cancel-new", "Cancel", t, (_event, cx) => {
+                      if (card.testing) return;
+                      const path = ownedIcon(card.fetched.path);
+                      if (path) exec("rm", ["-f", path]).catch(() => {});
+                      this.adding = null;
+                      cx.notify();
+                    }, { height: 26, px: 10, color: t.muted, disabled: card.testing }),
+                  ),
+                )
+                .when(card.status, (inner) => inner.child(div().flex_1().min_w(120).text_size(11).text_color(tone).child(card.status.text)))
+                .when(!card.status, (inner) => inner.child(div().flex_1()))
+                .when(card.id, (inner) =>
+                  inner.child(this.button(`am-delete-${card.id}`, "Delete", t, (_event, cx) => this.deleteProvider(card, cx), { height: 26, px: 10, color: t.blocked, disabled: card.testing })),
+                ),
+            ),
+        ),
+      );
+  }
+
+  /** The providers: a card for each saved one, then a dashed card that starts a new one. */
+  modelProvidersCard(t) {
+    const cards = [...this.cards.values()];
+    return v_flex()
+      .w_full()
+      .gap(10)
+      .when(this.providersError, (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.providersError)))
+      .when(cards.length === 0 && !this.adding, (el) =>
+        el.child(
+          div()
+            .text_size(12)
+            .line_height("18px")
+            .text_color(t.muted)
+            .child("Codex can start against a model server you run, such as oMLX. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user."),
+        ),
+      )
+      .children(cards.map((card) => this.providerCard(card, t)))
+      .when(this.adding, (el) => el.child(this.providerCard(this.adding, t)))
+      .when(!this.adding, (el) =>
+        el.child(
+          h_flex()
+            .id("am-provider-add")
+            .w_full()
+            .h(44)
+            .gap(8)
+            .items_center()
+            .justify_center()
+            .rounded(10)
+            .border_1()
+            .border_dashed()
+            .border_color(t.border)
+            .text_size(12)
+            .text_color(t.muted)
+            .cursor_pointer()
+            .hover((s) => s.border_color(t.accent).text_color(t.accent))
+            .role("button")
+            .accessibility_label("Add provider")
+            .on_click((_event, cx) => {
+              this.adding = this.makeCard(null, null);
+              this.adding.open = true;
+              cx.notify();
+            })
+            .child("＋ Add provider"),
+        ),
+      );
+  }
+
   /** The all-agents permission: one choice, plus the agents that keep their own. */
   permissionsCard(rows, t) {
     const permissions = this.currentPermissions();
@@ -1311,6 +1936,7 @@ export default class AgentManager extends View {
   }
 
   render(cx) {
+    if (this.providersPage) return this.providersView();
     const t = theme();
     const split = this.allRows();
     const rows = split.all;
