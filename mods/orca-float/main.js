@@ -18,7 +18,7 @@
 // (window/floats.rs:187,198).
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, run, theme, nextCommand, keys, setShared, openOverlay } from "herdr";
+import { agents, run, theme, nextCommand, keys, setShared, openOverlay, spaces } from "herdr";
 
 // Orca's DEFAULT_PANEL_WIDTH/HEIGHT, MIN_PANEL_WIDTH/HEIGHT and viewport clamp
 // (`floating-terminal-panel-bounds.ts:1-4,89-90`).
@@ -163,7 +163,7 @@ export default class FloatWorkspace extends View {
     // hides the float, which would otherwise cover it. New Markdown / New Browser are not
     // offered: Herdr has neither content type.
     const chordOf = (action) => (keys() ?? []).find((k) => k.action === action)?.keys ?? "";
-    const newTabChord = chordOf("tab.new"), toggleChord = chordOf("orca-float.toggle");
+    const newTabChord = chordOf("orca-tabs.new-tab"), toggleChord = chordOf("orca-float.toggle");
     // Its fifth row, Minimize (`:120-129`, `onClose`), is the header ×'s hide, so it is kept.
     // The first row is the empty message: Orca has no such row, but a list with nothing in it
     // has to say so.
@@ -175,7 +175,12 @@ export default class FloatWorkspace extends View {
         .child(h_flex().id("orca-float-new").h(32).w_full().px(12).gap(10).rounded(6).items_center()
           .cursor_pointer().hover((s) => s.bg(t.hover))
           .role("button").accessibility_label("New terminal")
-          .on_click((_e, cx) => { run("tab.new"); this.setOpen(false, cx); })
+          .on_click((_e, cx) => {
+            // Same pinned working directory as ⌘T and the "+" menu (docs/plan-tab-cwd.md).
+            const space = spaces().find((s) => s.active);
+            run("tab.new", space ? { space: space.id, ...(space.folder ? { folder: space.folder } : {}) } : {});
+            this.setOpen(false, cx);
+          })
           .child(div().flex_none().opacity(0.9).text_color(t.foreground).child(svg("mods/orca-float/terminal-square.svg").size(14)))
           .child(div().flex_1().min_w(0).truncate().text_size(14).line_height("14px").text_color(t.foreground).child("New Terminal"))
           .when(Boolean(newTabChord), (el) => el.child(div().flex_none().text_size(10).line_height("12px").opacity(0.9).text_color(t.foreground).child(newTabChord))))
