@@ -14,6 +14,15 @@
     以及 `orca-files`、`orca-changes`、`orca-agents`、`orca-panel-gap`、`skillshare` 五個
     panel mod 的 `render()` 包一層。`orca-tabs` 發佈 `shared("panel.openPx")`，並在
     `measurePanel` 開啟時寫 `/tmp/panel-native-<t>.json`。
+    動畫期間 `main` 與左側欄一樣被釘住（`Drawer` 的 `pin`），由 `work-body` 裁切，所以終端機
+    在動畫中不重排、只在結尾 reflow 一次——見 D6。
+*   **D6 兩側的底層效果必須相同（2026-11-23 由作者再次確認）。** 作者回報右側滑動方向正確但
+    **會閃爍**；左側不閃，因為它把 `main` 釘住。右側在 eecd76e 曾刻意拿掉釘寬與蓋層，於是
+    每一幀都 `layout.resize` → PTY 每一幀 reflow（實測一次開關 20+ 個 `size` events，欄數
+    105→135→105），畫面就是閃。修法：把左側那兩層原樣搬回右側——(1) `Drawer.pin` 回來，
+    `main` 在動畫中固定寬度、由 `work-body` 裁切（實測一次開關只剩 1 個 `size` event）；
+    (2) `panelFrame()` 回到「固定開啟寬 + 28px 位移 + 同色平塗蓋層」的鏡像，位移方向改成
+    往右（往 panel 不動的右緣出去）。看得到的仍然是「工作區右緣在移動、panel 從後面露出來」。
 *   **D2 31px 圖示列（`orca-panel-head`）暫不包。** 作者的描述是「按下去後，icon 左邊出現
     一組關於這個右側欄子畫面的操作」——那是新的互動（每個子畫面的操作群組），不是這次滑動
     的一部分。待作者確認範圍後再決定它要不要一起滑（Q2 改寫如下）。
@@ -180,8 +189,8 @@ host 給 transform，要嘛是 host 自己用原生版面動畫移動節點。�
     固定為原生（並在文件裡寫明）？
 *   **Q4：tab strip 在 panel 動畫中會不會跳？** `viewportWidth` 每幀改變 → `clampTabStripScroll`。
     需要一次「strip 捲到右端 + 開關 panel」的實測。
-*   **Q5：panel 動畫時 PTY 真的只 reflow 一次嗎？** 左側欄量過（35 → 2 次），panel 沒量過。
-    這是選項 A/B 的共同前提。
+*   **Q5：panel 動畫時 PTY 真的只 reflow 一次嗎？** 已量（2026-11-23）：釘寬時一次開關只有
+    1 個 `size` event（欄數直接從 105 → 64），不釘寬時 20+ 個。左側欄是 35 → 2 次。
 *   **Q6：卡片內縮的幾何會不會撞到「第一顆 tab 貼齊卡片左上角」？** `flushable()` 的判定
     依賴卡片左緣 = 側邊欄右緣；卡片若同時往內縮，左緣與右緣的位移量不同，flare 與圓角的
     視覺會不對稱。
@@ -244,7 +253,8 @@ Tabs.render() 消費旗標 ──▶ togglePanelNative(cx)
 
 `shared/panel-motion.js` + 五個 panel mod 的 `render()` 包一層；`orca-tabs` 發佈
 `shared("panel.openPx")`、`measurePanel` 取樣、`drawer.js` 一台動畫機；`keys.json` 四個鍵改
-走動畫。全部已複製到 `~/.config/herdr-app`，六個 mod `herdr-app check` 通過，
+走動畫。panel 的 `Drawer` 現在帶 `pin`（與左側同一個 `releaseNativePin`），所以上圖的「終端機
+被釘住，只被裁切」成立。全部已複製到 `~/.config/herdr-app`，六個 mod `herdr-app check` 通過，
 `herdr-app status` 的 `errors` 為空。
 
 ### 選項 B 的增量（原始提案，供對照）

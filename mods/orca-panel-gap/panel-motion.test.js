@@ -33,18 +33,18 @@ test("leaves the content alone at the open width, with no shared width, or in an
   clear();
 });
 
-test("a narrowing panel keeps its content at the open width, clipped on the left and unfaded", () => {
+test("a narrowing panel keeps the open width, slides the content out and covers it", () => {
   const content = inner();
-  at(350, 175);
+  at(350, 175); // k = 0.5
   const frame = panelFrame(content).__node;
   assert.deepEqual(frame.c.slice(0, 3), [["size_full", []], ["overflow_hidden", []], ["relative", []]]);
-  const children = frame.c.filter(([name]) => name === "child");
-  // One child: the content itself. No cover, no shift — the work area's edge is the only thing moving.
-  assert.equal(children.length, 1);
-  const innerFrame = children[0][1][0];
+  const [innerFrame, cover] = frame.c.filter(([name]) => name === "child").map(([, args]) => args[0]);
   const calls = innerFrame.c.map(([name, args]) => [name, args[0]]);
+  // Fixed at the open width, anchored to the panel's right edge and shifted 28px * (1-k) further out.
   assert.deepEqual([calls[0], calls[1][0]], [["w", 350], "h_full"]);
-  assert.deepEqual(calls.find(([name]) => name === "left"), ["left", 175]); // px - open
+  assert.deepEqual(calls.find(([name]) => name === "left"), ["left", -161]);
   assert.deepEqual(innerFrame.c.find(([name]) => name === "child")[1], [content]);
+  // clamp(1 - (k-.15)/.85) at k=0.5 is 0.588 -> alpha 0x96, in the panel's own colour.
+  assert.deepEqual(cover.c.find(([name]) => name === "bg")[1], ["#17171796"]);
   clear();
 });
