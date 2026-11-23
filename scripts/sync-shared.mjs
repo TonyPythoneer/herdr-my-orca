@@ -13,6 +13,7 @@ export const USES = {
   "review-store.js": ["orca-spaces"],
   "codex-provider.js": ["agent-config", "orca-agent-manager"],
   "agent-flyout.js": ["agent-config", "orca-new-menu"],
+  "list-viewport.js": ["agent-config", "orca-agent-manager"],
 };
 const header = (name) => `// Generated from shared/${name} by scripts/sync-shared.mjs. Edit that file, not this copy.\n`;
 

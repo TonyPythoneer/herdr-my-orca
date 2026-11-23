@@ -104,7 +104,7 @@ export const SPECS = {
       provider: { type: "provider", label: "MODEL PROVIDER" },
       model: { type: "model", label: "MODEL", argv: ["-m", "{v}"] },
       effort: { type: "effort", label: "EFFORT", argv: ["-c", "model_reasoning_effort={v}"], omit: ["", null] },
-      codexOff: { type: "checklist", label: "DISABLE", bulk: true, items: [...CODEX_ITEMS, { id: "mcp", expand: "codexMcp" }], list: 6 },
+      codexOff: { type: "checklist", label: "DISABLE", bulk: true, items: [...CODEX_ITEMS, { id: "mcp", expand: "codexMcp" }] },
     },
     launch: ["model", "effort", "codexOff"],
     ui: {
@@ -155,7 +155,7 @@ export const SPECS = {
     options: {
       model: { type: "model", label: "MODEL", argv: ["--model", "{v}"] },
       effort: { type: "effort", label: "THINKING", argv: ["--thinking", "{v}"], omit: [""] },
-      off: { type: "checklist", label: "TURN OFF", bulk: true, items: PI_ITEMS, list: 4 },
+      off: { type: "checklist", label: "TURN OFF", bulk: true, items: PI_ITEMS },
       systemPrompt: { type: "editor", label: "Append system prompt", default: "", argv: ["--append-system-prompt", "{v}"] },
     },
     launch: ["model", "effort", "off", "systemPrompt"],

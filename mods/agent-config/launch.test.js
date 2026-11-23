@@ -153,13 +153,27 @@ test("the launch remembers the provider model in the provider's own record", asy
 const t = new Proxy({}, { get: (_t, key) => `#${String(key)}` });
 const text = (node) => JSON.stringify(node.__node ?? node);
 
-test("zero providers: the Model provider row is greyed out and shows None", () => {
+test("zero providers: the row shows None and still opens, for Add More; on another machine it is greyed out", () => {
   const { view } = flyout({ providers: {} });
   const row = text(view.providerRow(t));
   assert.ok(row.includes("MODEL PROVIDER"));
   assert.ok(row.includes('"None"'));
-  assert.ok(row.includes('["opacity",[0.5]]'), "the row is dimmed");
-  assert.equal(row.includes("on_click"), false, "nothing to choose: the row must not open");
+  assert.equal(row.includes('["opacity",[0.5]]'), false);
+  assert.ok(row.includes("on_click"));
+  const remote = flyout({ providers: {}, machine: "m1" }).view;
+  const dim = text(remote.providerRow(t));
+  assert.ok(dim.includes('["opacity",[0.5]]'), "the row is dimmed");
+  assert.equal(dim.includes("on_click"), false, "a remote space has nothing to choose");
+});
+
+test("the provider list ends with Add More, which opens the Model providers page and closes the menu", () => {
+  const { view, runs } = flyout({ providers: { omlx: record() } });
+  const list = text(view.providerList(t));
+  assert.ok(list.includes("Add More") && list.includes("plus.svg"));
+  assert.ok(list.indexOf("oMLX") < list.indexOf("Add More"));
+  globalThis.__herdrProps = () => ({ key: "codex", space: "s1", overlay: "o1", menu: "m1" });
+  view.openProviders();
+  assert.deepEqual(runs.at(-1), ["layout.select", { stack: "main", child: "main-providers" }]);
 });
 
 test("a saved provider is selectable, and its models hide the EFFORT select", () => {

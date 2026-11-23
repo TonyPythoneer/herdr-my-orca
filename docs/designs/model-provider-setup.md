@@ -20,7 +20,7 @@ v1 supports Codex only. Several providers can be saved; each is one record with 
 *   **D2 Storage**: one plain JSON file, `appHome()/model-providers.json`, mode 0600. It holds the host, the API key, the project link, the icon path, the model list, and the verified time. No Keychain, no pipes. This follows how pi (`~/.pi/agent/models.json`) and opencode (`~/.config/opencode/opencode.jsonc`) already store oMLX settings.
 *   **D3 Accepted risk**: the key is readable by any process running as the same user. It is also visible in the Codex session files if the environment is captured (see Risks). The author accepted this.
 *   **D4 Setup location**: its own "Model providers" page in the main stack (`main-providers`, the hard-drive button in the sidebar footer), drawn by `mods/orca-agent-manager` with `props.page = "providers"`. The page is a list of provider cards plus a dashed "Add provider" card. A card opens into an editor (name, host, key, project link, Test and save, Delete).
-*   **D5 Flyout row**: the Codex flyout (`mods/agent-config`) gets a "Model provider" dropdown directly under the "Codex" title, then a divider, then MODEL and EFFORT. The row is greyed out and shows `None` when no provider has passed its test.
+*   **D5 Flyout row**: the Codex flyout (`mods/agent-config`) gets a "Model provider" dropdown directly under the "Codex" title, then a divider, then MODEL and EFFORT. The row shows `None` until a provider is chosen. Its list ends with an "Add More" row (plus icon) that opens the Model providers page and closes the menu and flyout, so it works with no provider saved.
 *   **D6 Name and icon from one project link** (optional). A GitHub link names the provider by its repo and takes the owner's avatar (`https://github.com/<owner>.png?size=64`). Any other https link names it by its site and takes `<origin>/favicon.ico` (converted to PNG with `sips`). The name field stays editable: a link only fills it while it is empty or still holds the earlier suggestion. The icon is downloaded once into `appHome()/provider-icons/icon-<unique>.png` and read from there; a new link fetches again when its field is left, or at save if that has not happened. No link, or a failed fetch, means the default drive icon. A well-known local port (8000, 11434) offers a name and link as a suggestion.
 *   **D7 Test**: `curl` with the key in an `Authorization` header, 5-second timeout. Passes on HTTP 200 with a non-empty `data` array. No timers, no polling.
 *   **D8 No `shell_snapshot`**: Codex is started with `--disable shell_snapshot`. Without it, Codex writes the environment, including `OMLX_API_KEY`, into `~/.codex/shell_snapshots/` as plain text (tested).
@@ -60,7 +60,7 @@ v1 supports Codex only. Several providers can be saved; each is one record with 
 
 ### CUJ 3: Zero providers
 
-*   **Then**: The Codex "Model provider" row is greyed out and shows `None`.
+*   **Then**: The Codex "Model provider" row shows `None`. Its list holds `None` and "Add More", which opens the Model providers page.
 
 ### CUJ 4: Launch Codex with oMLX
 
@@ -149,7 +149,7 @@ argv = [ "/bin/sh", "-c", WRAPPER, "--",
 4.  [oMLX, auto] After step 3: `ls ~/.codex/shell_snapshots` shows no new files, and no new session file under `~/.codex/sessions` contains the key.
 5.  [human] Launch from the flyout: the tab opens Codex with oMLX selected.
 6.  [auto] With `None`, the argv equals the argv from before the change.
-7.  [auto] Zero providers: row greyed out.
+7.  [auto] Zero providers: the row shows `None` and opens a list with Add More; Add More opens the Model providers page.
 8.  [auto] Delete: record removed, icon removed, row shows `None`.
 
 ## Implementation Files

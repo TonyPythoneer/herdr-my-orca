@@ -8,12 +8,11 @@
 // The flyout is sticky: it stays after the pointer leaves and closes on launch.
 
 import { View, div, image, svg } from "gpui-kit";
-import { v_flex, h_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
+import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
 import { PROVIDER_FILE, launchArgv, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
+import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
-
-const CODEX_ROW_H = 24;
 
 // Only servers in config.toml: `-c mcp_servers.<name>.enabled=false` on a plugin-provided server
 // (no config.toml entry) leaves an incomplete table and codex refuses to start.
@@ -32,11 +31,6 @@ const BUILTIN_STYLES = ["default", "Explanatory", "Learning"];
 const NEW_STYLE = "+ New style…";
 const styleDir = () => `${home()}/.claude/output-styles`;
 const styleTemplate = (name) => `---\nname: ${name}\ndescription: Describe this output style\n---\n\nYou are an interactive CLI tool that helps users with software engineering tasks.\n`;
-// modelRow is 30px high and the list gap is 2px, so N rows take N * 30 + (N - 1) * 2 px. The
-// list is capped at MODEL_ROWS rows worth of height (MODEL_LIST_H below): beyond that the rest scroll.
-const MODEL_ROWS = 10;
-const rowsH = (n) => n * 30 + (n - 1) * 2;
-const MODEL_LIST_H = rowsH(MODEL_ROWS);
 // Bump when the cached model shape changes (opencode gained providers/groups).
 const CATALOG_SCHEMA = 2;
 // Reuse a cache for ten minutes; the CLI and the upstream list are checked again after that.
@@ -529,7 +523,7 @@ export default class AgentConfig extends View {
     this.remember();
     // Launch uses the live editor text and never writes it; editors stay manual save.
     // argv elements, not shell words: no quotes around the JSON or the prompt.
-    if (this.spec.wrap?.after === "opencodeVariant") this.rememberVariant();
+    if (this.spec.wrap?.after === "opencodeVariant") await this.rememberVariant();
     run("tab.new", { space: p.space, argv: built.argv });
     setShared("agent-config", null);
     closeOverlay(p.overlay);
@@ -554,17 +548,8 @@ export default class AgentConfig extends View {
   modelRow(m, t) {
     const on = this.model === m.id;
     const hidden = this.hidden.has(m.id);
-    return h_flex()
-      .id(`model-${m.id}`)
-      .h(30)
+    return this.listRow(`model-${m.id}`, t)
       .flex_none()
-      .mx(6)
-      .px(10)
-      .gap(8)
-      .rounded(7)
-      .items_center()
-      .cursor_pointer()
-      .hover((s) => s.bg(t.hover))
       .on_click((_e, cx) => {
         this.choose(m, this.effort);
         this.open = null;
@@ -596,12 +581,12 @@ export default class AgentConfig extends View {
     return h_flex()
       .id("model-group")
       .w(80)
-      .h(26)
+      .h(ROW.height)
       .px(8)
       .gap(6)
       .items_center()
       .justify_between()
-      .rounded(6)
+      .rounded(ROW.radius)
       .border_1()
       .border_color(this.groupOpen ? t.ring : t.input)
       .bg(t.raised)
@@ -623,14 +608,27 @@ export default class AgentConfig extends View {
     const hiddenModels = all.filter((m) => this.hidden.has(m.id));
     // Rows actually rendered: visible plus (if expanded) hidden ones; the hidden heading counts
     // as a row whenever anything is hidden, so a list of only hidden models cannot collapse to
-    // zero height and hide the way back. The box gets a definite height — gpui sizes a
-    // content-based flex item to its content and does not clamp it to max-height, so max_h(..)
-    // alone lets every model render with no scrollbar. Fewer than MODEL_ROWS rows set the box
-    // to their exact height (nothing blank below them); more cap and the rest scroll.
-    const shownRows = visible.length
-      + (hiddenModels.length > 0 ? 1 : 0)
-      + (this.showHidden ? hiddenModels.length : 0);
-    const listH = shownRows === 0 ? 0 : Math.min(rowsH(shownRows), MODEL_LIST_H);
+    // zero height and hide the way back. scrollList gives it its height (list-viewport.js).
+    const rows = [
+      ...visible.map((m) => this.modelRow(m, t)),
+      ...(hiddenModels.length > 0
+        ? [
+            div()
+              .id("hidden-section")
+              .px(14)
+              .pt(6)
+              .text_size(11)
+              .text_color(t.dim)
+              .cursor_pointer()
+              .on_click((_e, cx) => {
+                this.showHidden = !this.showHidden;
+                cx.notify();
+              })
+              .child("-- hidden --"),
+            ...(this.showHidden ? hiddenModels.map((m) => this.modelRow(m, t)) : []),
+          ]
+        : []),
+    ];
     return v_flex()
       .gap(2)
       .when(this.groupOption(), (el) => el
@@ -638,7 +636,7 @@ export default class AgentConfig extends View {
           h_flex()
             .mx(6)
             .mb(2)
-            .h(28)
+            .h(ROW.height)
             .px(4)
             .gap(8)
             .items_center()
@@ -654,15 +652,8 @@ export default class AgentConfig extends View {
             .border_1()
             .border_color(t.border)
             .bg(t.popover)
-            .children(this.groupOption().groups.map((g) =>
-              h_flex()
-                .id(`group-${g.id}`)
-                .h(26)
-                .px(10)
-                .gap(8)
-                .items_center()
-                .cursor_pointer()
-                .hover((s) => s.bg(t.hover))
+            .child(this.scrollList("group-list", this.groupOption().groups.map((g) =>
+              this.listRow(`group-${g.id}`, t, 4)
                 .on_click((_e, cx) => {
                   this.modelGroup = g.id;
                   this.groupOpen = false;
@@ -671,37 +662,10 @@ export default class AgentConfig extends View {
                 })
                 .child(div().flex_1().text_size(12).text_color(t.foreground).child(g.label))
                 .when(this.modelGroup === g.id, (row) => row.child(div().text_color(t.accent).child("✓"))),
-            )),
+            ))),
         )),
       )
-      .child(
-        v_flex()
-          .id("agent-config-models")
-          .h(listH)
-          .min_h(0)
-          .flex_shrink(1)
-          .overflow_y_scroll()
-          .gap(2)
-          .children(visible.map((m) => this.modelRow(m, t)))
-          .when(hiddenModels.length > 0, (el) =>
-            el
-              .child(
-                div()
-                  .id("hidden-section")
-                  .px(14)
-                  .pt(6)
-                  .text_size(11)
-                  .text_color(t.dim)
-                  .cursor_pointer()
-                  .on_click((_e, cx) => {
-                    this.showHidden = !this.showHidden;
-                    cx.notify();
-                  })
-                  .child("-- hidden --"),
-              )
-              .when(this.showHidden, (inner) => inner.children(hiddenModels.map((m) => this.modelRow(m, t)))),
-          ),
-      );
+      .child(this.scrollList("agent-config-models", rows));
   }
 
   // A provider's icon sits in a small tile: the file saved in this app's folder, else the default
@@ -724,7 +688,8 @@ export default class AgentConfig extends View {
     const ids = Object.keys(this.providers ?? {});
     const space = spaces().find((candidate) => candidate.id === props()?.space) ?? spaces().find((candidate) => candidate.active);
     const remote = Boolean(space?.machine);
-    const enabled = ids.length > 0 && !remote;
+    // With none saved the select still opens, for its "Add More" row.
+    const enabled = !remote;
     const label = this.providerId === "none" ? "None" : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
       .gap(4)
@@ -738,9 +703,9 @@ export default class AgentConfig extends View {
           .tooltip(
             remote
               ? "A model provider is set up on this computer only"
-              : enabled
+              : ids.length > 0
                 ? "Choose which model source Codex starts with"
-                : "Set up a model provider in Agent Settings",
+                : "Add a model provider",
           )
           .child(
             this.selectBox("provider-select", "MODEL PROVIDER", label, this.open === "provider" && enabled, (cx) => this.toggle("provider", cx), t, null, null, !enabled),
@@ -766,40 +731,34 @@ export default class AgentConfig extends View {
       { id: "none", label: "None" },
       ...Object.entries(this.providers ?? {}).map(([id, record]) => ({ id, label: record?.name ?? id })),
     ];
-    return v_flex().children(
+    return this.scrollList("provider-list",
       options.map((option) =>
-        h_flex()
-          .id(`provider-${option.id}`)
-          .h(30)
-          .mx(6)
-          .px(10)
-          .gap(8)
-          .items_center()
-          .rounded(7)
-          .cursor_pointer()
-          .hover((s) => s.bg(t.hover))
+        this.listRow(`provider-${option.id}`, t)
           .on_click((_e, cx) => this.setProvider(option.id, cx))
-          .when(this.providerId === option.id, (el) => el.bg(t.hover))
           .child(this.providerIcon(option.id === "none" ? null : this.providers[option.id], t))
           .child(div().flex_1().min_w(0).truncate().child(option.label))
           .when(this.providerId === option.id, (el) => el.child(div().flex_none().text_color(t.accent).child("✓"))),
-      ),
-    );
+      ).concat(
+        // The way to a new provider: the Model providers page, with this menu and flyout closed.
+        this.listRow("provider-add", t)
+          .on_click(() => this.openProviders())
+          .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/agent-config/plus.svg").size(13).text_color(t.muted)))
+          .child(div().flex_1().min_w(0).truncate().child("Add More")),
+      ));
+  }
+
+  openProviders() {
+    const p = props();
+    run("layout.select", { stack: "main", child: "main-providers" });
+    setShared("agent-config", null);
+    closeOverlay(p.overlay);
+    closeOverlay(p.menu);
   }
 
   effortList(t) {
-    return v_flex().children(
+    return this.scrollList("effort-list",
       (this.current()?.efforts ?? []).map((e) =>
-        h_flex()
-          .id(`effort-${e}`)
-          .h(28)
-          .mx(6)
-          .px(10)
-          .gap(8)
-          .items_center()
-          .rounded(6)
-          .cursor_pointer()
-          .hover((s) => s.bg(t.hover))
+        this.listRow(`effort-${e}`, t)
           .on_click((_e, cx) => {
             this.effort = e;
             this.open = null;
@@ -808,8 +767,42 @@ export default class AgentConfig extends View {
           })
           .child(div().flex_1().child(EFFORT_LABEL[e] ?? e))
           .when(this.effort === e, (el) => el.child(div().text_color(t.accent).child("✓"))),
-      ),
-    );
+      ));
+  }
+
+  // The one look of a list row (ROW in list-viewport.js): the same height, radius, padding, gap,
+  // text size and hover in every list. Only what a row holds differs: an icon tile, a label, a
+  // check or a checkbox. `inset` is the space to the list's edge.
+  listRow(id, t, inset = 6) {
+    return h_flex()
+      .id(id)
+      .h(ROW.height)
+      .mx(inset)
+      .px(ROW.padX)
+      .gap(ROW.innerGap)
+      .items_center()
+      .rounded(ROW.radius)
+      .text_size(ROW.text)
+      .cursor_pointer()
+      .hover((s) => s.bg(t.hover));
+  }
+
+  // A list of rows under the shared rule (list-viewport.js): as tall as its rows up to five, then five
+  // and a half rows with a scrollbar, drawn like the Agent Settings lists. A definite height is
+  // needed because gpui does not clamp a content-sized flex item to max-height; the rows sit in an
+  // absolutely placed scroller inside it. The wheel stops at the list so the popup does not move.
+  scrollList(id, rows) {
+    const { height, gap } = ROW;
+    if (!scrolls(rows.length)) return v_flex().w_full().gap(gap).children(rows);
+    return div()
+      .w_full()
+      .flex_none()
+      .relative()
+      .overflow_hidden()
+      .h(viewportHeight(rows.length, height, gap))
+      .on_scroll_wheel((_e, cx) => cx.stop_propagation())
+      .child(v_flex().id(id).w_full().absolute().inset_0().overflow_y_scroll().gap(gap).children(rows))
+      .child(Scrollbar.vertical(id).absolute().inset_0());
   }
 
   selectBox(id, label, value, open, onToggle, t, valueEl = null, borderColor = null, disabled = false) {
@@ -837,23 +830,13 @@ export default class AgentConfig extends View {
   }
 
   optionList(id, options, current, onPick, t) {
-    return v_flex().children(
+    return this.scrollList(`${id}-list`,
       options.map((name) =>
-        h_flex()
-          .id(`${id}-${name}`)
-          .h(28)
-          .mx(6)
-          .px(10)
-          .gap(8)
-          .items_center()
-          .rounded(6)
-          .cursor_pointer()
-          .hover((s) => s.bg(t.hover))
+        this.listRow(`${id}-${name}`, t)
           .on_click((_e, cx) => onPick(name, cx))
           .child(div().flex_1().child(name))
           .when(name === current, (el) => el.child(div().text_color(t.accent).child("✓"))),
-      ),
-    );
+      ));
   }
 
   // One select list is open at a time, inline below its row.
@@ -925,30 +908,19 @@ export default class AgentConfig extends View {
           .child(div().flex_1().text_size(9).text_color(t.dim).child(option.label))
           .when(option.bulk, (el) => el.child(link(`${id}-all`, "all", true)).child(link(`${id}-clear`, "clear", false))),
       )
-      // Definite height: gpui does not clamp a content-sized flex item to max-height (see models list).
       .child(
-        v_flex().id(`${id}-list`).h((option.list ?? 6) * (CODEX_ROW_H + 2)).min_h(0).flex_shrink(1).overflow_y_scroll().gap(2).children(
+        this.scrollList(`${id}-list`,
           option.items.map((item) => {
             const checked = on.has(item.id);
-            return h_flex()
-              .id(`${id}-${item.id}`)
-              .h(CODEX_ROW_H)
+            return this.listRow(`${id}-${item.id}`, t, 0)
               .flex_shrink(0)
-              .px(8)
-              .gap(6)
-              .items_center()
-              .rounded(6)
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover))
-              .text_size(11)
               .on_click((_e, cx) => this.toggleItem(id, item.id, cx))
               .child(
                 div().size(14).flex_none().flex().items_center().justify_center().rounded(3).border_1()
                   .border_color(checked ? t.accent : t.muted).text_size(10).text_color(t.accent).child(checked ? "✓" : ""),
               )
               .child(item.label ?? item.id);
-          }),
-        ),
+          })),
       );
   }
 
