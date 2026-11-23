@@ -5,6 +5,7 @@ import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile, nextCommand } from "herdr";
 import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
+import { sidebarEase } from "./sidebar-motion.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { UNOFFICIAL_APPS, unofficialByTerminal } from "./unofficial-apps.js";
 import {
@@ -384,7 +385,7 @@ export default class Tabs extends View {
     // the button. Only the unified header listens, so overlay copies never toggle twice.
     if (props()?.unified) cx.spawn(async (cx) => {
       for (;;) {
-        if (await nextCommand() === "toggle-sidebar") { this.wantToggle = true; cx.notify(); }
+        if (await nextCommand() === "toggle-sidebar") { this.wantToggle = (this.wantToggle ?? 0) + 1; cx.notify(); }
       }
     });
   }
@@ -529,6 +530,7 @@ export default class Tabs extends View {
   // (measured), not per step. Collapse ends with `hide` and puts the open width back while hidden,
   // so the next `show` returns at that width; expand starts from 1px while hidden.
   toggleSidebar(cx) {
+    if (props()?.motion === "native") return this.toggleSidebarNative(cx);
     const sb = find(layout(), "sidebar");
     const hidden = Boolean(sb?.hidden);
     const open = this.sbOpenPx > 0 ? this.sbOpenPx : 259;
@@ -538,6 +540,7 @@ export default class Tabs extends View {
     this.sbBusy = true; this.sbGoal = target;
     cx.spawn(async (cx) => {
       await cx.sleep(1); // leave the render phase: notify() is only legal from a task
+      if (token !== this.sbToken) return;
       // Read the node live: a press can land in the tail of a collapse (hide already sent) or in the
       // preamble of an expand (show not yet applied), and `hidden` above may be a frame stale.
       const nowHidden = () => Boolean(find(layout(), "sidebar")?.hidden);
@@ -552,13 +555,16 @@ export default class Tabs extends View {
       const d = Math.abs(target - from);
       const dur = (320 + 120 * d) * (0.5 + 0.5 * d) + 60;
       const t0 = Date.now();
+      const motion = props()?.motion === "layout" ? "layout" : "smooth";
+      const samples = props()?.measureSidebar ? [] : null;
       let lastPx = -1;
       for (;;) {
         const k = Math.min(1, (Date.now() - t0) / dur);
-        this.sbP = from + (target - from) * drawerEase(k);
+        this.sbP = from + (target - from) * (motion === "layout" ? drawerEase(k) : sidebarEase(k));
         const px = Math.max(1, Math.round(open * this.sbP));
         if (px !== lastPx) { // each resize repaints the terminals, so never send one that changes nothing
           lastPx = px;
+          if (samples) samples.push({ ms: Date.now() - t0, px });
           run("layout.resize", { id: "sidebar", px });
           if (target === 1 && nowHidden()) run("layout.show", { id: "sidebar" }); // the hide of a reversed collapse landed late
           cx.notify();
@@ -567,6 +573,7 @@ export default class Tabs extends View {
         await cx.sleep(SIDEBAR_STEP_MS);
         if (token !== this.sbToken) return;
       }
+      if (samples) writeTextFile(`/tmp/sidebar-motion-${t0}.json`, JSON.stringify({ motion, open, target, dur, samples }), null).catch(() => {});
       if (target === 0) {
         run("layout.hide", { id: "sidebar" });
         await cx.sleep(80);
@@ -575,6 +582,79 @@ export default class Tabs extends View {
       run("layout.resize", { id: "sidebar", px: open });
       setShared("sidebar.collapsed", target === 0);
       this.sbBusy = false; this.sbGoal = undefined;
+      cx.notify();
+    });
+  }
+
+  toggleSidebarNative(cx) {
+    const sidebar = find(layout(), "sidebar");
+    if (!this.sbBusy && !this.sbOpenPx && sidebar?.size?.px >= 120) this.sbOpenPx = sidebar.size.px;
+    const target = this.sbBusy ? 1 - this.sbGoal : (sidebar?.hidden ? 1 : 0);
+    const token = ++this.sbToken;
+    this.sbBusy = true;
+    this.sbGoal = target;
+    this.nativeActive = false;
+    this.nativeFinishing = false;
+    this.nativeLastPx = undefined;
+    this.nativeSamples = props()?.measureSidebar ? [] : null;
+    this.nativeStart = Date.now();
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.sbToken) return;
+      if (props()?.pinSidebarTerminal && !this.nativePinned && this.nativeHeaderWidth > 0) {
+        this.nativePinned = true;
+        run("layout.resize", { id: "main", px: this.nativeHeaderWidth / (settings()?.zoom || 1) });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+      }
+      if (target === 1 && find(layout(), "sidebar")?.hidden) {
+        run("layout.resize", { id: "sidebar", px: 1 });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+        run("layout.show", { id: "sidebar" });
+        await cx.sleep(50);
+        if (token !== this.sbToken) return;
+      }
+      this.nativeActive = true;
+      this.nativeWidth = (target ? (this.sbOpenPx || 259) : 1) / (settings()?.zoom || 1);
+      cx.notify();
+      await cx.sleep(650);
+      if (token === this.sbToken && this.sbBusy && !this.nativeFinishing) this.sidebarNativeSize({ width: this.nativeWidth }, cx);
+    });
+  }
+
+  sidebarNativeSize(size, cx) {
+    if (!this.sbBusy || !this.nativeActive || this.nativeFinishing) return;
+    const open = this.sbOpenPx || 259;
+    const px = Math.max(1, Math.min(open, Math.round(size.width * (settings()?.zoom || 1))));
+    this.sbP = px / open;
+    if (px !== this.nativeLastPx) {
+      this.nativeLastPx = px;
+      if (this.nativeSamples) this.nativeSamples.push({ ms: Date.now() - this.nativeStart, px });
+      run("layout.resize", { id: "sidebar", px });
+    }
+    if (this.sbGoal === 1 && find(layout(), "sidebar")?.hidden) run("layout.show", { id: "sidebar" });
+    if (px !== (this.sbGoal ? open : 1)) return;
+    this.nativeFinishing = true;
+    const token = this.sbToken, target = this.sbGoal, start = this.nativeStart, samples = this.nativeSamples;
+    cx.spawn(async cx => {
+      await cx.sleep(1);
+      if (token !== this.sbToken) return;
+      if (samples) writeTextFile(`/tmp/sidebar-native-${start}.json`, JSON.stringify({ target, open, samples }), null).catch(() => {});
+      if (target === 0) {
+        run("layout.hide", { id: "sidebar" });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+      }
+      run("layout.resize", { id: "sidebar", px: open });
+      if (this.nativePinned) {
+        run("layout.resize", { id: "main", weight: 1 });
+        this.nativePinned = false;
+      }
+      setShared("sidebar.collapsed", target === 0);
+      this.sbBusy = false;
+      this.nativeActive = false;
+      this.nativeLastPx = undefined;
       cx.notify();
     });
   }
@@ -1269,6 +1349,14 @@ export default class Tabs extends View {
     };
     const root = layout();
     const sidebar = find(root, "sidebar");
+    if (unified && !this.sbBusy && !this.nativeRecovering && find(root, "main")?.size?.px != null) {
+      this.nativeRecovering = true;
+      cx.spawn(async cx => {
+        await cx.sleep(1);
+        if (!this.sbBusy && find(layout(), "main")?.size?.px != null) run("layout.resize", { id: "main", weight: 1 });
+        this.nativeRecovering = false;
+      });
+    }
     // Live read keeps maximize/restore current (Orca subscribes to onMaximizeChanged,
     // WindowControls.tsx:15); the cached seed covers the first paint, when `window()` is null.
     const live = appWindow();
@@ -1311,7 +1399,7 @@ export default class Tabs extends View {
     const zoomK = settings()?.zoom || 1;
     const toggleRightX = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
     const sbPx = sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0) / zoomK;
-    if (this.wantToggle) { this.wantToggle = false; this.toggleSidebar(cx); }
+    if (this.wantToggle) { const count = this.wantToggle; this.wantToggle = 0; if (count % 2) this.toggleSidebar(cx); }
     if (unified && !this.sbBusy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= 120 && this.sbOpenPx !== sidebar.size.px) {
       this.sbOpenPx = sidebar.size.px;
       setShared("sidebar.openPx", this.sbOpenPx);
@@ -1322,12 +1410,16 @@ export default class Tabs extends View {
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
     this.syncPanel(space, panel, body, enabled);
     this.syncLanding(cx);
+    if (unified && !this.sbBusy) this.nativeWidth = (sidebar?.hidden ? 1 : (sidebar?.size?.px ?? 259)) / zoomK;
     // `.titlebar`: 36px, border-bottom var(--border), background var(--card) #171717
     // (main.css:1072-1084). Tabs sit flush to each edge of that bar.
     // The Explorer / Source Control activity buttons are NOT here: Orca renders its activity
     // bar only inside the right sidebar (`right-sidebar-top-activity-bar.tsx:40`), which
     // `orca-panel-head` owns. Drawing them twice put two strip icons in the titlebar corner.
     return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(bar)
+      .when(unified && props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
+      .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.nativeWidth).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.sidebarNativeSize(size, cx))))
       .on_mouse_move((e, cx) => {
         if (this.pressed !== null && this.stripBounds) {
           this.triggerSplit(this.stripBounds, e.position, cx);
@@ -1359,7 +1451,7 @@ export default class Tabs extends View {
       .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), (_e, ecx) => {
         // Same route as the `toggle-sidebar` command: the render consumes the flag with a live render
         // context. The `cx` captured by this render is dead once the click arrives.
-        if (unified) { this.wantToggle = true; ecx.notify(); return; }
+        if (unified) { this.wantToggle = (this.wantToggle ?? 0) + 1; ecx.notify(); return; }
         setShared("sidebar.collapsed", !sidebar?.hidden);
         run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "sidebar" });
         // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.

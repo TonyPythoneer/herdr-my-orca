@@ -48,7 +48,9 @@
               "content": {
                 "mod": "orca-tabs",
                 "props": {
-                  "unified": true
+                  "unified": true,
+                  "motion": "native",
+                  "pinSidebarTerminal": true
                 }
               }
             },
