@@ -679,6 +679,8 @@ export default class Tabs extends View {
     this.panelActive = false;
     this.panelFinishing = false;
     this.panelLastPx = undefined;
+    this.panelSamples = props()?.measurePanel ? [] : null;
+    this.panelStart = Date.now();
     cx.spawn(async cx => {
       await cx.sleep(1);
       if (token !== this.panelToken) return;
@@ -712,15 +714,18 @@ export default class Tabs extends View {
     const px = Math.max(1, Math.min(open, Math.round(size.width * (settings()?.zoom || 1))));
     if (px !== this.panelLastPx) {
       this.panelLastPx = px;
+      if (this.panelSamples) this.panelSamples.push({ ms: Date.now() - this.panelStart, px });
       run("layout.resize", { id: "panel", px });
     }
     if (this.panelGoal === 1 && find(layout(), "panel")?.hidden) run("layout.show", { id: "panel" });
     if (px !== (this.panelGoal ? open : 1)) return;
     this.panelFinishing = true;
     const token = this.panelToken, target = this.panelGoal;
+    const samples = this.panelSamples, start = this.panelStart;
     cx.spawn(async cx => {
       await cx.sleep(1);
       if (token !== this.panelToken) return;
+      if (samples) writeTextFile(`/tmp/panel-native-${start}.json`, JSON.stringify({ target, open, samples }), null).catch(() => {});
       if (target === 0) {
         run("layout.hide", { id: "panel" });
         await cx.sleep(80);
@@ -1492,7 +1497,11 @@ export default class Tabs extends View {
     const flushable = (c, i) => c.active && i === 0 && !geometry.arrows.hasOverflow && this.scrollX <= 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
     if (this.wantPanelToggle) { const count = this.wantPanelToggle; this.wantPanelToggle = 0; if (count % 2) this.togglePanelNative(cx); }
-    if (unified && !this.panelBusy && !panel?.hidden && (panel?.size?.px ?? 0) >= 120) this.panelOpenPx = panel.size.px;
+    if (unified && !this.panelBusy && !panel?.hidden && (panel?.size?.px ?? 0) >= 120) {
+      this.panelOpenPx = panel.size.px;
+      // The panel mods keep their content at this width while the panel narrows (panel-motion.js).
+      setShared("panel.openPx", this.panelOpenPx);
+    }
     if (unified && !this.panelBusy) this.panelWidth = (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK;
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
     this.syncPanel(space, panel, body, enabled);

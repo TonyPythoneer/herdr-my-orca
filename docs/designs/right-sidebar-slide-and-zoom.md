@@ -1,8 +1,24 @@
 # 右側欄滑動，中間畫面縮放
 
 *   **Author:** Tony Yang
-*   **Status:** Draft（只回答「能不能做到、做到什麼程度」，尚未實作）
+*   **Status:** Draft（選項 B 已實作：`panel-motion.js` 與五個 panel mod；`orca-panel-head` 待定，見 Decisions）
 *   **Date:** 2026-11-23
+
+--------------------------------------------------------------------------------
+
+## Decisions（2026-11-23 由作者回答）
+
+*   **D1 右側欄要跟左側欄一樣。** 內容不重排、只滑出去＋淡出 → 採用選項 B，已實作：
+    `shared/panel-motion.js`（`panelFrame()`，左側 `sidebarFrame()` 的鏡像：內框固定開啟寬、
+    靠 panel 右緣、位移 `-(1-k)*(open-28)`、同色平塗蓋層 `clamp(1-(k-.15)/.85)`），
+    以及 `orca-files`、`orca-changes`、`orca-agents`、`orca-panel-gap`、`skillshare` 五個
+    panel mod 的 `render()` 包一層。`orca-tabs` 發佈 `shared("panel.openPx")`，並在
+    `measurePanel` 開啟時寫 `/tmp/panel-native-<t>.json`。
+*   **D2 31px 圖示列（`orca-panel-head`）暫不包。** 作者的描述是「按下去後，icon 左邊出現
+    一組關於這個右側欄子畫面的操作」——那是新的互動（每個子畫面的操作群組），不是這次滑動
+    的一部分。待作者確認範圍後再決定它要不要一起滑（Q2 改寫如下）。
+*   **D3 不做的**：離散跳段縮放（C）、卡片內縮錯覺、`keys.json` 的瞬間鍵（`cmd-l`、
+    `ctrl-shift-e`）。
 
 --------------------------------------------------------------------------------
 
@@ -146,9 +162,10 @@ host 給 transform，要嘛是 host 自己用原生版面動畫移動節點。�
 *   **Q1：右側欄內容真的需要 frame 嗎？** panel 的內容大多是清單與樹（檔案樹、changes），
     被壓窄時本來就會重新排版；左側欄的專案樹當初是為了避免「夾扁」才加 frame。要先看一段
     錄影決定值不值得動那六個 mod（九個 block）。
-*   **Q2：`orca-panel-head`（31px 的 icon 條）該不該跟內容一起滑？** 它是固定 31px 高、
-    icon 固定 32px 寬的一條，壓窄時 icon 會依序被裁掉。要不要改成「整條保持開啟寬、往右
-    滑出」，還是讓它直接裁切？
+*   **Q2：`orca-panel-head`（31px 的 icon 條）該不該跟內容一起滑？** 它現在是唯一還
+    會被壓窄的 panel 區塊。作者的初步描述是「按下去後，icon 左邊出現一組關於這個子畫面的
+    操作」，那是新功能（每個子畫面的操作群組），要先定範圍：圖示列本身要不要像內容一樣
+    「保持寬度滑出去」，還是它要留在原位當那組操作的錨點。
 *   **Q3：曲線要不要跟 `motion` 對齊？** 現在右側欄永遠是原生 `ease-in-out` 500ms。若
     `motion` 改成 `smooth`，左右會不一致。要不要讓 panel 也有 timer 版本，還是把 panel
     固定為原生（並在文件裡寫明）？

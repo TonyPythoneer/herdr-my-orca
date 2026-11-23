@@ -1,0 +1,32 @@
+// Generated from shared/panel-motion.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Right sidebar, mirrored from the left sidebar's `sidebarFrame` (orca-nav / orca-spaces /
+// orca-chrome): while `orca-tabs.togglePanelNative` steps the panel narrower, the panel's content
+// keeps the OPEN width and only slides out and fades, so nothing reflows or truncates on the way.
+// The panel is anchored to the right edge, so the inner frame is too and the content leaves
+// through the left; the 28px shift and the clamp((k-.15)/.85) fade are the left side's numbers.
+// Untouched (`inner`) at the open width, with no shared open width, outside the unified layout,
+// or in an overlay copy (those carry their own props, so `unified` is absent).
+import { div } from "gpui-kit";
+import { theme, layout, props, shared } from "herdr";
+
+function find(n, id) {
+  if (n?.id === id) return n;
+  for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; }
+  return null;
+}
+
+export function panelFrame(inner) {
+  if (!props()?.unified) return inner;
+  const open = shared("panel.openPx");
+  const px = find(layout(), "panel")?.size?.px;
+  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
+  const k = px / open;
+  // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A
+  // flat cover in the panel's own colour, with the alpha the fade needs, is one blended quad.
+  const bg = theme().surface;
+  const cover = Math.max(0, Math.min(1, 1 - (k - 0.15) / 0.85));
+  const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
+  return div().size_full().overflow_hidden().relative()
+    .child(div().w(open).h_full().relative().left(-(1 - k) * (open - 28)).child(inner))
+    .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
+}

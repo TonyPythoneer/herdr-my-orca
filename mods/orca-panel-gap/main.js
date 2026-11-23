@@ -10,6 +10,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { theme, props } from "herdr";
+import { panelFrame } from "./panel-motion.js";
 
 const GAPS = {
   workspaces: {
@@ -35,7 +36,10 @@ const GAPS = {
 };
 
 export default class PanelGap extends View {
-  render() {
+  // Unified layout: a narrowing panel keeps this content at its open width (see panel-motion.js).
+  render() { return panelFrame(this.renderBody()); }
+
+  renderBody() {
     const t = theme();
     const gap = GAPS[props()?.tab] ?? GAPS.checks;
     return v_flex().id(`gap-${props()?.tab ?? "checks"}`).size_full().items_center().justify_center().px(16)

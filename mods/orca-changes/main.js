@@ -10,6 +10,7 @@ import { sameOperationTarget } from "./operation-target.js";
 import { GIT_OPTIONS as READ, chunkPaths as chunks } from "./git-options.js";
 import { assertDiscardUnchanged, discardSnapshot } from "./discard-snapshot.js";
 import { displayPushDestination, forcePushConfirmed, forcePushTarget, pushConfigured } from "./push-target.js";
+import { panelFrame } from "./panel-motion.js";
 
 let mainChangesView = null;
 
@@ -761,7 +762,10 @@ export default class Changes extends View {
       }));
   }
 
-  render(cx) {
+  // Unified layout: a narrowing panel keeps this content at its open width (see panel-motion.js).
+  render(cx) { return panelFrame(this.renderBody(cx)); }
+
+  renderBody(cx) {
     // A task's error is reported, not thrown into the paint: a failed refresh
     // must never replace the pane with the shell's "could not be re-rendered" bar.
     // Deferred off the frame for the same reason as `orca-files`: a spawn body runs immediately
