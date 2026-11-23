@@ -73,6 +73,26 @@ To enable the live Claude feed, point `statusLine` in `~/.claude/settings.json` 
 The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` from `PATH`, then
 `npx -y ccstatusline@latest`, so the status line you see does not change.
 
+## How the repo is organized
+
+- The repo holds only our own mods (`orca-*`, `agent-config`, `skillshare`). Herdr ships its own
+  mods and layouts (`confirm`, `picker`, `main`, `terminals`, …); they stay in the live config
+  and are not tracked here.
+- A mod may import only files inside its own folder: `../x.js` and symlinks fail
+  `herdr-app check`. Code several mods need lives in `shared/` and `scripts/sync-shared.mjs`
+  copies it into each mod with a header line; `--check` (and a test) fails on drift. Edit only
+  the file in `shared/`. Asset paths such as `mods/<other>/x.svg` may cross folders.
+- Big mods are split into pure logic files, each with its own test (for example
+  `orca-agent-manager/{util,parts,views}.js`, `orca-spaces/{storage,cards}.js`,
+  `orca-tabs/{drop-zone,tab-title}.js`). `scripts/gpui-stub-loader.mjs` stubs `gpui-kit`,
+  `gpui-base` and `herdr`, so `render.test.js` renders the real `main.js` and compares it with
+  `render.snap.json` (delete the snapshot to re-record after an intended view change).
+- Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
+  (see `.agents/skills/herdr-app-dev-sync/SKILL.md`).
+- Checks: `node --test mods scripts`, `herdr-app check <mod>`, `herdr-app status`,
+  `node scripts/sync-shared.mjs --check`.
+- Not used: a bundler (about 3% saved, breaks edit-live-then-sync).
+
 ## Setup
 
 Read ~/.config/herdr-app/AGENTS.md, then add this layout: https://github.com/TonyPythoneer/herdr-my-orca/tree/main
