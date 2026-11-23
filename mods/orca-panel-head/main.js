@@ -136,11 +136,14 @@ export default class PanelHead extends View {
           .child(svg(`mods/orca-panel-head/${icon}.svg`).size(16));
       }))
       .child(div().flex_1())
+      // This header is the panel's own row, so it is only ever drawn while the panel is open: the
+      // toggle carries `PanelRightClose` (arrow out of the panel) for that state, and `orca-tabs`
+      // carries the matching open glyph for the hidden one.
       .child(div().id("panel-toggle").mr(3).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
         .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-        .role("button").accessibility_label("Toggle right sidebar").tooltip("Toggle right sidebar")
+        .role("button").accessibility_label("Collapse right sidebar").tooltip("Collapse right sidebar")
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .on_click(() => props()?.unified ? run("orca-tabs.toggle-panel") : run("layout.toggle", { id: "panel" }))
-        .child(svg("mods/orca-panel-head/panel-right.svg").size(16)));
+        .child(svg("mods/orca-panel-head/panel-right-close.svg").size(16)));
   }
 }
