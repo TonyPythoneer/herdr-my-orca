@@ -1079,10 +1079,17 @@ export default class Tabs extends View {
       // crossfades the joined shape (old fades out, new fades in) and hover fades the pill in and out.
       // (`.hover()` styles cannot animate; the strip already tracks `hoveredTab`.)
       const fade = { duration: 160, easing: "ease-out" };
-      const activeLayer = div().id(`tab-active-${c.id}${copyId}`).absolute().top(0).bottom(0).left(0).right(0)
-        .rounded_t(14).bg(t.background).opacity(c.active ? 1 : 0).transition("opacity", fade)
+      // Nothing here may depend on which tab is active in a way that moves layout: slot padding is
+      // constant, so a click moves no pixel and re-measures no width. Only these two layers react.
+      // The active layer is instant (click feedback). A hover pill inset 12px on the side that faces
+      // the active tab keeps clear of that tab's 14px fillet, which reaches 12px into its neighbour.
+      const prevActive = i > 0 && shown[i - 1].active, nextActive = Boolean(shown[i + 1]?.active);
+      const activeLayer = div().id(`tab-active-${c.id}${copyId}`).absolute().top(0).bottom(0)
+        .left(flush && gapToCard <= 0 ? -2 : 0).right(0)
+        .rounded_t(14).bg(t.background).opacity(c.active ? 1 : 0)
         .child(fillet("left")).child(fillet("right"));
-      const hoverLayer = div().id(`tab-hover-${c.id}${copyId}`).absolute().top(4).bottom(4).left(0).right(0)
+      const hoverLayer = div().id(`tab-hover-${c.id}${copyId}`).absolute().top(4).bottom(4)
+        .left(prevActive ? 12 : 0).right(nextActive ? 12 : 0)
         .rounded(10).bg(tint(t.foreground, 0.08)).opacity(!c.active && this.hoveredTab === c.id ? 1 : 0).transition("opacity", fade);
       const pill = h_flex().w_full().h_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
         .child(hoverLayer).child(activeLayer)
@@ -1096,7 +1103,9 @@ export default class Tabs extends View {
         })
         // SortableTab.tsx:214 — cursor-pointer: tab rest hover is a pointer hand, not grab.
         .cursor_pointer()
-        .when(this.pressed === i, el => el.cursor_grabbing().opacity(0.8))
+        // Dim and grab only once the pointer has left this tab (a real drag), not on every mouse-down:
+        // dimming at the press made a plain click look half-highlighted.
+        .when(this.pressed === i && this.overTab !== null && this.overTab !== c.id, el => el.cursor_grabbing().opacity(0.8))
         // SortableTab.tsx:231-243 — onAuxClick button === 1 (middle-click) closes tab.
         .on_mouse_down("middle", (_e, cx) => {
           cx.stop_propagation();
@@ -1239,9 +1248,7 @@ export default class Tabs extends View {
       // The SLOT around the pill keeps its place and its width, so the track stays exactly as long
       // as the tab list. The width of a tab is its label's, so the strip measures the slot rather
       // than guessing (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
-      return h_flex().id(`tab-${c.id}${copyId}`)// The active tab's fillets reach 14px into its neighbours; padding that side keeps a
-      // neighbour's hover pill from sitting under (or over) them as a dark square.
-      .h_full().pl(i > 0 && shown[i - 1].active ? 14 : flush && gapToCard <= 0 ? 0 : 2).pr(shown[i + 1]?.active ? 14 : 2).relative().items_center().flex_none().min_w(144).max_w(300)
+      return h_flex().id(`tab-${c.id}${copyId}`).h_full().px(2).relative().items_center().flex_none().min_w(144).max_w(300)
         .when(!mode.overlay, el => el.on_size_change((size, cx) => this.measureTabWidth(c.id, size.width, cx)))
         // The pinned copy: drawn after the track, so it paints above the inactive tabs passing
         // underneath, and given the clamped left the geometry asked for. It is the same tab — its
