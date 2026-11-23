@@ -825,13 +825,17 @@ export default class AgentConfig extends View {
       );
   }
 
-  // A provider's icon is the file saved in this app's folder; without one, the default drive.
+  // A provider's icon sits in a small tile: the file saved in this app's folder, else the default
+  // drive; None gets a plain circle. Without a record the tile is None's.
   providerIcon(record, t) {
     const home = `${appHome()}/`;
     const path = String(record?.iconPath ?? "");
-    return path.startsWith(home)
-      ? image(path.slice(home.length)).w(16).h(16).flex_none().rounded(3)
-      : svg("mods/agent-config/hard-drive.svg").size(14).flex_none().text_color(t.muted);
+    const glyph = !record
+      ? svg("mods/agent-config/circle.svg").size(13).text_color(t.muted)
+      : path.startsWith(home)
+        ? image(path.slice(home.length)).w(20).h(20).rounded(4)
+        : svg("mods/agent-config/hard-drive.svg").size(14).text_color(t.muted);
+    return div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(glyph);
   }
 
   // The provider row under the title: None, or a provider whose test passed. Greyed out when there
@@ -888,7 +892,6 @@ export default class AgentConfig extends View {
                     ? "Choose which model source Codex starts with"
                     : "Set up a model provider in Agent Settings",
               )
-              .when(this.providerId !== "none" && this.providers[this.providerId], (el) => el.child(this.providerIcon(this.providers[this.providerId], t)))
               .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(enabled ? t.foreground : t.muted).child(label))
               .child(div().flex_none().text_size(11).text_color(t.muted).child("▾")),
           ),
@@ -930,7 +933,8 @@ export default class AgentConfig extends View {
           .cursor_pointer()
           .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => this.setProvider(option.id, cx))
-          .when(option.id !== "none", (el) => el.child(this.providerIcon(this.providers[option.id], t)))
+          .when(this.providerId === option.id, (el) => el.bg(t.hover))
+          .child(this.providerIcon(option.id === "none" ? null : this.providers[option.id], t))
           .child(div().flex_1().min_w(0).truncate().child(option.label))
           .when(this.providerId === option.id, (el) => el.child(div().flex_none().text_color(t.accent).child("✓"))),
       ),
