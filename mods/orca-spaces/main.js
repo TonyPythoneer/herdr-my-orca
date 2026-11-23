@@ -36,8 +36,14 @@ function sidebarFrame(inner) {
   const px = find(layout(), "sidebar")?.size?.px;
   if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
   const k = px / open;
-  return div().size_full().overflow_hidden().child(div().w(open).h_full().relative().left(-(1 - k) * 28)
-    .opacity(Math.max(0, Math.min(1, (k - 0.15) / 0.85))).child(inner));
+  // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat
+  // cover in the sidebar's own colour, with the alpha the fade needs, is one blended quad.
+  const bg = theme().surface;
+  const cover = Math.max(0, Math.min(1, 1 - (k - 0.15) / 0.85));
+  const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
+  return div().size_full().overflow_hidden().relative()
+    .child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner))
+    .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
 }
 
 export default class Spaces extends View {
