@@ -127,6 +127,21 @@ function labelOf(choices, value) {
   return choices.find(([id]) => id === value)?.[1] ?? choices[0][1];
 }
 
+
+// Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
+// keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
+// Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
+// Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
+function sidebarFrame(inner) {
+  const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
+  const open = shared("sidebar.openPx");
+  const px = find(layout(), "sidebar")?.size?.px;
+  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
+  const k = px / open;
+  return div().size_full().overflow_hidden().child(div().w(open).h_full().relative().left(-(1 - k) * 28)
+    .opacity(Math.max(0, Math.min(1, (k - 0.15) / 0.85))).child(inner));
+}
+
 export default class Nav extends View {
   // The placed nav is not focusable; the popup copy is. Its keyboard list starts at the first row
   // (dropdown-menu.tsx:115 data-[current=true]), and Esc closes it (SidebarWorkspaceOptionsMenu
@@ -139,7 +154,9 @@ export default class Nav extends View {
     this.handle.focus();
   }
 
-  render(cx) {
+  render(cx) { return sidebarFrame(this.renderBody(cx)); }
+
+  renderBody(cx) {
     if (props()?.navMenu === "workspace-options") return this.optionsView(cx);
     const t = theme();
     // orca-spaces owns the fold set, so it publishes whether every project is closed;

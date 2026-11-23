@@ -7,7 +7,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar } from "gpui-base";
-import { spaces, machines, panes, agents, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, props, nextCommand } from "herdr";
+import { spaces, machines, panes, agents, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, props, nextCommand, layout } from "herdr";
 import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar, avatarFile } from "./project.js";
 
 import { getProjectGroupHeaderPaddingLeft } from "./indentation.js";
@@ -24,6 +24,21 @@ import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUP
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
+
+// Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
+// keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
+// Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
+// Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
+function sidebarFrame(inner) {
+  const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
+  const open = shared("sidebar.openPx");
+  const px = find(layout(), "sidebar")?.size?.px;
+  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
+  const k = px / open;
+  return div().size_full().overflow_hidden().child(div().w(open).h_full().relative().left(-(1 - k) * 28)
+    .opacity(Math.max(0, Math.min(1, (k - 0.15) / 0.85))).child(inner));
+}
+
 export default class Spaces extends View {
   init(_props, cx) {
     stopsInit(this, cx, "entry");
@@ -911,7 +926,9 @@ export default class Spaces extends View {
     return r.head ? [this.header(r, t, ps), this.card(r, t, ps, mine)] : [this.card(r, t, ps, mine)];
   }
 
-  render(cx) {
+  render(cx) { return sidebarFrame(this.renderBody(cx)); }
+
+  renderBody(cx) {
     const t = theme();
     const sp = spaces();
     // Unread workspace state (`spaces.unread.v1`): orca-menu writes shared store on toggle;

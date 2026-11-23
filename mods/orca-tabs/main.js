@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile } from "herdr";
+import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile, nextCommand } from "herdr";
 import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
@@ -68,6 +68,14 @@ const TAB_STRIP_FALLBACK = 32; // `TAB_GROUP_TAB_STRIP_HEIGHT_PX` (tab-drop-zone
 const TAB_STRIP_SLIDE_MS = 150;
 // The reference design's sidebar collapse is 300ms.
 const SIDEBAR_GLIDE_MS = 300;
+const SIDEBAR_STEP_MS = 33; // measured: layout.resize lands at 18-30ms, one frame after the call
+// The reference design's drawer curve, cubic-bezier(.32,.72,0,1), solved by bisection.
+const drawerEase = (() => {
+  const [x1, y1, x2, y2] = [.32, .72, 0, 1];
+  const bx = t => 3 * x1 * t * (1 - t) ** 2 + 3 * x2 * t * t * (1 - t) + t ** 3;
+  const by = t => 3 * y1 * t * (1 - t) ** 2 + 3 * y2 * t * t * (1 - t) + t ** 3;
+  return (x) => { let lo = 0, hi = 1, t = x; for (let i = 0; i < 24; i++) { if (bx(t) < x) lo = t; else hi = t; t = (lo + hi) / 2; } return by(t); };
+})();
 const DROP_STILL_TICKS = 20; // ~320ms of a motionless pointer is the release fallback, since the host has no button state.
 const TAB_DRAG_DISTANCE = 12; // `useTabDragSplit.ts:42` — dnd-kit activation distance, and how far down a press must travel before it is a split.
 const DROP_REV = 13; // bumped every time the instrumentation changes
@@ -355,6 +363,7 @@ export default class Tabs extends View {
     this.animatedUntil = 0;
     this.glideShift = 0;
     this.glideGen = 0;
+    this.sbBusy = false; this.sbToken = 0; this.sbP = 1; this.sbOpenPx = 0;
     try {
       const stored = JSON.parse(localStorage.getItem("panels") ?? "{}");
       this.panels = stored && typeof stored === "object" ? stored : {};
@@ -371,6 +380,13 @@ export default class Tabs extends View {
       if (tries > 0) cx.timer.after(50, (cx) => seed(cx, tries - 1));
     };
     if (!this.windowState) cx.timer.after(0, (cx) => seed(cx, 20));
+    // `orca-tabs.toggle-sidebar` (a key binding or `herdr-app do`) runs the same animated toggle as
+    // the button. Only the unified header listens, so overlay copies never toggle twice.
+    if (props()?.unified) cx.spawn(async (cx) => {
+      for (;;) {
+        if (await nextCommand() === "toggle-sidebar") { this.wantToggle = true; cx.notify(); }
+      }
+    });
   }
 
   // useTabDragSplit.ts:42 — TAB_DRAG_ACTIVATION_DISTANCE_PX = 12. Once downward travel reaches
@@ -506,6 +522,55 @@ export default class Tabs extends View {
   // GPUI's own `transition` is that ease — it runs natively between frames, so nothing here needs
   // a timer. The flag only says "these next changes slide"; it lapses on its own, so a wheel or a
   // trackpad in between moves the strip directly, the way `scrollBy` is cut short by real input.
+  // Unified layout: the toggle steps the sidebar's width itself, so the strip, the sidebar content
+  // and the terminals move in the same frames (only `layout.resize` can move a layout node). The
+  // loop owns just the target width; everything drawn is derived from the width `layout()` reports.
+  // A second press while it runs reverses from where it is. The PTY is resized once at the end
+  // (measured), not per step. Collapse ends with `hide` and puts the open width back while hidden,
+  // so the next `show` returns at that width; expand starts from 1px while hidden.
+  toggleSidebar(cx) {
+    const sb = find(layout(), "sidebar");
+    const hidden = Boolean(sb?.hidden);
+    const open = this.sbOpenPx > 0 ? this.sbOpenPx : 259;
+    const target = this.sbBusy ? (this.sbGoal === 1 ? 0 : 1) : (hidden ? 1 : 0);
+    const token = ++this.sbToken;
+    const from = this.sbBusy ? this.sbP : (hidden ? 0 : Math.min(1, (sb?.size?.px ?? open) / open));
+    this.sbBusy = true; this.sbGoal = target;
+    cx.spawn(async (cx) => {
+      await cx.sleep(1); // leave the render phase: notify() is only legal from a task
+      if (hidden && !this.sbShown) {
+        run("layout.resize", { id: "sidebar", px: 1 });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+        run("layout.show", { id: "sidebar" });
+        await cx.sleep(50);
+        if (token !== this.sbToken) return;
+      }
+      this.sbShown = true;
+      const d = Math.abs(target - from);
+      const dur = (320 + 120 * d) * (0.5 + 0.5 * d) + 60;
+      const t0 = Date.now();
+      for (;;) {
+        const k = Math.min(1, (Date.now() - t0) / dur);
+        this.sbP = from + (target - from) * drawerEase(k);
+        run("layout.resize", { id: "sidebar", px: Math.max(1, Math.round(open * this.sbP)) });
+        cx.notify();
+        if (k >= 1) break;
+        await cx.sleep(SIDEBAR_STEP_MS);
+        if (token !== this.sbToken) return;
+      }
+      if (target === 0) {
+        run("layout.hide", { id: "sidebar" });
+        await cx.sleep(80);
+        if (token !== this.sbToken) return;
+      }
+      run("layout.resize", { id: "sidebar", px: open });
+      setShared("sidebar.collapsed", target === 0);
+      this.sbBusy = false; this.sbShown = false; this.sbGoal = undefined;
+      cx.notify();
+    });
+  }
+
   scrollTabStrip(direction, cx) {
     const to = tabStripScrollTarget(this.scrollX, this.viewportWidth, this.contentWidth, direction);
     if (to === this.scrollX) return;
@@ -1218,6 +1283,11 @@ export default class Tabs extends View {
     const zoomK = settings()?.zoom || 1;
     const toggleRightX = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
     const sbPx = sidebar?.hidden ? 0 : (sidebar?.size?.px ?? 0) / zoomK;
+    if (this.wantToggle) { this.wantToggle = false; this.toggleSidebar(cx); }
+    if (unified && !this.sbBusy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= 120 && this.sbOpenPx !== sidebar.size.px) {
+      this.sbOpenPx = sidebar.size.px;
+      setShared("sidebar.openPx", this.sbOpenPx);
+    }
     gapToCard = unified ? Math.max(sbPx, toggleRightX) - sbPx : 0;
     const flushable = (c, i) => c.active && i === 0 && !geometry.arrows.hasOverflow && this.scrollX <= 0;
     const panel = find(root, "panel"), body = find(root, "panel-body");
@@ -1259,6 +1329,7 @@ export default class Tabs extends View {
       // left slot by floating `titlebar-left` over the workspace
       // (AppWorkspaceShell.tsx:163-167).
       .when(unified || Boolean(sidebar?.hidden), el => el.child(sidebarToggle(svg("mods/orca-chrome/panel-left.svg").size(16), () => {
+        if (unified) return this.toggleSidebar(cx);
         setShared("sidebar.collapsed", !sidebar?.hidden);
         run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "sidebar" });
         // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.
