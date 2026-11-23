@@ -54,3 +54,16 @@ test("a group with no open space has no Close row", () => {
   const items = fixture([]);
   assert.equal(closeRow(items({ tab: "group", target: { id: "w1", path: "/repo" } }, null), "Close workspace"), undefined);
 });
+
+test("a made-up row id never reaches space.close", () => {
+  // The sidebar also lists worktrees no space opens; their ids are `repo:`/`wt:` strings the
+  // host does not know. Only the live space is closed (and named by the group).
+  const items = fixture([space("w1")]);
+  const row = closeRow(items({ tab: "group", target: { id: "w1", path: "/repo", spaces: ['repo:[null,"/repo"]', "w1"] } }, null), "Close workspace");
+  assert.deepEqual(row, ["Close workspace", "space.close", { id: "w1", confirmed: true }]);
+});
+
+test("a group whose every row is an unopened worktree has no Close row", () => {
+  const items = fixture([]);
+  assert.equal(closeRow(items({ tab: "group", target: { id: 'repo:[null,"/repo"]', path: "/repo", spaces: ['repo:[null,"/repo"]', "wt:/repo/.git:/repo/wt-x"] } }, null), "Close workspace"), undefined);
+});

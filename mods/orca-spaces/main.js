@@ -13,7 +13,7 @@ import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar, avatarFile } f
 import { getProjectGroupHeaderPaddingLeft } from "./indentation.js";
 import { tip, tipMark } from "./tip.js";
 import { stopsInit, stop, focusRoot, enter, within, onStop } from "./focus.js";
-import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, activeReviewKeys, planRenderRows } from "./worktree-plan.js";
+import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, activeReviewKeys, planRenderRows, groupSpaceIds } from "./worktree-plan.js";
 import { cardView } from "./cards.js";
 import { stored, workspaceOptions } from "./storage.js";
 import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUPS, BRANCH_PR_LOOKUP_PAGE_SIZE } from "./review-store.js";
@@ -24,20 +24,6 @@ import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUP
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
-
-// The open spaces a sidebar group covers: every row's own space (and any other space merged onto
-// the same checkout). Unopened worktrees (`wt:...`) have no tabs, so they are skipped. Reads the
-// plan the sidebar already computed, so a project's tabs are found without git or a path match.
-function groupSpaceIds(g) {
-  const ids = [];
-  for (const r of g?.rows ?? []) {
-    for (const w of [r.w, ...(r.also ?? []).map((a) => a.w)]) {
-      if (!w?.id || w.id.startsWith("wt:") || ids.includes(w.id)) continue;
-      ids.push(w.id);
-    }
-  }
-  return ids;
-}
 
 // Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
 // keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
@@ -885,7 +871,7 @@ export default class Spaces extends View {
     const id = `space-head-${w.id}`;
     // One list serves both the right-click and the ellipsis menu; the menu turns it into a project
     // "Delete all tabs" (it covers linked worktrees, which a folder-prefix match would miss).
-    const groupSpaces = groupSpaceIds((this.plan?.groups ?? []).find((x) => x.key === key));
+    const groupSpaces = groupSpaceIds((this.plan?.groups ?? []).find((x) => x.key === key), spaces().map((s) => s.id));
     return stop(this, t, id, h_flex()
       .id(id)
       .h(28).flex_none().w_full().pl(getProjectGroupHeaderPaddingLeft(0)).pr(8).gap(6).items_center().mt(4)

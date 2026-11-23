@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { parseWorktreeList, projectWorktreePlan, where } from './worktree-plan.js';
+import { parseWorktreeList, projectWorktreePlan, where, groupSpaceIds } from './worktree-plan.js';
 
 test('deleted worktrees disappear from the sidebar without closing their tabs', () => {
   const repo = JSON.stringify([null, '/repo/.git']);
@@ -130,4 +130,38 @@ test('catalog pruning preserves unopened and disconnected projects across restar
   assert.deepEqual(new Set(plan.visibleRows.map(r => r.w.folder)), new Set([
     '/local', '/local/sibling', '/remote/linked', '/remote/linked/sibling',
   ]));
+});
+
+test('a group hands over only the spaces the host knows', () => {
+  // Project rows: a space opened on the main checkout, a space on a linked worktree, and — as
+  // in the sidebar — a `repo:` row and a `wt:` row that no space opens. Those two ids are
+  // made up by the plan, so `space.close` on one fails with `no space "repo:[...]"`.
+  const group = {
+    rows: [
+      { w: { id: 'w1' }, also: [{ w: { id: 'w1b' } }] },
+      { w: { id: 'repo:[null,"/repo"]' }, unopened: true },
+      { w: { id: 'wt:/repo/.git:/repo/wt-x' }, unopened: true },
+      { w: { id: 'w2' }, also: [] },
+    ],
+  };
+  assert.deepEqual(groupSpaceIds(group, ['w1', 'w1b', 'w2']), ['w1', 'w1b', 'w2']);
+  // Nothing live: no row names an open space.
+  assert.deepEqual(groupSpaceIds(group, []), []);
+  assert.deepEqual(groupSpaceIds(undefined, ['w1']), []);
+  // A repeated id arrives once.
+  assert.deepEqual(groupSpaceIds({ rows: [{ w: { id: 'w1' } }, { w: { id: 'w1' } }] }, ['w1']), ['w1']);
+});
+
+test('the plan gives an unopened main checkout a made-up id, never a space id', () => {
+  const linked = { id: 'w1', folder: '/repo/wt-x', tabs: [] };
+  const gitState = {
+    [where(linked)]: {
+      repo: JSON.stringify([null, '/repo/.git']), top: '/repo/wt-x', name: 'repo', linked: true,
+      branch: 'feature', worktrees: [{ path: '/repo', branch: 'main' }, { path: '/repo/wt-x', branch: 'feature' }],
+    },
+  };
+  const plan = projectWorktreePlan({ spaces: [linked], gitState, loaded: true });
+  const group = plan.groups.find((g) => g.rows.some((r) => r.w.id === 'w1'));
+  assert.equal(group.rows.some((r) => r.unopened && r.w.id.startsWith('repo:')), true);
+  assert.deepEqual(groupSpaceIds(group, ['w1']), ['w1']);
 });
