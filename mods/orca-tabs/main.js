@@ -21,24 +21,6 @@ import {
   tabStripScrollTarget,
 } from "./tab-strip-scroll.js";
 
-// Memoized tab colour store: shared() is the primary source; localStorage is the fallback.
-// Cache the parsed fallback by its raw string so repeated renders skip re-parsing.
-let _tabColorCache = { raw: undefined, value: null };
-function readTabColorStore() {
-  const s = shared("tab.colors");
-  if (s && typeof s === "object") return s;
-  try {
-    const raw = localStorage.getItem("tab.colors.v1");
-    if (_tabColorCache.raw === raw && _tabColorCache.value) return _tabColorCache.value;
-    const v = raw ? JSON.parse(raw) : {};
-    const value = v && typeof v === "object" && !Array.isArray(v) ? v : {};
-    _tabColorCache = { raw, value };
-    return value;
-  } catch {
-    return {};
-  }
-}
-
 // Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
 // derived from the theme's own foreground, so both the dark and the light theme tint correctly.
 function tint(hex, alpha) {
@@ -1045,9 +1027,6 @@ export default class Tabs extends View {
     const shown = space?.tabs ?? [];
     const tabPanes = selectTabPanes(panes() ?? []);
     const unofficialPanes = unofficialByTerminal(terminals() ?? []);
-    // Tab colour store, read once per render. orca-menu writes shared("tab.colors")
-    // and mirrors to localStorage["tab.colors.v1"]. SortableTab.tsx:293-297 drives the dot below.
-    const tabColorStore = readTabColorStore();
     // Once per frame, before anything reads it: widths, real limits, arrow states and the clamped
     // position of the active tab (which is where a newly selected tab is also revealed).
     const geometry = this.stripGeometry(shown);
@@ -1111,7 +1090,6 @@ export default class Tabs extends View {
       const unofficial = this.unofficialApp(pane, unofficialPanes);
       // SortableTab.tsx:130 — displayTitle = customTitle ?? (tabAgent ? strip(title) : title).
       const label = this.getTabLabel(c, pane, unofficial);
-      const tabColour = tabColorStore[c.id] ?? null;
       // TerminalTabLeadingIcon.tsx:31-45 — the agent's identity mark, `opacity-70` while the
       // tab is inactive. Orca's `AgentIcon` (`agent-catalog.tsx:50-122`) decides which mark an
       // agent has; what decides the drawing is whether it brings its own fills. omp's gradient
@@ -1313,8 +1291,6 @@ export default class Tabs extends View {
         // Orca never marks an expanded pane in the title (SortableTab.tsx:130-131); the
         // Minimize2 button below is the only indicator.
         .child(div().flex_1().min_w(0).truncate().child(label))
-        // Colour dot — SortableTab.tsx:293-297: size-2 rounded-full dot, shown only when tab has a colour. Orca reads tab.color; Herdr has no colour field, so the value comes from localStorage["tab.colors.v1"] written by orca-menu. No !isEditing guard exists in this port.
-        .when(Boolean(tabColour), el => el.child(div().size(8).flex_none().rounded(4).mr(6).bg(tabColour)))
         // Collapse pane — SortableTab.tsx:298-316: shown while the pane is expanded, a 16px box
         // with a 12px `Minimize2`; active tabs always show it, inactive ones on TAB hover
         // (`text-transparent group-hover:text-muted-foreground`). `pane.zoom` collapses.
