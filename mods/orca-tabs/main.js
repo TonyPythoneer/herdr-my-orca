@@ -66,6 +66,8 @@ const TAB_STRIP_FALLBACK = 32; // `TAB_GROUP_TAB_STRIP_HEIGHT_PX` (tab-drop-zone
 // How long an arrow's slide takes: Orca hands `scrollBy` a `behavior: 'smooth'`, which in Chromium
 // runs about this long.
 const TAB_STRIP_SLIDE_MS = 150;
+// The reference design's sidebar collapse is 300ms.
+const SIDEBAR_GLIDE_MS = 300;
 const DROP_STILL_TICKS = 20; // ~320ms of a motionless pointer is the release fallback, since the host has no button state.
 const TAB_DRAG_DISTANCE = 12; // `useTabDragSplit.ts:42` — dnd-kit activation distance, and how far down a press must travel before it is a split.
 const DROP_REV = 13; // bumped every time the instrumentation changes
@@ -351,6 +353,8 @@ export default class Tabs extends View {
     this.activeTabId = undefined;
     this.revealPending = false;
     this.animatedUntil = 0;
+    this.glideShift = 0;
+    this.glideGen = 0;
     try {
       const stored = JSON.parse(localStorage.getItem("panels") ?? "{}");
       this.panels = stored && typeof stored === "object" ? stored : {};
@@ -975,19 +979,25 @@ export default class Tabs extends View {
         ? image(mark).size(12)
         : svg(mark).size(12).text_color(t.muted);
       else if (program?.icon) identity = program.tint ? svg(program.icon).size(12).text_color(t.muted) : image(program.icon).size(12);
-      // A glass capsule per tab (deliberate divergence from Orca's flat strip,
-      // SortableTab.tsx:214 / getTabStripBorderClasses). The PILL below paints the capsule: 24px
-      // tall inside the 32px bar, 8px radius, a faint foreground-tinted outline; the active one
-      // is a raised frosted fill with a brighter edge and shadow instead of Orca's 2px bottom bar
-      // (drop-indicator.ts:15-16). The slot that wraps it keeps Orca's measured width rules
-      // (`w-[300px] max-w-[300px] min-w-[144px]`, tab-width-rules.ts:2) and the 2px inset that
-      // separates neighbouring capsules. `mr-1` on the leading icon and label
-      // (TerminalTabLeadingIcon.tsx:63, SortableTab.tsx:291) is the 4px gap between children.
-      const pill = h_flex().h(24).w_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
-        .rounded(8).border_1().border_color(c.active ? tint(t.foreground, 0.22) : tint(t.foreground, 0.1))
-        .when(c.active, el => el.bg(tint(t.foreground, 0.1)).shadow_md())
+      // The reference design's tab strip (deliberate divergence from Orca's flat strip,
+      // SortableTab.tsx:214): the ACTIVE tab is joined to the terminal below it. It is as tall as
+      // the bar, fills with the terminals' own `background` (what lies under the bar), rounds its
+      // top corners at 14 and flares into the terminal through two concave 14px fillets, so there
+      // is no bottom bar and no border. An inactive tab is bare text; only hover raises a 24px
+      // pill (radius 10). The slot that wraps it keeps Orca's measured width rules
+      // (`w-[300px] max-w-[300px] min-w-[144px]`, tab-width-rules.ts:2) and its 2px inset.
+      // `mr-1` on the leading icon and label (TerminalTabLeadingIcon.tsx:63, SortableTab.tsx:291)
+      // is the 4px gap between children.
+      // shortcut: a fillet is a 14px square of terminal colour holding a bar-coloured square with
+      // one rounded corner; it assumes the bar is `t.surface`, so change both together.
+      const fillet = (side) => div().absolute().bottom(0).size(14).bg(t.background)
+        .when(side === "left", el => el.left(-14)).when(side === "right", el => el.right(-14))
+        .child(div().size(14).bg(t.surface)
+          .when(side === "left", el => el.rounded_br(14)).when(side === "right", el => el.rounded_bl(14)));
+      const pill = h_flex().w_full().min_w(0).px(10).gap(4).relative().items_center().text_size(12)
+        .when(c.active, el => el.h_full().rounded_t(14).bg(t.background).child(fillet("left")).child(fillet("right")))
+        .when(!c.active, el => el.h(24).rounded(10).hover(s => s.bg(tint(t.foreground, 0.08)).text_color(t.foreground)))
         .text_color(c.active ? t.foreground : t.muted)
-        .when(!c.active, el => el.hover(s => s.bg(tint(t.foreground, 0.06)).text_color(t.foreground)))
         .on_hover((hovered, cx) => {
           const next = hovered ? c.id : this.hoveredTab === c.id ? null : this.hoveredTab;
           if (next === this.hoveredTab) return;
@@ -1115,7 +1125,7 @@ export default class Tabs extends View {
         // with a 12px `Minimize2`; active tabs always show it, inactive ones on TAB hover
         // (`text-transparent group-hover:text-muted-foreground`). `pane.zoom` collapses.
         .when(c.zoomed, el => el.child(div().id(`collapse-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(8)
-          .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
+          .text_color(c.active || this.hoveredTab === c.id ? t.muted : t.dim)
           .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
           .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
           .on_mouse_down("left", stop)
@@ -1131,7 +1141,7 @@ export default class Tabs extends View {
         // (16px), the glyph `w-3` (12px); inactive is `text-transparent` and becomes muted on
         // TAB hover (`group-hover`), not on its own box.
         .when(!c.settled, el => el.child(div().id(`close-${c.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(8)
-          .text_color(c.active || this.hoveredTab === c.id ? t.muted : "#00000000")
+          .text_color(c.active || this.hoveredTab === c.id ? t.muted : t.dim)
           .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
           .on_mouse_down("left", stop).accessibility_label("Close").tooltip("Close")
           .on_click((_e, cx) => { cx.stop_propagation(); this.requestCloseTab(c); })
@@ -1139,7 +1149,9 @@ export default class Tabs extends View {
       // The SLOT around the pill keeps its place and its width, so the track stays exactly as long
       // as the tab list. The width of a tab is its label's, so the strip measures the slot rather
       // than guessing (`on_size_change`, gpui-kit.d.ts:734-736 — the only measurement a mod gets).
-      return h_flex().id(`tab-${c.id}${copyId}`).h_full().px(2).items_center().flex_none().min_w(144).max_w(300)
+      return h_flex().id(`tab-${c.id}${copyId}`)// The active tab's fillets reach 14px into its neighbours; padding that side keeps a
+      // neighbour's hover pill from sitting under (or over) them as a dark square.
+      .h_full().pl(i > 0 && shown[i - 1].active ? 14 : 2).pr(shown[i + 1]?.active ? 14 : 2).relative().items_center().flex_none().min_w(144).max_w(300)
         .when(!mode.overlay, el => el.on_size_change((size, cx) => this.measureTabWidth(c.id, size.width, cx)))
         // The pinned copy: drawn after the track, so it paints above the inactive tabs passing
         // underneath, and given the clamped left the geometry asked for. It is the same tab — its
@@ -1150,7 +1162,10 @@ export default class Tabs extends View {
         // The slot only stops painting while the pinned copy stands in for it. The pinned copy
         // always covers the slot's visible part, so no hole shows and no second tab appears.
         .when(mode.hidden, el => el.opacity(0))
-        .child(pill);
+        .child(pill)
+        // 1px divider between neighbouring inactive tabs, hidden beside the active or hovered one.
+        .when(!c.active && !mode.overlay && i < shown.length - 1 && !shown[i + 1].active && this.hoveredTab !== c.id && this.hoveredTab !== shown[i + 1].id,
+          el => el.child(div().absolute().right(0).top(0).bottom(0).flex().items_center().child(div().w(1).h(14).bg(tint(t.foreground, 0.14)))));
     };
     const root = layout();
     const sidebar = find(root, "sidebar");
@@ -1159,6 +1174,28 @@ export default class Tabs extends View {
     const live = appWindow();
     if (live) this.windowState = live;
     const w = live ?? this.windowState ?? {};
+    // The layout moves the strip's left edge in one step when the sidebar hides or shows, so the
+    // strip is drawn where it was and eased home: render 1 holds the old spot, a moment later
+    // render 2 lets `left` go to 0 under a transition. A transition only animates changes made
+    // after the element carried it, so each glide gets fresh element ids (`-g<n>`): render 1
+    // creates them already at the old spot, render 2 moves the same elements home. Only the tabs
+    // glide; the toggle stays put.
+    // shortcut: the column and the terminals still jump, since a mod cannot move layout nodes.
+    const sidebarHidden = Boolean(sidebar?.hidden);
+    if (this.lastSidebarHidden !== undefined && sidebarHidden !== this.lastSidebarHidden) {
+      const stripStartHidden = (w.platform === "macos" || !w.platform ? (w.fullscreen ? 8 : 75) : 6) + 36;
+      const jump = (sidebar?.size?.px ?? 280) - stripStartHidden;
+      this.glideShift = sidebarHidden ? jump : -jump;
+      this.glideGen = (this.glideGen ?? 0) + 1;
+      cx.spawn(async (cx) => {
+        await cx.sleep(40);
+        this.glideShift = 0;
+        cx.notify();
+      });
+    }
+    this.lastSidebarHidden = sidebarHidden;
+    const glide = (el, id) => el.id(`${id}-g${this.glideGen ?? 0}`).relative().left(this.glideShift)
+      .transition("left", { duration: SIDEBAR_GLIDE_MS, easing: "ease-out" });
     // .titlebar has no horizontal padding (main.css:1072-1084), so the strip is flush from the
     // left; only macOS traffic lights that land over this column reserve space. Old saved rails
     // and a dragged-narrow sidebar can be smaller than the window buttons.
@@ -1175,7 +1212,7 @@ export default class Tabs extends View {
     // The Explorer / Source Control activity buttons are NOT here: Orca renders its activity
     // bar only inside the right sidebar (`right-sidebar-top-activity-bar.tsx:40`), which
     // `orca-panel-head` owns. Drawing them twice put two strip icons in the titlebar corner.
-    return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(t.surface).border_b(1).border_color(t.border)
+    return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(t.surface)
       .on_mouse_move((e, cx) => {
         if (this.pressed !== null && this.stripBounds) {
           this.triggerSplit(this.stripBounds, e.position, cx);
@@ -1222,8 +1259,8 @@ export default class Tabs extends View {
       // pinned — its slot in the track (unpainted, but still holding the width) and the overlay at
       // the clamped left — which is what keeps `contentWidth` and the scroll limits independent of
       // the dock (§4). The arrows sit outside this box, so the pinned tab can never slide under them.
-      .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("start", geometry.arrows.leftDisabled)))
-      .child(div().id("tab-viewport").relative().flex_shrink(1).min_w(0).h_full().overflow_hidden()
+      .when(geometry.arrows.hasOverflow, el => el.child(glide(tabScrollButton("start", geometry.arrows.leftDisabled), "tab-scroll-start")))
+      .child(glide(div(), "tab-viewport").flex_shrink(1).min_w(0).h_full().overflow_hidden()
         .on_size_change((size, cx) => {
           if (Math.abs(size.width - this.viewportWidth) < 0.5) return;
           this.viewportWidth = size.width;
@@ -1234,7 +1271,7 @@ export default class Tabs extends View {
           .when(this.sliding(), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
           .children(shown.map((c, i) => item(c, i, { hidden: geometry.docked && i === geometry.activeIndex }))))
         .when(geometry.docked, el => el.child(item(geometry.activeTab, geometry.activeIndex, { overlay: { ...geometry.slot, width: geometry.activeWidth }, sliding: this.sliding() }))))
-      .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("end", geometry.arrows.rightDisabled)))
+      .when(geometry.arrows.hasOverflow, el => el.child(glide(tabScrollButton("end", geometry.arrows.rightDisabled), "tab-scroll-end")))
       // Orca terminal-tab-strip-drop-target.ts:39-52 — visual drop indicator when a pane is dragged to the tab strip.
       .when(Boolean(paneDrag?.inTabStrip), el =>
         el.child(
@@ -1253,7 +1290,7 @@ export default class Tabs extends View {
         )
       )
       // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-      .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: this.newMenuAt() })))
+      .child(glide(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: this.newMenuAt() })), "tab-new"))
       .child(div().flex_1())
       // TitlebarMainStrip.tsx:58-69 — the single-tab case gets a `Minimize2`
       // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,
