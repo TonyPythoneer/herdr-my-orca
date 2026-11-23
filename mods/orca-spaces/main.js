@@ -13,7 +13,7 @@ import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar, avatarFile } f
 import { getProjectGroupHeaderPaddingLeft } from "./indentation.js";
 import { tip, tipMark } from "./tip.js";
 import { stopsInit, stop, focusRoot, enter, within, onStop } from "./focus.js";
-import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, agentsByRow, activeReviewKeys, planRenderRows, groupSpaceIds } from "./worktree-plan.js";
+import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, forgetProject as forgetProjectCache, agentsByRow, activeReviewKeys, planRenderRows, groupSpaceIds } from "./worktree-plan.js";
 import { cardView } from "./cards.js";
 import { stored, workspaceOptions } from "./storage.js";
 import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUPS, BRANCH_PR_LOOKUP_PAGE_SIZE } from "./review-store.js";
@@ -87,6 +87,10 @@ export default class Spaces extends View {
         // filesystem wake. Orca reads a repo's worktrees when a dialog asks; a person who just
         // checked out or added one here has no such trigger.
         else if (cmd === "refresh") this.refreshAll(cx);
+        // The project menu's "Remove Project from Sidebar" (Orca's Remove Project): the
+        // catalog and the rows drawn from it live in this mod, so orca-menu hands over the
+        // repo through the shared store and pings this loop.
+        else if (cmd === "forget-project") this.forgetProject(cx);
       }
     });
     // where() -> { name, branch, owner, repo, linked }, null: not a repo.
@@ -623,6 +627,9 @@ export default class Spaces extends View {
       unread: this.unread.has(w.id),
       named: Boolean(w.named),
       name: w.name ?? null,
+      // The catalog entry this row was drawn from: a project with no open space is only a
+      // cache entry, and the menu's "Remove Project from Sidebar" needs the repo to name it.
+      repo: g?.repo ?? null,
     };
     // WorktreeContextMenuView.tsx:147 — `min-w-52` (208).
     openOverlay({ mod: "orca-menu", kind: "popup", width: 208, height: 320, props: { tab: "space", target } });
@@ -711,6 +718,23 @@ export default class Spaces extends View {
     this.foldedRepos.has(repo) ? this.foldedRepos.delete(repo) : this.foldedRepos.add(repo);
     localStorage.setItem("repos.folded", JSON.stringify([...this.foldedRepos]));
     // `cx` is absent for a keyboard Enter from `stop` (`focus.js`), which has no render cx.
+    this.notify(cx);
+  }
+
+  // Orca's Remove Project (`repo-header-project-actions.tsx:204`): the project leaves the
+  // sidebar, nothing on disk is touched. Herdr has no project catalog, so the sidebar's list
+  // IS this cache — every repo ever read stays listed with its main checkout and worktrees
+  // once its spaces close, and nothing else drops a non-null entry. A key a live space still
+  // sits on is kept, so the group those spaces draw from never loses its row.
+  forgetProject(cx) {
+    const ask = shared("orca-spaces.forget");
+    setShared("orca-spaces.forget", null);
+    const repo = ask?.repo;
+    if (!repo) return;
+    const live = spaces().map((s) => where(s));
+    if (!forgetProjectCache(this.git, repo, live)) return;
+    for (const key of Object.keys(this.checked)) if (!(key in this.git)) delete this.checked[key];
+    localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
     this.notify(cx);
   }
 
@@ -877,7 +901,7 @@ export default class Spaces extends View {
       .h(28).flex_none().w_full().pl(getProjectGroupHeaderPaddingLeft(0)).pr(8).gap(6).items_center().mt(4)
       .role("button").accessibility_label(g?.name ?? w.name)
       // SectionHeader.tsx:355-414 & repo-header-project-actions.tsx:113: right click opens group actions menu
-      .on_mouse_down("right", () => openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces } } }))
+      .on_mouse_down("right", () => openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces, repo: g?.repo ?? null } } }))
       .on_click((_e, cx) => this.toggleRepo(key, cx))
       .on_hover((on, cx) => {
         if (on) this.hoveredRepo = key;
@@ -923,11 +947,11 @@ export default class Spaces extends View {
               this.menuKey = key;
               // RepoHeaderProjectActionsMenu's DropdownMenuContent has no width class, so Orca's
               // dropdown-menu.tsx:80 `min-w-[11rem]` (176) applies.
-              openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces } } });
+              openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces, repo: g?.repo ?? null } } });
               this.notify(cx);
             })
             .child(svg("mods/orca-spaces/ellipsis.svg").size(14).flex_none()),
-          6, { enter: () => { this.menuKey = key; openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces } } }); } }))
+          6, { enter: () => { this.menuKey = key; openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces, repo: g?.repo ?? null } } }); } }))
         .child(stop(this, t, `space-new-${w.id}`,
           div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
             .role("button").accessibility_label("New space")

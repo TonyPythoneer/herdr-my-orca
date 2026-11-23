@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { parseWorktreeList, projectWorktreePlan, where, groupSpaceIds } from './worktree-plan.js';
+import { parseWorktreeList, projectWorktreePlan, where, groupSpaceIds, forgetProject } from './worktree-plan.js';
 
 test('deleted worktrees disappear from the sidebar without closing their tabs', () => {
   const repo = JSON.stringify([null, '/repo/.git']);
@@ -164,4 +164,40 @@ test('the plan gives an unopened main checkout a made-up id, never a space id', 
   const group = plan.groups.find((g) => g.rows.some((r) => r.w.id === 'w1'));
   assert.equal(group.rows.some((r) => r.unopened && r.w.id.startsWith('repo:')), true);
   assert.deepEqual(groupSpaceIds(group, ['w1']), ['w1']);
+});
+
+test('removing a project drops its catalog entries and keeps a live space\'s checkouts', () => {
+  const repo = JSON.stringify([null, '/repo/.git']);
+  const other = JSON.stringify([null, '/other/.git']);
+  const cache = {
+    [JSON.stringify([null, '/repo'])]: { repo, top: '/repo' },
+    [JSON.stringify([null, '/repo/wt-a'])]: { repo, top: '/repo/wt-a' },
+    [JSON.stringify([null, '/repo/wt-live'])]: { repo, top: '/repo/wt-live' },
+    [JSON.stringify([null, '/other'])]: { repo: other, top: '/other' },
+    [JSON.stringify([null, '/gone'])]: null,
+  };
+  const live = [JSON.stringify([null, '/repo/wt-live'])];
+  assert.equal(forgetProject(cache, repo, live), 2);
+  assert.deepEqual(Object.keys(cache).sort(), [
+    JSON.stringify([null, '/gone']),
+    JSON.stringify([null, '/other']),
+    JSON.stringify([null, '/repo/wt-live']),
+  ].sort());
+  // Asking again changes nothing; no repo removes nothing.
+  assert.equal(forgetProject(cache, repo, live), 0);
+  assert.equal(forgetProject(cache, null, live), 0);
+  assert.equal(Object.keys(cache).length, 3);
+});
+
+test('removing a project after its spaces close leaves the sidebar empty of it', () => {
+  const linked = { id: 'w1', folder: '/repo/wt', tabs: [] };
+  const gitState = { [where(linked)]: {
+    repo: JSON.stringify([null, '/repo/.git']), top: '/repo/wt', name: 'repo', linked: true, branch: 'x',
+    worktrees: [{ path: '/repo', branch: 'main' }, { path: '/repo/wt', branch: 'x' }],
+  } };
+  assert.equal(projectWorktreePlan({ spaces: [linked], gitState, loaded: true }).groups.length, 1);
+  assert.equal(forgetProject(gitState, JSON.stringify([null, '/repo/.git']), []), 1);
+  const plan = projectWorktreePlan({ spaces: [], gitState, loaded: true });
+  assert.equal(plan.groups.length, 0);
+  assert.equal(plan.visibleRows.length, 0);
 });
