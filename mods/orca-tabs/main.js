@@ -300,15 +300,16 @@ export default class Tabs extends View {
         pin: () => (props()?.pinSidebarTerminal && !this.nativePinned && this.nativeHeaderWidth > 0 ? this.nativeHeaderWidth / (settings()?.zoom || 1) : null),
         after: (target) => setShared("sidebar.collapsed", target === 0),
       }),
-      // The same hold as the sidebar, mirrored: `main` keeps the width it had while the panel
-      // moves and `work-body` clips it, so the PTY reflows once at the end instead of on every
-      // step. Without it the terminal is re-laid out on each frame and flickers.
+      // Size the PTY for the open panel before moving the panel, and hold that width during motion.
       panel: new Drawer({
         id: "panel", defaultOpen: 350, measure: "measurePanel",
-        pin: (open, wasHidden) => {
+        pin: (open) => {
           if (!(this.nativeHeaderWidth > 0)) return null;
-          const sb = find(layout(), "sidebar");
-          return this.nativeHeaderWidth / (settings()?.zoom || 1) + (wasHidden ? 0 : open) - (sb?.hidden ? 0 : (sb?.size?.px ?? 0));
+          const root = layout();
+          const sb = find(root, "sidebar"), panel = find(root, "panel");
+          const sidebarWidth = sb?.hidden ? 0 : (sb?.size?.px ?? 0);
+          const panelWidth = panel?.hidden ? 0 : (panel?.size?.px ?? 0);
+          return Math.max(1, this.nativeHeaderWidth / (settings()?.zoom || 1) + panelWidth - open - sidebarWidth);
         },
       }),
     };

@@ -5,11 +5,10 @@ description: Required before you create, edit or delete any Herdr App UI file (a
 
 # Herdr App dev sync
 
-The running app reads only live `~/.config/herdr-app/`; git sees only the repo (this herdr-my-orca checkout, main or a worktree). Same relative paths, no automatic sync. Live also holds other worktrees' unmerged work, so the two already differ: never sync drift you didn't create.
+The active herdr-my-orca checkout is the source of truth for the files you edit. The running app reads `~/.config/herdr-app/`. Edit in the repo first, then apply the changed files to the matching live paths.
 
-1. Before your first edit to a file, run `diff <file> ~/.config/herdr-app/<file>` from the repo root. If they differ, stop: show the user and ask which side is current. Diff again right before copying; a hunk you didn't write means stop and ask, never overwrite.
-2. Edit on either side, then copy each file you changed (yours only, not everything in `git status`) to the other side with a haiku subagent (Agent tool, `model: haiku`), prompting:
-   > Copy exactly these files from `<absolute src root>` to `<absolute dest root>`, same relative path, one `cp` per file (`mkdir -p` a missing parent): `<files>`. Copy nothing else, delete nothing, run no git, load no skills, spawn no agents. Report each file you copied.
+1. Review the repo-to-live diff for each file you changed. The repo version takes precedence for those files, including existing differences in live.
+2. Copy each changed file from the repo to the matching live path with one `cp` per file. Create missing parent directories as needed. Limit the copy to files changed for the current task.
 3. Done only when every changed file diffs empty, `herdr-app check ~/.config/herdr-app/mods/<mod>` exits 0 for each changed mod, and `herdr-app status` shows no errors from the files you changed. Tell the user which files went which way.
 
 Never:

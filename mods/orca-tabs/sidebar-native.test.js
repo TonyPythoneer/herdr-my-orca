@@ -44,7 +44,7 @@ test("native motion pins the terminal and restores its flexible width", async ()
   delete globalThis.__herdrLayout;
 });
 
-test("right panel holds the terminal width until both animations finish", async () => {
+test("closing the right panel hides it before restoring flexible terminal width", async () => {
   const calls = [], tasks = [];
   globalThis.__herdrRun = (name, args) => calls.push([name, args]);
   globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px: 350 }, hidden: false }, { id: "sidebar", size: { px: 259 }, hidden: false }] });
@@ -56,15 +56,44 @@ test("right panel holds the terminal width until both animations finish", async 
   tabs.togglePanelNative(cx);
   await tasks[0](cx);
   // The same hold as the sidebar, so the PTY does not reflow on every step.
-  assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.px === 891));
+  assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.px === 541));
   await tasks[1](cx); // the silent clock's timer steps the node to the end
   const widths = calls.filter(([name, args]) => name === "layout.resize" && args.id === "panel").map(([, args]) => args.px);
   assert.ok(new Set(widths).size > 10, "the panel's edge moves in steps");
+  assert.equal(widths.at(-1), 1);
+  assert.equal(calls.some(([name]) => name === "layout.hide"), false);
   await tasks[2](cx); // then the drawer finishes
+  assert.deepEqual(calls.slice(-2), [
+    ["layout.hide", { id: "panel" }],
+    ["layout.resize", { id: "panel", px: 350 }],
+  ]);
   assert.equal(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.weight === 1), false, "the left drawer is still moving");
   tabs.drawers.sidebar.busy = false;
   tabs.releaseNativePin();
   assert.ok(calls.some(([name, args]) => name === "layout.resize" && args.id === "main" && args.weight === 1));
   delete globalThis.__herdrRun;
   delete globalThis.__herdrLayout;
+});
+
+test("right panel pins the terminal at its open width before showing the panel", async (t) => {
+  const calls = [], tasks = [];
+  globalThis.__herdrRun = (name, args) => calls.push([name, args]);
+  globalThis.__herdrLayout = () => ({ children: [
+    { id: "panel", size: { px: 410 }, hidden: true },
+    { id: "sidebar", size: { px: 259 }, hidden: false },
+  ] });
+  t.after(() => {
+    delete globalThis.__herdrRun;
+    delete globalThis.__herdrLayout;
+  });
+  const tabs = new Tabs();
+  tabs.nativeHeaderWidth = 1150;
+  const cx = cxOf(tasks);
+  tabs.togglePanelNative(cx);
+  await tasks[0](cx);
+  assert.deepEqual(calls.slice(0, 3), [
+    ["layout.resize", { id: "main", px: 481 }],
+    ["layout.resize", { id: "panel", px: 1 }],
+    ["layout.show", { id: "panel" }],
+  ]);
 });
