@@ -64,7 +64,7 @@
                   },
                   "min": 0,
                   "max": 500,
-                  "background": "chrome",
+                  "background": "surface",
                   "resizable": false,
                   "children": [
                     {
@@ -76,7 +76,10 @@
                           "id": "nav-top",
                           "type": "block",
                           "content": {
-                            "mod": "orca-nav"
+                            "mod": "orca-nav",
+                            "props": {
+                              "unified": true
+                            }
                           },
                           "size": {
                             "px": 86
@@ -89,7 +92,10 @@
                             "weight": 1
                           },
                           "content": {
-                            "mod": "orca-spaces"
+                            "mod": "orca-spaces",
+                            "props": {
+                              "unified": true
+                            }
                           }
                         }
                       ]
@@ -103,7 +109,8 @@
                       "content": {
                         "mod": "orca-chrome",
                         "props": {
-                          "footer": true
+                          "footer": true,
+                          "unified": true
                         }
                       }
                     }

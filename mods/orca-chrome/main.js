@@ -29,6 +29,7 @@ function toggleSidebar() {
 // Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
 function sidebarFrame(inner) {
   const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
+  if (!props()?.unified) return inner;
   const open = shared("sidebar.openPx");
   const px = find(layout(), "sidebar")?.size?.px;
   if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
@@ -62,7 +63,7 @@ export default class WorkspaceChrome extends View {
       const row = (id, icon, label, action) => div().id(id).size(24).flex_none().flex().items_center().justify_center().rounded(8)
         .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
         .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
-      const footerBar = h_flex().size_full().items_center().justify_between().bg(t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
+      const footerBar = h_flex().size_full().items_center().justify_between().bg(props()?.unified ? t.surface : t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
         .child(h_flex().items_center().gap(4)
           // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
           // while the Agents page lives in the `main` stack (`main-agents`).

@@ -538,7 +538,10 @@ export default class Tabs extends View {
     this.sbBusy = true; this.sbGoal = target;
     cx.spawn(async (cx) => {
       await cx.sleep(1); // leave the render phase: notify() is only legal from a task
-      if (hidden && !this.sbShown) {
+      // Read the node live: a press can land in the tail of a collapse (hide already sent) or in the
+      // preamble of an expand (show not yet applied), and `hidden` above may be a frame stale.
+      const nowHidden = () => Boolean(find(layout(), "sidebar")?.hidden);
+      if (target === 1 && nowHidden()) {
         run("layout.resize", { id: "sidebar", px: 1 });
         await cx.sleep(80);
         if (token !== this.sbToken) return;
@@ -546,7 +549,6 @@ export default class Tabs extends View {
         await cx.sleep(50);
         if (token !== this.sbToken) return;
       }
-      this.sbShown = true;
       const d = Math.abs(target - from);
       const dur = (320 + 120 * d) * (0.5 + 0.5 * d) + 60;
       const t0 = Date.now();
@@ -554,6 +556,7 @@ export default class Tabs extends View {
         const k = Math.min(1, (Date.now() - t0) / dur);
         this.sbP = from + (target - from) * drawerEase(k);
         run("layout.resize", { id: "sidebar", px: Math.max(1, Math.round(open * this.sbP)) });
+        if (target === 1 && nowHidden()) run("layout.show", { id: "sidebar" }); // the hide of a reversed collapse landed late
         cx.notify();
         if (k >= 1) break;
         await cx.sleep(SIDEBAR_STEP_MS);
@@ -566,7 +569,7 @@ export default class Tabs extends View {
       }
       run("layout.resize", { id: "sidebar", px: open });
       setShared("sidebar.collapsed", target === 0);
-      this.sbBusy = false; this.sbShown = false; this.sbGoal = undefined;
+      this.sbBusy = false; this.sbGoal = undefined;
       cx.notify();
     });
   }
@@ -942,9 +945,9 @@ export default class Tabs extends View {
     const paneDrag = shared("orca-tabs.pane-drag");
     const t = theme();
     // `unified`: this block is the single header over the sidebar AND the work column
-    // (layouts/orca-unified.json); the bar then shares the sidebar's `chrome` colour.
+    // (layouts/orca-unified.json); the sidebar there is `surface` too, so bar, sidebar and fillets match.
     const unified = Boolean(p?.unified);
-    const bar = unified ? t.chrome : t.surface;
+    const bar = t.surface;
     const space = (spaces() ?? []).find(p => p.active);
     const shown = space?.tabs ?? [];
     const tabPanes = selectTabPanes(panes() ?? []);

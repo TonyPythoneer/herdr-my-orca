@@ -134,6 +134,7 @@ function labelOf(choices, value) {
 // Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
 function sidebarFrame(inner) {
   const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
+  if (!props()?.unified) return inner;
   const open = shared("sidebar.openPx");
   const px = find(layout(), "sidebar")?.size?.px;
   if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
@@ -194,7 +195,7 @@ export default class Nav extends View {
       .on_click(() => { pushHistory(page); run("layout.select", { stack: "main", child: page }); })
       .child(svg(`mods/orca-nav/${icon}.svg`).size(16).flex_none().text_color(shown === page ? t.accent_foreground : "#f0f0f04d"))
       .child(div().flex_1().truncate().child(label));
-    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(t.chrome)
+    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(props()?.unified ? t.surface : t.chrome)
       .child(search)
       // Projects header — SidebarHeader.tsx:60-63: `group/sidebar-header mt-2 flex h-8 min-w-0
       // shrink-0 items-center justify-between gap-1.5 px-2`; title `pl-2 pr-0.5 text-xs
