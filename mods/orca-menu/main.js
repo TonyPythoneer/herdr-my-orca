@@ -199,7 +199,10 @@ function items(p, git) {
       const groupSpaces = spaces().filter((s) => s.id === tg.id || (tg.path && (s.folder === tg.path || s.folder?.startsWith(tg.path + "/"))));
       // The sidebar's own grouping (`tg.spaces`, from orca-spaces) knows the linked worktrees
       // stored outside the project folder; the folder-prefix match above misses them.
-      const groupIds = tg.spaces?.length ? tg.spaces : groupSpaces.map((s) => s.id);
+      // Only live spaces: a row git lists with no space open carries a made-up id
+      // (`repo:`/`wt:`), and `space.close` would fail with `no space "repo:[...]"`.
+      const groupIds = (tg.spaces?.length ? tg.spaces : groupSpaces.map((s) => s.id))
+        .filter((id) => spaces().some((s) => s.id === id));
       const openSpace = groupSpaces[0];
       const folder = tg.path ?? (openSpace ? place(openSpace) : null);
       const args = { ...(open ? { space: tg.id } : openSpace ? { space: openSpace.id } : {}), ...(folder ? { folder } : {}), ...(tg.machine ? { machine: tg.machine } : {}) };

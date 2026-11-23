@@ -44,6 +44,25 @@ export function place(s, _ps = []) {
  */
 export const where = (s, ps) => JSON.stringify([s?.machine ?? null, place(s, ps)]);
 
+/**
+ * The open spaces a sidebar group covers: its rows name them (`r.w`, plus any space merged
+ * onto the same checkout), so a project's commands need no git and no path match.
+ * Only ids the host knows are returned: a row git lists with no space open gets a made-up
+ * id (`repo:` for a main checkout, `wt:` for a sibling) and `space.close` rejects it
+ * ("no space \"repo:[null,...]\"").
+ */
+export function groupSpaceIds(group, live) {
+  const known = new Set(live ?? []);
+  const ids = [];
+  for (const r of group?.rows ?? []) {
+    for (const w of [r.w, ...(r.also ?? []).map((a) => a.w)]) {
+      if (!w?.id || !known.has(w.id) || ids.includes(w.id)) continue;
+      ids.push(w.id);
+    }
+  }
+  return ids;
+}
+
 export function pruneGitCache(cache, spaces, checked = {}) {
   const active = new Set(spaces.map(s => where(s)));
   const remove = key => { delete cache[key]; delete checked[key]; };
