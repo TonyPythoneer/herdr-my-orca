@@ -11,6 +11,7 @@ import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, 
 import { copyText } from "./clip.js";
 import { buildBoundedSessionTranscript } from "./transcript.js";
 import { closeSideTabs } from "./close-sides.js";
+import { closeRows } from "./close-space.js";
 
 // Orca's palette (`SortableTabContextMenu.tsx:15-80`), in its order; `null` is "None".
 const TAB_COLORS = [["None", null], ["Blue", "#3b82f6"], ["Purple", "#a855f7"], ["Pink", "#ec4899"],
@@ -200,6 +201,9 @@ function items(p, git) {
     case "group": {
       const open = spaces().some((s) => s.id === tg.id);
       const groupSpaces = spaces().filter((s) => s.id === tg.id || (tg.path && (s.folder === tg.path || s.folder?.startsWith(tg.path + "/"))));
+      // The sidebar's own grouping (`tg.spaces`, from orca-spaces) knows the linked worktrees
+      // stored outside the project folder; the folder-prefix match above misses them.
+      const groupIds = tg.spaces?.length ? tg.spaces : groupSpaces.map((s) => s.id);
       const openSpace = groupSpaces[0];
       const folder = tg.path ?? (openSpace ? place(openSpace) : null);
       const args = { ...(open ? { space: tg.id } : openSpace ? { space: openSpace.id } : {}), ...(folder ? { folder } : {}), ...(tg.machine ? { machine: tg.machine } : {}) };
@@ -211,11 +215,9 @@ function items(p, git) {
         // Every unpinned tab of the project: the main checkout and every linked worktree, from the
         // sidebar's own grouping (`spaces`), which knows worktrees outside the project folder.
         ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: tg.spaces ?? [], disabled: !unpinnedTabs(tg.spaces ?? []).length }],
-        ...(groupSpaces.length === 1
-          ? [["Close workspace", "space.close", { id: groupSpaces[0].id }]]
-          : groupSpaces.length > 1
-            ? [["Close workspace", "orca-menu.close-group", { ids: groupSpaces.map((s) => s.id) }]]
-            : []),
+        // `space.close` needs `confirmed` (the host refuses it otherwise), and a group closes
+        // as one command (close-space.js).
+        ...closeRows(groupIds),
       ];
     }
     case "space": {
@@ -251,7 +253,7 @@ function items(p, git) {
         ...(linked ? [["Remove worktree", "worktree", { ...args, action: "remove" }]] : []),
         // Every unpinned tab on this worktree's spaces; greyed out when there is none.
         ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: [tg.id], disabled: !unpinnedTabs([tg.id]).length }],
-        ...(open ? [["Close", "space.close", { id: tg.id }]] : []),
+        ...(open ? closeRows([tg.id], "Close") : []),
       ];
     }
     default:
