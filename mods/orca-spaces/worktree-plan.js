@@ -93,7 +93,7 @@ export function pruneGitCache(cache, spaces, checked = {}) {
   }
 }
 
-export const base = (path) => path.replace(/\/+$/, "").split("/").pop();
+export const base = (path) => typeof path === "string" ? path.replace(/\/+$/, "").split("/").pop() : "";
 
 /**
  * A `[machine, path|repo]` pair written by `where`: anything else reads as [].
