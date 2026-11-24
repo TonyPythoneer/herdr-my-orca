@@ -18,7 +18,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: 77f07e6b825204397ac49e9def5516f5556ded70
+          ref: 523c318529a1b8dabf1172f36154023ebef0719c
           path: target
           persist-credentials: false
       - name: Record source and prepare output
@@ -50,7 +50,7 @@ jobs:
       - name: Report
         if: always()
         run: |
-          echo "## Candidate UI snapshot — PR #20 (not main)" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Candidate UI snapshot — PR #25 (not main)" >> "$GITHUB_STEP_SUMMARY"
           if test -f "$RUNNER_TEMP/ui-snapshot/summary.md"; then
             cat "$RUNNER_TEMP/ui-snapshot/summary.md" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -59,14 +59,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: candidate-pr20-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
+          name: candidate-pr25-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ui-snapshot/
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always() && !cancelled()
         with:
-          name: candidate-pr20-gallery-${{ github.run_id }}-${{ github.run_attempt }}
+          name: candidate-pr25-gallery-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ui-gallery/
           if-no-files-found: error
           retention-days: 14
