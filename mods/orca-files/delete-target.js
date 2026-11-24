@@ -1,14 +1,19 @@
-// The confirmation may outlive the workspace that opened it.
-export async function deleteTarget(target, current, exec) {
-  if (!target || !target.cwd || !target.space || !target.path ||
-      JSON.stringify({ cwd: target.cwd, on: target.on, space: target.space }) !== JSON.stringify(current)) {
+import { sameWorkspace, hasUnsafePart } from "./workspace-path.js";
+
+// The path below the workspace root, checked against the workspace the confirmation was opened for.
+function relativeTarget(target, current) {
+  if (!target?.cwd || !target.space || !target.path || !sameWorkspace(target, current)) {
     throw new Error("Workspace or host changed; deletion was cancelled.");
   }
   const root = target.cwd.replace(/\/+$/, ""), prefix = root ? `${root}/` : "/";
   const relative = target.path.startsWith(prefix) ? target.path.slice(prefix.length) : "";
-  if (!relative || relative.split("/").some((part) => !part || part === "." || part === "..")) {
-    throw new Error("Invalid deletion target.");
-  }
+  if (!relative || hasUnsafePart(relative)) throw new Error("Invalid deletion target.");
+  return { root, relative };
+}
+
+// The confirmation may outlive the workspace that opened it.
+export async function deleteTarget(target, current, exec) {
+  const { root, relative } = relativeTarget(target, current);
   // shortcut: path components can change between the checks and rm; use a host API with
   // directory-handle-relative deletion when Herdr exposes one.
   const script = `

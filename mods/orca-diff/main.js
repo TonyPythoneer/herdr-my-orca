@@ -8,10 +8,19 @@ import { diffRows, diffWidth } from "./diff-rows.js";
 import { diffBody } from "./diff.js";
 import { loadDiff } from "./diff-data.js";
 
+const RELOAD_INTERVAL_MS = 10000;
+
 function label(t) {
   if (t.all) return "uncommitted";
   if (t.sectionAll) return t.section === "staged" ? "Staged" : "Unstaged + untracked";
-  return t.section === "staged" ? "Staged" : t.status === "U" ? "Untracked" : "Unstaged";
+  if (t.section === "staged") return "Staged";
+  return t.status === "U" ? "Untracked" : "Unstaged";
+}
+
+function title(target) {
+  if (target.all) return "All changes";
+  if (!target.sectionAll) return target.path;
+  return target.section === "staged" ? "Staged Changes" : "Changes";
 }
 
 export default class Diff extends View {
@@ -20,11 +29,11 @@ export default class Diff extends View {
     this.target = props()?.root ? props() : null;
     this.rows = []; this.width = 300; this.loadGeneration = 0;
     this.load(cx);
-    cx.timer.every(10000, (cx) => this.load(cx));
-    cx.spawn(async (cx) => {
+    cx.timer.every(RELOAD_INTERVAL_MS, (timerCx) => this.load(timerCx));
+    cx.spawn(async (taskCx) => {
       for (;;) {
-        if ((await nextCommand()) === "show") { this.target = shared("orca-diff.target") ?? this.target; this.load(cx); }
-        cx.notify();
+        if ((await nextCommand()) === "show") { this.target = shared("orca-diff.target") ?? this.target; this.load(taskCx); }
+        taskCx.notify();
       }
     });
   }
@@ -33,7 +42,7 @@ export default class Diff extends View {
     const t = this.target;
     if (!t) return;
     const generation = ++this.loadGeneration;
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try {
         const lines = await loadDiff(t, exec);
         if (this.target !== t || this.loadGeneration !== generation) return;
@@ -43,7 +52,7 @@ export default class Diff extends View {
         this.rows = diffRows([`Cannot preview this diff: ${e}`]);
       }
       this.width = diffWidth(this.rows);
-      cx.notify();
+      taskCx.notify();
     });
   }
 
@@ -56,7 +65,7 @@ export default class Diff extends View {
   render(_cx) {
     const t = theme(), target = this.target;
     if (!target) return div().size_full().p(16).text_size(12).text_color(t.muted).child("Pick a file in Changes");
-    const parts = (target.all ? "All changes" : target.sectionAll ? (target.section === "staged" ? "Staged Changes" : "Changes") : target.path).split("/"), name = parts.pop();
+    const parts = title(target).split("/"), name = parts.pop();
     const add = this.rows.filter((r) => r.kind === "+").length, del = this.rows.filter((r) => r.kind === "-").length;
     return v_flex().id("orca-diff").size_full().min_h(0).overflow_hidden().bg(t.background).text_color(t.foreground).text_size(13)
       .child(h_flex().h(36).flex_none().px(12).gap(8).items_center().border_b(1).border_color(t.border)

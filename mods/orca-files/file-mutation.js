@@ -1,20 +1,10 @@
-export async function mutateFile(target, current, name, exec) {
-  if (!target?.cwd || !target.space || JSON.stringify({ cwd: target.cwd, on: target.on, space: target.space }) !== JSON.stringify(current)) {
-    throw new Error("Workspace or host changed; action was cancelled.");
-  }
-  if (!name || !name.trim() || name === "." || name === ".." || name.includes("/") || name.includes("\\") || name.includes("\0")) throw new Error("Enter a single valid file name.");
-  if (!["touch", "mkdir", "mv", "duplicate"].includes(target.mode)) throw new Error("Invalid action.");
-  const root = target.cwd.replace(/\/+$/, ""), prefix = root ? `${root}/` : "/";
-  const hasSource = target.mode === "mv" || target.mode === "duplicate";
-  const parent = hasSource ? target.full.replace(/\/[^/]*$/, "") : target.full;
-  const relative = parent === root || (target.cwd === "/" && parent === "/") ? "" : parent.startsWith(prefix) ? parent.slice(prefix.length) : null;
-  if (relative === null || (relative && relative.split("/").some((part) => !part || part === "." || part === ".."))) throw new Error("Invalid target folder.");
-  if (hasSource && (!target.full.startsWith(prefix) || !target.full.slice(prefix.length) || target.full.endsWith("/"))) throw new Error("Invalid source.");
-  if (target.mode === "duplicate" && target.full.slice(target.full.lastIndexOf("/") + 1) !== name) throw new Error("Invalid source name.");
-  const dot = name.lastIndexOf("."), stem = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : "";
-  // shortcut: shell path checks and mutation are not atomic; use a host directory-handle API when available.
-  // Copies retain ordinary permission bits, but never inherit setuid, setgid or sticky bits.
-  const script = `
+import { sameWorkspace, hasUnsafePart } from "./workspace-path.js";
+
+const MODES = ["touch", "mkdir", "mv", "duplicate"];
+
+// shortcut: shell path checks and mutation are not atomic; use a host directory-handle API when available.
+// Copies retain ordinary permission bits, but never inherit setuid, setgid or sticky bits.
+const FILE_ACTION_SCRIPT = `
 dir=$1; rest=$2; mode=$3; name=$4; source=$5; stem=$6; ext=$7
 if [ -L "$dir" ] || [ ! -d "$dir" ]; then echo 'Unsafe or missing workspace root' >&2; exit 1; fi
 while [ -n "$rest" ]; do
@@ -48,6 +38,42 @@ case "$mode" in
     if [ -e "$source" ] || [ -L "$source" ]; then echo 'Destination already exists or rename failed' >&2; exit 1; fi ;;
 esac
 `;
-  const result = await exec("sh", ["-c", script, "file-action", root || "/", relative, target.mode, name, target.full, stem, ext], { on: target.on });
+
+const isSingleName = (name) => Boolean(name) && Boolean(name.trim()) && name !== "." && name !== ".." && !/[/\\\0]/.test(name);
+
+function validateRequest(target, current, name) {
+  if (!target?.cwd || !target.space || !sameWorkspace(target, current)) throw new Error("Workspace or host changed; action was cancelled.");
+  if (!isSingleName(name)) throw new Error("Enter a single valid file name.");
+  if (!MODES.includes(target.mode)) throw new Error("Invalid action.");
+}
+
+// The folder the action runs in, relative to the workspace root ("" for the root itself), or null when it is outside.
+function relativeFolder(parent, root, prefix, cwd) {
+  if (parent === root || (cwd === "/" && parent === "/")) return "";
+  return parent.startsWith(prefix) ? parent.slice(prefix.length) : null;
+}
+
+function assertSource(target, prefix, name) {
+  const { full } = target;
+  if (!full.startsWith(prefix) || !full.slice(prefix.length) || full.endsWith("/")) throw new Error("Invalid source.");
+  if (target.mode === "duplicate" && full.slice(full.lastIndexOf("/") + 1) !== name) throw new Error("Invalid source name.");
+}
+
+// Where the action runs and what it acts on, checked against the workspace root; throws when either is outside it.
+function resolvePaths(target, name) {
+  const root = target.cwd.replace(/\/+$/, ""), prefix = root ? `${root}/` : "/";
+  const hasSource = target.mode === "mv" || target.mode === "duplicate";
+  const parent = hasSource ? target.full.replace(/\/[^/]*$/, "") : target.full;
+  const relative = relativeFolder(parent, root, prefix, target.cwd);
+  if (relative === null || (relative && hasUnsafePart(relative))) throw new Error("Invalid target folder.");
+  if (hasSource) assertSource(target, prefix, name);
+  return { root, relative };
+}
+
+export async function mutateFile(target, current, name, exec) {
+  validateRequest(target, current, name);
+  const { root, relative } = resolvePaths(target, name);
+  const dot = name.lastIndexOf("."), stem = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : "";
+  const result = await exec("sh", ["-c", FILE_ACTION_SCRIPT, "file-action", root || "/", relative, target.mode, name, target.full, stem, ext], { on: target.on });
   if (result.code !== 0) throw new Error((result.stderr || result.stdout || "File operation failed").trim());
 }

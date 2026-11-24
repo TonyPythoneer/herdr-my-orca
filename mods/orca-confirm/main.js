@@ -20,7 +20,7 @@ export default class Confirm extends View {
     run(p.command.name, p.command.args ?? {});
   }
 
-  render(cx) {
+  render(_cx) {
     const t = theme();
     const p = props() ?? {};
     const button = (id, label, bg, fg, onClick) =>

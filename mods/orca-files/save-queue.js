@@ -6,6 +6,6 @@ export function queueSave(doc, text, write) {
     try { await write(doc.full, text, doc.disk); doc.disk = text; }
     catch (e) { doc.failure = e; throw e; }
   });
-  doc.queue = task.catch(() => {});
+  doc.queue = task.catch(() => { /* Keep the queue usable; the caller receives the original rejection. */ });
   return task;
 }
