@@ -4,7 +4,7 @@ import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import {
   TASK_TIMEOUT_MS, WINDOW_MINUTES, describeTrigger, formatClock, formatCountdown, isDue, nextDaily, nextRunAt,
-  parseResets, parseTasks, recordRun, resetMs, runTask, tail, windowLabel, windowMinutes,
+  parseResets, parseTasks, providerLabel, recordRun, resetMs, runTask, tail, windowLabel, windowMinutes,
 } from "../orca-ui/shared/tasks.js";
 
 const MIN = 60_000;
@@ -250,4 +250,14 @@ test("parseResets: Codex reports its windows by length", () => {
   assert.deepEqual(codex({}), EMPTY);
   assert.deepEqual(codex({ primary: "x", secondary: 5 }), EMPTY);
   assert.deepEqual(codex(null), EMPTY);
+});
+
+test("task reset validation and labels reject inherited object keys", () => {
+  for (const key of ["constructor", "toString", "__proto__"]) {
+    assert.match(problem({ ...good, trigger: { ...good.trigger, provider: key } }), /trigger.provider/);
+    assert.match(problem({ ...good, trigger: { ...good.trigger, window: key } }), /trigger.window/);
+    assert.equal(windowMinutes(key), 300);
+    assert.equal(windowLabel(key), key);
+    assert.equal(providerLabel(key), key);
+  }
 });
