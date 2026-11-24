@@ -1,104 +1,270 @@
 # Orca UI 單一原始碼套件實作計畫
 
-## 目的與完成條件
+截至 2026-11-24，第一批已在 `2d38b99`、`9b9e22a` 提交。`orca-panel-head` 已遷入 [orca-ui/features/panel/head/](../orca-ui/features/panel/head/)，builder 可生成 12 個檔案，`where-error` 可反查現有 feature 和共用副本。下一步依序做步驟 2a、2b、3a。3a 驗收後執行 B／C 檢查點，再依結果決定是否啟動 3b。
 
-讓第一次接手的 AI 從一個入口看懂整套 Orca UI，拿到修改需求時能指出正確來源、受影響的畫面和驗證方式。**完成遷移後，日常功能開發從 `orca-ui/app.mjs` 開始。AI 沿來源中的連結改程式、跑測試，不必搜尋或打開已生成的 `mods/` 才能知道怎麼改。** Herdr 和產物測試仍讀取這些檔案。
+第一條分隔線以前是現行計畫。分隔線起保留歷史。處置依據見 [實作準備度報告](../egm/implementation_readiness_report.md)、[Codex 顧問建議](../egm/codex_advice.md)、[Intermediate Zoom Out](../egm/intermediate_zoom_out_report.md)、[本輪決議](../egm/critic_report.md)、[Codex 第二輪審查](../egm/codex_review_round2.md)、[前輪處置](../egm/stage5-6_resolution.md)、[Zoom Out](../egm/zoom_out_report.md) 與 [Comprehension](../egm/comprehension_report.md)。本輪計畫提交包含 `egm/` 與 [3b 規格筆記](plan-orca-ui-3b-notes.md)。
 
-本節到「實施順序與驗收」是現行計畫。本文只規劃遷移；目前 checkout 的多數實作仍在 `mods/`，已有的建置工具是 [sync-shared.mjs](../scripts/sync-shared.mjs)。文末保留原提案和署名審查供追溯。遇到基準、來源位置或執行順序差異，以現行計畫為準。
+## 問題
 
-## AI 從哪裡讀、在哪裡改
+第一次接手的 AI 從 layout 的 `children` 只能找到直接掛載的 mod。跨 mod command、overlay、pane、背景 runner 和 `shared()` 狀態的接收端散在各檔。例如在 `orca` 按 ⌘⇧F 會先經 panel-head 展開右面板並選中 Files，再交給 Files 切換 Contents。搬入來源套件後，同一份 JS 又可能同時出現在來源端與 Herdr 讀取的副本。現有 builder 會直接覆寫較新的副本，`--check` 會漏掉未宣告的檔案，builder 與錯誤反查也各有自己的掃描邏輯。相關入口見 [app.mjs](../orca-ui/app.mjs)、[builder](../scripts/build-orca-ui.mjs)、[where-error](../scripts/where-error.mjs) 與 [panel-views.js](../orca-ui/features/panel/head/panel-views.js)。
 
-遷移第一批時，在 repo README 的開發段落放上 `orca-ui/app.mjs` 的連結。這個入口按畫面組合兩套 layout，並連到選單、快捷鍵和其他方式才會開啟的功能。每個功能從入口可追到實際來源、它提供或呼叫的跨 mod 動作、發布路徑與相關測試。優先用真實的 import、layout 節點與建置對應表示關係；例如快捷鍵直接連到根目錄 `keys.json` 的區段，避免另外手抄一份鍵表。Builder 使用同一份組合與輸出對應。
+## 目標與非目標
 
-| 修改需求 | 從入口往哪裡讀 | 要辨認的行為 |
-|---|---|---|
-| 左側欄 `sidebar` | 側欄組合連到導覽、spaces 清單和頁尾；⌘B 的處理連到 tabs 功能 | `orca` 直接切換 `sidebar`；`orca-unified` 的 tabs 收到 `motion: "native"`，驅動 drawer。三個側欄 view 讀取寬度來排版。 |
-| 右面板 `panel` | 面板標題列連到 `panel-body` 的各頁，以及接收命令的功能 | 在 `orca`，⌘⇧F 經 `orca-panel-head.search` 展開面板、選到 Files，再送 `orca-files.search` 切換 Contents。改按鍵、改開啟順序、改搜尋畫面各有自己的來源。 |
-| 中央工作區、分頁與工作頁 | 從 `work-body` 找終端機、pane header、Landing、Agents、Providers、Tasks；從 tabs 找分頁互動 | 終端機由 Herdr 提供，標題列由 `orca-pane` 提供。Tasks 頁面位於中央，啟動排程的程式位於側欄頁尾。 |
-| 選單、對話框、浮層、狀態列 | 從呼叫端的 command、overlay、pane 或外部腳本入口連到實作 | 例如 Changes 可在 pane 開啟 Diff，New Menu 可開 Worktree 對話框。單看 layout 的 `children` 會漏掉這些路徑。 |
+- 讓第一次接手的 AI 從 [README](../README.md) 進入 [app.mjs](../orca-ui/app.mjs)，沿畫面、快捷鍵和命令找到唯一的可編輯來源、受影響的 layout 與測試。對有 mod frame 的載入與 render 錯誤，從報錯直接找來源座標。
+- 每個交付路徑只有一個所有者和寫入者。先讓 builder 與反查共用磁碟掃描結果，加入遞迴漂移檢查及寫入前的 mtime 預檢，再由 builder 接管共用 JS 副本，最後用實驗決定 feature 是否繼續遷移。
+- 遷移保留兩套 layout 的行為。修正標準版 ⌘B、補上 `layout:orca-unified` 快捷鍵或調整 UI 行為都屬於另外的功能變更。24 個 mod 的入口須能查到，是否全部搬家由檢查點決定。
+- 本計畫的建置範圍是複製或生成 Herdr 交付檔。使用者的既有設定、runtime 資料、外部 CLI 與安裝流程留在各自的維護入口。
 
-**每個路徑只有一個可編輯來源。** 第一批就讓入口標出哪些路徑已交給 builder、哪些仍由現行檔案負責；同一個 mod 可能同時含手寫入口與已生成的共用 helper，所以對應要精確到檔案。
+## 名詞表
 
-**Feature 是檔案所有權的單位，不是畫面。** 畫面的分組只存在於 `app.mjs`；一個受管產物檔只能有一個 feature 宣告為 owner，跨 mod 共用碼（例如 `sidebar-frame.js`）由宣告它的 feature 連到發佈路徑。同一個畫面下的多個 mod 仍是多個 feature。（buffy deepseek-v4.1-flash high）
+- Orca 是本 repo 在 Herdr 中維護的介面，由 24 個 mod、兩套 layout、主題與設定組成。`orca` 是標準版，左上有 `brand`。`orca-unified` 把標題列併入側欄，是擁有者的日常版。兩者掛載同一組 mod，節點結構與 props 有差異。見 [orca.json](../layouts/orca.json) 與 [orca-unified.json](../layouts/orca-unified.json)。
+- `herdr-app` 是載入 mod 並畫視窗的 app，mod JS 在 QuickJS 執行。`hc` 是終端機與 core 的命令入口。實測程序另有 launchd 啟動的 core 與 `herdr-core connect`，app、connect 與 core 各有自己的執行環境。`herdr-app check <mod>` 載入並嘗試 render，`status` 讀視窗狀態，`shot` 擷取畫面。見 [視窗實測](../artifacts/orca-bundler/20261123T162528Z-retest/window/RESULT.md)。
+- frame 是 Herdr 錯誤文字中指向 mod 檔案的座標，包含檔案路徑、行號與選填的 byte 欄。
+- feature 是 `orca-ui/features/<區域>/<名稱>/` 下的一組來源，映射到一個 mod 目錄。feature 的 `manifest.json` 逐檔宣告 runtime 產物、測試與 layout slots。slot 是 layout JSON 的節點 ID。共用來源有自己的 manifest，可跨 mod 發出副本。Herdr 的 `mod.json` 是 runtime 檔案，由 builder 原樣複製。
+- `herdr` 提供宿主 API，`gpui-kit` 和 `gpui-base` 提供宿主 UI。mod 的相對 JS import 限於自己的資料夾，跨 mod 的執行期狀態走 `shared()`／`setShared()`。Node 測試用 [gpui-stub-loader.mjs](../scripts/gpui-stub-loader.mjs) 代替宿主模組。
+- dev-sync 是 [herdr-app-dev-sync/SKILL.md](../.agents/skills/herdr-app-dev-sync/SKILL.md) 的交付流程。repo 先改好，再以每檔一個 `cp` 同步本次涉及的檔案到 live app home `~/.config/herdr-app/`。repo 的刪除與 rename 要列出給擁有者處理。
+- Claude Code 的 statusline 回呼 wrapper 由 [claude-statusline.sh](../mods/orca-status/claude-statusline.sh) 接收 JSON、更新快取並轉交原 statusline。`orca-agents` 搜尋 OMP session 時，依序取非空的 `OMP_CODING_AGENT_DIR`、`PI_CODING_AGENT_DIR`、實際子程序的 `$HOME/.omp/agent`。見 [README 的 statusline 說明](../README.md) 與 [orca-agents/main.js](../mods/orca-agents/main.js#L149-L166)。
 
-| 範圍 | 編輯位置與讀取時機 |
+## 架構與編輯入口
+
+[app.mjs](../orca-ui/app.mjs) 是閱讀地圖，從 2a 起單向 import manifest，並補上面向讀者的畫面分組、說明與 `next`。builder 與 where-error 共用 loader 從磁碟建立的逐檔對應表，建置與定位只依賴磁碟 manifest，反查 CLI 可從 `app.mjs` 補上 `next`。登記與磁碟發現結果由 `node --test` 核對。Node.js 用標準函式庫複製 JS、SVG、PNG、`mod.json` 和腳本，保留檔案模式。Herdr 依 layout 的 `content.mod`、`content.props` 或 command／overlay 選擇入口。下列是地圖須能串起的典型路徑。
+
+| 畫面 | 導覽路徑 |
 |---|---|
-| 已遷移的 Orca mod、layout、主題、資產與腳本 | 從 `orca-ui/` 修改並重新生成。`mods/`、`layouts/` 和 `themes/` 下對應的受管檔案是 Herdr 的交付格式。只有定位載入錯誤、資產缺失或 repo／live 漂移時，開啟報錯的產物，比對後回到對應來源修正。 |
-| 尚未遷移的路徑 | 入口暫時指向現有手寫檔或 `shared/` 原件；本批完成後一併換成新來源。現有八個共用 JS 依 `sync-shared.mjs` 的 `USES` 逐項交接，每個目的檔同時只由一支工具寫入。 |
-| 快捷鍵與全域預設 | `keys.json`、`settings.json`、`programs.json` 保留在 repo 根目錄，從功能入口連到相關設定；它們是 seed-once／merge-only，不是 builder 產物。`layout:<name>` 只對同名 layout 生效，因此 `layout:orca` 的 35 條在 `orca-unified` 不生效，unified 只繼承 `global`、`terminal`。安裝與回復須保留使用者的 live 覆寫。 |
-| 本機工具與執行期資料 | `mods/skillshare/` 是 repo 自有的 mod，是使用者本機 skillshare 工具的介面，和其他 Orca mod 一樣遷移；它呼叫的本機工具不在 repo 內，不屬於 builder 產物。Herdr 內建項目由 host 提供；`tasks.json`、`layouts/.state/` 等使用者資料留在 app home。 |
+| 左側欄 | Nav、Spaces、Chrome → Tabs |
+| 右面板 | panel-head → panel-body → 目標頁 |
+| 中央工作區 | work-body → 終端機、pane header、工作頁 |
+| 選單與浮層 | command／overlay／pane → 開啟與關閉端 |
 
-## 實作形狀與工具
+Tasks 開在中央，Chrome 的 runner 位於側欄頁尾。Changes 可開 Diff pane，New Menu 可開 Worktree 對話框。這些入口與畫面節點一起收錄在地圖。見 [orca layout](../layouts/orca.json)、[Changes](../mods/orca-changes/main.js#L492-L504)、[New Menu](../mods/orca-new-menu/main.js#L215-L217) 與 [Chrome runner](../mods/orca-chrome/runner.js)。
 
-以下路徑是要實作的介面。第一批先移交右面板標題列，其餘功能在入口中指向當時的權威來源。
+| 範圍 | 編輯位置 |
+|---|---|
+| 已遷移的 feature | `orca-ui/features/` |
+| 未遷移的 mod、layout、theme | 各自原目錄 |
+| 共用 JS，至步驟 2b 為止 | [shared/](../shared/) |
+| 共用 JS，3a 起 | `orca-ui/shared/` |
+| 全域設定 | repo 根目錄 |
+
+已受管的產物由 [builder](../scripts/build-orca-ui.mjs) 寫入。3a 以前，共用 JS 副本由 [sync-shared.mjs](../scripts/sync-shared.mjs) 依 `USES` 寫入。測試跟 feature 放在來源旁，使用 runtime 產物的測試須明確載入 `mods/<mod>/`。現有 [mods/keys.test.js](../mods/keys.test.js) 原地保留。
+
+[keys.json](../keys.json)、[settings.json](../settings.json)、[programs.json](../programs.json) 由 builder 排除，遷移及回復都保留已存在的 live 設定。README 有手動首次安裝的複製範例，Agent Manager 在執行期會寫 live `programs.json`。`layout:<name>` 只對同名 layout 生效，`orca` 有 35 項 `layout:orca` 鍵位，`orca-unified` 現有 `global` 57 項與 `terminal` 10 項。repo 自有的 [skillshare mod](../mods/skillshare/) 依相同規則管理，呼叫的本機 CLI 由擁有者管理。`tasks.json` 與 `layouts/.state/` 是 app home 的 runtime 資料。見 [Agent Manager 寫入](../mods/orca-agent-manager/main.js#L859-L870)、[README 安裝](../README.md#setup) 與 [skillshare CLI 呼叫](../mods/skillshare/jobs.js#L43-L48)。
+
+[scripts/titlebar-height.py](../scripts/titlebar-height.py) 調整兩套 layout 的指定節點，基準高度為 32 px，`panel-head` 為 31 px，同時設定 `titlebar` 與 `traffic_lights`。預設寫入此 repo 的 `layouts/<name>.json`。`--root DIR` 改用指定根目錄，`--check` 唯讀比對且有差異時退出 1，`--write-live` 額外選入 live layout 路徑，與 `--check` 併用時也只讀。layout 批次移交時，這支工具改寫來源、保留 `--root`／`--check` 語意並停用 `--write-live`，live 交由 dev-sync。
+
+## 替代方案
+
+| 方案 | 主要收益 | 代價 |
+|---|---|---|
+| bundler | 壓縮 JS、合併模組 | 反查成本、map 體積 |
+| 只做地圖 | 原地編輯、少一層產物 | 來源分散 |
+| 延用 sync-shared | 沿用現有複製與測試 | 維護兩支寫入工具 |
+| 從 manifest 生成 app.mjs | 自動列出檔案映射 | 額外生成入口 |
+| 雜湊記錄（寫入保護） | 可驗證上次寫入的內容 | 因需維護隱藏狀態而拒絕 |
+| 安裝器 | 可封裝首次安裝 | 要處理既有設定與刪除 |
+
+Vite+ 的兩個 mod 樣本中，含 map 的發布量約為原始複製的兩倍，每個 mod 仍持有自己的共用 JS。在 herdr-app 0.1.17，外部與 inline source map 探針都只回報產物座標。採原檔複製，讓 stack 行與 byte 欄可直接沿用。見 [評估](plan-orca-bundler-evaluation.md)、[發布量觀察](../artifacts/orca-bundler/20261123T160756Z/observations.md)、[外部 map](../artifacts/orca-bundler/20261123T162528Z-retest/map-ext/RESULT.md) 與 [inline map](../artifacts/orca-bundler/20261123T162528Z-retest/map-inline/RESULT.md)。
+
+只做地圖是 3a 後的對照方案。共用 JS 在兩組都交給 builder，以免兩個寫入工具各自維護所有權、漂移和反查。手寫入口直接 import manifest，可保留跨 command、overlay 與 shared key 的人工導覽，並以測試查出遺漏的登記。現有手動安裝加 dev-sync 已涵蓋交付需求，省去安裝器的設定合併與 live 清理規則。
+
+## 風險與限制
+
+| herdr-app 0.1.17 探針 | 可觀察結果 |
+|---|---|
+| 模組載入錯誤 | `check` 退出 1、`status` errors、視窗錯誤 |
+| render 錯誤 | `check` 退出 1、視窗錯誤卡片、`status` errors 為空 |
+| 點擊事件錯誤 | 尚未驗證 |
+
+已測 `check` stack 的行與欄從 1 開始。欄是 UTF-8 byte 座標，例如 `new Error` 指到 `Error`，直接保留回報值。非 Error 的 throw 可能沒有 frame。測過的命令清單沒有合成點擊的命令。Herdr 升版後重跑評估的第 0 節及受影響的載入、render 探針。見 [載入](../artifacts/orca-bundler/20261123T162528Z-retest/load/RESULT.md)、[render](../artifacts/orca-bundler/20261123T162528Z-retest/render/RESULT.md)、[欄位](../artifacts/orca-bundler/20261123T162528Z-retest/column-semantics/RESULT.md) 與 [視窗實測](../artifacts/orca-bundler/20261123T162528Z-retest/window/RESULT.md)。
+
+用獨立 socket 與 `HERDR_APP_HOME` 驗證測試視窗的連線目標。launchd 啟動的 core 仍取登入帳號的 HOME，`check` 啟動的 `exec` 子程序也可能在 `check` 結束後繼續執行。步驟 1 用無憑證的 macOS 測試帳號隔離這些宿主程序。見 [視窗隔離](../artifacts/orca-bundler/20261123T162528Z-retest/window/RESULT.md#isolation-proof) 與 [exec 探針](../artifacts/orca-bundler/20261123T162528Z-retest/exec/RESULT.md)。
+
+mtime 預檢的已知限制與處理方式見 [步驟 2b](#步驟-2b寫入前的-mtime-預檢)。
+
+## 實作預設值
+
+依下列契約實作。偏離預設值時，在提交訊息寫明理由。
+
+- **Loader API**。將兩支腳本的 `manifests()` 走訪集中到 `scripts/orca-ui-manifests.mjs`，匯出 `ROOT`、`ManifestError` 與同步 `loadManifests({ root = ROOT, uses })`。回傳 `{ table, features, shared }`。`features` 是以 repo 相對 manifest 路徑為鍵的 Map，值為解析後的 feature manifest。`shared` 從 3a 起為共用 manifest，之前為 `null`。無效宣告或衝突拋出 `ManifestError(message, path)`，`path` 是涉事 manifest 的 repo 相對路徑。
+- **逐檔表**。`table` 為 `Map<repo 相對目的路徑, { kind: "feature" | "shared", id, source, mode, consumers, tests, layoutSlots }>`。`source` 與 `tests` 使用 repo 相對路徑，`mode` 為來源的 `stat.mode & 0o777`，`layoutSlots` 沿用 manifest 的 layout 至 ID 陣列對應。feature 的 `id` 是 feature ID，`consumers` 只含其 mod。共用列的 `id` 是來源 basename，`consumers` 列全部消費 mod，`tests`、`layoutSlots` 取該列目的 mod 的 feature manifest，缺少時分別為 `[]`、`{}`。3a 前的 `uses` 為 `{ [name]: string[] }`，省略時為空物件，用檔名及 mod 名展開舊共用列，來源為 `shared/<name>`，builder 將這些列視為唯讀允許項。3a 移除 `uses`，由共用 manifest 提供共用列。
+- **測試根目錄**。builder 的 `--root <dir>` 只供測試，預設 `ROOT`，用來讀取 repo 來源、宣告、layout 與 `keys.json`。`--out <dir>` 指定獨立的目的根。相對的 CLI 目錄參數以當前工作目錄解析。
+- **`app.mjs`**。匯出 `features = [{ manifest, area, description, next }]`，每個 `manifest` 用 `import … with { type: "json" }` 取得。首批 `area` 為 `"panel"`，`description` 為文字，`next` 為存在的 repo 相對檔案陣列，無連結時填 `[]`。3a 的共用條目只有一個，用同一格式：`area: "shared"`，`description` 為 `"Shared helpers copied into each mod that imports them; edit orca-ui/shared/<name>, never the copies."`，`next: []`。CLI 對應規則：`kind: "feature"` 的列取 `manifest.feature === row.id` 的條目；`kind: "shared"` 的列一律取唯一 `area: "shared"` 的條目。移除 `id`、`source`、`output`、`layouts`、`shortcuts`，由 manifest 推得，保留 `settings` 與 `build` exports。`scripts/orca-ui-manifests.test.js` 逐一 import 磁碟發現的 JSON，依 import 物件身分核對登記全等且各一次，並驗 `next`；由 `node --test mods scripts orca-ui/features` 執行。
+- **where-error**。`locate(text, table)` 回傳 `[{ frame, edit, kind, note }]`，沿輸入順序保留重複 frame，忽略行號 0。`frame` 去掉絕對前綴與 `?v=N`，以 `mods/<mod>/<file>:<line>[:<col>]` 表示，行與 byte 欄保留原值。判斷順序固定：路徑越界一律 `unknown`；其次查表，命中就用來源座標（即使該產物在 repo 輸出樹已不存在）；未命中時，repo 中存在的 mod 一般檔是 `in-place`，缺少對應 `mod.json` 或檔案不存在是 `unknown`。`in-place` 與 `unknown` 的 `edit` 都沿用 repo 相對 frame 座標。
+- 每個 frame 在 stdout 印兩行。第一行固定為 `<edit>`（`path:line[:col]`）。第二行是兩個前導空格、`from <frame>; ` 和 `note`，完整格式如下。
+
+  | kind | 第二行 |
+  |---|---|
+  | feature | `  from <frame>; feature "<id>"; tests <…>; layouts <…>` |
+  | shared | `  from <frame>; shared helper, copied into <consumer mods>` |
+  | in-place | `  from <frame>; not in app.mjs yet: edit this file in place` |
+  | unknown | `  from <frame>; unknown path: no such mod in this repo` |
+
+- 清單用 `, ` 分隔。依宣告順序列出。測試列 repo 相對路徑，slots 用 `<layout>#<id>`，空清單顯示 `-`。shared 列全部消費 mod（含報錯的 mod），只有該目的 mod 有 feature manifest 時才加 `; tests <…>; layouts <…>`。CLI 對 feature 和已登記的 shared 條目讀取 `next`，非空時在第二行加 `; next <…>`，載入失敗時仍照常定位及退出。
+- manifest 無效或衝突時，stderr 印 `<path>: <message>`，回 2。輸入讀取失敗時 stderr 印 `cannot read input: <message>`，回 2。無 frame 時 stderr 印 `no mods/<mod>/<file>:<line> frame found in the input`，回 1。有 frame 則回 0，包含 `unknown`。
+- **檔案清單**。
+  - **2a** 新增 `scripts/orca-ui-manifests.mjs`、`scripts/orca-ui-manifests.test.js`。修改 `scripts/build-orca-ui.mjs`、`scripts/build-orca-ui.test.js`、`scripts/where-error.mjs`、`scripts/where-error.test.js`、`orca-ui/app.mjs`、`orca-ui/features/panel/head/manifest.json`、`README.md`、`.agents/skills/herdr-app-dev-sync/SKILL.md`。
+  - **2b** 修改 `scripts/build-orca-ui.mjs`、`scripts/build-orca-ui.test.js`、`README.md`、`.agents/skills/herdr-app-dev-sync/SKILL.md`。
+  - **3a** 將步驟 3a 表中的八份 `shared/*.js` 搬入 `orca-ui/shared/`，新增 `orca-ui/shared/manifest.json`，重建表中的 20 份 `mods/` 副本，刪除 `scripts/sync-shared.mjs`。修改 `orca-ui/app.mjs`、`scripts/orca-ui-manifests.mjs`、`scripts/orca-ui-manifests.test.js`、`scripts/build-orca-ui.mjs`、`scripts/where-error.mjs`、`README.md`、`.agents/skills/herdr-app-dev-sync/SKILL.md` 及 3a「受影響的測試」表所列檔案。
+
+## 步驟 1：基準與隔離
+
+- 提交 `9b9e22a` 的隔離 Node 測試共 440 個且全數通過，Node 版本與 PATH 替身的驗證見 [基準輸出](../egm/codex_rewrite_notes.md#基準輸出)。
+- 每批記錄自己的父提交 SHA，在隔離環境各跑一次父版與候選版。保留測試名稱、所在的 suite、結果和數量，以名稱逐項比對。搬檔只改路徑，必要的改名逐項登記舊名與新名。新增案例須通過，既有案例掉測、重跑成重複案例、skip 或新增失敗均不通過。基準的 expected-failure 清單為空。
+- 所有真視窗測試一律在沒有 agent、GH 等真實憑證、Keychain token 或 session 的 macOS 測試帳號進行。由擁有者建立帳號。帳號尚未就緒時，視窗及需要該隔離環境的 `check` 標「待驗」，用 Node fixtures 驗證可離線重現的行為。
+- 跑 Node suite 前建立暫存 `HOME` 和 `HERDR_APP_HOME`，把放有可執行 `herdr-app` 替身的暫存目錄加到 PATH 最前面。替身只接受兩個參數 `do orca-status.refresh`，將呼叫逐行寫入暫存 log 並回 0，其餘呼叫回 1。以 `command -v herdr-app` 確認解析到替身的絕對路徑。真視窗與宿主 `check` 採用測試帳號、獨立 app home、同版本 core 與 fixture，驗證 socket、實際子程序環境及替身歸屬。見 [Node 基準](../egm/codex_rewrite_notes.md#基準輸出)、[statusline 測試](../mods/orca-status/claude-statusline.test.js)、[視窗隔離程序](../artifacts/orca-bundler/20261123T162528Z-retest/window/RESULT.md#isolation-proof) 與 [exec 探針](../artifacts/orca-bundler/20261123T162528Z-retest/exec/RESULT.md)。
+- 實際呼叫 Herdr `exec` 的 15 個 mod 為 `agent-config`、`orca-agent-manager`、`orca-agents`、`orca-changes`、`orca-chrome`、`orca-diff`、`orca-files`、`orca-handoff`、`orca-menu`、`orca-new-menu`、`orca-panel-head`、`orca-spaces`、`orca-status`、`orca-worktree`、`skillshare`。入口矩陣逐項列出可能的副作用。Agents、Handoff、Status 涉及 session 或憑證。Chrome 即使任務清單空白仍可能探測 Claude／Codex。Spaces 有 `gh`、`curl`，Changes 有 `gh`，Files 可啟動外部 app。見 [Chrome 的 Tasks runner](../mods/orca-chrome/runner.js)、[Spaces](../mods/orca-spaces/main.js)、[Changes](../mods/orca-changes/main.js) 與 [Files](../mods/orca-files/main.js)。
+- `check` 可能在受檢目錄寫入 `gpui-kit.d.ts`、`jsconfig.json`。需要宿主驗收的批次在 builder `--check` 後，對隔離的驗收樹副本執行。保留退出碼與畫面證據，點擊類動作由人在測試視窗手動操作一次。
+- **Repo 驗收完成**。當批產物、唯讀檢查及 Node suite 通過對應的驗收表，父版與候選版測試名稱及結果比對完成。宿主項目可以記為「待驗」。
+- **Live 交付完成**。依當批更新的 dev-sync 指引逐檔同步，將需刪除或 rename 的路徑交給擁有者。宿主 `herdr-app check` 只在隔離樹執行，不對 live 路徑執行，因為交付終端的環境變數（例如 `OMP_CODING_AGENT_DIR`）可能和 app 不同，`check` 會讓 `orca-agents` 等 mod 的子程序改讀個人 session，且子程序可能在 `check` 結束後才完成。live 核對只做逐檔 `cmp` 與擁有者視窗的 `herdr-app status` 無新錯誤。測試帳號未就緒時，交付狀態記為「live 已同步、宿主 check 待驗」。3a 同一提交把 dev-sync 第 3 點的「對每個改動的 live mod 執行 `check`」改成這條規則，並把 `.agents/skills/herdr-app-dev-sync/SKILL.md` 列入 3a 的檔案清單。
+
+| 步驟 1 案例 | 必驗結果 |
+|---|---|
+| Node 隔離 | `command -v` 指向暫存替身，statusline 測試的 `do orca-status.refresh` 呼叫記入暫存 log 並回 0；替身收到其他參數時回 1。 |
+
+## 步驟 2a：磁碟 loader、漂移檢查與反查
+
+保留 panel-head 的 12 個輸出。採用[實作預設值](#實作預設值)的 loader、登記格式、反查契約與檔案清單。
+
+1. 遞迴讀取磁碟上的 `orca-ui/features/**/manifest.json`，以 repo 相對路徑排序。Feature manifest 為 `{feature, mod, source, output, files, handwritten?, tests, layoutSlots, keys}`。`feature` 為唯一 ID，`source` 為 manifest 所在的 repo 相對目錄，`mod` 是單一目錄名，`output` 為 `mods/<mod>`。`files` 與 `tests` 是 source 相對路徑，前者逐檔同名輸出，後者列出留在來源的測試及 fixture。`handwritten` 由作者明列 output 相對檔案，省略時用空陣列。移除 `commands`、`shared`。
+2. 以正規化的 repo 相對路徑判重。來源檔及測試須為一般檔案，宣告與實際解析的路徑都須在宣告的來源目錄內，來源目錄也須在 repo 內。每個目的檔須在其 `mods/<mod>/` 內。手寫檔、共用副本、Herdr 保留檔（mod 根的 `gpui-kit.d.ts`、`jsconfig.json`）與 feature 產物逐檔互斥，包含 3a 接手後的共用副本。
+3. 遞迴核對 feature 來源恰為 `manifest.json`、`files`、`tests` 的聯集，拒絕缺檔、漏列、重複與欄位型別錯誤。遞迴掃描一律忽略 `.DS_Store`。`layoutSlots` 讀取 repo 的 `layouts/<name>.json`，走訪所有物件（含陣列內物件），每個宣告的 ID 須在指定 layout 唯一且該物件的 `content.mod` 相符。`keys` 每項須為 repo `keys.json` 自有的頂層區段。
+4. `node scripts/build-orca-ui.mjs --out <dir> [--check] [--root <dir>]` 的旗標各最多一次，`--out` 必填。參數或宣告錯誤列診斷並回 2，漂移或輸出 I/O 失敗列路徑並回 1，成功回 0。按 `--out` 重定位後，整批檢查每個受管目的路徑。用 `lstat` 驗所有已存在的路徑元件（含輸出根及目的檔），遇 symlink（含斷鏈）即整批拒絕，`--force` 也適用。非法目的檔是目錄、symlink 或任何非一般檔案，視為輸出錯誤。
+5. `--check` 唯讀，逐檔核對 builder 產物的存在、bytes 與模式，再遞迴掃描有 feature manifest 的目的 mod。掃描允許清單包含 feature 產物、共用副本、`handwritten` 與 Herdr 保留檔。其他 mod 只查 builder 受管檔。空目錄 build 只建立 builder 負責的產物並保留來源模式；build 不刪產物。
+6. `node scripts/where-error.mjs '<錯誤文字>'` 或 stdin 接受任意絕對前綴的 `mods/<mod>/<file>`，支援子目錄、選填 `?v=N`、正整數行號與選填的正整數 byte 欄。按[實作預設值](#實作預設值)用同一份 loader 表定位；宿主探針標「待驗」，目前定位證據可重跑 [where-error.test.js](../scripts/where-error.test.js)。見 [宿主探針](../artifacts/orca-bundler/20261123T162528Z-retest/codex-where-error/RESULT.md)。
+7. README 的開發入口改為相對連結，說明 skillshare 是 repo 自有 mod、共用副本應改來源且行號相同，以及 bundler 評估的版本與樣本範圍。README、dev-sync 與 `app.mjs` 的 builder 檢查指引採用 `--check --out .`。
+
+新建暫存 repo fixture，依現行 `USES` 放入對應的 `shared/<name>` 來源。builder 測試用 `--root` 指向該 repo，以另一個暫存目錄的實體路徑作 `--out`；反查 CLI 測試把腳本與其相依檔複製到 fixture 的 `scripts/`，讓 `ROOT` 指向 fixture。各失敗案例只變動被測條件。
+
+| 2a 案例 | 必驗結果 |
+|---|---|
+| 登記與引用 | 核對 JSON import 及條目格式。漏登、重複、多登與失效 `next` 各失敗；缺少 `app.mjs` 時建置和反查仍成功，只省略 `next`。 |
+| Loader、來源與宣告 | 驗回傳表的正規化鍵及 metadata。巢狀資產輸出、測試與 fixture 留來源、`.DS_Store` 被忽略；缺檔、漏列、重複、錯型別、來源 symlink 指向同 repo 其他來源目錄、目的越出 mod、非一般來源檔各回 2，loader 拋出含路徑的 `ManifestError`。 |
+| Layout 與 key | 巢狀 slot 和 key 通過；錯誤或重複的 ID、`content.mod` 不符、缺 key 各回 2。只在輸出根放正確 layout，repo 的 layout 不符時仍回 2。 |
+| 所有權 | 重複 feature ID、經正規化後的重複目的地、產物與各保留類別相撞、`handwritten` 與 `USES` 認領同檔各回 2。 |
+| 建置與漂移 | 空輸出精確 12 檔且 bytes／模式同父版；允許的附加檔與 `.DS_Store` 存在仍回 0。巢狀多檔、缺檔、bytes 或模式不同、非法目的檔各回 1 且零寫入；無 feature 的 mod 中無關檔案不影響結果。 |
+| 目的 symlink | 在同一輸出根內，把某個待建置 mod 的父目錄做成 symlink，分別驗指向同根內目錄及斷鏈皆回 1，其他產物與連結目標皆無寫入。 |
+| CLI 錯誤 | 無效參數或壞 manifest 回 2；輸出 I/O 失敗報路徑並回 1。 |
+| 反查 | 用 argv 和 stdin 驗相同的混合輸入。逐字核對四種二行輸出、`next`、子目錄、版本後綴、無欄、行號 0 被跳過及重複 frame 保留；包含未知路徑仍回 0。共用結果有 consumer feature 時附 tests／slots，沒有時省略。另逐字核對無 frame 回 1、宣告衝突與輸入讀取失敗回 2 的 stderr 格式。 |
+| 文件與回歸 | README 與 app 範例可執行，`node scripts/build-orca-ui.mjs --check --out .`、`node scripts/sync-shared.mjs --check` 與步驟 1 完整測試通過並附名稱差異。 |
+
+## 步驟 2b：寫入前的 mtime 預檢
+
+檔案範圍見[實作預設值](#實作預設值)。先通過 2a 的宣告與目的路徑檢查，再比較每個目的檔的預期 bytes（3a 起含共用尾行）及 `mode & 0o777`。兩者都相同時直接跳過 mtime 與寫入。只對 bytes 或模式需要更新的現存目的檔查 mtime，目的嚴格晚於來源才視為手改。整批預檢通過後才寫入，缺失的目的檔一律列為待建立。若擋下，將所有被擋的 repo 相對目的路徑逐行印到 stderr，回 1 且整批零寫入。
+
+`--force` 只略過 mtime，其他檢查及相符檔跳過規則照常。與 `--check` 併用回 2。將旗標寫進 USAGE、README 與 dev-sync。
+
+先手改副本再存來源，可能因來源較新而漏擋。只做 `chmod` 也可能漏擋，因為 mtime 維持原值。開始編輯前先跑 `--check` 可找出既有漂移。`git checkout` 可能讓有差異的目的檔因 mtime 較新被擋，核對差異後可用 `--force`。
+
+| 2b 案例 | 必驗結果 |
+|---|---|
+| 同一輸出樹重建 | 用 fixture 固定 mtime，只改一份來源並令來源和其舊副本的 mtime 相等。第二次 build 成功更新該檔；其餘 bytes／模式相符的資產即使比來源新，mtime 也保持原值。 |
+| 整批預檢與補檔 | 同時放入晚於來源的內容差異、只差模式的較新檔及一個缺檔。回 1、stderr 列出兩個被擋路徑，整批零寫入。用 `--force` 更新兩檔並建立缺檔。 |
+| `--force` 邊界 | 2a 的同根 symlink 案例加 `--force` 仍回 1；與 `--check` 併用回 2。 |
+
+## 步驟 3a：搬家並切換來源的提交
+
+依[實作預設值](#實作預設值)限定檔案範圍，獨立提交。將 [shared/](../shared/) 八份 JS 的原始 bytes 與 Git 模式搬到 `orca-ui/shared/`，依下表填入 `orca-ui/shared/manifest.json` 並由 `app.mjs` import 登記。manifest 格式為 `{files:[{source,outputs:[…]}]}`，路徑都相對 repo 根。每個來源是 `orca-ui/shared/<name>`，目的為每個消費 mod 下同名檔案。loader 從磁碟讀取此固定位置，沿用 2a 的路徑和所有權規則，另查來源目錄恰為 manifest 與列出的 JS，每個來源只宣告一次，`outputs` 是消費端 `mods/<mod>/<name>` 的非空陣列。共用 manifest 的登記依實作預設值。
+
+| 來源 basename | 消費 mod |
+|---|---|
+| `clip.js` | `orca-changes`、`orca-files`、`orca-handoff`、`orca-menu` |
+| `transcript.js` | `orca-handoff`、`orca-menu` |
+| `review-store.js` | `orca-spaces` |
+| `codex-provider.js` | `agent-config`、`orca-agent-manager` |
+| `agent-flyout.js` | `agent-config`、`orca-new-menu` |
+| `list-viewport.js` | `agent-config`、`orca-agent-manager` |
+| `tasks.js` | `orca-chrome`、`orca-tasks` |
+| `panel-motion.js` | `orca-files`、`orca-changes`、`orca-agents`、`orca-panel-gap`、`skillshare` |
+
+在 builder 新增共用展開，讀取 `orca-ui/shared/manifest.json`，將每份來源展開到所有目的地並保留模式。來源缺結尾 LF 時先補 LF，再附上固定說明行與最後的 LF。`<name>` 含 `.js`。
 
 ```text
-orca-ui/app.mjs                         組合入口，連結兩套 layout、功能與發布對應
-orca-ui/features/panel/head/            第一批，orca-panel-head 的程式、圖示、測試
-orca-ui/features/sidebar/               後續，左側欄組合與共用 sidebarFrame
-orca-ui/layouts/                        後續，兩套 layout 的組合來源（存放形式於移交時定案）
-orca-ui/themes/                         後續，主題來源（同上）
-scripts/build-orca-ui.mjs               Node.js 建置工具
-mods/orca-panel-head/                   第一批輸出，Herdr 從這裡載入 main.js
+// Generated from orca-ui/shared/<name> by scripts/build-orca-ui.mjs. Edit that file, not this copy.
 ```
 
-**開發時**用 JavaScript ES modules 編寫功能，以既有的 `herdr`、`gpui-kit`、`gpui-base` API 繪製原生畫面。**建置時**由 Node.js 標準函式庫讀取組合，複製 JS、SVG、PNG、manifest 與腳本，保留執行位元，並在 layout 移交後輸出 JSON。**執行時** Herdr 依 `content.mod` 或 command／overlay 選擇已安裝的 mod，由 `content.props` 指定角色。每個 mod 以相對 import 載入同目錄內的程式；跨 mod 的動態狀態沿用 `shared()`、`setShared()`。這條路徑只需要 Node.js builder，無須另設前端 bundler。
+八份來源原樣搬移，保留 `agent-flyout.js`、`codex-provider.js`、`list-viewport.js`、`tasks.js` 提到 `sync-shared.mjs` 的四處註解。20 個副本只允許最後一行說明文字改成上列格式。其餘 bytes、換行、路徑與 Git 模式逐檔同父提交，12 個既有 feature 產物及其餘 runtime 檔的 Git blob 和模式也同父版。共用 manifest 接手全部 13 個消費 mod 的 20 條路徑，同一提交刪除 `shared/`、`scripts/sync-shared.mjs` 及 loader 的 `USES` 相依。只接管共用 JS 的 mod 逐檔核對 builder 產物，其他檔案維持原地管理；有 feature manifest 的 mod 將共用目的檔納入遞迴允許清單。反查沿用實作預設值的契約。更新 `app.mjs`、README 與 dev-sync 的來源、建置、`--check` 和逐檔交付指引。
 
-**不引入 bundler 有實測依據。** 用 `vite-plus@1.7.0` 的 `vp pack`（tsdown 0.23.4／rolldown 1.2.19）打包 `orca-panel-gap`、`orca-agents`：runtime JS 從 35,680 bytes 降到 19,824（未壓縮）或 14,232（壓縮），但節省大半來自刪掉註解；連同外部 map，發布量從 39,341 增到約 75–79 KB（僅測 2 個 mod，未量啟動時間）。Herdr（herdr-app 0.1.17，QuickJS）不讀外部 source map；inline map 只在 `check` 做過一次單點測試，同樣被忽略。`check` 與視窗錯誤卡片只報產物座標，打包後必須另做離線解碼才能回到原始碼。解碼時要先把 Herdr 回報的 UTF-8 byte 欄換成 UTF-16 欄，否則含非 ASCII 的長行（例如壓縮後的單行 bundle）會解到錯誤位置：`orca-agents` 壓縮版實測解成第 459 行，真值是 457。依現行規則 mod 只能 import 自己資料夾（見 `sync-shared.mjs`），打包仍把共用 helper 內嵌到每個 mod，不會去重。因此維持複製式 builder。評估規格見 [plan-orca-bundler-evaluation.md](plan-orca-bundler-evaluation.md)，證據與 `replay.sh` 在本機 `artifacts/orca-bundler/20261123T160756Z/`（不入版控）。（Opus 5.5 審查，Sonnet 5.5 high 實測）
+### 受影響的測試
 
-**從 Herdr 報錯回到來源。** 以 herdr-app 0.1.17、hc 0.1.22 實測於隔離測試實例，Herdr 升版後要重驗（`artifacts/orca-bundler/20261123T160823Z-window/`）：
+以 `rg -n 'sync-shared|shared/' scripts mods orca-ui shared -g '*test*'` 核對。表列需更新的既有測試，包含命中舊共用路徑或 API 的案例與 builder 的產物檢查。`mods/keys.test.js` 命中的 `src/shared/keybindings/` 是上游 Orca 路徑。
 
-| 錯誤時機 | 哪裡看得到 | 回報內容 |
-|---|---|---|
-| 載入（模組頂層 throw） | `herdr-app check`、`herdr-app status` 的 errors、整個視窗的紅字 | `…/mods/<mod>/main.js?v=1:行:欄`，行精確；欄是 UTF-8 byte 位置，指向出錯的詞（`new X` 的 X、被呼叫的函式名、讀屬性失敗的物件、未定義的變數），不是 `throw`；丟出非 Error 的值沒有座標 |
-| render | `herdr-app check` 與視窗內錯誤卡片（含 Copy details）；**`status` 的 errors 是空的** | 完整 stack，例如 `panel-motion.js?v=1:23:13` → `main.js?v=1:40:37` |
-| 點擊等事件 | 未驗證：`herdr-app commands` 沒有能合成點擊的指令 | 未知 |
+| 測試 | 3a 變更 |
+|---|---|
+| [build-orca-ui.test.js](../scripts/build-orca-ui.test.js) | 沿用空輸出案例名稱，由四檔抽查改為兩個空輸出樹的 32 檔全集與逐檔 bytes／模式比對 |
+| [sync-shared.test.mjs](../scripts/sync-shared.test.mjs) | 切換到 loader、manifest 與 builder `--check` |
+| [opencode-launch.test.mjs](../scripts/opencode-launch.test.mjs) | `SPECS` 改 import `../orca-ui/shared/agent-flyout.js` |
+| [where-error.test.js](../scripts/where-error.test.js) | 更新 shared、同 mod 手寫、feature 與 CLI 斷言 |
+| [agent-flyout.test.js](../mods/agent-config/agent-flyout.test.js) | 更新來源註解，繼續測副本 |
+| [codex-provider.test.js](../mods/agent-config/codex-provider.test.js) | 更新來源註解，繼續測副本 |
 
-回報路徑都是已部署的產物。AI 不打開它：把錯誤文字交給 `node scripts/where-error.mjs`（例如 `herdr-app check mods/<mod> 2>&1 | node scripts/where-error.mjs`），它依 manifest 與 `sync-shared.mjs` 的 `USES` 印出要改的來源檔與行，以及擁有它的 `app.mjs` 條目、測試、layout 與下一跳；`sync-shared.mjs` 已把生成檔頭移到副本最後一行，共用 helper 副本的行號與 `shared/` 原件相同；未遷移的 mod 會標明「原地修改」。`app.mjs` 開頭與 README 都寫明這個入口，之後每批新增 manifest 就自動涵蓋，無須另維護對照表。實測：codex（gpt-6-luna，low）在暫存副本模擬載入、共用 helper render、已遷移功能三種錯誤，`where-error.mjs` 都指到正確的來源檔、行與欄（`artifacts/orca-bundler/20261123T162528Z-retest/codex-where-error-2/`）。（Opus 5.5 審查，Sonnet 5.5 high、Haiku 5.5 medium 實測）
+`sync-shared.test.mjs` 保留檔名和兩個案例的涵蓋範圍，以共用 manifest 驗每份副本及唯一目的路徑。`where-error.test.js` 中的 `panel-motion.js?v=1:22:13` 應指到 `orca-ui/shared/panel-motion.js:22:13` 並列全部消費 mod。`orca-panel-gap/main.js:40:37` 仍是同 mod 內已知手寫。遷移 feature 的座標、入口與無 frame 的退出碼維持原驗收語意。步驟 2a 的 fixtures 改用共用 manifest。只測 feature 時用 `{ "files": [] }`，共管案例列出共用來源與目的，繼續測重複認領及共管允許清單。測試名稱如因寫入者或路徑更名而改動，記錄一對一對應。純讀取 runtime 副本的測試照原路徑執行。
 
-例如左側欄移交後，builder 將一份 `features/sidebar/sidebar-frame.js` 發到 `mods/orca-nav/sidebar-frame.js`、`mods/orca-spaces/sidebar-frame.js`、`mods/orca-chrome/sidebar-frame.js`。三個執行期入口各自 `import { sidebarFrame } from "./sidebar-frame.js"`。AI 改共用外框只需編輯一份來源；若改的是展開動畫，則沿側欄組合連到 tabs 的 native drawer。
+### 步驟 3a 驗收測試
 
-以下命令已隨第一批實作，從 repo 根目錄執行。
+依序在 repo 根執行以下指令，套用步驟 1 的 Node 替身。以 3a 的直接父提交作比對，先確認目前的 20 份副本與父提交的 bytes／Git 模式一致，且父提交的每份副本等於父版來源（缺結尾 LF 時先補上）加父版 `sync-shared.mjs` 的說明行。通過才首次建置；若只因 mtime 被擋，按 2b 加 `--force` 重跑一次。以下驗收指令成功時均回 0。
 
 ```sh
-staging=$(mktemp -d)
-node scripts/build-orca-ui.mjs --out "$staging"   # 在空目錄重建本批產物
-node scripts/build-orca-ui.mjs --out .            # 更新 repo 內本批受管產物
-node scripts/build-orca-ui.mjs --check --out .    # 唯讀比較，漂移時列出來源及目的檔並回傳非零
+node scripts/build-orca-ui.mjs --out .
+node scripts/build-orca-ui.mjs --check --out .
+node --test mods scripts orca-ui/features
+orca_staging="$(mktemp -d)"
+orca_staging="$(cd "$orca_staging" && pwd -P)"
+node scripts/build-orca-ui.mjs --out "$orca_staging"
+node scripts/build-orca-ui.mjs --check --out "$orca_staging"
 ```
 
-產物由來源單向生成。在空目錄建置時，builder 必須能在已遷移的 `mods/` 產物完全缺席時重建它們。`--check` 才需讀既有產物來核對路徑集合、內容與 Git 檔案模式。寫入 repo 前若發現目的檔有來源無法解釋的修改，列印該 diff 並中止寫入，由人移植後重跑。（mimo-2.6-pro high）建置只寫指定的暫存目錄或 repo；同步到使用中的 `~/.config/herdr-app/` 是另一步，依 dev-sync 逐檔核對。
+| 案例 | 必驗結果 |
+|---|---|
+| 交接與產物 | 八份來源的 blob／模式同父版，含四處保留註解；首次 build 前逐檔通過父提交副本的舊尾行、bytes／模式核對，共用 manifest 登記相符且接管 13 個 mod 的 20 個唯一目的檔；比對父版 blob 驗複本只改精確尾行（另以無結尾 LF 的 fixture 驗補 LF），Git 模式、12 個 feature 產物與其餘 runtime 檔同父版；舊來源、腳本及 `USES` 相依已移除，入口與交付文件指向新流程 |
+| 共用宣告與掃描 | 缺檔、未列來源、重複宣告、空 `outputs` 或與 feature 共用目的地各回 2；有 feature 的 mod 允許共用副本，只接管共用 JS 的 mod 保留原地 `main.js`，受管副本缺失或漂移回 1 |
+| 建置與回歸 | repo 和空輸出均可 build、check，空輸出精確 32 檔且與 repo 逐檔等 bytes／模式；共用副本套用 2b 預檢；完整 suite 依步驟 1 比對名稱與結果 |
+| 反查 | 共用副本回新來源、原有行／欄及消費端，同 mod 手寫仍回原地座標，feature 與錯誤輸入維持 2a 契約 |
 
-**受管範圍由 manifest 決定。** 每批的 manifest 列出受管產物檔、來源、測試路徑與 layout slots；空目錄建置只產生 manifest 內的檔案，其餘 mod、兩套 layout 與設定仍由現行手寫檔負責。builder 的 descriptor 至少宣告 mod 名稱、輸出清單、資產來源、測試路徑、layout slots 與 commands／shared keys，並定義 `--check` 退出碼（0 相符、1 漂移或模式不符、2 用法錯誤）。（buffy deepseek-v4.1-flash high）
+Repo 驗收及 live 交付各依步驟 1 的完成條件。
 
-八個共用 JS 與側欄同批移交 builder，`sync-shared.mjs` 於該提交改為呼叫 builder 或移除，`mods/` 不得同時有兩個寫入者；在移交前它們仍由 `sync-shared.mjs` 寫入，builder 的 manifest 不得列出這些目的檔。三個設定檔是 seed-once／merge-only：builder 只讀，安裝器只在檔案不存在或使用者同意合併時寫入，不得覆蓋已編輯的檔案，也不得把 `--dangerously-*` 旗標寫進原本沒有的設定。`herdr-app check` 會寫出 `gpui-kit.d.ts`／`jsconfig.json`，因此排在 `--check` 之後，或只在暫存副本執行。（buffy deepseek-v4.1-flash high）
+## 3a 之後、3b 之前：B／C 檢查點
 
-## 實施順序與驗收
+### 固定題目與預期 diff
 
-1. **建立基準與隔離。** 用盤點清單（歷史 Task 1）涵蓋 24 個 mod，區分 Orca、第三方與 host 入口。歷史版本 `f2736b9` 留作參照，每批對照已整合當時 main 的父提交。在第一次執行 Node 測試前攔截 statusline 的 Herdr CLI；視窗測試另用空任務清單、暫存 HOME，先確認控制指令及 core 指向測試實例。實測可行的做法是 `env -i` 加暫存 `HOME`／`HERDR_APP_HOME` 與獨立 `HC_SESSION`，再用 `lsof` 確認 app 與 core 的 socket 都在暫存目錄。兩個已知漏洞：暫存 HOME 內沒有 core 時，app 不會自動安裝（只對 `releases.herdr.dev/app/latest.json` 做一次版本檢查），視窗也不回應指令，所以要先把已安裝的 core 複製進暫存 HOME；core 經 launchd 啟動後仍是真實 `HOME`，不帶 `OMP_`／`PI_` 變數，所以 mod 的 `exec` 子程序沒有憑證隔離，會呼叫 `exec` 的 mod（如 `orca-agents`）不得掛進測試實例，直到 core 環境也能隔離。`herdr-app check` 同樣會真的執行 mod 的 `exec`（子程序拿到傳給 `check` 的 HOME），且 `check` 結束時不等子程序跑完，對這類 mod 也要用暫存 HOME，不能靠 `check` 提早結束來擋。（Opus 5.5 審查，Sonnet 5.5 high 實測）記錄測試名稱與失敗原因，納入 [Stage 9 實測結果](../implementation_readiness_report.md)。
+給模型同一題。
 
-   盤點 `keys.json` 時逐條記錄 scope 與生效 layout：`layout:<name>` 只對同名 layout 生效，`layout:orca` 的 35 條在 `orca-unified` 不生效，unified 只繼承 `global`、`terminal`。隔離清單沿用 Review notes 的 P0：暫存 `HOME`、cache 與 Git fixtures，以假 executable／固定資料取代網路與本機 CLI，停用真實排程，跑完斷言測試根目錄外沒有檔案或 repo 被改動。基準原本有 16 個既有失敗（15 個效能探針、1 個 `titlebar-height.test.js` 的 `ReferenceError`），已修成全綠（現為 428／428），expected-failure 清單目前為空；每批跑 `node --test mods scripts orca-ui/features` 時，數量與名稱不得增加。（buffy deepseek-v4.1-flash high）
-2. **移交第一個功能。** 把 `orca-panel-head` 的現有檔案逐檔對應到 `features/panel/head/`。首次保留該 mod 交付給 Herdr 的檔案位元組與 Git 模式；測試去向見下段，搬動時另列允許差異（只限路徑常數），並驗證搬前搬後跑的是同一組案例。（mimo-2.6-pro high）追蹤搜尋的最後一步時，入口暫時連到仍手寫的 `mods/orca-files/main.js`。同一提交更新 README、dev-sync skill 與測試發現路徑，讓下一位 AI 一開始就走對流程。
+> 將 unified 右面板收窄時的額外滑移從 28px 改為 16px，內容寬度、淡出和 drawer 時序照舊。在標準版 `orca`，⌘⇧F 保持立即展開右面板、選到 Files 並聚焦 Contents，且保留已有查詢與搜尋結果，按下時不重新查詢。原有 `orca-files.search` command 保留原本行為。請修改並測試。
 
-   測試去向在本批就定案：來源測試搬到 `features/panel/head/` 並改寫由 `mods/<mod>/` 出發的相對定位（現為 `./panel-views.js`、`../scripts/gpui-stub-loader.mjs`、`../../keys.json` 這類路徑），或留在 `mods/` 產物旁由產物側測試執行；README 提供單一指令（例如 `node --test mods scripts orca-ui/features`），並註明產物側測試從暫存安裝樹跑。`mods/keys.test.js` 不屬於任何 mod，隨 `keys.json` 留在 repo 根目錄或移到 `orca-ui/`，不得被「一 mod 一目錄」默默漏掉。（buffy deepseek-v4.1-flash high）
-3. **驗證 builder，再逐批擴大。** 從兩個空目錄獨立建置，逐檔比對；刻意漏檔、多出未宣告檔案、篡改內容或移除執行位元時，檢查必須失敗。host 寫入的 `gpui-kit.d.ts`、`jsconfig.json` 不入版控，也不列入路徑集合比對。`herdr-app check` 排在比對之後，或只在另一份一次性副本執行。（mimo-2.6-pro high）兩套 layout 初次移交保留原始位元組，改由程式組合時才允許這兩檔改排版，解析後分別與父提交的整棵樹全等。同步移交 `titlebar-height.py` 的寫入責任。每批在實際產物跑受影響的 unit／render 測試，缺快照須失敗。過期探針的修復範圍含 `titlebar-height.test.js` 的 tab-padding 案例（擷取的運算式含未綁定的 `unified`）與效能 `replace_once` 針（與 `render(cx) → renderBody` 重構脫節）；兩者已修成全綠，任一回歸都算這批退化，不是基準瑕疵。（mimo-2.6-pro high）
+驗收者預先保存以下預期 diff，測試時只給模型上面的題目和 README 入口。
 
-   Layout 差異即規格，逐項指定由哪個組合參數產生：`cloned_from`、`under` wrapper、側欄 `min`（220／0）與背景（`chrome`／`surface`）、unified 無 `brand`、tabs 的 `unified`／`motion`／`pinSidebarTerminal`；`scripts/layout.test.js` 同時斷言兩套 layout 的節點集合、順序與否定條件（unified 不得出現 `brand`）。`titlebar-height.py` 在 layout 移交前先改成依 layout 使用不同期望節點集（unified 無 `brand`），提供 `--check`／`--root`，預設不寫 live。（buffy deepseek-v4.1-flash high）
-4. **用新 AI 驗收可讀性。** 給未參與遷移的 AI 兩題：「改 Orca 的 Contents 搜尋快捷鍵」與「只改 unified 左側欄的原生動畫」。只給 README 作為起點，讓它沿組合與來源指出設定、發送端、接收端、layout 差異、該跑的測試及預期變動的產物。用實際建置差異及產物測試核對答案。第一批容許入口明示的未遷移來源；完整遷移後，任何一題若仍須翻找生成的 `mods/` 或猜測動作的接收端，就回頭修正入口。回復演練在暫存樹進行，第一批用父提交原檔，後續用對應版本的 builder。
+- panel-head 的 `panel-views.js` 將 `search` reveal 的第三個 command 改成 `orca-files.focus-search`，保留前兩步 `layout.show(panel)` → `layout.select(panel-body, files)`。對應的 `panel-views.test.js` 驗完整順序。`keys.json` 和兩套 layout 應相同。
+- `orca-ui/shared/panel-motion.js` 的 `panelFrame` 以 16 取代 28，更新相應說明。由 builder 更新五份副本。既有 [panel-motion.test.js](../mods/orca-panel-gap/panel-motion.test.js) 的 `open=350, px=175` fixture 驗位移從 `-161` 到 `-167`、內容寬度仍為 350、cover 仍是 `#17171796`，overlay 和全開時直通。drawer 控制端應相同。
+- [orca-files/main.js](../mods/orca-files/main.js#L723-L733) 由同一段既有搜尋命令處理新增的 `focus-search`。兩個命令都切換 `view`、focus、notify，只有既有 `search` 在查詢非空時呼叫 `rerun`。用 GPUI stub 對實際 `command()` 驗 focus、notify、查詢及結果仍在、`focus-search` 不執行 `rerun`、`search` 行為相同。其餘快捷鍵、入口、render snapshot 及無關 runtime 檔維持基準。
 
-   第一批已做小型對照（Haiku 5.5 medium，每格 2 次，證據在 `artifacts/orca-bundler/20261123T162528Z-retest/ab-comprehension/`）：A 為 main、B 為本分支、C 為 main 加一份只指向 `mods/` 原地檔案的 `app.mjs` 地圖。兩題（⌘⇧F 改成只聚焦、移除 Ports 按鈕與 ⌘⇧I）12 次全部改對，B 也都改 `orca-ui/` 來源並重建、`--check` 通過。B 用時最短（兩題平均 90／115 秒，A 為 148／142，C 為 130／183），但 A、C 基準帶 16 個既有失敗測試會拖慢它們，樣本也太小，只能說「新結構沒有讓 AI 改錯，也沒有明顯變慢」，還不能證明更好懂。完整遷移後用更難、跨多個未遷移 mod 的題目重做，並讓三組基準的測試狀態一致。（Opus 5.5 審查，Haiku 5.5 medium 實測）
+### 兩組材料
 
-   升級路徑另設 fixture：額外 mod、執行期資料與已修改的 `keys.json`、`settings.json`、`programs.json`，斷言自訂內容保留或進人工 diff，不得被 repo 預設覆蓋。快捷鍵驗收寫出預期結果：`orca` 的 ⌘⇧F 等 `layout:orca` 綁定在 unified 不生效，unified 只有 `global` 的 ⌘B 等可用。回復演練擴成「上一版安裝樹 → 新版 → 回上一版」，過程中確認使用者設定與執行期資料未被刪除或覆蓋。（buffy deepseek-v4.1-flash high）
+- B 使用通過驗收的 3a 提交，panel-head 來源、共用 manifest、builder 和反查照常。
+- 從同一個 3a 提交派生 C。在暫存副本先 build 確認 12 個 panel-head 產物，保留其 bytes／模式，將它們轉為 `mods/orca-panel-head/` 的手寫來源。兩個 feature 測試搬回該 mod，`panel-views.test.js` 的 `keys.json` 相對路徑改為 `../../keys.json`。移除該 feature 的 manifest、登記和來源目錄，保留 `orca-ui/features/` 作測試入口。在 `app.mjs` 的註解補上等資訊的地圖項，包含原地來源、同一組 layout slots、鍵位、測試及 `next`。C 的 builder 仍使用同一份共用 manifest 管理 20 份副本。
+- 固定同一版 README、題目、Node、CLI 替身、工具權限和模型設定。README 統一指向 `app.mjs`，說明 feature 依地圖判讀來源。兩組用同一份 builder fixture 測試。反查對 panel-head 的整合測試按各組所有權驗預期路徑，維持測試名稱與數量。兩組預跑完整 suite 及 `--check`，確認名稱、基準結果相同。C 的 runtime 起始樹與 B 比對 bytes／模式全等。
+- 每次從各自的乾淨暫存副本開始，用獨立 context。向模型提供相同起始 README，隱去計畫、審查、舊實驗、另一組和答案。兩組暫存 Git 歷史只留各自的起始快照，C 在還原快照後建立空的 `orca-ui/features/` 給測試指令，關閉會帶到原 repo 或其他組的專案記憶。
 
-   每批在測試實例執行受影響入口的冒煙案例（快捷鍵、按鈕、選單、overlay 各一），與基準比較 `herdr-app status` 的錯誤差異。render 錯誤不會出現在 `status`，所以每個受影響 mod 另跑 `herdr-app check`（在暫存副本），退出碼非 0 即判失敗（render 時丟出錯誤實測回傳 1）。`check` 只用預設 props 畫一次，依 props 或狀態才走到的畫面另存 `shot`，確認沒有「This view could not be rendered」卡片；點擊類動作在找到可合成點擊的方式前，由人手動點一次並記錄結果。完整遷移後通過 24-mod 入口矩陣（歷史 Review notes 的 P1 併入此步），每個 mod 至少驗證實際掛載或由指令／overlay／pane 開啟、主要動作與關閉。（mimo-2.6-pro high）會呼叫 `exec` 的 mod 在 core 環境能隔離前不掛進測試實例（見步驟 1），矩陣中這些列改用暫存 HOME 的 `herdr-app check` 加 fixture 資料的 render 測試驗收，並標明「未在視窗驗證」。（Opus 5.5 審查，Sonnet 5.5 high 實測）
+### 計分與去留
 
-## 補審紀錄與待決事項（mimo-2.6-pro high）
+使用同一個沒有參與計畫、遷移或審查的模型，按 B、C 交錯各跑 3 次。每次保存 diff、測試輸出、工具呼叫紀錄和耗時。「改對」須同時符合預期行為（用 Node fixtures 驗）、完整測試通過及 `--check` 0，且工具紀錄沒有直接手改任何當組受管產物。允許透過 builder 寫入副本。每組報正確次數／3，工具呼叫數取三次的中位數，失敗場次也採計。耗時與直接改產物次數一併記錄供追查。
 
-本輪 goldfish 審查由兩個獨立上下文的唯讀審查者分頭進行（實作準備度、程式碼核對），合併報告見 [`goldfish_review_report-2.md`](../goldfish_review_report-2.md)；DeepSeek（buffy）的 single-context 補審見 [`goldfish_review_report.md`](../goldfish_review_report.md)。本輪驗證補充：`node --test mods scripts orca-ui/features` 實跑 428／428 全綠（以 PATH 替身攔截 `herdr-app`，仍攔到 3 次 `do orca-status.refresh`，故 Task 1 的隔離必須早於第一次跑測試）。
+- B 改對率較高，或改對率相同且 B 的工具數中位數至多為 C 的 80%，啟動 3b 的批次規格，再依批次交付。C 的工具數中位數為 0 時，效率條件視為未達成。
+- 其餘結果停止搬家。保留 panel-head、共用 JS builder、`app.mjs` 和 `where-error`。其餘 mod 原地維護，在 `app.mjs` 補齊地圖條目，不啟動 3b 或之後的遷移批次。
 
-- **已修正（本輪）**　手改處置改為列印 diff 並中止；`--check` 補上多出未宣告檔案的失敗案例，`gpui-kit.d.ts`／`jsconfig.json` 不入比對；測試搬動的允許差異限定路徑常數；形狀清單補上 layout 與主題來源；探針修復範圍補上 `titlebar-height.test.js` 的 tab-padding 案例；每批入口冒煙與 24-mod 入口矩陣併入驗收；「Task 1」的懸空引用改指歷史任務。
-- **已決：`skillshare` 的性質。**　擁有者確認它是本機 app 上的工具介面，屬 repo 自有 mod，沒有 vendored 上游；與 README、dev-sync skill 的記載一致。遷移時與其他 Orca mod 同等處理，「保留上游來源」與歷史 Task 1 的「保留第三方來源」不再適用。
-- **已決：`layout:orca-unified` 先不補建快捷鍵區段（A 案）。**　遷移的驗收是「產物與基準行為相同」，途中新增 unified 快捷鍵會改變行為，讓差異無法歸因。遷移期間只文件化 `layout:orca` 的 35 條不作用於 unified；全部遷移並通過驗收後，再以獨立功能變更補建 `layout:orca-unified`（B 案），屆時單獨驗收快捷鍵。（Opus 5.5 代擁有者決定）
+第一批 Haiku 對照的 A 組是 main，每格 n=2，合計 12 次全對。A、C 有 16 個既有測試失敗，觀察差異落在雜訊內。B／C 檢查點依本輪新結果判定。見 [第一批 A／B／C](../artifacts/orca-bundler/20261123T162528Z-retest/ab-comprehension/RESULT.md)。
+
+檢查點通過後，依 [3b 規格筆記](plan-orca-ui-3b-notes.md) 撰寫 3b 規格。
+
+## 完成驗收
+
+- 入口矩陣覆蓋 24 個 `mods/*/mod.json`，逐列可追到實際掛載或 command、overlay、pane，附主要動作、關閉方式、驗收證據與隔離狀態。檢查點若選擇停止遷移，原地 mod 也要補齊入口地圖。
+- 由第一次接手的 AI 只從 README 出發，定位「調整標準版 Contents 搜尋快捷鍵」與「只調整 unified 左側欄的原生動畫」。前者應連到 `keys.json`、panel-head bridge 及 Files 接收端，後者應連到 Tabs 的 native clock 與 `drawer.js`。有生成對應的路徑可從入口直接找到可編輯來源。
+- 以隔離副本重現帶 frame 的載入及 render 錯誤，逐幀連回可編輯檔與原始行、已有的 byte 欄。需宿主測試且帳號尚未就緒的項目標「待驗」。
+
+依下列步驟演練回復。
+
+1. 在暫存 checkout 先回復下游批次，再回復其依賴的批次（如 3b 後 3a）。從回到的提交取完整快照，以該版 builder 和仍存在的 `sync-shared.mjs` 重建其受管檔案。保留同一快照的手寫 runtime 與兩套 layout。
+2. 核對回復樹的交付檔路徑、Git blob 與模式符合目標提交，按步驟 1 重跑對應 suite，按入口矩陣核對兩套 layout 的操作或記錄宿主待驗。交付清單須排除使用者的根設定與 runtime 資料。
+3. 比對更新前後的逐檔交付清單，將回復後應由擁有者移除的 live 相對路徑逐行寫到暫存驗收根的 `rollback-extra-paths.txt`，即使結果為空也保留檔案。上述比對與測試通過、清單與路徑差集相符即通過演練。Live 回復依 dev-sync 逐檔複製，將清單交給擁有者。
 
 ---
 
