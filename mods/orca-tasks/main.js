@@ -200,7 +200,7 @@ export default class Tasks extends View {
 
   openEditor(cx) {
     this.error = "";
-    this.editor = TextareaState.new({ value: shared("tasks.text") ?? "", rows: 16 });
+    this.editor = TextareaState.new({ value: shared("tasks.text") ?? "", rows: 8 });
     this.editor.set_soft_wrap(false);
     this.editor.on("change", (_event, changeCx) => {
       this.saved = false;
@@ -356,7 +356,7 @@ export default class Tasks extends View {
                   .text_color(t.dim)
                   .child("Schedules run while Herdr is open. Times are local; the last run of each task is kept by Herdr."),
               )
-              .child(this.resetCard(t))
+              .when(!this.editing, el => el.child(this.resetCard(t)))
               .child(this.taskSection(t)),
           ),
       );
@@ -417,12 +417,12 @@ export default class Tasks extends View {
       )
       .when(error, (el) => el.child(div().w_full().p(10).rounded(8).border_1().border_color(t.blocked).text_size(11).text_color(t.blocked).child(error)))
       .when(!config && !error, (el) => el.child(div().p(16).text_size(12).text_color(t.muted).child("Waiting for the task runner…")))
-      .children(
+      .when(this.editing, el => el.child(this.editorCard(t)))
+      .when(!this.editing, el => el.children(
         tasks.length
           ? tasks.map((task) => this.taskCard(task, t))
           : [div().p(16).rounded(8).border_1().border_color(t.border).border_dashed().text_size(12).text_color(t.muted).child("No tasks. New task adds a disabled template; Edit JSON writes the file directly.")],
-      )
-      .when(this.editing, (el) => el.child(this.editorCard(t)));
+      ));
   }
 
   // The reset instants the reset-ping schedules fire on.

@@ -450,3 +450,18 @@ test("unsupported harness command copy reaches both clipboard channels without l
   assert.equal(host[0][1].at(-1), copied[0]);
   assert.deepEqual(commands, []);
 });
+
+test("active settings permissions card stacks the description above its trigger", (t) => {
+  const {page,cx}=harness(t);
+  page.width=394;
+  page.agents=inventory(() => true);
+  page.railSelection="global";
+  const tree=draw(page,cx);
+  function walk(value) {
+    if (!value || typeof value !== "object") return [];
+    return [value,...Object.values(value).flatMap(walk)];
+  }
+  const rows=walk(tree).filter(n=>n.n==="v_flex" && n.c?.some(([m,a])=>m==="gap" && a[0]===8));
+  const card=rows.find(n=>JSON.stringify(n).includes("How much every agent may do without asking") && JSON.stringify(n).includes("am-perm-default"));
+  assert.ok(card,"permission description and trigger share a vertical stack");
+});

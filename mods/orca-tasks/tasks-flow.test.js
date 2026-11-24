@@ -216,3 +216,13 @@ test("rendered task controls never reuse expired render or event contexts", asyn
     delete globalThis.__gpuiClickHandler;
   }
 });
+
+test("editing tasks JSON presents the editor ahead of the task cards and hides the reset list", () => {
+  const view=new Tasks();
+  globalThis.__herdrShared=key=>key==="tasks.config"?{tasks:[sample("a")]}:undefined;
+  view.editing=true;
+  view.editor={};
+  const json=JSON.stringify(view.render({}).__node);
+  assert.match(json,/Close JSON[\s\S]*tm-editor[\s\S]*tm-save[\s\S]*tm-cancel/);
+  assert.doesNotMatch(json,/tm-task-a|RESET WINDOWS/);
+});

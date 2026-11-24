@@ -18,7 +18,7 @@ const SPINNER_FRAME_MS = 120;
 const spinner = (t, size) => div().flex_none().text_size(size).text_color(t.muted).frames(SPINNER_FRAMES, SPINNER_FRAME_MS);
 
 /** The all-agents permission: one choice, plus the agents that keep their own. */
-export function permissionsCardView(owner, rows, t) {
+export function permissionsCardView(owner, rows, t, compact = false) {
   // The page already derived this inventory; avoid rebuilding it for this card.
   const permissions = owner.currentPermissions(rows);
   const managed = rows.filter((row) => row.supports);
@@ -31,20 +31,19 @@ export function permissionsCardView(owner, rows, t) {
     .border_1()
     .border_color(t.border)
     .bg(t.surface)
-    .child(permissionTitleRow(owner, managed, permissions, t))
+    .child(permissionTitleRow(owner, managed, permissions, t, compact))
     .when(Boolean(summary.exceptionLine) || summary.custom > 0, (el) => el.child(permissionSummaryRow(owner, summary, permissions, t)))
     .when(Boolean(summary.noChoiceLine), (el) => el.child(div().text_size(11).text_color(t.dim).child(summary.noChoiceLine)))
     .when(owner.permissionNotice, (el) => el.child(permissionNoticeRow(owner, t)));
 }
 
-function permissionTitleRow(owner, managed, permissions, t) {
-  return h_flex()
-    .w_full()
-    .items_start()
-    .gap(16)
+function permissionTitleRow(owner, managed, permissions, t, compact) {
+  // In the settings rail, the detail column may be only 280px wide.
+  // Stack the trigger below the description rather than squeezing it to a word per line.
+  const row = compact ? v_flex().w_full().gap(8) : h_flex().w_full().items_start().gap(16);
+  return row
     .child(
-      v_flex()
-        .flex_1()
+      (compact ? v_flex().w_full() : v_flex().flex_1())
         .min_w(0)
         .gap(3)
         .child(div().text_size(13).font_semibold().text_color(t.foreground).child("Permissions"))
@@ -65,7 +64,7 @@ function permissionTitleRow(owner, managed, permissions, t) {
           choice: permissions.default,
           label: PERMISSION_LABELS[permissions.default],
           warn: permissions.default === "full-access",
-          width: 340,
+          width: compact ? 300 : 340,
           items: defaultPermissionItems(owner, managed),
           onOpenChange: (open, cx) => owner.setPermissionMenu("default", open, cx),
         },
@@ -352,7 +351,7 @@ export function settingsPageView(owner, t, cx) {
   const body = v_flex().w_full().max_w(760).mx_auto().px(pad).pb(20).gap(2)
     .when(loading, el => el.child(loadingRow(t)))
     .when(!loading && owner.railSelection === "global", el => el.child(div().text_size(18).font_semibold().text_color(t.foreground).child("Global Agent Settings"))
-      .when(rows.some(row => row.supports), inner => inner.child(owner.permissionsCard(rows, t))))
+      .when(rows.some(row => row.supports), inner => inner.child(permissionsCardView(owner, rows, t, true))))
     .when(!loading && owner.railSelection !== "global", el => el.child(selected ? owner.agentDetail(selected, t, cx) : empty("Agent unavailable on this computer. Refresh or select another agent.", t)))
     .child(div().pt(12).text_size(11).text_color(t.dim).child(timeLabel(owner.lastChecked)));
   return v_flex().id("am-root").size_full().min_h(0).overflow_hidden().bg(t.background).text_size(12)
