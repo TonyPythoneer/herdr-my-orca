@@ -1,7 +1,7 @@
 // Task management: the schedule and reset-time logic both mods share, and the one-shot runner.
 //
 // Pure except `runTask`, which takes the host's `exec` as an argument so `node --test` runs it.
-// `scripts/sync-shared.mjs` copies this file into orca-tasks (the page) and orca-chrome (the
+// `scripts/build-orca-ui.mjs` copies this file into orca-tasks (the page) and orca-chrome (the
 // runner, which must live in an always-shown block).
 //
 // Times: every instant here is epoch milliseconds. `tasks.json` stores the last run; the next
@@ -12,18 +12,27 @@ export const TASKS_FILE = "tasks.json";
 export const TASKS_VERSION = 1;
 export const PING_PROMPT = "ping";
 
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60 * MS_PER_SECOND;
+
 // The windows the CLIs meter, in minutes: Claude's session and week, Codex's primary/secondary.
 export const WINDOW_MINUTES = { h5: 300, wk: 10080 };
 const WINDOW_LABEL = { h5: "5h", wk: "weekly" };
 const PROVIDER_LABEL = { claude: "Claude", codex: "Codex" };
 
 // A failed ping is retried soon (a Codex window may not have rolled over yet), then slowly.
-const RETRY_MS = 2 * 60_000;
-const RETRY_SLOW_MS = 30 * 60_000;
+const RETRY_MS = 2 * MS_PER_MINUTE;
+const RETRY_SLOW_MS = 30 * MS_PER_MINUTE;
 const RETRY_SLOW_AFTER = 4;
 const NOTE_MAX = 300;
 // `exec` caps at ten minutes; a ping takes seconds and a stuck CLI should give the slot back.
 export const TASK_TIMEOUT_MS = 180_000;
+// The pause after a window resets before its ping runs, when a task does not say.
+const DEFAULT_DELAY_SECONDS = 5;
+// A task that ran failed with no exit code of its own (not installed, timed out, no argv).
+const NOT_RUN_CODE = -1;
+// `HH:MM`, 24-hour: the one shape a daily trigger's time may take.
+const DAILY_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 /** The two seeded tasks. `codexModel` comes from the Codex catalog (see runner.js). */
 export function defaultTasks(options = {}) {
@@ -36,7 +45,7 @@ export function defaultTasks(options = {}) {
         name: "Claude reset ping",
         enabled: true,
         agent: "claude",
-        trigger: { type: "reset", provider: "claude", window: "h5", delaySeconds: 5 },
+        trigger: { type: "reset", provider: "claude", window: "h5", delaySeconds: DEFAULT_DELAY_SECONDS },
         // Claude Code's own initialize response: `haiku` is claude-haiku-5-5, the cheapest
         // model, and `low` is the lowest effort it accepts.
         argv: ["claude", "-p", PING_PROMPT, "--model", "haiku", "--effort", "low"],
@@ -47,7 +56,7 @@ export function defaultTasks(options = {}) {
         name: "Codex reset ping",
         enabled: true,
         agent: "codex",
-        trigger: { type: "reset", provider: "codex", window: "h5", delaySeconds: 5 },
+        trigger: { type: "reset", provider: "codex", window: "h5", delaySeconds: DEFAULT_DELAY_SECONDS },
         argv: ["codex", "exec", "--skip-git-repo-check", "-m", codexModel, "-c", "model_reasoning_effort=low", PING_PROMPT],
         cwd: null,
       },
@@ -86,26 +95,30 @@ export function parseTasks(text) {
   };
 }
 
+const isNonEmptyString = (value) => typeof value === "string" && value !== "";
+const isObjectLike = (value) => Boolean(value) && typeof value === "object";
+const isArgvOfStrings = (argv) => Array.isArray(argv) && argv.length > 0 && argv.every((arg) => typeof arg === "string");
+
+function resetTriggerProblem(trigger, where) {
+  if (!PROVIDER_LABEL[trigger.provider]) return `${where} needs trigger.provider "claude" or "codex".`;
+  if (!WINDOW_MINUTES[trigger.window]) return `${where} needs trigger.window "h5" or "wk".`;
+  return null;
+}
+
+function triggerProblem(trigger, where) {
+  if (!isObjectLike(trigger)) return `${where} needs a trigger.`;
+  if (trigger.type === "daily") return DAILY_TIME.test(String(trigger.time ?? "")) ? null : `${where} needs a trigger time as HH:MM.`;
+  if (trigger.type === "reset") return resetTriggerProblem(trigger, where);
+  return `${where} needs trigger.type "reset" or "daily".`;
+}
+
 function taskProblem(task, index) {
   const where = `Task ${index + 1}`;
-  if (!task || typeof task !== "object") return `${where} must be an object.`;
-  if (typeof task.id !== "string" || !task.id) return `${where} needs an id.`;
-  if (typeof task.name !== "string" || !task.name) return `${where} needs a name.`;
-  if (!Array.isArray(task.argv) || task.argv.length === 0 || task.argv.some((arg) => typeof arg !== "string")) {
-    return `${where} needs a non-empty argv list of strings.`;
-  }
-  const trigger = task.trigger;
-  if (!trigger || typeof trigger !== "object") return `${where} needs a trigger.`;
-  if (trigger.type === "daily") {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(trigger.time ?? ""))) return `${where} needs a trigger time as HH:MM.`;
-    return null;
-  }
-  if (trigger.type === "reset") {
-    if (!PROVIDER_LABEL[trigger.provider]) return `${where} needs trigger.provider "claude" or "codex".`;
-    if (!WINDOW_MINUTES[trigger.window]) return `${where} needs trigger.window "h5" or "wk".`;
-    return null;
-  }
-  return `${where} needs trigger.type "reset" or "daily".`;
+  if (!isObjectLike(task)) return `${where} must be an object.`;
+  if (!isNonEmptyString(task.id)) return `${where} needs an id.`;
+  if (!isNonEmptyString(task.name)) return `${where} needs a name.`;
+  if (!isArgvOfStrings(task.argv)) return `${where} needs a non-empty argv list of strings.`;
+  return triggerProblem(task.trigger, where);
 }
 
 export function serializeTasks(config) {
@@ -113,7 +126,7 @@ export function serializeTasks(config) {
 }
 
 export function windowMinutes(window) {
-  return WINDOW_MINUTES[window] ?? 300;
+  return WINDOW_MINUTES[window] ?? WINDOW_MINUTES.h5;
 }
 
 export function windowLabel(window) {
@@ -136,33 +149,45 @@ export function providerLabel(provider) {
 export function nextRunAt(task, ctx = {}) {
   const now = ctx.now ?? Date.now();
   const trigger = task?.trigger ?? {};
-  if (trigger.type === "daily") {
-    // A day's time that passed while Herdr was closed is still owed today: report it as due
-    // (the timer fires within its tick), and only then move to tomorrow.
-    const owed = latestDaily(trigger.time, now);
-    const lastAt = typeof task?.last?.at === "number" ? task.last.at : 0;
-    if (owed !== null && owed > lastAt) return owed;
-    return nextDaily(trigger.time, now);
-  }
-  if (trigger.type !== "reset") return null;
+  if (trigger.type === "daily") return nextDailyRun(task, trigger, now);
+  if (trigger.type === "reset") return nextResetRun(task, trigger, ctx.resets, now);
+  return null;
+}
 
-  const last = task.last && typeof task.last === "object" ? task.last : null;
+function nextDailyRun(task, trigger, now) {
+  // A day's time that passed while Herdr was closed is still owed today: report it as due
+  // (the timer fires within its tick), and only then move to tomorrow.
+  const owed = latestDaily(trigger.time, now);
+  const lastAt = typeof task?.last?.at === "number" ? task.last.at : 0;
+  if (owed !== null && owed > lastAt) return owed;
+  return nextDaily(trigger.time, now);
+}
+
+function nextResetRun(task, trigger, resets, now) {
+  const last = isObjectLike(task.last) ? task.last : null;
   const lastAt = typeof last?.at === "number" ? last.at : null;
-  if (lastAt !== null && last.code !== 0) {
-    const fails = Number(last.fails ?? 1);
-    return lastAt + (fails < RETRY_SLOW_AFTER ? RETRY_MS : RETRY_SLOW_MS);
-  }
+  if (lastAt !== null && last.code !== 0) return retryAt(lastAt, last.fails);
 
-  // A plan that does not meter the 5h window has nothing to ping for; the page greys it out.
-  if (trigger.window === "h5" && ctx.resets?.[trigger.provider]?.metered5h === false) return null;
-  const delay = Math.max(0, Number(trigger.delaySeconds ?? 5)) * 1000;
-  const reset = ctx.resets?.[trigger.provider]?.[trigger.window];
+  const reported = resets?.[trigger.provider];
+  if (isUnmetered(trigger, reported)) return null;
+  const reset = reported?.[trigger.window];
   // A reported live window is the truth about when it ends, even when it is sooner than the
   // one the last run appeared to start (that ping can land inside an already-running window).
-  if (typeof reset === "number" && reset > now) return reset + delay;
-  const startedAt = lastAt !== null && last.code === 0 ? lastAt + windowMinutes(trigger.window) * 60_000 : 0;
-  return Math.max(now, startedAt);
+  if (typeof reset === "number" && reset > now) return reset + pingDelayMs(trigger);
+  // Here a last run, if any, succeeded: it holds the task inside the window it started.
+  const heldUntil = lastAt === null ? 0 : lastAt + windowMinutes(trigger.window) * MS_PER_MINUTE;
+  return Math.max(now, heldUntil);
 }
+
+// A plan that does not meter the 5h window has nothing to ping for; the page greys it out.
+const isUnmetered = (trigger, reported) => trigger.window === "h5" && reported?.metered5h === false;
+
+// A failed run tries again soon, then slowly once it has failed RETRY_SLOW_AFTER times.
+function retryAt(lastAt, fails) {
+  return lastAt + (Number(fails ?? 1) < RETRY_SLOW_AFTER ? RETRY_MS : RETRY_SLOW_MS);
+}
+
+const pingDelayMs = (trigger) => Math.max(0, Number(trigger.delaySeconds ?? DEFAULT_DELAY_SECONDS)) * MS_PER_SECOND;
 
 export function isDue(task, ctx = {}) {
   const next = nextRunAt(task, ctx);
@@ -189,7 +214,7 @@ export function latestDaily(time, now = Date.now()) {
 }
 
 function dailyAt(time, now) {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(time ?? ""));
+  const match = DAILY_TIME.exec(String(time ?? ""));
   if (!match) return null;
   const at = new Date(now);
   at.setHours(Number(match[1]), Number(match[2]), 0, 0);
@@ -213,13 +238,17 @@ export function describeTrigger(task) {
 }
 
 /** "now", "in 4m", "in 3h 12m", "in 5d 23h". */
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
+const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR;
+
 export function formatCountdown(ms) {
-  const left = Math.round(Number(ms) / 1000);
+  const left = Math.round(Number(ms) / MS_PER_SECOND);
   if (!Number.isFinite(left) || left <= 0) return "now";
-  if (left < 60) return `in ${left}s`;
-  if (left < 3600) return `in ${Math.floor(left / 60)}m`;
-  if (left < 86400) return `in ${Math.floor(left / 3600)}h ${Math.floor((left % 3600) / 60)}m`;
-  return `in ${Math.floor(left / 86400)}d ${Math.floor((left % 86400) / 3600)}h`;
+  if (left < SECONDS_PER_MINUTE) return `in ${left}s`;
+  if (left < SECONDS_PER_HOUR) return `in ${Math.floor(left / SECONDS_PER_MINUTE)}m`;
+  if (left < SECONDS_PER_DAY) return `in ${Math.floor(left / SECONDS_PER_HOUR)}h ${Math.floor((left % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE)}m`;
+  return `in ${Math.floor(left / SECONDS_PER_DAY)}d ${Math.floor((left % SECONDS_PER_DAY) / SECONDS_PER_HOUR)}h`;
 }
 
 /** Local "13:50". */
@@ -244,18 +273,25 @@ export function tail(text, max = NOTE_MAX) {
  */
 export async function runTask(execFn, task, options = {}) {
   const argv = Array.isArray(task?.argv) ? task.argv.filter((arg) => typeof arg === "string") : [];
-  if (argv.length === 0) return { at: Date.now(), code: -1, note: "This task has no argv." };
+  if (argv.length === 0) return { at: Date.now(), code: NOT_RUN_CODE, note: "This task has no argv." };
   try {
-    const result = await execFn(argv[0], argv.slice(1), {
-      ...(options.cwd ?? task.cwd ? { cwd: options.cwd ?? task.cwd } : {}),
-      timeout: options.timeout ?? TASK_TIMEOUT_MS,
-    });
+    const result = await execFn(argv[0], argv.slice(1), execOptions(task, options));
     const code = Number.isFinite(result?.code) ? result.code : 0;
-    const note = code === 0 ? tail(result?.stdout) || tail(result?.stderr) : tail(result?.stderr) || tail(result?.stdout);
-    return { at: Date.now(), code, note };
+    return { at: Date.now(), code, note: noteOf(result, code) };
   } catch (error) {
-    return { at: Date.now(), code: -1, note: tail(String(error?.message ?? error)) };
+    return { at: Date.now(), code: NOT_RUN_CODE, note: tail(String(error?.message ?? error)) };
   }
+}
+
+function execOptions(task, options) {
+  const cwd = options.cwd ?? task.cwd;
+  return { ...(cwd ? { cwd } : {}), timeout: options.timeout ?? TASK_TIMEOUT_MS };
+}
+
+// What a run says for itself: stdout on success, stderr on failure, the other as a fallback.
+function noteOf(result, code) {
+  const [preferred, fallback] = code === 0 ? [result?.stdout, result?.stderr] : [result?.stderr, result?.stdout];
+  return tail(preferred) || tail(fallback);
 }
 
 // The reset instants already on this computer, in one `sh` run. The same files orca-status
@@ -285,7 +321,7 @@ export function parseResets(text) {
   try {
     data = JSON.parse(String(text ?? ""));
   } catch {
-    data = null;
+    data = null; // unreadable usage output means "nothing known", never an error
   }
   return { claude: claudeResets(data?.claude), codex: codexResets(data?.codex) };
 }
@@ -295,7 +331,7 @@ function emptyResets() {
 }
 
 function claudeResets(payload) {
-  if (!payload || typeof payload !== "object") return emptyResets();
+  if (!isObjectLike(payload)) return emptyResets();
   const live = payload.live?.rate_limits ?? payload.live ?? null;
   const api = payload.api ?? null;
   let h5 = resetMs(live?.five_hour?.resets_at);
@@ -312,20 +348,23 @@ function claudeResets(payload) {
  * so an unknown plan is never greyed out by guesswork.
  */
 function claudeMetersSession(live, api) {
-  const liveWindows = live && typeof live === "object" ? live : null;
-  const apiWindows = api && typeof api === "object" ? api : null;
-  if (apiWindows?.api || apiWindows?.bedrock) return null; // an API-key/bedrock session: not a plan
+  const liveWindows = isObjectLike(live) ? live : null;
+  const apiWindows = isObjectLike(api) ? api : null;
+  if (isKeyedSession(apiWindows)) return null;
   if (liveWindows && "five_hour" in liveWindows) return true;
-  if (apiWindows) {
-    const ranged = Array.isArray(apiWindows.limits) ? apiWindows.limits.some((limit) => limit?.kind === "session") : "five_hour" in apiWindows;
-    if (ranged) return true;
-  }
-  if (liveWindows || apiWindows) return false;
-  return null;
+  if (apiWindows && apiReportsSession(apiWindows)) return true;
+  return liveWindows || apiWindows ? false : null;
+}
+
+// An API-key or bedrock session: not a plan, so there is no window to speak of.
+const isKeyedSession = (api) => Boolean(api?.api || api?.bedrock);
+
+function apiReportsSession(api) {
+  return Array.isArray(api.limits) ? api.limits.some((limit) => limit?.kind === "session") : "five_hour" in api;
 }
 
 function apiResets(api) {
-  if (!api || typeof api !== "object") return emptyResets();
+  if (!isObjectLike(api)) return emptyResets();
   if (Array.isArray(api.limits)) {
     let h5 = null;
     let wk = null;
@@ -339,17 +378,14 @@ function apiResets(api) {
 }
 
 function codexResets(payload) {
-  if (!payload || typeof payload !== "object") return emptyResets();
+  if (!isObjectLike(payload)) return emptyResets();
   const out = emptyResets();
   // A plan that meters only the week reports a weekly window and no 5h one: that is exempt,
   // not unknown, and greys the 5h ping out. A payload with no window at all says nothing.
-  if (payload.primary && typeof payload.primary === "object") {
-    out.metered5h = Number(payload.primary.window_minutes) === WINDOW_MINUTES.h5;
-  } else if (payload.secondary && typeof payload.secondary === "object") {
-    out.metered5h = Number(payload.secondary.window_minutes) === WINDOW_MINUTES.h5;
-  }
+  const reported = [payload.primary, payload.secondary].find(isObjectLike);
+  if (reported) out.metered5h = Number(reported.window_minutes) === WINDOW_MINUTES.h5;
   for (const [id, window] of [["h5", payload.primary], ["wk", payload.secondary]]) {
-    if (!window || typeof window !== "object") continue;
+    if (!isObjectLike(window)) continue;
     // secondary is the week on a Plus/Pro plan; trust the reported length when it is there.
     const bucket = Number(window.window_minutes) === WINDOW_MINUTES.wk ? "wk" : id;
     out[bucket] = newest(out[bucket], resetMs(window.resets_at));
@@ -357,16 +393,20 @@ function codexResets(payload) {
   return out;
 }
 
+// A bare number above this is already epoch milliseconds (as seconds it would be the year 2286).
+const EPOCH_MS_FLOOR = 1e10;
+const toEpochMs = (numeric) => (numeric > EPOCH_MS_FLOOR ? numeric : numeric * MS_PER_SECOND);
+
 /** Epoch seconds, epoch milliseconds or an ISO string, as epoch milliseconds; null otherwise. */
 export function resetMs(value) {
   if (typeof value === "string" && value.trim() !== "") {
     const numeric = Number(value);
-    if (Number.isFinite(numeric)) return numeric > 1e10 ? numeric : numeric * 1000;
+    if (Number.isFinite(numeric)) return toEpochMs(numeric);
     const parsed = Date.parse(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
-  return value > 1e10 ? value : value * 1000;
+  return toEpochMs(value);
 }
 
 function newest(a, b) {

@@ -19,7 +19,9 @@
   ],
   "tests": [
     "panel-gating.test.js",
-    "panel-views.test.js"
+    "panel-views.test.js",
+    "render.test.js",
+    "render.golden.json"
   ],
   "layoutSlots": {
     "orca": [

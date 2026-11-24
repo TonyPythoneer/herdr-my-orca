@@ -1,12 +1,14 @@
 // Pure gating for the right-sidebar activity bar (Orca `use-right-sidebar-activity-items.ts`).
 // Kept separate from the View so the Git/folder/SSH rules and the gated-active fallback
 // can be tested without a render pass.
-export function visibleTools(items, { isFolder, onSshHost }) {
-  return items.filter(({ gating }) =>
-    gating === "gitOnly" ? !isFolder
-    : gating === "folderOnly" ? isFolder
-    : gating === "sshOnly" ? onSshHost
-    : true);
+const GATES = {
+  gitOnly: ({ isFolder }) => !isFolder,
+  folderOnly: ({ isFolder }) => isFolder,
+  sshOnly: ({ onSshHost }) => onSshHost,
+};
+
+export function visibleTools(items, state) {
+  return items.filter(({ gating }) => !Object.hasOwn(GATES, gating) || GATES[gating](state));
 }
 
 // Orca falls back to the first visible item when the active tab is gated out

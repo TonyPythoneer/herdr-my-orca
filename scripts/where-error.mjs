@@ -15,11 +15,11 @@ import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
 const FRAME = /(?:[^\s?:()]*\/)?mods\/([^/\s?:()]+)\/([^\s?:()]+)(?:\?v=\d+)?:(\d+)(?::([1-9]\d*))?/g;
 const list = items => (items.length ? items.join(", ") : "-");
 // lstat, so a symlink out of the mod is not offered as an in-place edit target.
-const isPlainFile = path => { try { return lstatSync(path).isFile(); } catch { return false; } };
+const isPlainFile = path => { try { return lstatSync(path).isFile(); } catch { return false; } }; // unreadable means not a plain file
 // A file that really sits under mods/<mod>/, so a symlinked folder or file cannot lead outside.
 const isModFile = (root, mod, file) => {
   const path = join(root, "mods", mod, file);
-  try { return isPlainFile(path) && realpathSync(path).startsWith(realpathSync(join(root, "mods", mod)) + sep); } catch { return false; }
+  try { return isPlainFile(path) && realpathSync(path).startsWith(realpathSync(join(root, "mods", mod)) + sep); } catch { return false; } // a vanished path cannot be an edit target
 };
 
 const UNKNOWN = "unknown path: no such mod in this repo";

@@ -16,7 +16,7 @@
 // and `{ json: <template> }` is JSON.stringify of the template with those substituted.
 //
 // Pure: no herdr or gpui imports, so `node --test` runs it directly. Edit this file, then
-// `node scripts/sync-shared.mjs` writes the copies the mods import.
+// `node scripts/build-orca-ui.mjs --out .` writes the copies the mods import.
 
 export const DEFAULT_AGENTS = {
   scout: {
@@ -244,21 +244,29 @@ export function readValues(spec, saved = {}) {
   for (const [id, option] of Object.entries(spec.options)) {
     if (TOP.includes(id)) {
       if (typeof saved[id] === "string") values[id] = saved[id];
-      continue;
     }
-    const stored = preset[id];
-    if (option.type === "checklist") {
-      const known = new Set(option.items.map((item) => item.id));
-      values[id] = Array.isArray(stored) ? stored.filter((item) => known.has(item)) : [];
-    } else if (option.type === "select") {
-      // The old on/off advisor switch saved `advisor: false`, which is now "none".
-      if (id === "advisorModel" && preset.advisor === false) values[id] = "none";
-      else if (option.choices?.includes(stored) || (option.source && typeof stored === "string")) values[id] = stored;
-    } else if (option.type === "editor") {
-      if (typeof stored === "string") values[id] = stored;
-    }
+    else if (option.type === "checklist") values[id] = readChecklist(option, preset[id]);
+    else if (option.type === "select") values[id] = readSelect(id, option, preset, values[id]);
+    else if (option.type === "editor") values[id] = readText(preset[id], values[id]);
   }
   return values;
+}
+
+// A saved editor text: any string, even an empty one; anything else keeps the default.
+const readText = (stored, fallback) => (typeof stored === "string" ? stored : fallback);
+
+// Ticked ids that still exist, in the saved order.
+function readChecklist(option, stored) {
+  const known = new Set(option.items.map((item) => item.id));
+  return Array.isArray(stored) ? stored.filter((item) => known.has(item)) : [];
+}
+
+function readSelect(id, option, preset, fallback) {
+  // The old on/off advisor switch saved `advisor: false`, which is now "none".
+  if (id === "advisorModel" && preset.advisor === false) return "none";
+  const stored = preset[id];
+  const isKept = option.choices?.includes(stored) || (option.source && typeof stored === "string");
+  return isKept ? stored : fallback;
 }
 
 /** The `preset` object to save for an agent: every non-top option, by id. */
@@ -281,6 +289,15 @@ export function readGroup(option, saved = {}) {
 // One parser per shape of CLI output. Each takes stdout and returns the models the flyout lists:
 // `{ id, label, efforts, fallbackEffort, group? }`. They are tested against captured output.
 
+// opencode mixes cloud models (free or paid) and local omlx ones; the list shows one group at a time.
+function catalogGroup(model, free) {
+  if (model.providerID === "omlx") return "omlx";
+  return free ? "free" : "paid";
+}
+
+// The level a model reports no default for: the one every CLI here accepts.
+const DEFAULT_FALLBACK_EFFORT = "high";
+
 const jsonObject = (stdout) => JSON.parse(stdout.slice(stdout.indexOf("{"), stdout.lastIndexOf("}") + 1));
 
 export const PARSERS = {
@@ -297,7 +314,7 @@ export const PARSERS = {
         id: m.value,
         label: m.displayName,
         efforts: m.supportedEffortLevels ?? [],
-        fallbackEffort: "high",
+        fallbackEffort: DEFAULT_FALLBACK_EFFORT,
       }));
     }
     throw new Error("claude did not list its models");
@@ -325,10 +342,10 @@ export const PARSERS = {
         return {
           id: `${m.providerID}/${m.modelID ?? m.id}`,
           label: m.name ?? m.modelID ?? m.id,
-          group: m.providerID === "omlx" ? "omlx" : free ? "free" : "paid",
+          group: catalogGroup(m, free),
           // "" first: the model's own level, no variant (opencode's "default").
           efforts: (m.variants ?? []).length ? ["", ...m.variants.map((v) => v.id)] : [],
-          fallbackEffort: "high",
+          fallbackEffort: DEFAULT_FALLBACK_EFFORT,
           free,
         };
       });

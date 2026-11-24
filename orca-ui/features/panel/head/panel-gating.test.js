@@ -30,3 +30,10 @@ test("fallback keeps a visible active tab and resets a gated one", () => {
   assert.equal(fallbackChild(visible, "workspaces"), "files");
   assert.equal(fallbackChild([], "changes"), null);
 });
+
+test("an item with no gate, or an unknown one, is always shown", () => {
+  const items = [{ id: "a" }, { id: "b", gating: "mystery" }, { id: "c", gating: "toString" }];
+  for (const state of [{ isFolder: true, onSshHost: false }, { isFolder: false, onSshHost: true }]) {
+    assert.deepEqual(visibleTools(items, state).map((t) => t.id), ["a", "b", "c"]);
+  }
+});

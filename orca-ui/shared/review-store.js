@@ -50,7 +50,7 @@ export function loadReviewCache() {
     const v = localStorage.getItem("pr.cache.v2");
     return v ? JSON.parse(v) : {};
   } catch {
-    return {};
+    return {}; // storage blocked or the cached JSON is damaged: start from an empty cache
   }
 }
 
@@ -74,7 +74,7 @@ export function saveReviewCache(cache) {
   }
   try {
     localStorage.setItem("pr.cache.v2", JSON.stringify(cache));
-  } catch {}
+  } catch { /* storage full or blocked: setShared below still carries the cache */ }
   setShared("pr.cache.v2", cache);
 }
 

@@ -9,6 +9,9 @@ const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() =
   spaces: "() => globalThis.__herdrSpaces?.() ?? []",
   machines: "() => globalThis.__herdrMachines?.() ?? []",
   layout: "() => globalThis.__herdrLayout?.()",
+  panes: "() => globalThis.__herdrPanes?.()",
+  focused: "() => globalThis.__herdrFocused?.()",
+  nextCommand: "() => globalThis.__herdrNextCommand?.()",
   // Commands go through `globalThis.__herdrRun` so a flow test can read what a mod asks of the app.
   run: "(command, args) => globalThis.__herdrRun?.(command, args)",
   // File IO goes through `globalThis.__herdrFiles` so a flow test can run a mod's real handlers.

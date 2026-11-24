@@ -11,10 +11,10 @@ export function copyText(text, cx) {
   if (!text) return;
   // 1. In-app GPUI internal clipboard (InputState, prompt modal, terminal.paste)
   if (typeof globalThis.__clipboard_write_text === "function") {
-    try { globalThis.__clipboard_write_text(text); } catch {}
+    try { globalThis.__clipboard_write_text(text); } catch { /* the host clipboard below still gets the text */ }
   }
   if (cx && typeof cx.write_to_clipboard === "function") {
-    try { cx.write_to_clipboard(text); } catch {}
+    try { cx.write_to_clipboard(text); } catch { /* a dead cx must not stop the host copy below */ }
   }
   // 2. Host OS display server clipboard via piped stdin (Wayland / X11 / macOS / Windows).
   // Zero temp files, closed standard streams (>/dev/null 2>&1), non-blocking.
@@ -28,7 +28,7 @@ export function copyText(text, cx) {
     'elif command -v powershell.exe >/dev/null 2>&1; then printf %s "$1" | powershell.exe -NoProfile -Command "$input | Set-Clipboard" >/dev/null 2>&1; fi',
     "copy",
     text,
-  ]).catch(() => {});
+  ]).catch(() => {}); // a missing clipboard tool is not worth an error: GPUI already has the text
 }
 
 export function reveal(path, isDir = false) {
@@ -40,5 +40,5 @@ export function reveal(path, isDir = false) {
     'elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$3"; ' +
     'elif command -v explorer.exe >/dev/null 2>&1; then explorer.exe "$3"; fi >/dev/null 2>&1 &',
     "reveal", path, isDir ? "1" : "0", dir,
-  ]).catch(() => {});
+  ]).catch(() => {}); // best effort: with no file manager to open there is nothing to report
 }

@@ -8,6 +8,15 @@ const MAX_FORK_CONTEXT_CHARS = 36000;
 const MAX_FORK_CAPTURE_SANITIZE_CHARS = MAX_FORK_CONTEXT_CHARS * 4;
 const ESCAPE_CODE = 27;
 const BELL_CODE = 7;
+const CARRIAGE_RETURN_CODE = 13;
+const LINE_FEED_CODE = 10;
+const RIGHT_BRACKET_CODE = 93; // ESC ] opens an OSC sequence
+const LEFT_BRACKET_CODE = 91; // ESC [ opens a CSI sequence
+const LETTER_C_CODE = 99; // ESC c resets the terminal
+// Orca keeps at most this many blank lines in a row.
+const MAX_NEWLINE_RUN = 3;
+// Intermediate characters after ESC that select a character set (`ESC ( B`).
+const CHARSET_SELECTORS = "()*+-./";
 
 function tailBoundForkCapture(value) {
   if (value.length <= MAX_FORK_CAPTURE_SANITIZE_CHARS) return value;
@@ -42,16 +51,16 @@ function findCsiSequenceEnd(value, index) {
 
 function findTerminalEscapeEnd(value, escapeIndex) {
   const nextCode = value.charCodeAt(escapeIndex + 1);
-  if (nextCode === 93) {
+  if (nextCode === RIGHT_BRACKET_CODE) {
     return findOscSequenceEnd(value, escapeIndex + 2) ?? escapeIndex + 1;
   }
-  if (nextCode === 91) {
+  if (nextCode === LEFT_BRACKET_CODE) {
     return findCsiSequenceEnd(value, escapeIndex + 2);
   }
-  if ((nextCode >= 64 && nextCode <= 90) || (nextCode >= 92 && nextCode <= 95) || nextCode === 99) {
+  if ((nextCode >= 64 && nextCode <= 90) || (nextCode >= 92 && nextCode <= 95) || nextCode === LETTER_C_CODE) {
     return escapeIndex + 1;
   }
-  if ("()*+-./".includes(value[escapeIndex + 1] ?? "") && escapeIndex + 2 < value.length) {
+  if (CHARSET_SELECTORS.includes(value[escapeIndex + 1] ?? "") && escapeIndex + 2 < value.length) {
     return escapeIndex + 2;
   }
   return null;
@@ -77,11 +86,11 @@ export function cleanAgentSessionForkTranscript(value) {
         continue;
       }
     }
-    if (code === 13 || code === 10) {
-      if (code === 13 && value.charCodeAt(index + 1) === 10) {
+    if (code === CARRIAGE_RETURN_CODE || code === LINE_FEED_CODE) {
+      if (code === CARRIAGE_RETURN_CODE && value.charCodeAt(index + 1) === LINE_FEED_CODE) {
         index++;
       }
-      if (newlineRun < 3) {
+      if (newlineRun < MAX_NEWLINE_RUN) {
         result += "\n";
       }
       newlineRun++;
