@@ -50,3 +50,11 @@ test("copy focuses its target and bulk deletion confirms before closing the over
   assert.deepEqual(JSON.parse(JSON.stringify(group.events[0].props.confirmClose)), { kind: "bulk", scope: "all", tabIds: ["a", "b"] });
   assert.equal(group.events[1], "popup");
 });
+
+test("left/up context splits swap the original target explicitly", () => {
+  for (const [label, direction] of [["Split Terminal Left", "right"], ["Split Terminal Up", "down"]]) {
+    const { menu, rows, events } = fixture("pane");
+    menu.choose(rows.findIndex(row => row[0] === label), {});
+    assert.deepEqual(JSON.parse(JSON.stringify(events)), [["pane.focus", { pane: "p" }], ["pane.split", { direction, pane: "p" }], ["pane.swap", { direction, pane: "p" }], "popup"]);
+  }
+});

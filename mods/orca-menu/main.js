@@ -632,11 +632,13 @@ function closeSplitPanes(args) {
   for (const x of mine) if (x !== keep) run("pane.close", { pane: x.pane });
 }
 
-// Split on one side, then swap the new pane over the old one for the other side.
-const splitThenSwap = (direction, swap) => (args) => {
-  focusPane(args);
-  run("pane.split", { direction, ...paneArg(args) });
-  run("pane.swap", { direction: swap });
+// Split on one side, then swap the original pane with its newly created neighbor.
+const splitThenSwap = (direction) => (args) => {
+  const pane = args?.pane ?? panes().find((p) => p.focused)?.pane;
+  if (!pane) return;
+  focusPane({ pane });
+  run("pane.split", { direction, pane });
+  run("pane.swap", { direction, pane });
 };
 
 // Copy Context (terminal-pane-menu-agent-session-actions.ts:58-65 & terminal-agent-session-fork.ts:139):
@@ -691,8 +693,8 @@ const ORCA_ACTIONS = new Map([
   ["orca-menu.move-tab-split", (args) => setShared("orca-tabs.action", { kind: "move-tab-split", tab: args.id, direction: args.direction })],
   ["orca-menu.unsplit-to-tab", (args) => setShared("orca-tabs.action", { kind: "unsplit-to-tab", terminal: args.terminal, pane: args.pane })],
   ["orca-menu.close-split-panes", closeSplitPanes],
-  ["orca-menu.split-left", splitThenSwap("right", "left")],
-  ["orca-menu.split-up", splitThenSwap("down", "up")],
+  ["orca-menu.split-left", splitThenSwap("right")],
+  ["orca-menu.split-up", splitThenSwap("down")],
   ["orca-menu.copy-terminal", copyId],
   ["orca-menu.copy-pane-id", copyId],
   ["orca-menu.copy-context", copyContext],

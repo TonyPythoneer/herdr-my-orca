@@ -5,7 +5,7 @@ import { register } from "node:module";
 register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
 const { default: SplitMenu } = await import("./main.js");
 
-test("split rows close the overlay before splitting and swap only for left and up", async () => {
+test("split rows close the overlay and avoid untargeted left/up swaps", async () => {
   const calls = [];
   globalThis.__herdrProps = () => ({ overlay: "menu" });
   globalThis.__herdrCloseOverlay = id => calls.push(id);
@@ -21,8 +21,7 @@ test("split rows close the overlay before splitting and swap only for left and u
   for (const [index, [, direction, swap, mod]] of expected.entries()) {
     calls.length = 0;
     menu.choose(index, {});
-    assert.deepEqual(calls, ["menu", ["pane.split", { direction, pane: undefined, ...(mod ? { mod } : {}) }],
-      ...(swap ? [["pane.swap", { direction: swap }]] : [])]);
+    assert.deepEqual(calls, swap ? ["menu"] : ["menu", ["pane.split", { direction, pane: undefined, ...(mod ? { mod } : {}) }]]);
   }
   for (const i of [8, 9]) {
     calls.length = 0;
