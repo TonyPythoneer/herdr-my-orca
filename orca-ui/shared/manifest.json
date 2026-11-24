@@ -6,7 +6,8 @@
         "mods/orca-changes/clip.js",
         "mods/orca-files/clip.js",
         "mods/orca-handoff/clip.js",
-        "mods/orca-menu/clip.js"
+        "mods/orca-menu/clip.js",
+        "mods/orca-agent-manager/clip.js"
       ]
     },
     {
@@ -33,7 +34,8 @@
       "source": "orca-ui/shared/agent-flyout.js",
       "outputs": [
         "mods/agent-config/agent-flyout.js",
-        "mods/orca-new-menu/agent-flyout.js"
+        "mods/orca-new-menu/agent-flyout.js",
+        "mods/orca-agent-manager/agent-flyout.js"
       ]
     },
     {
@@ -57,6 +59,13 @@
         "mods/orca-changes/panel-motion.js",
         "mods/orca-agents/panel-motion.js",
         "mods/orca-panel-gap/panel-motion.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/agent-config-view.js",
+      "outputs": [
+        "mods/agent-config/agent-config-view.js",
+        "mods/orca-agent-manager/agent-config-view.js"
       ]
     }
   ]

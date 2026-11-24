@@ -11,6 +11,7 @@ import { legacyButtonTree } from "./capture-handlers.loader.mjs";
 process.env.TZ = "UTC";
 register(new URL("./capture-handlers.loader.mjs", import.meta.url));
 const { default: AgentManager } = await import("./main.js");
+const { agentsPageView } = await import("./page-view.js");
 const GOLDEN = new URL("./page.golden.json", import.meta.url);
 const BUILDERS = new URL("./builders.golden.json", import.meta.url);
 // The golden files hold one SHA-256 per recorded tree (the trees run to megabytes). Set
@@ -68,6 +69,12 @@ const draw = (page, cx) => {
   globalThis.__herdrHandlers = [];
   return JSON.parse(JSON.stringify(page.render(cx).__node));
 };
+// Historical characterization of the retained row/editor builders, not the active settings route.
+const drawLegacy = (page, cx) => {
+  globalThis.__herdrHandlers = [];
+  const node = page.providersPage ? page.render(cx) : agentsPageView(page, globalThis.__herdrTheme());
+  return JSON.parse(JSON.stringify(node.__node));
+};
 // The handler a render gave the element with this id (or, with no id, the last one of that kind).
 const handler = (key, id) => {
   const found = globalThis.__herdrHandlers.filter((entry) => entry.key === key
@@ -91,7 +98,7 @@ function pageStates(t) {
   const add = (name, setup, props, agents) => {
     const { page, cx } = harness(t, props, agents);
     setup(page, cx);
-    states[name] = draw(page, cx);
+    states[name] = drawLegacy(page, cx);
   };
   add("loading", (page) => { page.agents = null; page.loading = true; });
   add("cached", () => {});
@@ -160,7 +167,7 @@ function addProviderStates(add) {
   }, { page: "providers" });
 }
 
-test("the whole page renders as recorded in every state", (t) => {
+test("legacy builders and unchanged provider page render as recorded in every state", (t) => {
   const out = pageStates(t);
   check(GOLDEN, out, "page");
   const distinct = new Set(Object.values(out).map((state) => JSON.stringify(state))).size;
@@ -203,7 +210,7 @@ test("the page's own handlers go back, refresh, resize, pass keys and stop the w
   const { page, cx, commands } = harness(t);
   const spy = spyCx();
   page.agents = inventory(() => true);
-  draw(page, cx);
+  drawLegacy(page, cx);
   page.typing = true;
   press(handler("on_click", "am-back"));
   assert.equal(page.typing, false);
@@ -217,7 +224,7 @@ test("the page's own handlers go back, refresh, resize, pass keys and stop the w
   assert.equal(page.width, 900);
   assert.deepEqual(spy.log, ["notify"]);
   assert.equal(press(handler("on_key_down", "am-root"), { key: "end" }, spy), true);
-  assert.equal(page.focusKey, page.allRows().all.at(-1).key);
+  assert.equal(page.railSelection, "freebuff");
   press(handler("on_scroll_wheel"), {}, spy);
   assert.equal(spy.log.at(-1), "stop");
 });
@@ -229,13 +236,13 @@ test("a row's switch, name and chevron toggle and expand without leaking the cli
   page.toggleEnabled = (row) => toggled.push(row.key);
   page.ensureEditor = (row) => page.editors.set(row.key, editorOf());
   page.agents = inventory(() => true);
-  draw(page, cx);
+  drawLegacy(page, cx);
   press(handler("on_click", "am-toggle-claude"), {}, spy);
   assert.deepEqual(toggled, ["claude"]);
   assert.equal(spy.log[0], "stop");
   press(handler("on_click", "am-name-claude"), {}, spy);
   assert.equal(page.expanded.has("claude"), true);
-  draw(page, cx);
+  drawLegacy(page, cx);
   press(handler("on_click", "am-more-claude"), {}, spy);
   assert.equal(page.expanded.has("claude"), false);
 });
@@ -252,7 +259,7 @@ test("the editor's keys save on cmd-enter and cancel on escape, and its buttons 
   page.save = (row) => saved.push(row.key);
   page.cancelEdit = (row) => cancelled.push(row.key);
   page.writeError = null;
-  draw(page, cx);
+  drawLegacy(page, cx);
   const keys = globalThis.__herdrHandlers.filter((entry) => entry.key === "on_key_down" && entry.rec.c.some(([name, args]) => name === "pl" && args[0] === 52)).map((entry) => entry.fn);
   assert.equal(keys.length, 2);
   page.typing = true;
@@ -281,7 +288,7 @@ test("the editor's conflict, reset and uninstall buttons call the page", (t) => 
   const calls = [];
   for (const name of ["reloadRow", "save", "reset", "requestUninstall", "cancelUninstall", "confirmUninstall"]) page[name] = (...args) => calls.push([name, args[0]?.key ?? typeof args[0]]);
   page.applyPrograms(programsWith({ claude: ["claude", "-x"] }));
-  draw(page, cx);
+  drawLegacy(page, cx);
   press(handler("on_click", "am-reload-claude"), {}, spy);
   press(handler("on_click", "am-force-claude"), {}, spy);
   assert.equal(page.editors.get("claude").force, true);
@@ -290,7 +297,7 @@ test("the editor's conflict, reset and uninstall buttons call the page", (t) => 
   press(handler("on_click", "am-uninstall-confirm-claude"), {}, spy);
   assert.deepEqual(calls.map(([name]) => name), ["reloadRow", "save", "reset", "cancelUninstall", "confirmUninstall"]);
   page.uninstall = null;
-  draw(page, cx);
+  drawLegacy(page, cx);
   press(handler("on_click", "am-uninstall-claude"), {}, spy);
   assert.equal(calls.at(-1)[0], "requestUninstall");
   press(handler("on_click", "am-save-claude"), {}, spy);
@@ -304,7 +311,7 @@ test("the permission menus pick an item and report open and close", (t) => {
   page.setDefaultPermission = (choice) => picks.push(["default", choice]);
   page.setAgentPermission = (row, choice) => picks.push([row.key, choice]);
   page.permissionOpen = "default";
-  draw(page, cx);
+  drawLegacy(page, cx);
   press(handler("on_click", "am-perm-default-ask"), {}, spy);
   press(handler("on_open_change", "am-perm-pop-default"), true, spy);
   assert.equal(page.permissionOpen, "default");
@@ -313,7 +320,7 @@ test("the permission menus pick an item and report open and close", (t) => {
   page.expanded.add("claude");
   page.editors.set("claude", editorOf());
   page.permissionOpen = "claude";
-  draw(page, cx);
+  drawLegacy(page, cx);
   press(handler("on_click", "am-perm-claude-ask"), {}, spy);
   press(handler("on_open_change", "am-perm-pop-claude"), true, spy);
   assert.equal(page.permissionOpen, "claude");
@@ -389,4 +396,35 @@ test("provider and refresh controls are native buttons; busy refresh cannot acti
   assert.match(JSON.stringify(draw(providers.page, providers.cx)), /"n":"Button.new","a":\["am-provider-add"\]/);
   providers.page.adding = cardOf(null, { host: "http://127.0.0.1:8000/v1" }, { open: true });
   assert.match(JSON.stringify(draw(providers.page, providers.cx)), /"n":"Button.new","a":\["am-key-eye-new"\]/);
+});
+
+// Exercise the actual V4 route independently of the historical builder snapshots.
+test("settings route selects Global, official and unofficial agents and dispatches real controls", (t) => {
+  const { page, cx } = harness(t);
+  const spy = spyCx();
+  const toggled = [];
+  page.toggleEnabled = row => toggled.push(row.key);
+  page.freebuffInstalled = true;
+  const global = JSON.stringify(draw(page, cx));
+  for (const id of ["am-agent-rail", "am-rail-select-global", "am-rail-select-claude", "am-rail-select-freebuff", "Global Agent Settings", "am-refresh"]) assert.ok(global.includes(id), id);
+  assert.ok(!global.includes("am-back"));
+  press(handler("on_click", "am-rail-toggle-claude"), {}, spy);
+  assert.deepEqual(toggled, ["claude"]);
+  assert.equal(spy.log.at(-1), "stop");
+  press(handler("on_click", "am-rail-select-claude"), {}, spy);
+  const claude = JSON.stringify(draw(page, cx));
+  assert.match(claude, /am-agent-detail-claude/);
+  assert.match(claude, /Loading harness settings/);
+  press(handler("on_click", "am-rail-select-codex"), {}, spy);
+  const codex = JSON.stringify(draw(page, cx));
+  assert.match(codex, /am-agent-detail-codex/);
+  assert.match(codex, /Install this CLI/);
+  press(handler("on_click", "am-rail-select-freebuff"), {}, spy);
+  const freebuff = JSON.stringify(draw(page, cx));
+  assert.match(freebuff, /Preview command/);
+  assert.match(freebuff, /am-copy-command/);
+  press(handler("on_click", "am-rail-select-global"), {}, spy);
+  assert.match(JSON.stringify(draw(page, cx)), /Global Agent Settings/);
+  press(handler("on_size_change", "am-root"), { width: 420 }, spy);
+  assert.equal(page.width, 420);
 });

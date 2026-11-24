@@ -7,6 +7,8 @@ import { defaultPermissionItems, permissionSelect } from "./permission-menu.js";
 import { permissionSummary } from "./permission-plan.js";
 import { timeLabel } from "./util.js";
 import { backButton, badge, banner, empty, group, section } from "./parts.js";
+import { railView } from "./rail-view.js";
+import { railRows } from "./agent-rail.js";
 
 // Below this width the page's side padding shrinks.
 const NARROW_WIDTH = 520;
@@ -334,4 +336,28 @@ export function agentsPageView(owner, t) {
     })
     .child(header.flex_none())
     .child(v_flex().id("am-list").w_full().min_h(0).overflow_y_scrollbar().flex_1().child(body));
+}
+
+// Settings route uses the existing native refresh and conflict controls.
+export function settingsPageView(owner, t, cx) {
+  const rows = railRows(owner.allRows().all);
+  const unofficial = owner.unofficialRows();
+  owner.revealRail(rows, unofficial, cx);
+  const pad = (owner.width || 800) < NARROW_WIDTH ? 12 : 24;
+  const header = addBanners(v_flex().w_full().max_w(760).mx_auto().px(pad).pt(20).gap(2)
+    .child(h_flex().w_full().items_center().gap(8).child(div().flex_1()).child(badge("This computer", t, { border: true })).child(refreshButton(owner, t))), owner, rows, t);
+  const loading = owner.loading && !owner.agents;
+  const selected = [...rows, ...unofficial].find(row => row.key === owner.railSelection);
+  const body = v_flex().w_full().max_w(760).mx_auto().px(pad).pb(20).gap(2)
+    .when(loading, el => el.child(loadingRow(t)))
+    .when(!loading && owner.railSelection === "global", el => el.child(div().text_size(18).font_semibold().text_color(t.foreground).child("Global Agent Settings"))
+      .when(rows.some(row => row.supports), inner => inner.child(owner.permissionsCard(rows, t))))
+    .when(!loading && owner.railSelection !== "global", el => el.child(selected ? owner.agentDetail(selected, t, cx) : empty("Agent unavailable on this computer. Refresh or select another agent.", t)))
+    .child(div().pt(12).text_size(11).text_color(t.dim).child(timeLabel(owner.lastChecked)));
+  return v_flex().id("am-root").size_full().min_h(0).overflow_hidden().bg(t.background).text_size(12)
+    .on_key_down((event, keyCx) => { if (owner.permissionOpen && owner.onPermissionKey(String(event.key ?? ""), keyCx)) keyCx.stop_propagation(); })
+    .on_size_change((size, sizeCx) => { if (owner.width !== size.width) { owner.width = size.width; sizeCx.notify(); } })
+    .child(h_flex().w_full().min_h(0).flex_1()
+      .child(railView(owner, rows, unofficial, t).track_focus(owner.handle).on_key_down((event, keyCx) => { if (owner.onKey(event, keyCx)) keyCx.stop_propagation(); }))
+      .child(v_flex().id("am-list").min_w(0).min_h(0).overflow_y_scrollbar().flex_1().child(header).child(body)));
 }

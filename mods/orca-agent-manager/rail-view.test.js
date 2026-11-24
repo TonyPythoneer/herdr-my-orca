@@ -1,0 +1,36 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { register } from "node:module";
+register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
+const { railItem } = await import("./rail-view.js");
+const { default: AgentManager } = await import("./main.js");
+const theme = new Proxy({}, { get: (_t,k) => String(k) });
+const render = (row, selected = row.key) => JSON.stringify(railItem({railSelection:selected},row,theme).__node);
+test("Global uses robot and gear, and FreeBuff retains its existing brand icon", () => {
+  const global = render({key:"global"});
+  assert.ok(global.includes("mods/orca-new-menu/bot.svg"));
+  assert.ok(global.includes("mods/orca-chrome/settings.svg"));
+  assert.ok(global.includes("Global Agent Settings"));
+  const owner = Object.create(AgentManager.prototype);
+  Object.assign(owner,{agents:[],disabled:new Set(),freebuffInstalled:false});
+  const row=owner.unofficialRows()[0];
+  assert.equal(row.icon,"mods/orca-new-menu/freebuff.png");
+  assert.ok(render(row).includes("freebuff.png"));
+  assert.ok(render(row).includes("am-rail-install-freebuff"));
+  assert.ok(render({...row,installed:true,enabled:true}).includes("am-rail-toggle-freebuff"));
+  assert.ok(!render({...row,installed:undefined}).includes("am-rail-install-freebuff"));
+});
+test("keyboard and pointer select the same single page, including Global and Unofficial", () => {
+  const owner=Object.create(AgentManager.prototype);
+  const cx={notify(){}};
+  Object.assign(owner,{agents:[],disabled:new Set(),freebuffInstalled:true,railSelection:"global",handle:{focus(){}}});
+  owner.allRows=()=>({all:[{key:"claude",installed:true},{key:"codex",installed:false}]});
+  owner.onKey({key:"down"},cx);
+  assert.equal(owner.railSelection,"claude");
+  owner.onKey({key:"end"},cx);
+  assert.equal(owner.railSelection,"freebuff");
+  owner.onKey({key:"enter"},cx);
+  assert.equal(owner.railSelection,"freebuff");
+  owner.onKey({key:"home"},cx);
+  assert.equal(owner.railSelection,"global");
+});

@@ -12,8 +12,8 @@
 // `command -v` probe in state.js, run in the same login shell Herdr uses. If it fails, the
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
 import { View, div } from "gpui-kit";
-import { Button, v_flex, h_flex, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
-import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, writeTextFile } from "herdr";
+import { Button, v_flex, h_flex, InputState, TextareaState, ScrollHandle, Scrollbar, Link } from "gpui-base";
+import { appHome, checking, exec, knownAgents, props, readTextFile, run, shared, setShared, terminals, theme, settings, writeTextFile } from "herdr";
 import {
   LIST_ROW_HEIGHT,
   applyFreshInstalled,
@@ -55,12 +55,18 @@ import {
   uninstallCommand,
 } from "./install.js";
 import { errorText, sameRun, tail } from "./util.js";
-import { icon, monoFont } from "./parts.js";
-import { agentsPageView, permissionsCardView } from "./page-view.js";
+import { icon, monoFont, empty } from "./parts.js";
+import { settingsPageView, permissionsCardView } from "./page-view.js";
 import { modelProvidersView, providerCardView, providersPageView } from "./provider-view.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
-import { agentPermissionItems, defaultPermissionItems } from "./permission-menu.js";
+import { agentPermissionItems, defaultPermissionItems, permissionRow } from "./permission-menu.js";
 import { PROVIDER_FILE, judgeModels, linkInfo, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost } from "./codex-provider.js";
+
+import { railRows } from "./agent-rail.js";
+import { createAgentConfigClass } from "./agent-config-view.js";
+import { SPECS } from "./agent-flyout.js";
+import { copyText } from "./clip.js";
+const Harness = createAgentConfigClass();
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
@@ -134,6 +140,12 @@ export default class AgentManager extends View {
     this.focusKey = null;
     this.installedScroll = ScrollHandle.new();
     this.availableScroll = ScrollHandle.new();
+    this.officialRailScroll = ScrollHandle.new();
+    this.unofficialRailScroll = ScrollHandle.new();
+    this.railSelection = "global";
+    this.railHover = null;
+    this.harnesses = new Map();
+    this.harnessPending = new Set();
     this.typing = false;
     this.loading = true;
     this.refreshing = false;
@@ -158,7 +170,7 @@ export default class AgentManager extends View {
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-manager", props: {expand: "claude"}}`).
     const expand = props()?.expand;
-    if (typeof expand === "string") this.expanded.add(expand);
+    if (typeof expand === "string") { this.railSelection = expand; this.focusKey = expand; this.railReveal = expand; }
 
     // The Model providers page is the same mod with `props.page`: only the provider card, no detection.
     this.providersPage = props()?.page === "providers";
@@ -1385,20 +1397,19 @@ export default class AgentManager extends View {
     if (this.typing) return false;
     const key = String(event.key ?? "");
     if (this.permissionOpen && this.onPermissionKey(key, cx)) return true;
-    const rows = this.allRows().all;
-    if (!rows.length) return false;
-    const at = rows.findIndex((row) => row.key === this.focusKey);
-    const current = rows[Math.max(0, at)];
-    if (key === "enter") {
-      this.toggleExpand(current, cx);
-      return true;
-    }
-    if (!this.applyRowKey(key, { rows, at, current }, cx)) return false;
-    this.scrollToFocus();
-    this.handle.focus();
-    cx.notify();
+    const rows = [{ key: "global" }, ...railRows(this.allRows().all), ...this.unofficialRows()];
+    const at = Math.max(0, rows.findIndex(row => row.key === this.railSelection));
+    const move = Object.hasOwn(ROW_MOVES, key) ? ROW_MOVES[key] : null;
+    if (move) this.selectRail(rows[move(at, rows.length)].key, cx);
+    else if (key === "enter") this.selectRail(rows[at].key, cx);
+    else if (key === "space" || key === " ") {
+      if (rows[at].installed) this.toggleEnabled(rows[at], cx);
+    } else if (key.toLowerCase() === "r") this.refresh(cx);
+    else return false;
     return true;
   }
+
+  // ---- drawing --------------------------------------------------------------
 
   // One key on the list: false when it means nothing here. `at` is the focused row, -1 for none.
   applyRowKey(key, { rows, at, current }, cx) {
@@ -1592,8 +1603,139 @@ export default class AgentManager extends View {
     return uninstallSectionView(this, row, t);
   }
 
-  render() {
+  unofficialRows() {
+    const agent = this.agents?.find(a => a.key === "freebuff");
+    const configured = this.programsText === undefined ? null : readRunOverride(this.programsText, "freebuff").run;
+    const installed = typeof this.freebuffInstalled === "boolean" ? this.freebuffInstalled : agent?.installed;
+    return [{
+      key: "freebuff", name: "FreeBuff CLI", icon: "mods/orca-new-menu/freebuff.png",
+      homepage: "https://github.com/CodebuffAI/freebuff#quick-start",
+      // Match the existing Start an agent integration, including a configured command.
+      run: configured ?? agent?.run ?? ["zsh", "-lic", "exec freebuff"],
+      installed, enabled: Boolean(installed) && !this.disabled.has("freebuff"), supports: false,
+    }];
+  }
+
+  selectRail(key, cx) {
+    this.railSelection = key;
+    this.focusKey = key === "global" ? null : key;
+    this.permissionOpen = null;
+    this.railReveal = key;
+    this.handle?.focus();
+    cx.notify();
+  }
+
+  revealRail(official, unofficial, cx) {
+    const key = this.railReveal;
+    if (!key) return;
+    const i = official.findIndex(row => row.key === key);
+    const j = unofficial.findIndex(row => row.key === key);
+    if (i < 0 && j < 0 && key !== "global") return; // wait for inventory
+    this.railReveal = null;
+    // The list may have just mounted on deep-link entry. Scroll after layout.
+    cx.spawn(async taskCx => {
+      await taskCx.sleep(1);
+      if (this.railSelection !== key) return;
+      if (i >= 0 && official.length > 5) this.officialRailScroll.scroll_to_item(i);
+      if (j >= 0 && unofficial.length > 5) this.unofficialRailScroll.scroll_to_item(j);
+      taskCx.notify();
+    });
+  }
+
+  harnessFor(row, cx) {
+    if (this.harnesses.has(row.key)) return this.harnesses.get(row.key);
+    if (this.harnessPending.has(row.key) || checking()) return null;
+    this.harnessPending.add(row.key);
+    cx.spawn(async taskCx => {
+      try {
+        const controller = new Harness();
+        controller.settingsContext = { key: row.key, name: row.name, argv: row.run };
+        controller.init({}, taskCx);
+        this.harnesses.set(row.key, controller);
+      } catch (e) {
+        this.harnesses.set(row.key, { initError: errorText(e) });
+      } finally {
+        this.harnessPending.delete(row.key);
+        taskCx.notify();
+      }
+    });
+    return null;
+  }
+
+  readonlyCommand(argv, t) {
+    const command = formatArgv(argv);
+    return v_flex().w_full().gap(6)
+      .child(h_flex().items_center().gap(8)
+        .child(div().flex_1().font_semibold().text_color(t.foreground).child("Preview command"))
+        .child(this.button("am-copy-command", "Copy", t, (_e,cx) => copyText(command,cx), { height: 24, px: 8 })))
+      .child(div().w_full().p(10).rounded(8).border_1().border_color(t.border).bg(t.surface)
+        .font_family(settings()?.font_family ?? "JetBrains Mono").text_size(11).text_color(t.foreground).child(command));
+  }
+
+  installationStatus(row) {
+    if (row.installed === undefined) return "Installation not yet verified";
+    if (!row.installed) return "Not installed";
+    return row.enabled ? "Installed · Enabled" : "Installed · Disabled";
+  }
+
+  agentDetailHeader(row, t) {
+    const status = this.installationStatus(row);
+    const guide = () => row.homepage
+      ? Link.new("am-detail-install-" + row.key).href(row.homepage).tooltip("Open installation guide")
+        .child(div().px(12).h(30).flex().items_center().rounded(7).border_1().border_color(t.border)
+          .text_color(t.accent).child("Install"))
+      : div().text_size(12).text_color(t.muted).child("No verified installation guide is available for this CLI.");
+    return v_flex().id("am-agent-detail-" + row.key).w_full().gap(14)
+      .child(h_flex().items_center().gap(12)
+        .child(div().size(52).rounded_full().bg(t.surface).flex().items_center().justify_center().child(icon(row,32,t)))
+        .child(v_flex().flex_1().gap(4)
+          .child(div().text_size(20).font_semibold().text_color(t.foreground).child(row.name))
+          .child(div().text_size(11).text_color(t.muted).child(status + (row.key === "freebuff" ? " · Unofficial" : " · Official"))))
+        .when(row.installed === false, el => el.child(guide())));
+  }
+
+  agentDetail(row, t, cx) {
+    const detail = this.agentDetailHeader(row, t);
+    if (!row.installed) return detail.child(v_flex().gap(8).p(16).rounded(8).border_1().border_color(t.border).bg(t.surface)
+      .child(div().text_size(13).text_color(t.foreground).child(row.installed === undefined ? "Refresh to verify this CLI." : "Install this CLI to configure its harness."))
+      .when(row.installed === false, el => el.child(div().text_size(11).text_color(t.muted).child("After installation, Refresh to recheck the executable."))));
+    const availability = v_flex().w_full().gap(10).p(12).rounded(8).border_1().border_color(t.border).bg(t.surface)
+      .child(h_flex().items_center().gap(10)
+        .child(v_flex().flex_1().gap(4)
+          .child(div().font_semibold().text_color(t.foreground).child("Show in Start an agent menu"))
+          .child(div().text_size(11).text_color(t.muted).child("Disable without uninstalling the CLI.")))
+        .child(this.toggle(row,t)))
+      .when(row.supports, el => el.child(permissionRow(this,row,t)))
+      .when(Boolean(this.permissionNotice), el => el.child(div().text_size(11)
+        .text_color(this.permissionNotice?.tone === "blocked" ? t.blocked : t.muted).child(this.permissionNotice?.text ?? "")));
+    let body = detail.child(availability);
+    if (row.entryError || this.programsError) return body.child(empty("Fix programs.json before previewing the command.",t));
+    if (row.key !== "freebuff") body = body.child(this.uninstallSection(row,t));
+    if (SPECS[row.key]) return body.child(this.harnessView(row, t, cx));
+    return body.child(div().text_size(12).text_color(t.muted).child("This agent has no dedicated harness options. Its configured command is used unchanged."))
+      .child(this.readonlyCommand(row.run,t));
+  }
+
+  harnessView(row, t, cx) {
+    const harness = this.harnessFor(row, cx);
+    if (!harness) return empty("Loading harness settings…", t);
+    if (harness.initError) return empty(harness.initError, t);
+    return harness.renderSettings(t, cx, { argv: row.run, format: formatArgv, copy: copyText, enabled: row.enabled });
+  }
+
+  render(cx) {
     if (this.providersPage) return this.providersView();
-    return agentsPageView(this, theme());
+    const requestedAgent = shared("agent-manager.open-agent");
+    if (requestedAgent && typeof requestedAgent.key === "string") {
+      this.railSelection = requestedAgent.key;
+      this.focusKey = requestedAgent.key;
+      this.railReveal = requestedAgent.key;
+      this.permissionOpen = null;
+      // Reload saved options on a new entry unless the page owns an unsaved draft.
+      const prior = this.harnesses.get(requestedAgent.key);
+      if (prior && !Object.values(prior.editors ?? {}).some(editor => editor.dirty)) this.harnesses.delete(requestedAgent.key);
+      setShared("agent-manager.open-agent", null);
+    }
+    return settingsPageView(this, theme(), cx);
   }
 }

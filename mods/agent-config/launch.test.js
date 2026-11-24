@@ -198,3 +198,46 @@ test("the flyout is split into sections: Codex has a model source, Claude does n
   assert.equal(claude.includes("MODEL SOURCE"), false);
   assert.ok(claude.includes("HARNESS CLI ARGUMENTS") && claude.includes("HARNESS CLI ADVANCED ARGUMENTS"));
 });
+
+test("settings command preview is the exact existing launch argv and has no launch side effects", async () => {
+  const { view, runs } = flyout({providerId:"omlx",providers:{omlx:record()},model:OMLX_MODEL,effort:"",
+    files:new Map([[PROVIDERS,providersFile({omlx:record()})]])});
+  view.settingsLoaded=true;
+  const preview=await view.buildPreview(CODEX);
+  assert.ok(preview.argv);
+  assert.deepEqual(preview.argv,(await view.buildLaunch({argv:CODEX})).argv);
+  assert.ok(!preview.argv.some(part=>part.includes("test-key-value")));
+  assert.equal(runs.length,0);
+});
+
+test("robot opens the selected local settings page even from a remote workspace", () => {
+  const {view,runs}=flyout({machine:"remote"});
+  const shared=[], closed=[];
+  globalThis.__herdrSetShared=(key,value)=>shared.push([key,value]);
+  globalThis.__herdrCloseOverlay=id=>closed.push(id);
+  globalThis.__herdrProps=()=>({key:"codex",space:"s1",overlay:"flyout",menu:"menu"});
+  view.openAgentSettings();
+  assert.deepEqual(shared,[["agent-manager.open-agent",{key:"codex"}],["agent-config",null]]);
+  assert.deepEqual(runs,[["layout.select",{stack:"main",child:"main-agents"}]]);
+  assert.deepEqual(closed,["flyout","menu"]);
+  delete globalThis.__herdrSetShared;
+  delete globalThis.__herdrCloseOverlay;
+});
+
+test("stale asynchronous previews cannot replace a newer draft, even after A-B-A", async () => {
+  const {view}=flyout();
+  const pending=[],tasks=[];
+  view.buildPreview=()=>new Promise(resolve=>pending.push(resolve));
+  const cx={spawn(fn){tasks.push(fn(cx));},notify(){}};
+  view.syncPreview(CODEX,cx);
+  view.model="another";
+  view.syncPreview(CODEX,cx);
+  view.model="gpt-5.6-sol";
+  view.syncPreview(CODEX,cx);
+  pending[2]({argv:["latest"]});
+  await tasks[2];
+  pending[0]({argv:["old"]});
+  pending[1]({argv:["middle"]});
+  await Promise.all(tasks);
+  assert.deepEqual(view.previewResult,{argv:["latest"]});
+});

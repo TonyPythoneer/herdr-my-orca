@@ -33,10 +33,10 @@ test("an empty directory receives exactly the managed batch, twice identically",
   assert.equal(run("--root", root, "--check", "--out", a).status, 0);
 });
 
-test("the real repo builds its 30 files, 19 of them shared copies, and matches", t => {
+test("the real repo builds its 34 files, 23 of them shared copies, and matches", t => {
   const out = temp(t);
   assert.equal(run("--out", out).status, 0);
-  assert.equal(files(out).length, 30);
+  assert.equal(files(out).length, 34);
   assert.equal(run("--check", "--out", out).status, 0);
 });
 

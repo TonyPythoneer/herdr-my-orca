@@ -15,9 +15,13 @@ const codexProvider = await import("./codex-provider.js");
 const viewport = await import("./list-viewport.js");
 const flyout = await import("./agent-flyout.js");
 
-const SOURCE = readFileSync(new URL("./main.js", import.meta.url), "utf8")
-  .replace(/^import .*;$/gm, "").replace("export default class AgentConfig", "class AgentConfig");
-const SCRIPT = new vm.Script(`${SOURCE}\n;globalThis.__Menu = AgentConfig;`, { filename: new URL("./main.js", import.meta.url).pathname });
+const SOURCE = readFileSync(new URL("./agent-config-view.js", import.meta.url), "utf8")
+  .replace(/^import .*;$/gm, "").replace("export function createAgentConfigClass", "function createAgentConfigClass");
+const SCRIPT = new vm.Script(`${SOURCE}\n;globalThis.__Menu = createAgentConfigClass(View);`, { filename: new URL("./agent-config-view.js", import.meta.url).pathname });
+const managerUrl = new URL("../orca-agent-manager/agent-config-view.js", import.meta.url);
+const managerSource = readFileSync(managerUrl, "utf8")
+  .replace(/^import .*;$/gm, "").replace("export function createAgentConfigClass", "function createAgentConfigClass");
+const MANAGER_SCRIPT = new vm.Script(`${managerSource}\n;globalThis.__Menu = createAgentConfigClass();`, { filename: managerUrl.pathname });
 const GOLDEN = new URL("./flyout.golden.json", import.meta.url);
 
 const stamp = text => String(text).replace(/"(checkedAt|at)": \d{10,}/g, '"$1": "<now>"');
@@ -120,7 +124,7 @@ const WORLDS = {
   "checking: no loading": { key: "codex", argv: ["codex"], files: {}, checking: true },
 };
 
-function start(world, log) {
+function start(world, log, settingsPage = false) {
   const handlers = [];
   const jobs = [];
   const timers = [];
@@ -149,12 +153,14 @@ function start(world, log) {
     },
   };
   vm.createContext(scope);
-  SCRIPT.runInContext(scope);
+  (settingsPage ? MANAGER_SCRIPT : SCRIPT).runInContext(scope);
   const cx = {
     notify: () => log.push(["notify"]), spawn: job => jobs.push(job), timer: { after: (ms, fn) => timers.push([ms, fn]) },
     stop_propagation: () => log.push(["stop"]),
   };
-  return { menu: new scope.__Menu(), cx, handlers, jobs, timers, files, log, props };
+  const menu = new scope.__Menu();
+  if (settingsPage) menu.settingsContext = { key: world.key, name: world.key, argv: world.argv, space: "s1" };
+  return { menu, cx, handlers, jobs, timers, files, log, props };
 }
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -180,7 +186,8 @@ const state = (m, w) => plain({
   editors: Object.fromEntries(Object.entries(m.editors).map(([id, e]) => [id, { v: e.input.value(), dirty: e.dirty, error: e.error }])), launching: m.launching, launched: m.launched,
   refreshing: m.refreshing, files: [...w.files].map(([k, v]) => [k, stamp(v)]),
 });
-const view = w => { w.handlers.length = 0; return digest(w.menu.render().__node); };
+// Compare the existing popup controls; the new shortcut has its own render and launch tests.
+const view = w => { w.handlers.length = 0; w.menu.showSettingsShortcut = () => false; return digest(w.menu.render().__node); };
 
 const KEYS = ["escape", "x"];
 // Method calls that cover what the handlers of the render do not reach.
@@ -275,4 +282,120 @@ test("every flyout records as before", async () => {
 test("the catalog fallback and error text are what the person reads", async () => {
   const w = await opened(WORLDS["codex, old schema, cli fails"]);
   assert.equal(w.menu.error, "Could not list models: offline");
+});
+
+const pageTheme = new Proxy({}, { get: (_t, key) => "#" + String(key) });
+async function openSettings(world) {
+  const w = start(world, [], true);
+  w.menu.init({}, w.cx);
+  await settle(w);
+  w.log.length = 0;
+  return w;
+}
+function drawSettings(w, enabled = true) {
+  const out = w.menu.renderSettings(pageTheme, w.cx, { argv: w.props.argv, format: argv => argv.join(" "), copy() {}, enabled });
+  return JSON.stringify(out.__node);
+}
+test("the settings controller loads a real catalog, previews current argv, and launches locally without closing a popup", async () => {
+  const w = await openSettings(WORLDS["codex, fresh cache, providers, saved choices"]);
+  assert.equal(w.menu.settingsLoaded, true);
+  assert.equal(w.menu.model, "m3");
+  assert.match(drawSettings(w), /Building command/);
+  await settle(w);
+  const argv = Array.from(w.menu.previewResult.argv);
+  assert.deepEqual(argv, Array.from((await w.menu.buildLaunch({ argv: w.props.argv })).argv));
+  const tree = drawSettings(w);
+  assert.match(tree, /am-copy-command/);
+  assert.match(tree, /am-launch-from-settings/);
+  assert.match(tree, /MODEL SOURCE/);
+  assert.ok(!w.log.some(entry => entry[0] === "run"));
+  w.menu.setAllItems("codexOff", false, w.cx);
+  await settle(w);
+  assert.match(drawSettings(w), /Building command/);
+  await settle(w);
+  assert.notDeepEqual(Array.from(w.menu.previewResult.argv), argv);
+  await w.menu.launch(w.cx);
+  await settle(w);
+  assert.ok(w.log.some(entry => entry[0] === "run" && entry[1] === "tab.new"));
+  assert.ok(w.log.some(entry => entry[0] === "run" && entry[1] === "layout.select"));
+  assert.ok(!w.log.some(entry => entry[0] === "closeOverlay"));
+});
+
+test("settings writes preserve another agent's data and reject conflicting or malformed disk state", async () => {
+  const w = await openSettings(WORLDS["codex, fresh cache, providers, saved choices"]);
+  const path = "/home/agent-config.json";
+  const disk = JSON.parse(w.files.get(path));
+  disk.pi = { model: "other" };
+  w.files.set(path, json(disk));
+  w.menu.effort = "high";
+  w.menu.remember();
+  await settle(w);
+  let saved = JSON.parse(w.files.get(path));
+  assert.equal(saved.pi.model, "other");
+  assert.equal(saved.codex.effort, "high");
+  saved.codex.effort = "external";
+  w.files.set(path, json(saved));
+  const before = w.files.get(path);
+  w.menu.effort = "low";
+  w.menu.remember();
+  await settle(w);
+  assert.equal(w.files.get(path), before);
+  assert.match(w.menu.settingsSaveError, /changed on disk/);
+  w.files.set(path, "{");
+  w.menu.remember();
+  await settle(w);
+  assert.equal(w.files.get(path), "{");
+  assert.ok(w.menu.settingsSaveError);
+  assert.match(drawSettings(w), /Could not save/);
+});
+
+test("Claude settings preview reads live JSON and never mutates an invalid editor or launches it", async () => {
+  const w = await openSettings(WORLDS["claude, valid agents json"]);
+  assert.match(drawSettings(w), /Harness CLI arguments/);
+  await settle(w);
+  assert.ok(w.menu.previewResult.argv);
+  const editor = w.menu.editors.agents;
+  editor.input.__v = "{bad";
+  const prior = editor.error;
+  const blocked = await w.menu.buildPreview(w.props.argv);
+  assert.match(blocked.error, /invalid JSON/);
+  assert.equal(editor.error, prior);
+  await w.menu.launch(w.cx);
+  assert.ok(editor.error);
+  assert.ok(!w.log.some(entry => entry[0] === "run" && entry[1] === "tab.new"));
+  editor.input.__v = '{"worker":{"description":"test"}}';
+  w.menu.saveEditor("agents", w.cx);
+  await settle(w);
+  assert.ok((await w.menu.buildPreview(w.props.argv)).argv);
+});
+
+test("remote settings are local-only, and OpenCode variant preview is read-only", async () => {
+  const remote = await openSettings(WORLDS["codex, remote machine"]);
+  drawSettings(remote);
+  await settle(remote);
+  assert.match(drawSettings(remote), /Choose a local workspace/);
+  await remote.menu.launch(remote.cx);
+  assert.ok(!remote.log.some(entry => entry[0] === "run"));
+  const w = await openSettings(WORLDS["opencode, groups, hidden models, variant file"]);
+  drawSettings(w);
+  await settle(w);
+  assert.match(drawSettings(w), /stored separately as its model variant/);
+  assert.ok(!w.log.some(entry => entry[0] === "write" && entry[1].includes("model.json")));
+  const preview = Array.from(w.menu.previewResult.argv);
+  assert.deepEqual(preview, Array.from((await w.menu.buildLaunch({ argv: w.props.argv })).argv));
+  await w.menu.launch(w.cx);
+  await settle(w);
+  assert.ok(w.log.some(entry => entry[0] === "run" && entry[1] === "tab.new"));
+});
+
+test("Pi and unavailable catalogs render the settings page without launching", async () => {
+  const pi = await openSettings(WORLDS["pi, saved presets"]);
+  drawSettings(pi);
+  await settle(pi);
+  assert.match(drawSettings(pi), /am-copy-command/);
+  assert.ok(pi.menu.previewResult.argv);
+  const missing = await openSettings(WORLDS["codex, old schema, cli fails"]);
+  assert.match(drawSettings(missing), /Could not list models: offline/);
+  assert.ok(!(await missing.menu.buildPreview(missing.props.argv)).argv);
+  assert.ok(!missing.log.some(entry => entry[0] === "run"));
 });

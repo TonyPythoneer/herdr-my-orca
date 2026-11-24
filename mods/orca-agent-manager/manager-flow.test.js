@@ -119,22 +119,18 @@ test("polling keeps a dirty draft, reload takes disk, save rechecks and expires 
   assert.equal(tasks.length, 1);
 });
 
-test("keyboard navigation wraps, scrolls the selected group and dispatches row and menu actions", async (t) => {
+test("keyboard navigation wraps across Global and both rail groups and dispatches menu actions", async (t) => {
   const { page, cx, tasks, drain, files } = harness(t);
   tasks.shift();
   page.refreshing = false;
-  const scroll = [];
-  page.installedScroll = { scroll_to_item: (i) => scroll.push(["installed", i]) };
-  page.availableScroll = { scroll_to_item: (i) => scroll.push(["available", i]) };
-  const press = (key) => page.onKey({ key }, cx);
-  for (const [key, focus] of [["up", "codex"], ["down", "claude"], ["end", "codex"], ["home", "claude"]]) {
+  const press = key => page.onKey({ key }, cx);
+  for (const [key, selection] of [["up", "freebuff"], ["down", "global"], ["end", "freebuff"], ["home", "global"], ["down", "claude"]]) {
     assert.equal(press(key), true);
-    assert.equal(page.focusKey, focus);
+    assert.equal(page.railSelection, selection);
+    assert.equal(page.railReveal, selection);
   }
-  assert.deepEqual(scroll, [["available", 0], ["installed", 0], ["available", 0], ["installed", 0]]);
   assert.equal(press("enter"), true);
-  assert.equal(page.expanded.has("claude"), true);
-  assert.equal(press("escape"), true);
+  assert.equal(page.railSelection, "claude");
   assert.equal(press("escape"), false);
   assert.equal(press("space"), true);
   await drain();
@@ -214,9 +210,10 @@ test("the agents page renders loading, conflicts, permissions and unsupported co
     return buildButton(id, label, theme, click, options);
   };
   const tree = draw();
-  for (const text of ["am-reload-all", "am-retry-detection", "am-permission-retry", "empty or multi-line", "stale probe", "no inventory"]) {
+  for (const text of ["am-reload-all", "am-retry-detection", "am-permission-retry", "stale probe", "no inventory"]) {
     assert.ok(tree.includes(text), text);
   }
+  assert.match(JSON.stringify(page.editor(page.allRows().all.find(row => row.key === "claude"), draft, {}).__node), /empty or multi-line/);
   buttons.get("am-permission-retry")({}, cx);
   assert.equal(retries, 1);
   buttons.get("am-reload-all")({}, cx);

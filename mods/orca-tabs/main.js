@@ -1,12 +1,13 @@
 // Derived from Herdr App's defaults/mods/tabs/main.js (Apache-2.0, Copyright Herdr App authors).
 // Modified for herdr-orca; see LICENSE and NOTICE.
-import { View, div } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, panes, terminals, run, openOverlay, closeOverlay, props, theme, window as appWindow, shared, layout, settings, setShared, writeTextFile, nextCommand } from "herdr";
 import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
 import { sidebarEase } from "./sidebar-motion.js";
 import { Drawer } from "./drawer.js";
+import { settingsPillLeft, settingsReturnPage } from "./agent-settings-route.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { TAB_STRIP_SLIDE_MS } from "./tab-item.js";
 import { addSidebarToggle, addTabTrack, addEndControls } from "./header-controls.js";
@@ -571,6 +572,7 @@ export default class Tabs extends View {
   // The center is a stack (`main`) holding `main-terminals` and `main-landing`, so switching is
   // `layout.select` — the same call this mod already makes for `panel-body`.
   syncLanding(cx) {
+    if (find(layout(), "main")?.active === "main-agents") return;
     // Orca's `hasActiveWorktree` is about the SELECTED worktree, not about whether any exists:
     // a selected space with no tabs open is still "no active worktree", and that is the blank
     // canvas Landing sits on. So the test is "the active space has at least one tab".
@@ -1133,10 +1135,66 @@ export default class Tabs extends View {
       return this.renderDrop(cx);
     }
 
+    const unified = Boolean(p?.unified);
+    const currentPage = find(layout(), "main")?.active;
+    if (currentPage === "main-agents") return this.settingsHeader(unified);
+    if (currentPage) this.lastAppPage = currentPage;
     this.applyTabAction(cx);
     const frame = this.stripFrame(cx, Boolean(p?.unified));
     const row = addSidebarToggle(this.headerSurface(frame), this, frame);
     return addEndControls(addTabTrack(row, this, frame), this, frame);
+  }
+
+  settingsHeader(unified) {
+    const t = theme();
+    const desiredLeft = this.settingsPillPosition(unified);
+    const back = this.settingsBack(t);
+    const w = appWindow() ?? this.windowState ?? {};
+    return h_flex().id("agent-settings-titlebar").size_full().relative().items_center().justify_center().bg(t.surface)
+      .child(desiredLeft == null ? back : div().absolute().left(desiredLeft).top(3).child(back))
+      .when(w.platform && w.platform !== "macos", el => el.child(this.settingsWindowControls(w, t)));
+  }
+
+  settingsPillPosition(unified) {
+    const root = layout();
+    const sidebar = find(root, "sidebar"), panel = find(root, "panel");
+    const zoom = settings()?.zoom || 1;
+    const vp = typeof window !== "undefined" ? window.viewport_size() : null;
+    const left = unified ? 0 : this.settingsRailWidth(sidebar, 280, zoom);
+    const right = panel ? this.settingsRailWidth(panel, 350, zoom) : 0;
+    // Balance the insets so the pill is centered in the window, not merely the strip.
+    return settingsPillLeft(vp?.width, left, right, 112);
+  }
+
+  settingsRailWidth(rail, fallback, zoom) {
+    if (rail?.hidden) return 0;
+    return (rail?.size?.px ?? fallback) / zoom;
+  }
+
+  settingsBack(t) {
+    const previous = this.lastAppPage;
+    return h_flex().id("agent-settings-back").h(26).w(112).flex_none().items_center().justify_center().gap(5)
+      .rounded_full().border_1().border_color(t.border).bg(t.raised).text_color(t.foreground)
+      .cursor_pointer().hover(s => s.bg(t.hover)).role("button").accessibility_label("Back to app")
+      .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation()).on_click((_e, eventCx) => {
+        const active = (spaces() ?? []).find(s => s.active);
+        const target = settingsReturnPage(previous, find(layout(), "main")?.children, active);
+        this.landing = active?.tabs?.length ? "main-terminals" : "main-landing";
+        run("layout.select", { stack: "main", child: target });
+        eventCx.notify();
+      })
+      .child(svg("mods/orca-tabs/chevron-left.svg").size(13))
+      .child(div().text_size(12).child("Back to app"));
+  }
+
+  settingsWindowControls(w, t) {
+    const winControl = (id,label,glyph,action) => div().id(id).w(46).h_full().flex_none().flex().items_center().justify_center()
+      .text_color(t.muted).hover(s => s.bg(t.hover)).role("button").accessibility_label(label).tooltip(label)
+      .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation()).on_click(action).child(svg(glyph).size(10));
+    return h_flex().absolute().right(0).top(0).bottom(0).items_center()
+      .child(winControl("minimize","Minimize","mods/orca-tabs/win-min.svg",()=>run("window.minimize")))
+      .child(winControl("maximize","Maximize",w.maximized ? "mods/orca-tabs/win-restore.svg" : "mods/orca-tabs/win-max.svg",()=>run("window.maximize")))
+      .child(winControl("close-window","Close window","mods/orca-tabs/win-close.svg",()=>run("window.close")));
   }
 
   // Live read keeps maximize/restore current (Orca subscribes to onMaximizeChanged,

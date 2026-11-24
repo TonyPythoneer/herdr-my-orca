@@ -1,16 +1,8 @@
 import { register } from "node:module";
 import { goldenSuite } from "./golden.mjs";
 
-// Same recorder as the other flow tests, with `setShared` routed to the test so a confirmation can be read back.
-const loader = new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url).href;
-register("data:text/javascript," + encodeURIComponent(`
-  import { load as record } from ${JSON.stringify(loader)};
-  export { resolve } from ${JSON.stringify(loader)};
-  export async function load(url, ctx, next) {
-    const result = await record(url, ctx, next);
-    if (!url.startsWith("stub:")) return result;
-    return { ...result, source: result.source.replace("export const setShared = () => {}", "export const setShared = (...a) => globalThis.__calls.push(['shared', ...a])") };
-  }`));
+register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
+globalThis.__herdrSetShared = (...a) => globalThis.__calls.push(["shared", ...a]);
 globalThis.__calls = [];
 globalThis.__herdrCloseOverlay = (id) => globalThis.__calls.push(["close", id]);
 globalThis.__herdrRun = (...a) => globalThis.__calls.push(["run", ...a]);
