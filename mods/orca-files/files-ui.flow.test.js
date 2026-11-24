@@ -334,10 +334,10 @@ goldenSuite("files-ui-actions", {
     out.unreadable = { text: view.code.value(), error: view.fileError };
     return out;
   },
-  "commands queued for the pane run in order, and a command that returns nothing ends the loop": async () => {
+  "commands queued for the pane run in order, and synchronous commands keep the loop alive": async () => {
     const { view } = await repo();
     await deliver("remove-x"); await deliver(""); const alive = world.waiters.length;
-    await deliver("search");
+    await deliver("search"); await deliver("unknown-command");
     return { view: view.view, alive, afterSearch: world.waiters.length, errors: world.spawnErrors, notifies: world.notifies > 0 };
   },
   "editing saves 800 ms after the last keystroke and reports success or failure": async () => {

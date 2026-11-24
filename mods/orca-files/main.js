@@ -258,7 +258,10 @@ export default class Files extends View {
     cx.spawn(async taskCx => {
       for (;;) {
         const c = await nextCommand();
-        if (c) await this.command(c, taskCx).catch(() => { /* A rejected action must allow the next command to run. */ });
+        if (c) {
+          try { await this.command(c, taskCx); }
+          catch { /* A failed action must allow the next command to run. */ }
+        }
         taskCx.notify();
       }
     });
