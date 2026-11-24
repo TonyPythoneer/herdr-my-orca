@@ -65,13 +65,13 @@ def sha(path):
 def report(out, info):
     (out / "manifest.json").write_text(json.dumps(info, indent=2))
     rows = info["steps"]
-    display_rows = ([info["startupDiagnostic"]] if "startupDiagnostic" in info else []) + rows
+    display_rows = rows
     h = html.escape
     cards = []
     for row in display_rows:
         images = "".join(f'<figure><figcaption>{h(k)}</figcaption><a href="{h(v["file"])}"><img loading="lazy" src="{h(v["file"])}"></a></figure>' for k, v in row.get("images", {}).items())
-        cards.append(f'<section><h2>{h(row["id"])} · {h(row["title"])}</h2><p>{h(row["mode"])} · {h(row["result"])}</p><p>{h(row["action"])}</p><p>{h(row.get("error", ""))}</p><div class="pair">{images}</div></section>')
-    (out / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Main UI snapshot</title><style>body{font:16px system-ui;background:#15171a;color:#eee;margin:24px}section{border-top:1px solid #555;padding:16px 0}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}figure{margin:0}img{width:100%;height:auto}a{color:#a9cfff}p{overflow-wrap:anywhere}</style><h1>Real Herdr App · main</h1><p>Commit: '+h(info["mainSha"])+'</p><p>'+h(info.get("fatal",""))+'</p><p>Native command = state navigation, not a mouse click. AX press = native accessibility interaction.</p><p><a href="manifest.json">Machine-readable manifest</a></p>'+''.join(cards))
+        cards.append(f'<section><h2>{h(row["mod"])} · {h(row["title"])}</h2><p>{h(row["mode"])} · {h(row["result"])}</p><p>{h(row["action"])}</p><p>{h(row.get("error", ""))}</p><div class="pair">{images}</div></section>')
+    (out / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Main UI snapshot</title><style>body{font:16px system-ui;background:#15171a;color:#eee;margin:24px}section{border-top:1px solid #555;padding:16px 0}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}figure{margin:0}img{width:100%;height:auto}a{color:#a9cfff}p{overflow-wrap:anywhere}</style><h1>Real Herdr App · main</h1><p>Commit: '+h(info["mainSha"])+'</p><p>'+h(info.get("fatal",""))+'</p><p>Custom mod controls only. AX press or native mouse click. Setup commands are not observations.</p><p><a href="manifest.json">Machine-readable manifest</a></p>'+''.join(cards))
     counts = {k: sum(r["result"] == k for r in rows) for k in ("captured", "failed", "blocked", "not-run")}
     (out / "summary.md").write_text(f'Main: `{info["mainSha"]}`\n\nCaptured: {counts["captured"]} / {len(rows)}; failed: {counts["failed"]}; blocked: {counts["blocked"]}; not run: {counts["not-run"]}.\n\nDownload the artifact and open index.html. Native command captures do not prove click behavior. Blocked accessibility observations are explicitly incomplete, not successful clicks.\n\n{info.get("fatal", "")}\n')
 
@@ -144,8 +144,8 @@ def main():
             (out/"deployment.json").write_text(json.dumps({"mainSha":info["mainSha"],"files":deployment},indent=2))
             info["deployment"] = {"verifiedFiles":len(deployment),"manifest":"deployment.json"}
             seed_safe_tasks(config)
-            # First run is deliberately unseeded so its real startup popup is evidence.
-            # Onboarding is then completed via Herdr's persisted state, not fake UI.
+            # Complete onboarding before capturing; never export stock UI.
+            seed_startup(config, info.get("herdr-appVersion", ""))
             log = (out / "app.log").open("w")
             def launch():
                 return subprocess.Popen([app], env=env, cwd=fixture, stdout=log, stderr=subprocess.STDOUT)
@@ -175,10 +175,6 @@ def main():
                 # native retest proved relaunch clears an already-presented note.
                 if blocking_overlays(ready) or ready.get("layout") != "orca":
                     print("Initial native layout/overlays:", ready.get("layout"), ready.get("overlays"), flush=True)
-                    startup = {"id":"00", "title":"Startup overlay before recovery", "mode":"initial-state",
-                               "action":"Capture startup diagnostic before relaunch", "result":"captured"}
-                    shot(startup, "after")
-                    info["startupDiagnostic"] = startup
                     stop(proc)
                     # Reinstall exact tracked files after the first launch seeds built-ins.
                     for name in DELIVERY:
@@ -208,119 +204,104 @@ def main():
                     if isinstance(e, subprocess.CalledProcessError):
                         ax_error += " " + (e.stderr or "")
                     print("AX helper unavailable:", ax_error, flush=True)
-                scenarios = []
-                def add(title, name=None, args=None, label=None, check=None, wait=0.8):
-                    mode = "accessibility-press" if label else ("native-command" if name else "initial-state")
-                    scenarios.append((title, name, args or {}, label, check, wait, mode))
-                add("First configured launch", check=lambda s:s.get("layout")=="orca" and not blocking_overlays(s))
-                add("Confirm startup overlay absent", check=lambda s:not blocking_overlays(s))
-                add("Switch to Orca layout", "layout.switch", {"name":"orca"}, check=lambda s:s.get("layout")=="orca")
-                add("Welcome / landing page", "layout.select", {"stack":"main","child":"main-landing"})
-                add("Create fixture workspace", "space.new", {"name":"Snapshot project","folder":str(fixture)}, check=lambda s:bool(s.get("space")),wait=2)
-                add("Show terminal", "layout.select", {"stack":"main","child":"main-terminals"})
-                add("Create second tab", "tab.new", {"name":"Second terminal"})
-                add("Rename selected tab", "tab.rename", {"name":"Renamed terminal"})
-                add("Switch to first tab", "tab.select", {"index":1})
-                add("Split right", "pane.split", {"direction":"right"})
-                add("Split down", "pane.split", {"direction":"down"})
-                add("Zoom focused pane", "pane.zoom")
-                add("Restore split panes", "pane.zoom")
-                add("Close focused pane", "pane.close")
-                add("Collapse left sidebar", "layout.hide", {"id":"sidebar"})
-                add("Expand left sidebar", "layout.show", {"id":"sidebar"})
-                add("Collapse right sidebar", "layout.hide", {"id":"panel"})
-                add("Expand right sidebar", "layout.show", {"id":"panel"})
-                for child in ("files","changes","ports","vault","workspaces","pr-checks","checks"):
-                    add("Right panel: "+child, "layout.select", {"stack":"panel-body","child":child})
-                add("Search files", "orca-panel-head.search")
-                add("Open new-tab menu", "mod.open", {"name":"orca-new-menu"}, check=lambda s:"orca-new-menu" in blocking_overlays(s))
-                add("Dismiss new-tab menu", "mod.open", {"name":"orca-new-menu"}, check=lambda s:not blocking_overlays(s))
-                add("Open split menu", "mod.open", {"name":"orca-split-menu"}, check=lambda s:"orca-split-menu" in blocking_overlays(s))
-                add("Dismiss split menu", "mod.open", {"name":"orca-split-menu"}, check=lambda s:not blocking_overlays(s))
-                add("Agent manager", "layout.select", {"stack":"main","child":"main-agents"},wait=2)
-                add("Model providers", "layout.select", {"stack":"main","child":"main-providers"})
-                add("Tasks", "layout.select", {"stack":"main","child":"main-tasks"})
-                add("Return to terminals", "layout.select", {"stack":"main","child":"main-terminals"})
-                add("Workspace search (actual AX press)", label="Search worktrees")
-                add("Dismiss search", "overlay.close")
-                add("Workspace options (actual AX press)", label="Workspace options")
-                add("Dismiss options", "overlay.close")
-                add("Agents footer (actual AX press)", label="Agents")
-                add("Providers footer (actual AX press)", label="Model providers")
-                add("Tasks footer (actual AX press)", label="Tasks")
-                add("Switch unified layout", "layout.switch", {"name":"orca-unified"}, check=lambda s:s.get("layout")=="orca-unified")
-                add("Unified layout sidebar animation settled", "orca-tabs.toggle-sidebar")
-                add("Unified layout sidebar restored", "orca-tabs.toggle-sidebar")
-                add("Unified layout right panel animation settled", "orca-tabs.toggle-panel")
-                add("Unified layout right panel restored", "orca-tabs.toggle-panel")
-                for i,(title,name,args,label,check,wait,mode) in enumerate(scenarios,1):
-                    row = {"id":f"{i:02d}","title":title,"mode":mode,
-                           "action":label or (name+" "+json.dumps(args) if name else "Launch app"),"result":"not-run"}
-                    info["steps"].append(row)
-                    if i > 3 and info["steps"][2]["result"] != "captured":
-                        row["result"] = "not-run"
-                        row["error"] = "Orca layout prerequisite failed"
-                        continue
-                    if i > 2 and any(s["result"] != "captured" for s in info["steps"][:2]):
-                        row["result"] = "not-run"
-                        row["error"] = "Startup overlay prerequisite failed"
-                        continue
-                    if i > 42 and info["steps"][41]["result"] != "captured":
-                        row["error"] = "Unified layout prerequisite failed"
-                        continue
-                    print(f'UI_STEP {row["id"]} {title}', flush=True)
+                from scenarios import CASES
+                def clear():
+                    for _ in range(4):
+                        overlays = blocking_overlays(status())
+                        if not overlays:
+                            return
+                        command("mod.open", name=overlays[-1])
+                        time.sleep(.3)
+                    raise RuntimeError("Could not reset overlay: "+str(blocking_overlays(status())))
+                def select(stack, child):
+                    command("layout.select", stack=stack, child=child)
+                def setup(case):
+                    clear()
+                    layout = case.get("layout","orca")
+                    if status().get("layout") != layout:
+                        command("layout.switch", name=layout)
+                        time.sleep(.7)
+                    select("main","main-terminals")
+                    command("layout.show", id="sidebar")
+                    command("layout.show", id="panel")
+                    select("panel-body","files")
+                    if case.get("page"):
+                        select("main",case["page"])
+                    if case.get("panel"):
+                        select("panel-body",case["panel"])
+                    time.sleep(.7)
+                    state = status()
+                    if state.get("layout") != layout or blocking_overlays(state) or state.get("errors"):
+                        raise RuntimeError("Fixture is not an unobstructed custom layout")
+                def interact(row, control):
+                    if ax_error:
+                        raise PermissionError(ax_error)
                     try:
-                        if name or label:
-                            shot(row, "before")
-                        if label:
-                            if ax_error:
-                                raise PermissionError(ax_error)
-                            try:
-                                run([ax,str(proc.pid),label],timeout=10)
-                            except subprocess.CalledProcessError as e:
-                                raise PermissionError(e.stderr.strip() or str(e)) from e
-                        elif name == "overlay.close":
-                            overlays = blocking_overlays(status())
-                            if not overlays:
-                                row["action"] += " (no overlay present; no-op)"
-                            else:
-                                # Native mod.open is documented as a toggle for named mod overlays.
-                                command("overlay.close", id=overlays[-1])
-                                time.sleep(0.5)
-                                if overlays[-1] in blocking_overlays(status()):
-                                    command("mod.open", name=overlays[-1])
-                                    time.sleep(0.5)
-                                if blocking_overlays(status()):
-                                    raise RuntimeError("Overlay did not close: "+str(blocking_overlays(status())))
-                        elif name:
-                            command(name,**args)
-                        time.sleep(wait)
+                        run([ax,str(proc.pid),control["label"]],timeout=10)
+                        row["mode"]="accessibility-press"
+                    except subprocess.CalledProcessError as e:
+                        if "xy" not in control:
+                            raise PermissionError(e.stderr.strip() or str(e)) from e
+                        img = row["images"]["before"]
+                        if (img["width"],img["height"]) != (1024,681):
+                            raise PermissionError("Coordinate fallback requires calibrated 1024x681 window") from e
+                        x,y=control["xy"]
+                        try:
+                            run([ax,str(proc.pid),"--click",str(x),str(y),"1024","681"],timeout=10)
+                        except subprocess.CalledProcessError as err:
+                            raise PermissionError(err.stderr.strip() or str(err)) from err
+                        row["mode"]="native-mouse"
+                command("space.new", name="Snapshot project", folder=str(fixture))
+                time.sleep(2)
+                if not status().get("space"):
+                    raise RuntimeError("Local synthetic workspace was not created")
+                info["coverage"] = {"repositoryMods":sorted(p.parent.name for p in (target/"mods").glob("*/mod.json")),
+                                    "plannedMods":sorted({m for c in CASES for m in c["mods"]}),
+                                    "scope":"Only real interactions with repository mods; no stock UI or native command screenshots."}
+                for i,case in enumerate(CASES,1):
+                    row = {"id":f"{i:02d}","title":case["title"],"mod":" / ".join(case["mods"]),
+                           "mods":case["mods"],"action":case["control"]["label"],"mode":"not-attempted","result":"not-run"}
+                    info["steps"].append(row)
+                    print("UI_STEP "+json.dumps(row),flush=True)
+                    try:
+                        setup(case)
+                        shot(row,"before")
+                        interact(row,case["control"])
+                        time.sleep(case.get("wait",1.0))
+                        after = status()
+                        row["status"] = after
+                        if after.get("layout") != case.get("layout","orca") or after.get("errors"):
+                            raise RuntimeError("Unexpected layout or native runtime error")
+                        expected = case.get("overlay")
+                        actual = blocking_overlays(after)
+                        if expected and expected not in actual:
+                            raise RuntimeError("Expected popup "+expected+"; got "+str(actual))
+                        if not expected and actual:
+                            raise RuntimeError("Unexpected blocking popup "+str(actual))
                         shot(row,"after")
-                        s = status()
-                        row["status"] = s
-                        expected_modal = name == "mod.open" and title.startswith("Open") or label in ("Search worktrees","Workspace options")
-                        if not expected_modal and blocking_overlays(s):
-                            raise RuntimeError("UI obstructed by "+str(blocking_overlays(s)))
-                        if i >= 3 and s.get("layout") != ("orca-unified" if i >= 42 else "orca"):
-                            raise RuntimeError("Unexpected layout: "+str(s.get("layout")))
-                        if s.get("errors"):
-                            raise RuntimeError("Herdr reported runtime errors")
-                        if label in ("Search worktrees","Workspace options") and not blocking_overlays(s):
-                            raise RuntimeError("Expected UI popup was not opened")
-                        if check and not check(s):
-                            raise RuntimeError("Expected native status was not observed")
+                        if row["images"]["before"]["sha256"] == row["images"]["after"]["sha256"]:
+                            raise RuntimeError("No visible change after interaction")
+                        row["verification"]="expected-popup" if expected else "visible-change; manual semantic review required"
+                        if expected:
+                            clear()
+                            time.sleep(.4)
+                            if blocking_overlays(status()):
+                                raise RuntimeError("Popup remained after fixture reset")
+                            shot(row,"closed")
                         row["result"]="captured"
                     except Exception as e:
                         row["result"]="blocked" if isinstance(e,PermissionError) else "failed"
                         row["error"]=str(e)
-                        if isinstance(e,subprocess.CalledProcessError):
-                            row["error"] += " "+(e.stderr or "")+" "+(e.stdout or "")
-                        try:
-                            shot(row,"diagnostic")
-                        except Exception:
-                            pass
-                    print("UI_RESULT "+json.dumps({k:v for k,v in row.items() if k != "status"}), flush=True)
+                        if row.get("images"):
+                            try:
+                                if status().get("layout") in ("orca","orca-unified"):
+                                    shot(row,"diagnostic")
+                            except Exception:
+                                pass
+                    print("UI_RESULT "+json.dumps({k:v for k,v in row.items() if k != "status"}),flush=True)
                     report(out,info)
+                info["coverage"]["observedMods"]=sorted({m for r in info["steps"] if r["result"]=="captured" for m in r["mods"]})
+                info["coverage"]["unobservedMods"]=sorted(set(info["coverage"]["repositoryMods"])-set(info["coverage"]["observedMods"]))
             finally:
                 stop(proc)
                 log.close()
@@ -333,7 +314,7 @@ def main():
         print((out/"summary.md").read_text(), flush=True)
     # AX coverage is reported independently from the required native state capture.
     # A missing AX element is an incomplete observation, never a successful click.
-    return 1 if info.get("fatal") or not info["steps"] or any(s["result"] in ("failed","not-run") for s in info["steps"]) else 0
+    return 1 if info.get("fatal") or not info["steps"] or any(s["result"] != "captured" for s in info["steps"]) else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
