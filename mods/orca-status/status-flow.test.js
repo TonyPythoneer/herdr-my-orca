@@ -199,3 +199,13 @@ test("reset times read as minutes, hours with minutes, or days with hours", () =
   const bar = JSON.stringify(view.render({}).__node);
   for (const text of ["30m", "2h 0m", "1d 1h", "0m"]) assert.ok(bar.includes(`["${text}"]`), text);
 });
+
+test("an invalid usage reset time does not render NaN", () => {
+  const view = new Status();
+  view.readings = [{ provider: "claude", status: "ok", detail: true, buckets: [
+    { usedPercent: 42, label: "5h", resetTime: "not a date" },
+  ] }];
+  const bar = JSON.stringify(view.render({}).__node);
+  assert.match(bar, /42%/);
+  assert.doesNotMatch(bar, /NaN/);
+});
