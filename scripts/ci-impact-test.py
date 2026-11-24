@@ -22,6 +22,7 @@ class ImpactTest(unittest.TestCase):
         self.assertEqual(p["selected_test_files"], 1)
         self.assertFalse(p["native_mods"])
         self.assertEqual(p["native_routes"], 0)
+        self.assertEqual(p["syntax_paths"], ["mods/orca-spaces/git-refresh.test.js"])
 
     def test_git(self):
         p = self.plan("mods/orca-spaces/main.js")

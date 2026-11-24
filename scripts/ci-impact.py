@@ -151,11 +151,12 @@ def select(root, files, changed, force=False):
     matrix = [{"layout": l, "stack": s, "pages": ps} for (l, s), ps in sorted(groups.items())]
     test_matrix = [{"suite": k, "files": sorted(p for p in selected if suite(p) == k)}
                    for k in ("unit", "behavior") if any(suite(p) == k for p in selected)]
+    syntax = sorted(p for p in files if p.endswith((".js", ".mjs", ".cjs", ".py", ".sh")) and (full or p in changed))
     return {"schema": 1, "full": full, "changed": sorted(set(changed)), "reasons": reasons,
             "direct_mods": sorted(direct), "native_mods": sorted(affected),
             "test_matrix": {"include": test_matrix}, "total_test_files": len(tests),
             "selected_test_files": len(selected), "lint_paths": sorted(lint),
-            "config": config, "snapshot": snapshot, "git_benchmark": git_bench,
+            "config": config, "snapshot": snapshot, "git_benchmark": git_bench, "syntax_paths": syntax,
             "native_matrix": {"include": matrix}, "native_routes": len(page_keys),
             "total_native_routes": len(layouts)}
 
@@ -183,7 +184,7 @@ def main():
         out = {"tests": result["test_matrix"], "native": result["native_matrix"],
                "has_tests": bool(result["test_matrix"]["include"]), "has_native": bool(result["native_matrix"]["include"]),
                "mods": result["native_mods"], "has_mods": bool(result["native_mods"]),
-               "lint": result["lint_paths"], "config": result["config"], "snapshot": result["snapshot"],
+               "lint": result["lint_paths"], "syntax": result["syntax_paths"], "config": result["config"], "snapshot": result["snapshot"],
                "git_benchmark": result["git_benchmark"], "full": result["full"]}
         with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
             for key, value in out.items():

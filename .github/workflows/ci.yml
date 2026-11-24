@@ -32,6 +32,7 @@ jobs:
       snapshot: ${{ steps.plan.outputs.snapshot }}
       git_benchmark: ${{ steps.plan.outputs.git_benchmark }}
       lint: ${{ steps.plan.outputs.lint }}
+      syntax: ${{ steps.plan.outputs.syntax }}
       native: ${{ steps.plan.outputs.native }}
       has_native: ${{ steps.plan.outputs.has_native }}
     steps:
@@ -69,21 +70,22 @@ jobs:
       - name: Validate configuration and mod manifests
         if: needs.plan.outputs.config == 'true'
         run: node scripts/check-config.mjs
-      - name: Check JavaScript syntax
-        if: needs.plan.outputs.config == 'true'
-        run: |
-          git ls-files -z -- '*.js' '*.mjs' | xargs -0 -r -n 1 node --check
-      - name: Check Python and shell syntax
-        if: needs.plan.outputs.config == 'true'
+      - name: Check impacted source syntax
+        if: needs.plan.outputs.syntax != '[]'
+        env:
+          SYNTAX_PATHS: ${{ needs.plan.outputs.syntax }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import subprocess
-          for name in subprocess.check_output(['git', 'ls-files', '-z', '--', '*.py']).decode().split('\0'):
-              if name:
-                  compile(Path(name).read_bytes(), name, 'exec')
+          import json, os, subprocess
+          for name in json.loads(os.environ["SYNTAX_PATHS"]):
+              if name.endswith((".js", ".mjs", ".cjs")):
+                  subprocess.run(["node", "--check", name], check=True)
+              elif name.endswith(".py"):
+                  compile(Path(name).read_bytes(), name, "exec")
+              elif name.endswith(".sh"):
+                  subprocess.run(["bash", "-n", name], check=True)
           PY
-          git ls-files -z -- '*.sh' | xargs -0 -r -n 1 bash -n
       - name: Check generated Orca UI and shared helpers
         if: needs.plan.outputs.config == 'true'
         run: node scripts/build-orca-ui.mjs --check --out .
@@ -96,7 +98,7 @@ jobs:
           LINT_PATHS: ${{ needs.plan.outputs.lint }}
         run: |
           mapfile -t paths < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["LINT_PATHS"])))')
-          npx --yes eslint@9 -c eslint.config.mjs --max-warnings 0 --no-error-on-unmatched-pattern "${paths[@]}"
+          npx --yes eslint@9 -c eslint.config.mjs --max-warnings 0 --no-warn-ignored --no-error-on-unmatched-pattern "${paths[@]}"
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
       - name: Paired Git branch-header microbenchmark
@@ -165,6 +167,9 @@ jobs:
     needs: [plan, validate, tests]
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Require all suites and validation
         env:
@@ -173,8 +178,45 @@ jobs:
           PLAN: ${{ needs.plan.result }}
           HAS_TESTS: ${{ needs.plan.outputs.has_tests }}
         run: |
-          test "$PLAN" = success && test "$VALIDATION" = success
+          test "$PLAN" = success
+          test "$VALIDATION" = success
           if [ "$HAS_TESTS" = true ]; then test "$TESTS" = success; else test "$TESTS" = skipped; fi
+      - uses: actions/download-artifact@v4
+        if: always() && needs.plan.result == 'success'
+        with:
+          name: impact-plan
+      - name: Upsert scoped CI feedback
+        if: always() && needs.plan.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        env:
+          TEST_RESULT: ${{ needs.tests.result }}
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const p = JSON.parse(fs.readFileSync('impact-plan.json', 'utf8'));
+            const {owner, repo} = context.repo;
+            const issue_number = context.issue.number;
+            const {data: current} = await github.rest.pulls.get({owner, repo, pull_number: issue_number});
+            if (current.state !== 'open' || current.head.sha !== context.payload.pull_request.head.sha) return;
+            const marker = '<!-- herdr-ci-impact:v1 -->';
+            const url = process.env.GITHUB_SERVER_URL + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID;
+            const body = [
+              marker, '## Change-aware CI feedback',
+              'Head: `' + current.head.sha.slice(0,12) + '`',
+              '| Scope | Selected | Total | Result |', '|---|---:|---:|---|',
+              '| JS test files | ' + p.selected_test_files + ' | ' + p.total_test_files + ' | ' + process.env.TEST_RESULT + ' |',
+              '| Native page routes | ' + p.native_routes + ' | ' + p.total_native_routes + ' | separate workflow |',
+              '| Native mod checks | ' + p.native_mods.length + ' | — | separate job |',
+              '| Config / syntax / lint | — | — | ' + process.env.VALIDATION_RESULT + ' |',
+              '| Git benchmark | ' + (p.git_benchmark ? 'selected' : 'not selected') + ' | — | see validation |',
+              '', 'Full fallback: ' + p.full + '. Unselected work is not a passing measurement.',
+              '', '[Impact plan and scoped coverage artifacts](' + url + ')'
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            const old = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.startsWith(marker));
+            if (old) await github.rest.issues.updateComment({owner, repo, comment_id: old.id, body});
+            else await github.rest.issues.createComment({owner, repo, issue_number, body});
 
   package:
     name: Package validated config
