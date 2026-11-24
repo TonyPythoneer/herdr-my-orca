@@ -107,4 +107,4 @@ export function invalidateReview(repo, branch) {
   saveReviewCache(cache);
   return cache;
 }
-// Generated from shared/review-store.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Generated from orca-ui/shared/review-store.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.

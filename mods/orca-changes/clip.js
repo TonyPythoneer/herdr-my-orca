@@ -42,4 +42,4 @@ export function reveal(path, isDir = false) {
     "reveal", path, isDir ? "1" : "0", dir,
   ]).catch(() => {});
 }
-// Generated from shared/clip.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Generated from orca-ui/shared/clip.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.

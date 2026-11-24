@@ -8,8 +8,8 @@ import { features } from "../orca-ui/app.mjs";
 import { FEATURE, edit, fixture, write } from "./orca-ui-fixture.mjs";
 
 const MANIFEST = `${FEATURE}/manifest.json`;
-const USES = { "clip.js": ["orca-files", "orca-handoff"], "transcript.js": ["orca-handoff"] };
-const load = root => loadManifests({ root, uses: USES });
+const load = root => loadManifests({ root });
+const SHARED_MANIFEST = "orca-ui/shared/manifest.json";
 const rejects = (root, pattern, path = MANIFEST) =>
   assert.throws(() => load(root), error => error instanceof ManifestError && error.path === path && pattern.test(error.message));
 
@@ -32,8 +32,8 @@ function registryProblems(entries, discovered, root) {
 async function diskManifests() {
   const dir = join(ROOT, "orca-ui/features");
   const found = readdirSync(dir, { recursive: true }).filter(f => f.endsWith("manifest.json")).sort();
-  return Promise.all(found.map(async f => [`orca-ui/features/${f}`,
-    (await import(pathToFileURL(join(dir, f)).href, { with: { type: "json" } })).default]));
+  const json = async path => (await import(pathToFileURL(join(ROOT, path)).href, { with: { type: "json" } })).default;
+  return Promise.all([...found.map(f => `orca-ui/features/${f}`), SHARED_MANIFEST].map(async path => [path, await json(path)]));
 }
 
 test("app.mjs registers every manifest on disk exactly once and its next links exist", async () => {
@@ -47,17 +47,21 @@ test("registry problems: a missing, duplicate, extra entry and a dead next link 
   const discovered = await diskManifests();
   const [entry] = features;
   assert.match(registryProblems([], discovered, ROOT)[0], /not registered/);
-  assert.match(registryProblems([entry, entry], discovered, ROOT)[0], /registered 2 times/);
-  assert.match(registryProblems([entry, { ...entry, manifest: { feature: "ghost" } }], discovered, ROOT)[0], /not on disk/);
-  assert.match(registryProblems([{ ...entry, next: ["nope.js"] }], discovered, ROOT)[0], /does not exist/);
+  assert.deepEqual(registryProblems(features.filter(e => e.area !== "shared"), discovered, ROOT), [`${SHARED_MANIFEST}: not registered in app.mjs`]);
+  assert.deepEqual(registryProblems([...features, entry], discovered, ROOT), ["orca-ui/features/panel/head/manifest.json: registered 2 times"]);
+  assert.deepEqual(registryProblems([...features, { ...entry, manifest: { feature: "ghost" } }], discovered, ROOT), ["ghost: registered but not on disk"]);
+  assert.match(registryProblems([{ ...entry, next: ["nope.js"] }, ...features.slice(1)], discovered, ROOT)[0], /does not exist/);
 });
 
 test("the real repo loads and every managed destination is under its mod", () => {
-  const { table, features: loaded, shared } = loadManifests({ uses: {} });
-  assert.equal(shared, null);
+  const { table, features: loaded, shared } = loadManifests();
   assert.deepEqual([...loaded.keys()], ["orca-ui/features/panel/head/manifest.json"]);
-  assert.equal(table.size, 12);
-  for (const dest of table.keys()) assert.match(dest, /^mods\/orca-panel-head\/[^/]+$/);
+  assert.equal(shared.files.length, 8);
+  assert.equal(table.size, 32);
+  const feature = [...table].filter(([, row]) => row.kind === "feature").map(([dest]) => dest);
+  assert.equal(feature.length, 12);
+  for (const dest of feature) assert.match(dest, /^mods\/orca-panel-head\/[^/]+$/);
+  assert.equal([...table.values()].filter(r => r.kind === "shared").length, 20);
 });
 
 test("the table maps each destination to its source, mode, tests and slots", t => {
@@ -66,14 +70,15 @@ test("the table maps each destination to its source, mode, tests and slots", t =
   const { table, features: loaded } = load(root);
   assert.deepEqual([...loaded.keys()], [MANIFEST]);
   assert.deepEqual([...table.keys()].sort(), [
-    "mods/orca-files/clip.js", "mods/orca-files/icons/a.svg", "mods/orca-files/main.js", "mods/orca-files/mod.json",
-    "mods/orca-files/tool.sh", "mods/orca-files/view.js", "mods/orca-handoff/clip.js", "mods/orca-handoff/transcript.js"]);
+    "mods/orca-changes/clip.js", "mods/orca-files/clip.js", "mods/orca-files/icons/a.svg", "mods/orca-files/main.js", "mods/orca-files/mod.json",
+    "mods/orca-files/tool.sh", "mods/orca-files/view.js", "mods/orca-handoff/clip.js", "mods/orca-handoff/transcript.js",
+    "mods/orca-menu/clip.js", "mods/orca-menu/transcript.js"]);
   assert.deepEqual(table.get("mods/orca-files/icons/a.svg"), { kind: "feature", id: "files/main", source: `${FEATURE}/icons/a.svg`,
     mode: 0o644, consumers: ["orca-files"], tests: [`${FEATURE}/view.test.js`, `${FEATURE}/fixture/data.json`], layoutSlots: { orca: ["list"] } });
   assert.equal(table.get("mods/orca-files/tool.sh").mode, 0o755);
   // A shared row carries the consumer feature's tests and slots; a consumer without one gets none.
-  assert.deepEqual(table.get("mods/orca-files/clip.js"), { kind: "shared", id: "clip.js", source: "shared/clip.js", mode: 0o644,
-    consumers: ["orca-files", "orca-handoff"], tests: [`${FEATURE}/view.test.js`, `${FEATURE}/fixture/data.json`], layoutSlots: { orca: ["list"] } });
+  assert.deepEqual(table.get("mods/orca-files/clip.js"), { kind: "shared", id: "clip.js", source: "orca-ui/shared/clip.js", mode: 0o644,
+    consumers: ["orca-changes", "orca-files", "orca-handoff", "orca-menu"], tests: [`${FEATURE}/view.test.js`, `${FEATURE}/fixture/data.json`], layoutSlots: { orca: ["list"] } });
   assert.deepEqual(table.get("mods/orca-handoff/clip.js").tests, []);
   assert.deepEqual(table.get("mods/orca-handoff/clip.js").layoutSlots, {});
 });
@@ -140,15 +145,39 @@ test("loader rejects a second feature that repeats an id or a destination", t =>
   rejects(root, /already defined/, `${twin}/manifest.json`);
 });
 
-test("loader rejects a feature output that collides with a shared copy", t => {
-  const root = fixture(t);
-  write(root, `${FEATURE}/clip.js`, "x");
-  edit(root, MANIFEST, m => m.files.push("clip.js"));
-  rejects(root, /claimed by both/);
-});
+const BAD_SHARED = {
+  "a shared source is missing": [r => rmSync(join(r, "orca-ui/shared/transcript.js")), /missing source orca-ui\/shared\/transcript\.js/],
+  "a shared file is not listed": [r => write(r, "orca-ui/shared/extra.js", "x"), /extra\.js is not listed/],
+  "a source is declared twice": [r => edit(r, SHARED_MANIFEST, m => m.files.push(m.files[0])), /declared twice/],
+  "outputs is empty": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs = []; }), /non-empty array/],
+  "outputs has the wrong type": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs = "mods/a/clip.js"; }), /non-empty array/],
+  "an output has another name": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs[0] = "mods/orca-changes/other.js"; }), /must be mods\/<mod>\/clip\.js/],
+  "an output is nested": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs[0] = "mods/orca-changes/sub/clip.js"; }), /must be mods\/<mod>\/clip\.js/],
+  "an output repeats": [r => edit(r, SHARED_MANIFEST, m => m.files[0].outputs.push(m.files[0].outputs[0])), /declared twice/],
+  "a source lies outside the shared folder": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].source = "shared/clip.js"; }), /must be orca-ui\/shared\/<name>\.js/],
+  "a source is a symlink": [r => { rmSync(join(r, "orca-ui/shared/clip.js")); symlinkSync(join(r, "orca-ui/shared/transcript.js"), join(r, "orca-ui/shared/clip.js")); }, /not a regular file/],
+  "the manifest has the wrong shape": [r => write(r, SHARED_MANIFEST, "[]"), /must be/],
+  "a shared output is a feature output": [r => {
+    write(r, `${FEATURE}/clip.js`, "x");
+    edit(r, MANIFEST, m => m.files.push("clip.js"));
+  }, /claimed by both/],
+  "a shared output is a Herdr reserved file": [r => {
+    write(r, "orca-ui/shared/jsconfig.json", "x");
+  }, /not listed|reserved/],
+};
+for (const [name, [mutate, pattern, path = SHARED_MANIFEST]] of Object.entries(BAD_SHARED)) {
+  test(`loader rejects: ${name}`, t => {
+    const root = fixture(t);
+    mutate(root);
+    rejects(root, pattern, path);
+  });
+}
 
-test("loader rejects a shared source that is missing", t => {
+test("an empty shared manifest is fine, and a repo without orca-ui/shared has none", t => {
   const root = fixture(t);
-  rmSync(join(root, "shared/transcript.js"));
-  rejects(root, /missing shared source/, "shared/transcript.js");
+  write(root, SHARED_MANIFEST, '{ "files": [] }');
+  for (const name of ["clip.js", "transcript.js"]) rmSync(join(root, "orca-ui/shared", name));
+  assert.deepEqual(load(root).shared, { files: [] });
+  rmSync(join(root, "orca-ui/shared"), { recursive: true });
+  assert.equal(load(root).shared, null);
 });

@@ -5,12 +5,14 @@
 // owns, the mod they build into, the layout slots that mount it, the keys it uses and its tests.
 // Herdr loads the built copies under `mods/`; those are delivery format, not edit locations.
 //
-// Not migrated yet: `shared/` helpers and mods without an entry here are still edited in place.
+// Not migrated yet: mods without an entry here are still edited in place. Helpers several mods
+// import live in `orca-ui/shared/`; the builder copies each one into every mod that lists it.
 //
 // Herdr errors name the built copy (`mods/<mod>/<file>?v=1:<line>:<col>`). Do not open it: pipe
 // the error to `node scripts/where-error.mjs`, which prints the file and line to edit and the
 // entry below that owns it.
 import panelHead from "./features/panel/head/manifest.json" with { type: "json" };
+import shared from "./shared/manifest.json" with { type: "json" };
 
 export const features = [
   {
@@ -21,6 +23,12 @@ export const features = [
     description: "Right panel header and view switcher.",
     // A reveal ends in another mod: search selects `files`, then dispatches orca-files.search.
     next: ["mods/orca-files/main.js"],
+  },
+  {
+    manifest: shared,
+    area: "shared",
+    description: "Shared helpers copied into each mod that imports them; edit orca-ui/shared/<name>, never the copies.",
+    next: [],
   },
 ];
 

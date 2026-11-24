@@ -1,10 +1,9 @@
-// A throwaway repo for the Orca UI script tests: one feature on the mod `orca-files`, the eight
-// shared helpers sync-shared still knows about, and one mod no manifest claims.
+// A throwaway repo for the Orca UI script tests: one feature on the mod `orca-files`, two shared
+// helpers (one consumed by the feature's mod), and one mod no manifest claims.
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { USES } from "./sync-shared.mjs";
 
 export const write = (root, rel, content, mode) => {
   mkdirSync(dirname(join(root, rel)), { recursive: true });
@@ -39,7 +38,12 @@ export function fixture(t) {
   write(root, `${FEATURE}/tool.sh`, "#!/bin/sh\n", 0o755);
   write(root, `${FEATURE}/view.test.js`, "// test\n");
   write(root, `${FEATURE}/fixture/data.json`, "{}\n");
-  for (const name of Object.keys(USES)) write(root, `shared/${name}`, `export const n = "${name}";\n`);
+  write(root, "orca-ui/shared/clip.js", 'export const n = "clip.js";\n');
+  write(root, "orca-ui/shared/transcript.js", 'export const n = "transcript.js"'); // no trailing LF
+  write(root, "orca-ui/shared/manifest.json", JSON.stringify({ files: [
+    { source: "orca-ui/shared/clip.js", outputs: ["mods/orca-changes/clip.js", "mods/orca-files/clip.js", "mods/orca-handoff/clip.js", "mods/orca-menu/clip.js"] },
+    { source: "orca-ui/shared/transcript.js", outputs: ["mods/orca-handoff/transcript.js", "mods/orca-menu/transcript.js"] },
+  ] }, null, 2));
   write(root, "mods/orca-files/extra.js", "// handwritten\n");
   write(root, "mods/orca-panel-gap/mod.json", "{}\n");
   write(root, "mods/orca-panel-gap/main.js", "export default 2;\n");
@@ -49,6 +53,6 @@ export function fixture(t) {
 // Copy the scripts the where-error CLI needs, so its ROOT is the fixture.
 export function withScripts(root) {
   const scripts = fileURLToPath(new URL(".", import.meta.url));
-  for (const name of ["where-error.mjs", "orca-ui-manifests.mjs", "sync-shared.mjs"]) cpSync(join(scripts, name), join(root, "scripts", name));
+  for (const name of ["where-error.mjs", "orca-ui-manifests.mjs"]) cpSync(join(scripts, name), join(root, "scripts", name));
   return join(root, "scripts", "where-error.mjs");
 }

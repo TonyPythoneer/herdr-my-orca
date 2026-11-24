@@ -1,4 +1,4 @@
-// Unit tests for the provider helpers the two mods share (generated from shared/codex-provider.js).
+// Unit tests for the provider helpers the two mods share (generated from orca-ui/shared/codex-provider.js).
 // `node --test mods` runs this file; nothing here touches herdr, the network or the file system.
 import test from "node:test";
 import assert from "node:assert/strict";

@@ -1,11 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { stale, USES } from "./sync-shared.mjs";
+import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { ROOT, loadManifests } from "./orca-ui-manifests.mjs";
 
-test("every copy of a shared helper matches shared/", async () => {
-  assert.deepEqual(await stale(), []);
+const { table, shared } = loadManifests();
+const shared20 = [...table].filter(([, row]) => row.kind === "shared");
+
+test("every copy of a shared helper matches orca-ui/shared/", () => {
+  assert.equal(shared20.length, 20);
+  for (const [dest, row] of shared20) {
+    const source = readFileSync(`${ROOT}/${row.source}`, "utf8");
+    const want = `${source}${source.endsWith("\n") ? "" : "\n"}// Generated from ${row.source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;
+    assert.equal(readFileSync(`${ROOT}/${dest}`, "utf8"), want, dest);
+  }
+  const script = fileURLToPath(new URL("./build-orca-ui.mjs", import.meta.url));
+  assert.equal(spawnSync(process.execPath, [script, "--check", "--out", ROOT], { encoding: "utf8" }).status, 0);
 });
 
 test("shared helpers are listed once per mod", () => {
-  for (const mods of Object.values(USES)) assert.equal(new Set(mods).size, mods.length);
+  const outputs = shared.files.flatMap(f => f.outputs);
+  assert.equal(new Set(outputs).size, outputs.length);
+  for (const { outputs: list } of shared.files) assert.equal(new Set(list.map(o => o.split("/")[1])).size, list.length);
 });

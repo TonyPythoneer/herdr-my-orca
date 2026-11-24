@@ -11,7 +11,6 @@
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, parse, resolve, sep } from "node:path";
 import { ROOT, ManifestError, allowedExtras, loadManifests, walkFiles } from "./orca-ui-manifests.mjs";
-import { USES } from "./sync-shared.mjs";
 
 const USAGE = "usage: node scripts/build-orca-ui.mjs --out <dir> [--check | --force] [--root <dir>]";
 
@@ -57,17 +56,25 @@ function pathProblem(path) {
   return null;
 }
 
+// A shared copy ends with a generated-file line, last so Herdr error lines match the source.
+function deliverable(root, row) {
+  const bytes = readFileSync(join(root, row.source));
+  if (row.kind !== "shared") return bytes;
+  const text = bytes.toString("utf8");
+  return Buffer.from(`${text}${text.endsWith("\n") ? "" : "\n"}// Generated from ${row.source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`);
+}
+
 function main() {
   const { out, check, force, root } = parseArgs(process.argv.slice(2));
   let loaded;
-  try { loaded = loadManifests({ root, uses: USES }); }
+  try { loaded = loadManifests({ root }); }
   catch (error) {
     if (!(error instanceof ManifestError)) throw error;
     console.error(`${error.path}: ${error.message}`);
     console.error(USAGE);
     process.exit(2);
   }
-  const rows = [...loaded.table].filter(([, row]) => row.kind === "feature");
+  const rows = [...loaded.table];
   const problems = [];
   const pending = [];
 
@@ -75,7 +82,7 @@ function main() {
     const to = join(out, dest);
     const bad = pathProblem(to);
     if (bad) { problems.push(`${dest}: ${bad}`); continue; }
-    const want = readFileSync(join(root, row.source));
+    const want = deliverable(root, row);
     if (!existsSync(to)) pending.push({ dest, to, want, mode: row.mode, why: "missing" });
     else if (!readFileSync(to).equals(want)) pending.push({ dest, to, want, mode: row.mode, why: "content differs" });
     else if ((statSync(to).mode & 0o777) !== row.mode) pending.push({ dest, to, want, mode: row.mode, why: "mode differs" });
@@ -119,7 +126,7 @@ function main() {
     console.error(`${error.path ?? out}: ${error.message}`);
     process.exit(1);
   }
-  console.log(`wrote ${pending.length} of ${rows.length} managed file(s) from ${loaded.features.size} feature(s) to ${out}`);
+  console.log(`wrote ${pending.length} of ${rows.length} managed file(s) from ${loaded.features.size} feature(s) and ${loaded.shared?.files.length ?? 0} shared helper(s) to ${out}`);
 }
 
 main();

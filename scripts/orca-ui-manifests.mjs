@@ -110,11 +110,43 @@ function parseFeature(root, path) {
   return m;
 }
 
-// `uses` is the retired `{ name: [mods] }` shared-helper map; its rows are read-only entries.
-export function loadManifests({ root = ROOT, uses = {} } = {}) {
+export const SHARED = "orca-ui/shared";
+
+// `orca-ui/shared/manifest.json`: `{ files: [{ source, outputs }] }`. Null when the folder is absent.
+function parseShared(root) {
+  const path = `${SHARED}/manifest.json`;
+  if (!existsSync(join(root, SHARED))) return null;
+  const fail = message => { throw new ManifestError(message, path); };
+  const m = readJson(root, path, fail);
+  if (!m || typeof m !== "object" || Array.isArray(m) || Object.keys(m).some(k => k !== "files") || !Array.isArray(m.files)) {
+    fail('manifest must be { "files": [...] }');
+  }
+  const listed = new Set(["manifest.json"]);
+  const outputs = new Set();
+  for (const item of m.files) {
+    if (!item || typeof item !== "object" || Object.keys(item).some(k => k !== "source" && k !== "outputs")) fail("each file needs only source and outputs");
+    const name = typeof item.source === "string" && item.source.startsWith(`${SHARED}/`) ? item.source.slice(SHARED.length + 1) : null;
+    if (!name || !/^[\w.-]+\.js$/.test(name)) fail(`source "${item.source}" must be ${SHARED}/<name>.js`);
+    if (listed.has(name)) fail(`source ${item.source} is declared twice`);
+    listed.add(name);
+    let stat;
+    try { stat = lstatSync(join(root, item.source)); } catch { fail(`missing source ${item.source}`); }
+    if (!stat.isFile()) fail(`${item.source} is not a regular file`);
+    if (!strings(item.outputs) || !item.outputs.length) fail(`${item.source}: "outputs" must be a non-empty array of strings`);
+    for (const out of item.outputs) {
+      if (!new RegExp(`^mods/[A-Za-z0-9][\\w.-]*/${name.replace(/\./g, "\\.")}$`).test(out)) fail(`output "${out}" must be mods/<mod>/${name}`);
+      if (outputs.has(out)) fail(`output ${out} is declared twice`);
+      outputs.add(out);
+    }
+  }
+  for (const file of walkFiles(join(root, SHARED))) if (!listed.has(file)) fail(`${SHARED}/${file} is not listed in the manifest`);
+  return m;
+}
+
+export function loadManifests({ root = ROOT } = {}) {
   const features = new Map();
   const table = new Map();
-  const owners = new Map(); // destination -> who claimed it
+  const owners = new Map(); // destination -> [who, manifest path]
   const ids = new Map();
   const claim = (dest, who, path) => {
     const parts = dest.split("/");
@@ -140,34 +172,28 @@ export function loadManifests({ root = ROOT, uses = {} } = {}) {
     }
   }
 
-  for (const [name, mods] of Object.entries(uses)) {
-    const source = `shared/${name}`;
-    let mode;
-    try { mode = statSync(join(root, source)).mode & 0o777; }
-    catch { throw new ManifestError(`missing shared source ${source}`, source); }
-    for (const mod of mods) {
-      const dest = `mods/${mod}/${name}`;
-      claim(dest, `shared ${name}`, source);
-      const own = [...features.values()].find(f => f.mod === mod);
-      table.set(dest, { kind: "shared", id: name, source, mode, consumers: mods,
-        tests: own ? own.tests.map(t => `${own.source}/${t}`) : [], layoutSlots: own?.layoutSlots ?? {} });
+  const shared = parseShared(root);
+  for (const item of shared?.files ?? []) {
+    const name = posix.basename(item.source);
+    const mods = item.outputs.map(o => o.split("/")[1]);
+    for (const dest of item.outputs) {
+      claim(dest, `shared ${name}`, `${SHARED}/manifest.json`);
+      const own = [...features.values()].find(f => f.mod === dest.split("/")[1]);
+      table.set(dest, { kind: "shared", id: name, source: item.source, mode: statSync(join(root, item.source)).mode & 0o777,
+        consumers: mods, tests: own ? own.tests.map(t => `${own.source}/${t}`) : [], layoutSlots: own?.layoutSlots ?? {} });
     }
   }
 
   for (const [path, m] of features) {
-    for (const file of m.handwritten) {
-      const dest = posix.join(m.output, posix.normalize(file));
-      claim(dest, `handwritten in feature "${m.feature}"`, path);
-    }
+    for (const file of m.handwritten) claim(posix.join(m.output, posix.normalize(file)), `handwritten in feature "${m.feature}"`, path);
   }
-  return { table, features, shared: null };
+  return { table, features, shared };
 }
 
-// Destination paths a build must leave alone inside a feature mod: handwritten, shared copies and
-// Herdr reserved files, as `mods/<mod>/<file>`.
-export function allowedExtras({ table, features }) {
+// Destination paths a build must leave alone inside a feature mod besides what it writes:
+// handwritten and Herdr reserved files, as `mods/<mod>/<file>`.
+export function allowedExtras({ features }) {
   const extras = new Set();
-  for (const [dest, row] of table) if (row.kind === "shared") extras.add(dest);
   for (const m of features.values()) {
     for (const file of m.handwritten) extras.add(posix.join(m.output, posix.normalize(file)));
     for (const file of RESERVED) extras.add(`${m.output}/${file}`);
