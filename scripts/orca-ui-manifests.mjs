@@ -77,18 +77,30 @@ function discover(root) {
   return walkFiles(join(root, FEATURES_DIR)).filter(f => posix.basename(f) === MANIFEST_FILE).map(f => `${FEATURES_DIR}/${f}`).sort();
 }
 
-function checkFeatureShape(m, path, fail) {
+function checkFeatureFields(m, fail) {
   if (!isObject(m)) fail("manifest must be an object");
   for (const key of Object.keys(m)) if (![...FEATURE_FIELDS, ...OPTIONAL_FIELDS].includes(key)) fail(`unknown field "${key}"`);
   for (const key of FEATURE_FIELDS) if (m[key] === undefined) fail(`missing "${key}"`);
+}
+
+function checkFeatureNames(m, path, fail) {
   if (typeof m.feature !== "string" || !m.feature) fail('"feature" must be a non-empty string');
   if (typeof m.mod !== "string" || !MOD_NAME.test(m.mod)) fail('"mod" must be one folder name');
   if (m.source !== posix.dirname(path)) fail(`"source" must be ${posix.dirname(path)}`);
   if (m.output !== `mods/${m.mod}`) fail(`"output" must be mods/${m.mod}`);
-  if (m.handwritten === undefined) m.handwritten = [];
+}
+
+function checkFeatureLists(m, fail) {
+  if (m.handwritten === undefined) m.handwritten = []; // a manifest with no handwritten files may leave the list out
   for (const key of ["files", "handwritten", "tests", "keys"]) if (!strings(m[key])) fail(`"${key}" must be an array of strings`);
   if (!isObject(m.layoutSlots) || !Object.values(m.layoutSlots).every(strings)) fail('"layoutSlots" must map layout names to arrays of ids');
   for (const file of m.handwritten) if (!relativeInside(file)) fail(`handwritten entry "${file}" is not a path inside the mod`);
+}
+
+function checkFeatureShape(m, path, fail) {
+  checkFeatureFields(m, fail);
+  checkFeatureNames(m, path, fail);
+  checkFeatureLists(m, fail);
 }
 
 // `files` plus `tests` plus the manifest must be exactly what is in the source folder.
@@ -137,14 +149,10 @@ function parseFeature(root, path) {
   return m;
 }
 
-function checkSharedItem(root, item, seen, fail) {
-  if (!isObject(item) || Object.keys(item).some(k => k !== "source" && k !== "outputs")) fail("each file needs only source and outputs");
-  const name = typeof item.source === "string" && item.source.startsWith(`${SHARED}/`) ? item.source.slice(SHARED.length + 1) : null;
-  if (!name || !/^[\w.-]+\.js$/.test(name)) fail(`source "${item.source}" must be ${SHARED}/<name>.js`);
-  if (seen.sources.has(name)) fail(`source ${item.source} is declared twice`);
-  seen.sources.add(name);
-  requireSourceFile(root, SHARED, name, fail);
+// Every output must be `mods/<mod>/<name>`, unclaimed so far, in a mod that has a mod.json.
+function checkSharedOutputs(root, item, name, seen, fail) {
   if (!strings(item.outputs) || !item.outputs.length) fail(`${item.source}: "outputs" must be a non-empty array of strings`);
+  // MOD_NAME without its ^ and $ anchors, so it can sit in the middle of the pattern.
   const shape = new RegExp(`^mods/${MOD_NAME.source.slice(1, -1)}/${name.replace(/\./g, "\\.")}$`);
   for (const out of item.outputs) {
     if (!shape.test(out)) fail(`output "${out}" must be mods/<mod>/${name}`);
@@ -152,6 +160,16 @@ function checkSharedItem(root, item, seen, fail) {
     if (!existsSync(join(root, "mods", modOf(out), "mod.json"))) fail(`output ${out}: mods/${modOf(out)} has no mod.json, check the mod name`);
     seen.outputs.add(out);
   }
+}
+
+function checkSharedItem(root, item, seen, fail) {
+  if (!isObject(item) || Object.keys(item).some(k => k !== "source" && k !== "outputs")) fail("each file needs only source and outputs");
+  const name = typeof item.source === "string" && item.source.startsWith(`${SHARED}/`) ? item.source.slice(SHARED.length + 1) : null;
+  if (!name || !/^[\w.-]+\.js$/.test(name)) fail(`source "${item.source}" must be ${SHARED}/<name>.js`);
+  if (seen.sources.has(name)) fail(`source ${item.source} is declared twice`);
+  seen.sources.add(name);
+  requireSourceFile(root, SHARED, name, fail);
+  checkSharedOutputs(root, item, name, seen, fail);
 }
 
 // `orca-ui/shared/manifest.json`: `{ files: [{ source, outputs }] }`. Required, so a mistyped
@@ -171,7 +189,7 @@ function parseShared(root) {
 }
 
 // The one table: destination -> who produces it. Rows say where to edit and what to run.
-function row(root, kind, id, source, consumers, owner) {
+function row(root, { kind, id, source, consumers, owner }) {
   return { kind, id, source, mode: modeOf(root, source), consumers,
     tests: owner ? owner.tests.map(t => `${owner.source}/${t}`) : [], layoutSlots: owner?.layoutSlots ?? {} };
 }
@@ -196,7 +214,7 @@ export function loadManifests({ root = ROOT } = {}) {
     for (const file of m.files) {
       const dest = inMod(m.output, file);
       claim(dest, `feature "${m.feature}"`, path);
-      table.set(dest, row(root, "feature", m.feature, `${m.source}/${posix.normalize(file)}`, [m.mod], m));
+      table.set(dest, row(root, { kind: "feature", id: m.feature, source: `${m.source}/${posix.normalize(file)}`, consumers: [m.mod], owner: m }));
     }
   }
 
@@ -206,7 +224,7 @@ export function loadManifests({ root = ROOT } = {}) {
     for (const dest of item.outputs) {
       claim(dest, `shared ${name}`, `${SHARED}/${MANIFEST_FILE}`);
       const owner = [...features.values()].find(f => f.mod === modOf(dest));
-      table.set(dest, row(root, "shared", name, item.source, item.outputs.map(modOf), owner));
+      table.set(dest, row(root, { kind: "shared", id: name, source: item.source, consumers: item.outputs.map(modOf), owner }));
     }
   }
 

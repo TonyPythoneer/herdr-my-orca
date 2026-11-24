@@ -13,11 +13,14 @@ import { dirname, join, parse, resolve, sep } from "node:path";
 import { ROOT, SHARED, ManifestError, MODE_MASK, allowedExtras, loadManifests, walkFiles } from "./orca-ui-manifests.mjs";
 
 const USAGE = "usage: node scripts/build-orca-ui.mjs --out <dir> [--check | --force] [--root <dir>]";
+// Exit codes, as the header documents them: drift or an output I/O failure, a usage or manifest error.
+const EXIT_DRIFT = 1;
+const EXIT_USAGE = 2;
 
 function fail(message) {
   console.error(message);
   console.error(USAGE);
-  process.exit(2);
+  process.exit(EXIT_USAGE);
 }
 
 function parseArgs(args) {
@@ -48,7 +51,7 @@ function pathProblem(path) {
   for (const part of path.slice(root.length).split(sep)) {
     at = join(at, part);
     let stat;
-    try { stat = lstatSync(at); } catch { return null; }
+    try { stat = lstatSync(at); } catch { return null; } // nothing there yet: the build creates it
     if (stat.isSymbolicLink()) return "is or crosses a symlink";
     if (at !== path && !stat.isDirectory()) return "is or crosses a non-directory";
     if (at === path && !stat.isFile()) return "exists but is not a regular file";
@@ -61,11 +64,12 @@ const GENERATED_PREFIX = "// Generated from ";
 const generatedLine = source => `${GENERATED_PREFIX}${source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;
 const isSharedCopyLine = line => line.startsWith(`${GENERATED_PREFIX}${SHARED}/`);
 const TEMP_SUFFIX = ".orca-build-tmp";
+const LINE_FEED = 0x0a;
 
 function deliverable(root, row) {
   const bytes = readFileSync(join(root, row.source));
   if (row.kind !== "shared") return bytes;
-  const lf = bytes.length && bytes[bytes.length - 1] === 0x0a ? "" : "\n";
+  const lf = bytes.length && bytes[bytes.length - 1] === LINE_FEED ? "" : "\n";
   return Buffer.concat([bytes, Buffer.from(lf + generatedLine(row.source))]);
 }
 
@@ -74,8 +78,16 @@ function loadOrExit(root) {
   catch (error) {
     console.error(`${error instanceof ManifestError ? error.path : "orca-ui"}: ${error.message}`);
     console.error(USAGE);
-    return process.exit(2);
+    return process.exit(EXIT_USAGE);
   }
+}
+
+// Why the file at `to` is not what the build would write, or null when it is.
+function driftReason(to, want, mode) {
+  if (!existsSync(to)) return "missing";
+  if (!readFileSync(to).equals(want)) return "content differs";
+  if ((statSync(to).mode & MODE_MASK) !== mode) return "mode differs";
+  return null;
 }
 
 // Compare every managed destination with what the build would write.
@@ -87,15 +99,14 @@ function plan(loaded, root, out) {
     const bad = pathProblem(to);
     if (bad) { problems.push(`${dest}: ${bad}`); continue; }
     const want = deliverable(root, row);
-    const why = !existsSync(to) ? "missing" : !readFileSync(to).equals(want) ? "content differs" : (statSync(to).mode & MODE_MASK) !== row.mode ? "mode differs" : null;
+    const why = driftReason(to, want, row.mode);
     if (why) pending.push({ dest, to, want, mode: row.mode, why, source: join(root, row.source) });
   }
   return { problems, pending };
 }
 
-// Files in a feature's mod folder that nothing declares, and generated shared copies no manifest
-// lists (a typo'd or retired target).
-function undeclared(loaded, out) {
+// Files in a feature's mod folder that nothing declares.
+function undeclaredInFeatureMods(loaded, out) {
   const found = [];
   const managed = new Set(loaded.table.keys());
   const extras = allowedExtras(loaded);
@@ -107,6 +118,13 @@ function undeclared(loaded, out) {
       if (!managed.has(dest) && !extras.has(dest)) found.push(`${dest}: not declared by any manifest`);
     }
   }
+  return found;
+}
+
+// Generated shared copies no manifest lists (a typo'd or retired target), in mods no feature owns.
+function unlistedSharedCopies(loaded, out) {
+  const found = [];
+  const managed = new Set(loaded.table.keys());
   const featureMods = new Set([...loaded.features.values()].map(m => m.output));
   const mods = join(out, "mods");
   for (const mod of existsSync(mods) ? readdirSync(mods) : []) {
@@ -121,6 +139,8 @@ function undeclared(loaded, out) {
   }
   return found;
 }
+
+const undeclared = (loaded, out) => [...undeclaredInFeatureMods(loaded, out), ...unlistedSharedCopies(loaded, out)];
 
 // Only an existing copy that must change can be a hand edit; missing files are always safe.
 const looksHandEdited = p => p.why !== "missing" && statSync(p.to).mtimeMs > statSync(p.source).mtimeMs;
@@ -142,19 +162,19 @@ function check(loaded, out, { problems, pending }) {
   const lines = [...problems, ...undeclared(loaded, out), ...pending.map(p => `${p.dest}: ${p.why}`)];
   for (const line of lines) console.log(line);
   console.log(lines.length ? `${lines.length} managed file(s) drifted` : `${loaded.table.size} managed file(s) match`);
-  return lines.length ? 1 : 0;
+  return lines.length ? EXIT_DRIFT : 0;
 }
 
 function build(loaded, out, { problems, pending }, force) {
-  if (problems.length) { for (const line of problems) console.error(line); return 1; }
+  if (problems.length) { for (const line of problems) console.error(line); return EXIT_DRIFT; }
   const blocked = force ? [] : pending.filter(looksHandEdited);
   if (blocked.length) {
     for (const p of blocked) console.error(p.dest);
     console.error("newer than their source and different: edit the source, or rerun with --force to overwrite");
-    return 1;
+    return EXIT_DRIFT;
   }
   try { pending.forEach(replaceFile); }
-  catch (error) { console.error(`${error.path ?? out}: ${error.message}`); return 1; }
+  catch (error) { console.error(`${error.path ?? out}: ${error.message}`); return EXIT_DRIFT; }
   console.log(`wrote ${pending.length} of ${loaded.table.size} managed file(s) from ${loaded.features.size} feature(s) and ${loaded.shared.files.length} shared helper(s) to ${out}`);
   return 0;
 }

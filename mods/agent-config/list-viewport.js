@@ -7,8 +7,8 @@
 // short one. Full-height panes (file tree, changes list, agents list) fill their container and do
 // not use this.
 //
-// Pure: no herdr or gpui imports. Edit this file, then `node scripts/sync-shared.mjs` writes the
-// copies the mods import.
+// Pure: no herdr or gpui imports. Edit this file, then `node scripts/build-orca-ui.mjs --out .`
+// writes the copies the mods import.
 
 /**
  * The one row of every list: its height, the space between rows, its radius, its side padding, the
