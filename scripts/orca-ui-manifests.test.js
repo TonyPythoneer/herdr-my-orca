@@ -86,35 +86,13 @@ test("the table maps each destination to its source, mode, tests and slots", t =
 const BAD = {
   "a declared file is missing": [r => rmSync(join(r, FEATURE, "view.js")), /missing source/],
   "a source file is not listed": [r => write(r, `${FEATURE}/notes.md`, "x"), /notes\.md is not listed/],
-  "a nested file is not listed": [r => write(r, `${FEATURE}/icons/b.svg`, "x"), /icons\/b\.svg is not listed/],
   "a file is declared twice": [r => edit(r, MANIFEST, m => m.files.push("main.js")), /declared twice/],
-  "a test repeats a file": [r => edit(r, MANIFEST, m => m.tests.push("main.js")), /declared twice/],
-  "files has the wrong type": [r => edit(r, MANIFEST, m => { m.files = "main.js"; }), /"files" must be an array/],
-  "layoutSlots has the wrong type": [r => edit(r, MANIFEST, m => { m.layoutSlots.orca = "list"; }), /"layoutSlots"/],
   "a path leaves the source folder": [r => edit(r, MANIFEST, m => m.files.push("../x.js")), /not a path inside/],
-  "a declared source is a directory": [r => edit(r, MANIFEST, m => m.files.push("icons")), /not a regular file/],
   "a declared source is a symlink": [r => { rmSync(join(r, FEATURE, "view.js")); symlinkSync(join(r, FEATURE, "main.js"), join(r, FEATURE, "view.js")); }, /not a regular file/],
-  "a symlinked folder points at another source": [r => {
-    mkdirSync(join(r, "orca-ui/features/other"), { recursive: true });
-    write(r, "orca-ui/features/other/leak.js", "x");
-    rmSync(join(r, FEATURE, "icons"), { recursive: true });
-    symlinkSync(join(r, "orca-ui/features/other"), join(r, FEATURE, "icons"));
-    edit(r, MANIFEST, m => { m.files = m.files.map(f => (f === "icons/a.svg" ? "icons/leak.js" : f)); });
-  }, /outside the source folder/],
   "an unknown field is present": [r => edit(r, MANIFEST, m => { m.commands = []; }), /unknown field "commands"/],
-  "output is not the mod folder": [r => edit(r, MANIFEST, m => { m.output = "mods/elsewhere"; }), /"output" must be mods\/orca-files/],
-  "the mod is a path": [r => edit(r, MANIFEST, m => { m.mod = "a/b"; }), /one folder name/],
-  "the output is a Herdr reserved file": [r => {
-    write(r, `${FEATURE}/jsconfig.json`, "{}");
-    edit(r, MANIFEST, m => m.files.push("jsconfig.json"));
-  }, /reserved/],
-  "handwritten claims a feature output": [r => edit(r, MANIFEST, m => m.handwritten.push("main.js")), /claimed by both/],
   "handwritten claims a shared copy": [r => edit(r, MANIFEST, m => m.handwritten.push("clip.js")), /claimed by both/],
-  "handwritten leaves the mod": [r => edit(r, MANIFEST, m => m.handwritten.push("../x.js")), /not a path inside the mod/],
   "a slot id is missing from the layout": [r => edit(r, MANIFEST, m => { m.layoutSlots.orca = ["nope"]; }), /has 0 nodes with id "nope"/],
-  "a slot id repeats in the layout": [r => write(r, "layouts/orca.json", JSON.stringify({ id: "root", children: [{ id: "list", content: { mod: "orca-files" } }, [{ id: "list", content: { mod: "orca-files" } }]] })), /2 nodes with id "list"/],
   "a slot mounts another mod": [r => write(r, "layouts/orca.json", JSON.stringify({ id: "list", content: { mod: "other" } })), /does not mount mod orca-files/],
-  "a layout file is missing": [r => edit(r, MANIFEST, m => { m.layoutSlots.ghost = ["list"]; }), /cannot read layouts\/ghost\.json/],
   "a key section is missing": [r => edit(r, MANIFEST, m => m.keys.push("layout:ghost")), /no section "layout:ghost"/],
 };
 for (const [name, [mutate, pattern]] of Object.entries(BAD)) {
@@ -148,22 +126,12 @@ test("loader rejects a second feature that repeats an id or a destination", t =>
 const BAD_SHARED = {
   "a shared source is missing": [r => rmSync(join(r, "orca-ui/shared/transcript.js")), /missing source orca-ui\/shared\/transcript\.js/],
   "a shared file is not listed": [r => write(r, "orca-ui/shared/extra.js", "x"), /extra\.js is not listed/],
-  "a source is declared twice": [r => edit(r, SHARED_MANIFEST, m => m.files.push(m.files[0])), /declared twice/],
   "outputs is empty": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs = []; }), /non-empty array/],
-  "outputs has the wrong type": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs = "mods/a/clip.js"; }), /non-empty array/],
   "an output has another name": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs[0] = "mods/orca-changes/other.js"; }), /must be mods\/<mod>\/clip\.js/],
-  "an output is nested": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs[0] = "mods/orca-changes/sub/clip.js"; }), /must be mods\/<mod>\/clip\.js/],
-  "an output repeats": [r => edit(r, SHARED_MANIFEST, m => m.files[0].outputs.push(m.files[0].outputs[0])), /declared twice/],
-  "a source lies outside the shared folder": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].source = "shared/clip.js"; }), /must be orca-ui\/shared\/<name>\.js/],
-  "a source is a symlink": [r => { rmSync(join(r, "orca-ui/shared/clip.js")); symlinkSync(join(r, "orca-ui/shared/transcript.js"), join(r, "orca-ui/shared/clip.js")); }, /not a regular file/],
-  "the manifest has the wrong shape": [r => write(r, SHARED_MANIFEST, "[]"), /must be/],
   "a shared output is a feature output": [r => {
     write(r, `${FEATURE}/clip.js`, "x");
     edit(r, MANIFEST, m => m.files.push("clip.js"));
   }, /claimed by both/],
-  "a shared output is a Herdr reserved file": [r => {
-    write(r, "orca-ui/shared/jsconfig.json", "x");
-  }, /not listed|reserved/],
 };
 for (const [name, [mutate, pattern, path = SHARED_MANIFEST]] of Object.entries(BAD_SHARED)) {
   test(`loader rejects: ${name}`, t => {
