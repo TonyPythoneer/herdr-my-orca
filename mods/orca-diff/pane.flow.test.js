@@ -3,15 +3,9 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import { loadDiff } from "./diff-data.js";
 
-const loader = new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url).href;
-register("data:text/javascript," + encodeURIComponent(`
-  import { load as record } from ${JSON.stringify(loader)};
-  export { resolve } from ${JSON.stringify(loader)};
-  export async function load(url, ctx, next) {
-    const result = await record(url, ctx, next);
-    if (!url.startsWith("stub:herdr")) return result;
-    return { ...result, source: result.source.replace("export const nextCommand = () => undefined", "export const nextCommand = () => globalThis.command()") };
-  }`));
+register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
+// The stub forwards nextCommand() to this global, so a test can feed the command loop.
+globalThis.__herdrNextCommand = () => globalThis.command();
 const { default: Diff } = await import("./main.js");
 
 test("show changes the target, the timer reloads it and a failed load shows its message", async () => {
