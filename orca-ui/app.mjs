@@ -88,6 +88,9 @@ export const inPlace = [
     ],
     "tests": [
       "mods/orca-agent-manager/install.test.js",
+      "mods/orca-agent-manager/manager-flow.test.js",
+      "mods/orca-agent-manager/manager-logic.test.js",
+      "mods/orca-agent-manager/manager-page.test.js",
       "mods/orca-agent-manager/permission-menu.test.js",
       "mods/orca-agent-manager/permissions.flow.test.js",
       "mods/orca-agent-manager/permissions.test.js",
