@@ -118,12 +118,11 @@ function labelOf(choices, value) {
 }
 
 
-// Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
+// While the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
 // keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
 // Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
 // Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
 function sidebarFrame(inner) {
-  if (!props()?.unified) return inner;
   const open = shared("left-sidebar.openPx");
   const px = find(layout(), "left-sidebar")?.size?.px;
   if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
@@ -275,12 +274,13 @@ export default class Nav extends View {
     this.handle.focus();
   }
 
-  render(cx) { return sidebarFrame(this.renderBody(cx)); }
+  // The workspace-options popup is its own overlay, not sidebar content, so it never slides or fades.
+  render(cx) { return props()?.navMenu ? this.renderBody(cx) : sidebarFrame(this.renderBody(cx)); }
 
   renderBody(cx) {
     if (props()?.navMenu === "workspace-options") return this.optionsView(cx);
     const t = theme();
-    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(props()?.unified ? t.surface : t.chrome)
+    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(t.surface)
       .child(searchButton())
       .child(this.projectsHeader(t));
   }

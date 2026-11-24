@@ -33,6 +33,6 @@ CASES = [
     case("Task management footer","orca-chrome orca-tasks","Tasks",(69,671)),
     case("Task management: JSON editor","orca-tasks","Edit JSON",(612,271),page="main-tasks"),
     case("Task management: back to terminals","orca-tasks","Back to terminals",(318,68),page="main-tasks"),
-    case("Unified sidebar collapse","orca-chrome orca-tabs","Collapse sidebar",(91,15),layout="orca-unified"),
-    case("Unified right panel collapse","orca-panel-head orca-tabs","Collapse right sidebar",(1000,15),layout="orca-unified"),
+    case("Sidebar collapse","orca-tabs","Collapse sidebar",(91,15)),
+    case("Right panel collapse","orca-panel-head orca-tabs","Collapse right sidebar",(1000,15)),
 ]

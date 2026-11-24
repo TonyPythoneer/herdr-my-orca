@@ -4,7 +4,6 @@ import { existsSync, readFileSync } from "node:fs";
 
 const read = name => JSON.parse(readFileSync(new URL(`../layouts/${name}.json`, import.meta.url), "utf8"));
 const orca = read("orca");
-const unified = read("orca-unified");
 
 const walk = (node, visit) => {
   visit(node);
@@ -18,8 +17,8 @@ const ids = layout => {
 
 // Herdr only honours titlebar, traffic_lights and preview on the root; a wrapper row (seen once in
 // live) moves them to a child and the system titlebar comes back above the app's own header.
-test("both layouts have the column that carries the window chrome on the root", () => {
-  for (const [name, layout] of Object.entries({ orca, "orca-unified": unified })) {
+test("the layout has the column that carries the window chrome on the root", () => {
+  for (const [name, layout] of Object.entries({ orca })) {
     assert.equal(layout.id, "root", name);
     assert.equal(layout.type, "column", name);
     assert.equal(layout.titlebar, "none", name);
@@ -28,9 +27,9 @@ test("both layouts have the column that carries the window chrome on the root", 
   }
 });
 
-test("every mod either layout names exists in this repo", () => {
+test("every mod the layout names exists in this repo", () => {
   const missing = [];
-  for (const [name, layout] of Object.entries({ orca, "orca-unified": unified })) {
+  for (const [name, layout] of Object.entries({ orca })) {
     walk(layout, node => {
       if (!node?.content?.mod) return;
       if (!existsSync(new URL(`../mods/${node.content.mod}/main.js`, import.meta.url))) missing.push(`${name}: ${node.content.mod}`);
@@ -39,44 +38,27 @@ test("every mod either layout names exists in this repo", () => {
   assert.deepEqual([...new Set(missing)], []);
 });
 
-// Layout differences are the spec the builder has to reproduce, so each one is asserted rather
-// than left to a visual diff. `cloned_from` only applies to the layout Herdr clones it from.
-test("unified differs from orca in the declared ways", () => {
+// The one header spans the sidebar and the work column, so the layout has no brand row, wraps the
+// drawer and work body in `under`, and lets the sidebar collapse to 0 over the surface colour.
+// `cloned_from` only applies to the layout Herdr clones it from.
+test("orca is the single unified-header layout", () => {
   assert.equal(orca.cloned_from?.name, "main");
-  assert.equal(unified.cloned_from, undefined, "unified is not a clone of a shipped layout");
+  const found = ids(orca);
+  assert.ok(!found.includes("brand"), "no brand row");
+  assert.ok(found.includes("under"), "the drawer and work body sit in under");
 
-  const orcaIds = ids(orca), unifiedIds = ids(unified);
-  assert.ok(orcaIds.includes("brand"), "orca keeps the branded sidebar header");
-  assert.ok(!unifiedIds.includes("brand"), "unified has no brand row");
-  assert.ok(!orcaIds.includes("under"), "orca has no under wrapper");
-  assert.ok(unifiedIds.includes("under"), "unified wraps the drawer and work body in under");
-
-  const sidebar = layout => {
-    const found = [];
-    walk(layout, node => {
-      if (node?.id !== "left-sidebar") return;
-      found.push({ min: node.min, background: node.background });
-    });
-    return found;
-  };
-  assert.ok(sidebar(orca).every(s => s.min === 220 && s.background === "chrome"), "orca sidebar: 220px over chrome");
-  assert.ok(sidebar(unified).every(s => s.min === 0 && s.background === "surface"), "unified sidebar: collapses to 0 over surface");
-
-  const tabs = layout => {
-    const found = [];
-    walk(layout, node => {
-      if (node?.content?.mod === "orca-tabs") found.push(node.content.props ?? {});
-    });
-    return found;
-  };
-  assert.ok(!tabs(orca).some(props => props.unified), "orca tabs are not unified");
-  assert.deepEqual(tabs(unified), [{ unified: true, motion: "native", pinSidebarTerminal: true }]);
+  const sidebars = [];
+  const tabs = [];
+  walk(orca, node => {
+    if (node?.id === "left-sidebar") sidebars.push({ min: node.min, background: node.background });
+    if (node?.content?.mod === "orca-tabs") tabs.push(node.content.props ?? {});
+  });
+  assert.ok(sidebars.every(s => s.min === 0 && s.background === "surface"), "sidebar collapses to 0 over surface");
+  assert.deepEqual(tabs, [{ motion: "native", pinSidebarTerminal: true }]);
 });
 
 test("retired Skillshare panel is not mounted or packaged", () => {
-  for (const layout of [orca, unified]) {
-    assert.ok(!ids(layout).includes("skillshare"));
-    walk(layout, node => assert.notEqual(node?.content?.mod, "skillshare"));
-  }
+  assert.ok(!ids(orca).includes("skillshare"));
+  walk(orca, node => assert.notEqual(node?.content?.mod, "skillshare"));
   assert.ok(!existsSync(new URL("../mods/skillshare/mod.json", import.meta.url)));
 });

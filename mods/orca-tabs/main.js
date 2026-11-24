@@ -65,13 +65,12 @@ function lightsOverlap(w, lights) {
 }
 
 // .titlebar has no horizontal padding (main.css:1072-1084), so the strip is flush from the
-// left; only macOS traffic lights that land over this column reserve space. Old saved rails
-// and a dragged-narrow sidebar can be smaller than the window buttons.
+// left; only macOS traffic lights that land over it reserve space.
 // (scripts/titlebar-height.test.js reads the expression below from this file.)
-function trafficLightPadding(root, w, sidebar, unified) {
+function trafficLightPadding(root, w) {
   const lights = root?.traffic_lights;
   return lightsOverlap(w, lights)
-    ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1) - (unified || sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
+    ? Math.max(0, (lights[0] + 64) / (settings()?.zoom || 1))
     : 0;
 }
 
@@ -104,7 +103,6 @@ function sidebarPlan(drawer, node) {
 const STATUS_BAR_HEIGHT = 24; // `orca-status` draws this (`layouts/orca.json` node `status`).
 const TAB_STRIP_FALLBACK = 32; // `TAB_GROUP_TAB_STRIP_HEIGHT_PX` (tab-drop-zone.ts:4), the fallback.
 // The reference design's sidebar collapse is 300ms.
-const GLIDE_START_MS = 40;
 const SIDEBAR_GLIDE_MS = 300;
 const SIDEBAR_STEP_MS = 16; // one step per frame (60fps); steps that would not change the width are skipped
 const SIDEBAR_RESIZE_SETTLE_MS = 80; // after sizing a hidden sidebar to 1px, before `show`
@@ -511,7 +509,6 @@ export default class Tabs extends View {
           this.requestSettingsPage("main-agents", taskCx);
           continue;
         }
-        if (!props()?.unified) continue;
         if (command === "toggle-sidebar") this.wantToggle = (this.wantToggle ?? 0) + 1;
         if (command === "toggle-panel") this.wantPanelToggle = (this.wantPanelToggle ?? 0) + 1;
         if (command === "toggle-sidebar" || command === "toggle-panel") taskCx.notify();
@@ -657,16 +654,13 @@ export default class Tabs extends View {
   // GPUI's own `transition` is that ease — it runs natively between frames, so nothing here needs
   // a timer. The flag only says "these next changes slide"; it lapses on its own, so a wheel or a
   // trackpad in between moves the strip directly, the way `scrollBy` is cut short by real input.
-  // Unified layout: the toggle steps the sidebar's width itself, so the strip, the sidebar content
+  // The toggle steps the sidebar's width itself, so the strip, the sidebar content
   // and the terminals move in the same frames (only `layout.resize` can move a layout node). The
   // loop owns just the target width; everything drawn is derived from the width `layout()` reports.
   // A second press while it runs reverses from where it is. The PTY is resized once at the end
   // (measured), not per step. Collapse ends with `hide` and puts the open width back while hidden,
   // so the next `show` returns at that width; expand starts from 1px while hidden.
   toggleSidebar(cx) {
-    // Only the unified layout has the header clock and the content frames, so anywhere else keeps
-    // the plain toggle `keys.json` used to call.
-    if (!props()?.unified) return run("layout.toggle", { id: "left-sidebar" });
     if (props()?.motion === "native") return this.toggleSidebarNative(cx);
     this.startSidebarMotion(cx, sidebarPlan(this.drawers.sidebar, find(layout(), "left-sidebar")));
   }
@@ -752,9 +746,7 @@ export default class Tabs extends View {
 
   toggleSidebarNative(cx) { this.drawers.sidebar.toggle(cx, this.drawerEnv()); }
 
-  // Only the unified layout renders the panel's clock, so anywhere else keeps the plain toggle.
   togglePanel(cx) {
-    if (!props()?.unified) return run("layout.toggle", { id: "panel" });
     this.togglePanelNative(cx);
   }
 
@@ -1047,46 +1039,23 @@ export default class Tabs extends View {
     }
   }
 
-  updateGlide(unified, sidebar, w, cx) {
-    // The layout moves the strip's left edge in one step when the sidebar hides or shows, so the
-    // strip is drawn where it was and eased home: render 1 holds the old spot, a moment later
-    // render 2 lets `left` go to 0 under a transition. A transition only animates changes made
-    // after the element carried it, so each glide gets fresh element ids (`-g<n>`): render 1
-    // creates them already at the old spot, render 2 moves the same elements home. Only the tabs
-    // glide; the toggle stays put.
-    // shortcut: the column and the terminals still jump, since a mod cannot move layout nodes.
-    const sidebarHidden = Boolean(sidebar?.hidden);
-    if (!unified && this.lastSidebarHidden !== undefined && sidebarHidden !== this.lastSidebarHidden) {
-      const stripStartHidden = toggleLeft(w) + 36;
-      const jump = (sidebar?.size?.px ?? 280) - stripStartHidden;
-      this.glideShift = sidebarHidden ? jump : -jump;
-      this.glideGen = (this.glideGen ?? 0) + 1;
-      cx.spawn(async (taskCx) => {
-        await taskCx.sleep(GLIDE_START_MS);
-        this.glideShift = 0;
-        taskCx.notify();
-      });
-    }
-    this.lastSidebarHidden = sidebarHidden;
-  }
-
   glide(el, id) {
     return el.id(`${id}-g${this.glideGen ?? 0}`).relative().left(this.glideShift)
       .transition("left", { duration: SIDEBAR_GLIDE_MS, easing: "ease-out" });
   }
 
-  syncSidebarToggle(cx, sidebar, unified) {
+  syncSidebarToggle(cx, sidebar) {
     if (shared("left-sidebar.settingsPrior")) return;
     if (takeToggle(this, "wantToggle")) this.toggleSidebar(cx);
-    if (unified && !this.drawers.sidebar.busy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= DRAWER_MIN_OPEN_PX && this.drawers.sidebar.openPx !== sidebar.size.px) {
+    if (!this.drawers.sidebar.busy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= DRAWER_MIN_OPEN_PX && this.drawers.sidebar.openPx !== sidebar.size.px) {
       this.drawers.sidebar.openPx = sidebar.size.px;
       setShared("left-sidebar.openPx", this.drawers.sidebar.openPx);
     }
   }
 
-  syncPanelToggle(cx, panel, unified, zoom) {
+  syncPanelToggle(cx, panel, zoom) {
     if (takeToggle(this, "wantPanelToggle")) this.togglePanel(cx);
-    if (!unified || this.drawers.panel.busy) return;
+    if (this.drawers.panel.busy) return;
     this.rememberPanelWidth(panel);
     this.drawers.panel.clockPx = (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoom;
   }
@@ -1118,15 +1087,15 @@ export default class Tabs extends View {
     cx.notify();
   }
 
-  headerSurface(header, { unified, panel, zoomK }) {
+  headerSurface(header, { panel, zoomK }) {
     // `.titlebar`: 36px, border-bottom var(--border), background var(--card) #171717
     // (main.css:1072-1084). Tabs sit flush to each edge of that bar.
     // The Explorer / Source Control activity buttons are NOT here: Orca renders its activity
     // bar only inside the right sidebar (`right-sidebar-top-activity-bar.tsx:40`), which
     // `orca-panel-head` owns. Drawing them twice put two strip icons in the titlebar corner.
     return header
-      .when(unified, el => el.relative().child(div().id("panel-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.panel.clockPx ?? (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK).transition("width", { duration: 500, easing: "ease-in-out" })
-        .on_size_change((size, cx) => this.drawers.panel.size(size, cx, this.drawerEnv()))))
+      .relative().child(div().id("panel-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.panel.clockPx ?? (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.drawers.panel.size(size, cx, this.drawerEnv())))
       .on_mouse_move((e, cx) => {
         if (this.pressed !== null && this.stripBounds) {
           this.triggerSplit(this.stripBounds, e.position, cx);
@@ -1135,10 +1104,10 @@ export default class Tabs extends View {
       .on_mouse_up("left", (_e, cx) => this.releaseStrip(cx));
   }
 
-  sidebarClock(header, unified) {
+  sidebarClock(header) {
     return header
-      .when(unified && props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
-      .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.sidebar.clockPx).transition("width", { duration: 500, easing: "ease-in-out" })
+      .when(props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
+      .when(props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.sidebar.clockPx).transition("width", { duration: 500, easing: "ease-in-out" })
         .on_size_change((size, cx) => this.drawers.sidebar.size(size, cx, this.drawerEnv()))));
   }
 
@@ -1151,12 +1120,11 @@ export default class Tabs extends View {
       return this.renderDrop(cx);
     }
 
-    const unified = Boolean(p?.unified);
     const currentPage = find(layout(), "main")?.active;
     if (this.settingsPageRequest?.page === currentPage) this.settingsPageRequest = null;
     const requestedPage = this.settingsPageRequest?.page ?? currentPage;
-    this.syncSettingsSidebar(cx, requestedPage === "main-agents", unified);
-    if (requestedPage === "main-agents") this.closePanelForSettings(cx, unified);
+    this.syncSettingsSidebar(cx, requestedPage === "main-agents");
+    if (requestedPage === "main-agents") this.closePanelForSettings(cx);
     let frame;
     if (currentPage === "main-agents") {
       // The strip is not drawn here, so nothing would consume a sidebar or panel key pressed on this page;
@@ -1165,13 +1133,13 @@ export default class Tabs extends View {
     } else {
       if (currentPage) this.lastAppPage = currentPage;
       this.applyTabAction(cx);
-      frame = this.stripFrame(cx, unified);
+      frame = this.stripFrame(cx);
     }
     // The native clock is the first child of the same root on both pages.
     const base = h_flex().size_full().min_w(0);
     if (frame) base.pl(frame.leftPad).gap(0).items_center().bg(frame.bar);
-    const header = this.sidebarClock(base, unified);
-    if (!frame) return this.settingsHeader(header, unified);
+    const header = this.sidebarClock(base);
+    if (!frame) return this.settingsHeader(header);
     const row = addSidebarToggle(this.headerSurface(header, frame), this, frame);
     return addEndControls(addTabTrack(row, this, frame), this, frame);
   }
@@ -1183,11 +1151,10 @@ export default class Tabs extends View {
 
   // Agent Settings has no right sidebar. Called on every render while it is requested, so the `busy`
   // guard stops a second call from flipping the Drawer back open.
-  closePanelForSettings(cx, unified) {
+  closePanelForSettings(cx) {
     const panel = find(layout(), "panel");
     if (!panel || panel.hidden || this.drawers.panel.busy) return;
-    if (unified) this.togglePanelNative(cx);
-    else run("layout.hide", { id: "panel" });
+    this.togglePanelNative(cx);
   }
 
   selectRequestedSettingsPage() {
@@ -1197,13 +1164,13 @@ export default class Tabs extends View {
     run("layout.select", { stack: "main", child: request.page });
   }
 
-  syncSettingsSidebar(cx, open, unified) {
+  syncSettingsSidebar(cx, open) {
     const root = layout();
     const sidebar = find(root, "left-sidebar");
     const prior = shared("left-sidebar.settingsPrior");
     const drawer = this.drawers.sidebar;
     const wide = shared("left-sidebar.openPx") || drawer.openPx || drawer.defaultOpen;
-    const plan = settingsSidebarPlan({ open, unified, prior, sidebar, busy: drawer.busy, zoom: settings()?.zoom || 1, wide });
+    const plan = settingsSidebarPlan({ open, prior, sidebar, busy: drawer.busy, zoom: settings()?.zoom || 1, wide });
     if (!plan) {
       if (!drawer.busy) {
         if (open && prior && !sidebar?.hidden) this.showSettingsNav(false);
@@ -1268,9 +1235,9 @@ export default class Tabs extends View {
     run(show ? "layout.show" : "layout.hide", { id: nav.id });
   }
 
-  settingsHeader(header, unified) {
+  settingsHeader(header) {
     const t = theme();
-    const desiredLeft = this.settingsPillPosition(unified);
+    const desiredLeft = this.settingsPillPosition();
     const back = this.settingsBack(t);
     const w = appWindow() ?? this.windowState ?? {};
     return header.relative().items_center().justify_center().bg(t.surface)
@@ -1278,12 +1245,12 @@ export default class Tabs extends View {
       .when(w.platform && w.platform !== "macos", el => el.child(this.settingsWindowControls(w, t)));
   }
 
-  settingsPillPosition(unified) {
+  settingsPillPosition() {
     const root = layout();
-    const sidebar = find(root, "left-sidebar"), panel = find(root, "panel");
+    const panel = find(root, "panel");
     const zoom = settings()?.zoom || 1;
     const vp = typeof window !== "undefined" ? window.viewport_size() : null;
-    const left = unified ? 0 : this.settingsRailWidth(sidebar, 280, zoom);
+    const left = 0;
     const right = panel ? this.settingsRailWidth(panel, 350, zoom) : 0;
     // Balance the insets so the pill is centered in the window, not merely the strip.
     return settingsPillLeft(vp?.width, left, right, 112);
@@ -1329,10 +1296,10 @@ export default class Tabs extends View {
 
   // Everything one frame of the strip reads, in the order it has to be read: the layout is
   // measured, the toggles and the panel are synced against it, and the rest only derives.
-  stripFrame(cx, unified) {
+  stripFrame(cx) {
     const t = theme();
-    // `unified`: this block is the single header over the sidebar AND the work column
-    // (layouts/orca-unified.json); the sidebar there is `surface` too, so bar, sidebar and fillets match.
+    // This block is the single header over the sidebar AND the work column (layouts/orca.json); the
+    // sidebar is `surface` too, so bar, sidebar and fillets match.
     const bar = t.surface;
     const space = (spaces() ?? []).find(candidate => candidate.active);
     const shown = space?.tabs ?? [];
@@ -1343,33 +1310,32 @@ export default class Tabs extends View {
     const geometry = this.stripGeometry(shown);
     const root = layout();
     const sidebar = find(root, "left-sidebar");
-    if (unified) this.recoverMainWidth(root, cx);
+    this.recoverMainWidth(root, cx);
     const w = this.currentWindow();
-    this.updateGlide(unified, sidebar, w, cx);
-    const leftPad = trafficLightPadding(root, w, sidebar, unified);
+    const leftPad = trafficLightPadding(root, w);
     // Where the strip starts against the card's left edge (the sidebar's right edge): a first tab that
     // lands exactly on it is flush and needs no left flare; the further it sits, the more flare shows.
-    // In the old layout the strip starts on the card, so the gap is 0. The card's own rounded
+    // The card's own rounded
     // top-left corner is NOT drawn: this block cannot paint into the terminal block below it
     // (tried, clipped), and a static pane radius would leave a notch under a flush first tab.
     const zoomK = settings()?.zoom || 1;
     const toggleRightX = toggleLeft(w) + 36;
     const sbPx = scaledWidth(sidebar, 0, zoomK);
-    const gapToCard = unified ? Math.max(sbPx, toggleRightX) - sbPx : 0;
+    const gapToCard = Math.max(sbPx, toggleRightX) - sbPx;
     const flushable = (c, i) => c.active && i === 0 && !geometry.arrows.hasOverflow && this.scrollX <= 0;
     const panel = find(root, "panel");
-    this.syncChrome(cx, { space, sidebar, panel, body: find(root, "panel-body"), unified, zoomK });
-    return { t, bar, unified, sidebar, panel, zoomK, w, leftPad, paneDrag: shared("orca-tabs.pane-drag"),
+    this.syncChrome(cx, { space, sidebar, panel, body: find(root, "panel-body"), zoomK });
+    return { t, bar, sidebar, panel, zoomK, w, leftPad, paneDrag: shared("orca-tabs.pane-drag"),
       shown, space, geometry, tabPanes, unofficialPanes, gapToCard, flushable };
   }
 
   // The toggles, the open widths, the remembered panel and the landing page all follow the layout.
-  syncChrome(cx, { space, sidebar, panel, body, unified, zoomK }) {
-    this.syncSidebarToggle(cx, sidebar, unified);
-    this.syncPanelToggle(cx, panel, unified, zoomK);
+  syncChrome(cx, { space, sidebar, panel, body, zoomK }) {
+    this.syncSidebarToggle(cx, sidebar);
+    this.syncPanelToggle(cx, panel, zoomK);
     const enabled = [...(shared("workspace.panels") ?? ["files", "changes"])];
     this.syncPanel(space, panel, body, enabled);
     this.syncLanding(cx);
-    if (unified && !this.drawers.sidebar.busy) this.drawers.sidebar.clockPx = (sidebar?.hidden ? 1 : (sidebar?.size?.px ?? 259)) / zoomK;
+    if (!this.drawers.sidebar.busy) this.drawers.sidebar.clockPx = (sidebar?.hidden ? 1 : (sidebar?.size?.px ?? 259)) / zoomK;
   }
 }

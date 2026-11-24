@@ -272,7 +272,7 @@ test('render consumes prepared rows and sizes without traversing the catalog', t
   const metrics = {created:0};
   let suppliedSizes;
   const owner = candidate(t, {
-    metrics, console:{log() {}}, theme:()=>({}), props:()=>null, machines:()=>[],
+    metrics, console:{log() {}}, theme:()=>({}), props:()=>null, machines:()=>[], layout:()=>null, shared:()=>undefined,
     setShared() {}, focusRoot:(_owner, el)=>el, Scrollbar:{vertical:()=>element},
     native_div:()=>element, native_v_flex:()=>element,
     v_virtual_list:(_id,_count,sizes)=>{suppliedSizes=sizes;return element;},

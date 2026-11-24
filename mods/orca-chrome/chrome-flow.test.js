@@ -18,22 +18,12 @@ register("data:text/javascript," + encodeURIComponent(`
 
 const { default: Chrome } = await import("./main.js");
 
-test("titlebar chooses padding for the rail, traffic lights, fullscreen and non-mac windows", () => {
+test("the footer offers the model providers and never fades or slides with the left sidebar", () => {
   const view = new Chrome();
-  for (const [hidden, traffic_lights, win, padding] of [
-    [false, true, null, 75], [false, false, { platform: "macos", fullscreen: true }, 8],
-    [false, true, { platform: "linux" }, 10], [true, false, null, 6],
-  ]) {
-    globalThis.__herdrLayout = () => ({ traffic_lights, children: [{ id: "left-sidebar", hidden }] });
-    view.win = win;
-    assert.deepEqual(view.render().__node.c.find(([key]) => key === "pl"), ["pl", [padding]]);
-  }
-  globalThis.__herdrProps = () => ({ footer: true, unified: true });
   globalThis.__herdrShared = () => 350;
   globalThis.__herdrLayout = () => ({ children: [{ id: "left-sidebar", size: { px: 175 } }] });
   const frame = JSON.stringify(view.render().__node);
   assert.match(frame, /Model providers/);
-  // It sits in the status bar now, so narrowing the left sidebar must not fade or slide it.
   assert.doesNotMatch(frame, /"left",\[-/);
   assert.doesNotMatch(frame, /"opacity"/);
 });
@@ -48,7 +38,7 @@ function byId(node, id) {
 
 test("the Agents footer button is inverted only while the agent settings page is showing", () => {
   const view = new Chrome();
-  globalThis.__herdrProps = () => ({ footer: true, unified: true });
+  globalThis.__herdrProps = () => ({});
   globalThis.__herdrShared = () => 350;
   const agents = (page) => {
     globalThis.__herdrLayout = () => ({ children: [{ id: "main", active: page }] });
@@ -65,7 +55,7 @@ test("footer seeds the catalog model, then runs a requested task on the next tic
   const jobs = [], calls = [], files = new Map([["/home/tasks.json", null]]);
   files.set("/home/agent-config.json", JSON.stringify({ catalog: { codex: { models: [{ id: "small" }] } } }));
   globalThis.__herdrFiles = files;
-  globalThis.__herdrProps = () => ({ footer: true });
+  globalThis.__herdrProps = () => ({});
   globalThis.__herdrExec = (cmd, args) => { calls.push(cmd); return { stdout: "", stderr: "", code: 0 }; };
   let every;
   const pending = {};
@@ -88,7 +78,7 @@ async function startRunner({ text, exec, files = new Map(), resets = '{"claude":
   const published = request ? { "tasks.request": request } : {}, sets = [], notices = [], jobs = [], execs = [];
   files.set("/home/tasks.json", text);
   globalThis.__herdrFiles = files;
-  globalThis.__herdrProps = () => ({ footer: true });
+  globalThis.__herdrProps = () => ({});
   globalThis.__setShared = (key, value) => { sets.push(key); published[key] = value; };
   globalThis.__herdrShared = key => published[key];
   globalThis.__notify = notice => notices.push(notice);

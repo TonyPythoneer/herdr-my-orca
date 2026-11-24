@@ -147,7 +147,7 @@ def select(root, files, changed, force=False):
             if path == "mods/orca-spaces/worktree-plan.js":
                 projection_bench = True
             reasons[path] = "mod implementation or fixture"
-        elif path in ("layouts/orca.json", "layouts/orca-unified.json"):
+        elif path == "layouts/orca.json":
             config = True
             selected.update(p for p in tests if p.startswith(("mods/", "orca-ui/features/")) or p == "scripts/layout.test.js")
             page_keys.update((l, s, p) for l, s, p, _ in layouts if l == Path(path).stem)

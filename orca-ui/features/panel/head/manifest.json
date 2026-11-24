@@ -25,9 +25,6 @@
   "layoutSlots": {
     "orca": [
       "panel-head"
-    ],
-    "orca-unified": [
-      "panel-head"
     ]
   },
   "keys": [

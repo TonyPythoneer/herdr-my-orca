@@ -74,7 +74,8 @@ function setup(t, o = {}) {
     openOverlay: (spec) => { w.log.push(["openOverlay", spec]); return "overlay-1"; },
     setShared: (key, value) => {
       const copy = value == null ? null : structuredClone(value);
-      w.log.push(["setShared", key, copy]);
+      // Every settled render republishes the open widths; only the test that is about them logs them.
+      if (o.logOpenPx || !key.endsWith(".openPx")) w.log.push(["setShared", key, copy]);
       w.shared[key] = copy ?? undefined;
     },
   };
@@ -135,17 +136,13 @@ const notified = (w, label) => w.log.filter(([kind, who]) => kind === "notify" &
 const viewport = () => { globalThis.window = { viewport_size: () => ({ width: 1200, height: 800 }), mouse_position: () => globalThis.window.at }; };
 const traces = (w, name) => [...w.files].filter(([path]) => path.endsWith(`-${name}.json`)).map(([, text]) => JSON.parse(text).detail);
 
-test("commands open a tab in the active space and unified toggles are counted for the render", async (t) => {
-  const w = setup(t, { props: { unified: true }, commands: ["new-tab", "toggle-sidebar", "toggle-panel", "toggle-sidebar", "other"] });
+test("commands open a tab in the active space and the toggles are counted for the render", async (t) => {
+  const w = setup(t, { commands: ["new-tab", "toggle-sidebar", "toggle-panel", "toggle-sidebar", "other"] });
   await assert.rejects(w.loop.fn(w.hcx), (error) => error === END);
   assert.deepEqual(w.runLog(), [["tab.new", { space: "s1", folder: "/proj" }]]);
   assert.equal(w.view.wantToggle, 2);
   assert.equal(w.view.wantPanelToggle, 1);
   assert.equal(notified(w, "handler"), 3);
-  const plain = setup(t, { commands: ["toggle-sidebar", "toggle-panel"] });
-  await assert.rejects(plain.loop.fn(plain.hcx), (error) => error === END);
-  assert.equal(plain.view.wantToggle, undefined);
-  assert.equal(notified(plain, "handler"), 0);
 });
 
 test("the window is read again until it is published, then cached and repainted", async (t) => {
@@ -641,14 +638,15 @@ test("the header's buttons act on the sidebar, the panel, the new-tab menu and t
   const w = setup(t, { window: { platform: "linux" }, spaces: [{ id: "s1", active: true, tabs: [tab("a", { active: true, zoomed: true })] }], panes: [pane("p1", "a", { zoomed: true })],
     layout: { children: [{ id: "left-sidebar", size: { px: 259 }, hidden: true }, { id: "panel", size: { px: 350 }, hidden: true }, { id: "main", active: "main-terminals" }] } });
   const click = (id, e = {}) => handler(byId(w.render(), id), "on_click")(e, w.hcx);
-  assert.equal(byId(w.render(), "sidebar-toggle") !== undefined, true, "a visible sidebar draws its own toggle, so this one only shows while hidden");
+  assert.equal(byId(w.render(), "sidebar-toggle") !== undefined, true, "the header always draws the sidebar toggle");
   w.log.length = 0;
   click("sidebar-toggle");
-  assert.deepEqual(w.log.filter(([kind]) => kind !== "notify" && kind !== "storage"), [["setShared", "left-sidebar.collapsed", false], ["run", "layout.show", { id: "left-sidebar" }]]);
-  w.layout.children[0].hidden = true;
+  assert.equal(w.view.wantToggle, 1, "a press is only counted; the next render runs the drawer");
+  assert.deepEqual(w.runLog(), []);
   w.log.length = 0;
   click("panel-toggle");
-  assert.deepEqual(w.runLog(), [["layout.toggle", { id: "panel" }]]);
+  assert.equal(w.view.wantPanelToggle, 1);
+  assert.deepEqual(w.runLog(), []);
   w.log.length = 0;
   click("titlebar-collapse");
   assert.deepEqual(w.runLog(), [["pane.zoom", { pane: "p1" }]]);
@@ -675,8 +673,8 @@ test("the header's buttons act on the sidebar, the panel, the new-tab menu and t
   assert.ok(byId(w.render(), "maximize"));
 });
 
-test("unified toggles only count a press, and the next render consumes it with a live context", (t) => {
-  const w = setup(t, { props: { unified: true }, window: { platform: "macos" } });
+test("toggles only count a press, and the next render consumes it with a live context", (t) => {
+  const w = setup(t, { window: { platform: "macos" } });
   const tree = w.render();
   w.log.length = 0;
   handler(byId(tree, "sidebar-toggle"), "on_click")({}, w.hcx);
@@ -702,12 +700,8 @@ test("unified toggles only count a press, and the next render consumes it with a
   assert.equal(w.tasks.length, 0, "an even count cancels out");
 });
 
-test("a plain toggle uses layout.toggle and unified toggles run the drawers", async (t) => {
-  const plain = setup(t);
-  plain.view.toggleSidebar(plain.cx);
-  plain.view.togglePanel(plain.cx);
-  assert.deepEqual(plain.runLog(), [["layout.toggle", { id: "left-sidebar" }], ["layout.toggle", { id: "panel" }]]);
-  const native = setup(t, { props: { unified: true, motion: "native" } });
+test("the toggles run the drawers", async (t) => {
+  const native = setup(t, { props: { motion: "native" } });
   native.view.toggleSidebar(native.cx);
   native.view.togglePanel(native.cx);
   assert.equal(native.tasks.length, 2, "one task per drawer");
@@ -715,8 +709,8 @@ test("a plain toggle uses layout.toggle and unified toggles run the drawers", as
   assert.equal(native.view.drawers.panel.busy, true);
 });
 
-test("the unified smooth collapse steps the sidebar down, hides it and publishes", async (t) => {
-  const w = setup(t, { props: { unified: true } });
+test("the smooth collapse steps the sidebar down, hides it and publishes", async (t) => {
+  const w = setup(t);
   w.view.toggleSidebar(w.cx);
   assert.equal(w.view.drawers.sidebar.busy, true);
   assert.equal(w.view.drawers.sidebar.goal, 0);
@@ -739,7 +733,7 @@ test("the unified smooth collapse steps the sidebar down, hides it and publishes
 });
 
 test("a second sidebar press reverses the motion and a stale task stops quietly", async (t) => {
-  const w = setup(t, { props: { unified: true, motion: "layout", measureSidebar: true } });
+  const w = setup(t, { props: { motion: "layout", measureSidebar: true } });
   w.view.toggleSidebar(w.cx);
   w.view.toggleSidebar(w.cx);
   assert.equal(w.view.drawers.sidebar.goal, 1, "reversing from the collapse");
@@ -754,7 +748,7 @@ test("a second sidebar press reverses the motion and a stale task stops quietly"
 });
 
 test("a press during a late hide keeps the sidebar shown", async (t) => {
-  const w = setup(t, { props: { unified: true }, layout: { children: [{ id: "left-sidebar", size: { px: 100 }, hidden: true }] } });
+  const w = setup(t, { layout: { children: [{ id: "left-sidebar", size: { px: 100 }, hidden: true }] } });
   w.view.toggleSidebar(w.cx);
   await w.runTasks();
   assert.deepEqual(w.runLog().slice(0, 3), [["layout.resize", { id: "left-sidebar", px: 1 }], ["layout.show", { id: "left-sidebar" }], ["layout.resize", { id: "left-sidebar", px: 1 }]]);
@@ -762,7 +756,7 @@ test("a press during a late hide keeps the sidebar shown", async (t) => {
 });
 
 test("the native pin is released only when no drawer is moving", (t) => {
-  const w = setup(t, { props: { unified: true } });
+  const w = setup(t);
   w.view.nativePinned = true;
   w.view.drawers.panel.busy = true;
   w.view.releaseNativePin();
@@ -837,25 +831,8 @@ test("the landing page shows exactly when the active space has no tab", (t) => {
   assert.deepEqual(bare.calls("layout.select"), [{ stack: "main", child: "main-terminals" }], "no layout node counts as none selected");
 });
 
-test("a sidebar that hides or shows glides the strip home and repaints after the glide", async (t) => {
-  const w = setup(t, { window: { platform: "macos", fullscreen: false } });
-  const ids = () => nodes(w.render()).flatMap((n) => n.c.filter(([key]) => key === "id").map(([, args]) => args[0])).filter((id) => id?.includes("-g"));
-  assert.deepEqual(ids().slice(0, 1), ["tab-viewport-g0"]);
-  w.layout.children[0].hidden = true;
-  w.log.length = 0;
-  const tree = w.render();
-  assert.deepEqual(ids().slice(0, 1), ["tab-viewport-g1"]);
-  assert.equal(w.view.glideGen, 1);
-  assert.equal(w.view.glideShift, 259 - 111);
-  assert.equal(w.tasks.length, 1);
-  await w.runTasks();
-  assert.equal(w.view.glideShift, 0);
-  assert.equal(notified(w, "handler"), 1);
-  assert.ok(tree);
-});
-
-test("a render with unified chrome and an idle layout resets the terminal width once", async (t) => {
-  const w = setup(t, { props: { unified: true } });
+test("a render with an idle layout resets the terminal width once", async (t) => {
+  const w = setup(t);
   w.log.length = 0;
   w.render();
   w.render();
@@ -868,7 +845,7 @@ test("a render with unified chrome and an idle layout resets the terminal width 
   w.render();
   assert.equal(w.tasks.length, 0);
   // Open widths are published once, and only for a settled drawer.
-  const open = setup(t, { props: { unified: true }, layout: { children: [{ id: "left-sidebar", size: { px: 300 } }, { id: "panel", size: { px: 410 } }] } });
+  const open = setup(t, { logOpenPx: true, layout: { children: [{ id: "left-sidebar", size: { px: 300 } }, { id: "panel", size: { px: 410 } }] } });
   open.render();
   open.render();
   assert.deepEqual(open.log.filter(([kind, key]) => kind === "setShared" && key.endsWith(".openPx")), [["setShared", "left-sidebar.openPx", 300], ["setShared", "panel.openPx", 410], ["setShared", "panel.openPx", 410]]);

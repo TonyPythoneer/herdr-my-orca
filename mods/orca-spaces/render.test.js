@@ -100,11 +100,9 @@ function headerCases() {
     menu: [{ menuKey: gitFor(w).repo }, rowOf(gitFor(w))],
     remote: [{}, { w: { ...w, machine: 'remote' }, g: gitFor({ ...w, machine: 'remote' }, { owner: null }), count: 1 }],
   };
-  for (const unified of [false, true]) {
-    for (const [name, [state, row]] of Object.entries(variants)) {
-      const { view } = liveView({ props: { unified }, spaces: [w], state: { plan: grouped, ...state } });
-      out[`header-${unified}-${name}`] = rec(view.header(row, palette, []));
-    }
+  for (const [name, [state, row]] of Object.entries(variants)) {
+    const { view } = liveView({ spaces: [w], state: { plan: grouped, ...state } });
+    out[`header-${name}`] = rec(view.header(row, palette, []));
   }
   const keyboard = { shared: { 't3-focus': 'me' }, spaces: [w], state: { plan: grouped } };
   const { view } = liveView(keyboard);
@@ -159,22 +157,20 @@ function bodyCases() {
   const gitCache = { [where(a)]: gitFor(a, { repo: JSON.stringify([null, '/repo/.git']), top: '/repo' }), [where(b)]: gitFor(b, { top: '/repo-wt', linked: true, branch: 'wt' }), [where(c)]: null };
   const storage = (extra = {}) => ({ 'git.cache.v2': JSON.stringify(gitCache), ...extra });
   const base = { spaces, machines: [{ name: 'remote', layout: 'ready' }] };
-  for (const unified of [false, true]) {
-    for (const [name, env] of Object.entries({
-      loaded: { storage: storage() },
-      loading: { storage: storage(), state: { loaded: false } },
-      refreshing: { storage: storage(), state: { refreshingAll: true, listHover: true } },
-      empty: { storage: {}, spaces: [], machines: [], state: { loaded: true } },
-      saved: { storage: storage({ 'projects.saved.v1': JSON.stringify(['/a/deep', '/saved/one', '/gone']) }), state: { missingFolders: new Set(['/gone']) } },
-      shared: { storage: storage(), shared: { 'spaces.unread.v1': ['a'], 'space.colors': {}, 'projects.count': 1, 'projects.allCollapsed': true } },
-      collapsed: { storage: storage({ 'repos.folded': JSON.stringify([gitFor(a).repo]) }) },
-      ungrouped: { storage: storage({ 'workspace.options.v1': JSON.stringify({ groupBy: 'workspace-status' }) }) },
-      narrow: { storage: storage(), shared: { 'left-sidebar.openPx': 240 }, layout: { id: 'left-sidebar', size: { px: 100 } } },
-      newMenu: { storage: storage(), props: { newMenu: true } },
-    })) {
-      const { view, cx } = liveView({ ...base, ...env, props: { unified, ...env.props }, state: { loaded: true, ...env.state } });
-      out[`body-${unified}-${name}`] = rec(view.render(cx));
-    }
+  for (const [name, env] of Object.entries({
+    loaded: { storage: storage() },
+    loading: { storage: storage(), state: { loaded: false } },
+    refreshing: { storage: storage(), state: { refreshingAll: true, listHover: true } },
+    empty: { storage: {}, spaces: [], machines: [], state: { loaded: true } },
+    saved: { storage: storage({ 'projects.saved.v1': JSON.stringify(['/a/deep', '/saved/one', '/gone']) }), state: { missingFolders: new Set(['/gone']) } },
+    shared: { storage: storage(), shared: { 'spaces.unread.v1': ['a'], 'space.colors': {}, 'projects.count': 1, 'projects.allCollapsed': true } },
+    collapsed: { storage: storage({ 'repos.folded': JSON.stringify([gitFor(a).repo]) }) },
+    ungrouped: { storage: storage({ 'workspace.options.v1': JSON.stringify({ groupBy: 'workspace-status' }) }) },
+    narrow: { storage: storage(), shared: { 'left-sidebar.openPx': 240 }, layout: { id: 'left-sidebar', size: { px: 100 } } },
+    newMenu: { storage: storage(), props: { newMenu: true } },
+  })) {
+    const { view, cx } = liveView({ ...base, ...env, props: { ...env.props }, state: { loaded: true, ...env.state } });
+    out[`body-${name}`] = rec(view.render(cx));
   }
   return out;
 }
@@ -182,7 +178,7 @@ function bodyCases() {
 test('the header, machine, status, badge and body views render as recorded', () => {
   const out = digests({ ...headerCases(), ...machineCases(), ...bodyCases() });
   assert.deepEqual(out, JSON.parse(readFileSync(GOLDEN, 'utf8')));
-  assert.ok(new Set(Object.values(out)).size >= 45);
+  assert.ok(new Set(Object.values(out)).size >= 25);
 });
 
 test('a folderless workspace does not hide saved projects or crash the sidebar', () => {

@@ -132,18 +132,15 @@ test("entering agent settings closes a visible right panel once, and only when i
   const panel = (hidden) => globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px: 350 }, hidden }] });
   try {
     panel(false);
-    tabs.closePanelForSettings(cx, true);
-    tabs.closePanelForSettings(cx, true); // a repeat render while the Drawer moves must not flip it back
+    tabs.closePanelForSettings(cx);
+    tabs.closePanelForSettings(cx); // a repeat render while the Drawer moves must not flip it back
     assert.equal(tasks.length, 1);
     assert.equal(tabs.drawers.panel.goal, 0, "the drawer is heading closed");
     panel(true);
     Object.assign(tabs.drawers.panel, { busy: false });
-    tabs.closePanelForSettings(cx, true);
+    tabs.closePanelForSettings(cx);
     assert.equal(tasks.length, 1, "a hidden panel is left alone");
-    panel(false);
-    Object.assign(tabs.drawers.panel, { busy: false });
-    tabs.closePanelForSettings(cx, false);
-    assert.deepEqual(calls, [["layout.hide", { id: "panel" }]]);
+    assert.deepEqual(calls, []);
   } finally {
     delete globalThis.__herdrRun; delete globalThis.__herdrLayout;
   }

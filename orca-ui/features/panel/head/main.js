@@ -127,7 +127,7 @@ function collapseButton(t) {
     .text_color(t.muted).hover(s => s.bg(tint(t.foreground, TINT_ACTIVE)).text_color(t.foreground))
     .role("button").accessibility_label("Collapse right sidebar").tooltip("Collapse right sidebar")
     .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation())
-    .on_click(() => props()?.unified ? run("orca-tabs.toggle-panel") : run("layout.toggle", { id: "panel" }))
+    .on_click(() => run("orca-tabs.toggle-panel"))
     .child(svg("mods/orca-panel-head/panel-right-close.svg").size(16));
 }
 

@@ -258,7 +258,6 @@ test("render output for each state matches the golden record", async () => {
     folderFilesActive: { answers: [NOT_REPO], active: "files" },
     folderWorkspacesActive: { answers: [NOT_REPO], active: "workspaces" },
     repoChangesActive: { answers: [REPO], active: "changes" },
-    unifiedToggle: { answers: [REPO], active: "files", props: { unified: true } },
   };
   for (const [name, state] of Object.entries(states)) {
     resetProbe();
