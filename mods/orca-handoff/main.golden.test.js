@@ -55,7 +55,11 @@ const plain = (value) => JSON.parse(JSON.stringify(value ?? null));
 const settle = async () => { for (let i = 0; i < 30; i++) await new Promise((resolve) => setImmediate(resolve)); };
 
 const TRANSCRIPT = "\u001b[31mhello\u001b[0m\nworld ".repeat(3);
-function setup({ props = {}, panes, agents, hcResult, git = {}, spaces = [{ active: true, id: "s" }] } = {}) {
+const DEFAULT_INVENTORY = [
+  ["claude", "Claude Code", "claude"], ["opencode", "OpenCode", "opencode"], ["codex", "Codex", "codex"], ["pi", "Pi", "pi"],
+  ["gemini", "Gemini", "gemini"], ["agy", "Antigravity", "agy"], ["cursor", "Cursor Agent", "cursor-agent"], ["aider", "Aider", "aider"]
+].map(([key, name, cmd]) => ({ key, name, run: [cmd], installed: true }));
+function setup({ props = {}, panes, agents, hcResult, git = {}, spaces = [{ active: true, id: "s" }], inventory = DEFAULT_INVENTORY } = {}) {
   const log = { exec: [], runs: [], closed: [], copies: [], timers: [], hc: [] };
   const state = { props: { overlay: "ov", action: "handoff", terminal: "term1", pane: "p1", ...props } };
   const scope = {
@@ -63,6 +67,7 @@ function setup({ props = {}, panes, agents, hcResult, git = {}, spaces = [{ acti
     run: (name, args) => log.runs.push([name, cleanse(args)]), props: () => state.props, closeOverlay: (id) => log.closed.push(id), theme: () => theme,
     panes: () => panes ?? [{ pane: "p1", terminal: "term1", cwd: "/repo", title: "My Terminal" }], spaces: () => spaces,
     agents: () => agents ?? [{ address: "term1", app: "Codex" }],
+    knownAgents: async (opts) => { log.inventory = opts; if (inventory === "reject") throw Error("offline"); return inventory; },
     hc: async (args) => { log.hc.push(args); if (hcResult === "reject") throw new Error("hc gone"); return hcResult ?? { code: 0, stdout: TRANSCRIPT }; },
     exec: async (cmd, args, opts) => {
       log.exec.push([cmd, args, opts]);
@@ -167,4 +172,28 @@ test("handoff dialog behaves as recorded: renders, handlers and flows", async ()
   for (const [group, entries] of Object.entries(out)) for (const [name, value] of Object.entries(entries)) digest[`${group}/${name}`] = createHash("sha256").update(JSON.stringify(value)).digest("hex");
   if (!existsSync(GOLDEN)) writeFileSync(GOLDEN, JSON.stringify(digest, null, 1) + "\n");
   assert.deepStrictEqual(digest, JSON.parse(readFileSync(GOLDEN, "utf8")));
+});
+
+test("handoff uses Herdr's installed catalog and configured argv, not hardcoded commands", async () => {
+  const env = await opened({
+    panes: [{ pane: "p1", tab: "t", terminal: "term1", cwd: "/repo" }],
+    spaces: [{ id: "s", machine: "remote", tabs: [{ id: "t" }] }],
+    inventory: [
+      { key: "custom", name: "Custom Agent", run: ["custom", "--flag"], installed: true },
+      { key: "claude", name: "Claude", run: ["claude"], installed: false }
+    ]
+  });
+  assert.deepEqual(plain(env.log.inventory), { on: "remote" });
+  const tree = JSON.stringify(env.view.render(env.cx).__rec);
+  assert.match(tree, /agent-opt-custom/);
+  assert.doesNotMatch(tree, /agent-opt-claude/);
+  await env.view.executeHandoff(env.cx);
+  assert.deepEqual(plain(env.log.runs[0][1].argv), ["custom", "--flag"]);
+  const empty = await opened({ inventory: [] });
+  await empty.view.executeHandoff(empty.cx);
+  assert.deepEqual(empty.log.runs, []);
+  assert.match(empty.view.statusMessage, /No installed/);
+  const failed = await opened({ inventory: "reject" });
+  assert.match(failed.view.statusMessage, /discovery unavailable/);
+  assert.match(JSON.stringify(failed.view.render(failed.cx).__rec), /agent-opt-claude/);
 });
