@@ -58,6 +58,12 @@ class ImpactTest(unittest.TestCase):
         p = self.plan("layouts/orca.json")
         self.assertTrue(all(row["layout"] == "orca" for row in p["native_matrix"]["include"]))
 
+    def test_shared_static_assets(self):
+        p = self.plan("mods/orca-assets/refresh-cw.svg")
+        self.assertEqual(p["direct_mods"], ["orca-agent-manager", "orca-files", "orca-status"])
+        self.assertFalse(p["full"])
+        self.assertIn("scripts/shared-config-assets.test.mjs", [f for row in p["test_matrix"]["include"] for f in row["files"]])
+
     def test_shared(self):
         p = self.plan("orca-ui/shared/panel-motion.js")
         self.assertIn("orca-files", p["native_mods"])

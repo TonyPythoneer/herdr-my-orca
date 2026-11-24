@@ -67,6 +67,13 @@
         "mods/agent-config/agent-config-view.js",
         "mods/orca-agent-manager/agent-config-view.js"
       ]
+    },
+    {
+      "source": "orca-ui/shared/ui-settings.js",
+      "outputs": [
+        "mods/orca-files/ui-settings.js",
+        "mods/orca-status/ui-settings.js"
+      ]
     }
   ]
 }

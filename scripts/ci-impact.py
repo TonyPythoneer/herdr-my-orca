@@ -89,6 +89,8 @@ def select(root, files, changed, force=False):
     mods = {module(p) for p in files if p.endswith("/mod.json") and module(p)}
     layouts = routes(root)
     shared = shared_outputs(root)
+    asset_manifest = root / "mods/orca-assets/resources.json"
+    assets = json.loads(asset_manifest.read_text()) if asset_manifest.exists() else {}
     direct, affected, selected, lint, page_keys, reasons = set(), set(), set(), set(), set(), {}
     full = force
     all_native = force
@@ -123,6 +125,11 @@ def select(root, files, changed, force=False):
                 all_native = True
                 selected.update(p for p in tests if p.startswith("scripts/benchmark-"))
             reasons[path] = "benchmark harness"
+        elif path in assets:
+            direct.update(assets[path])
+            selected.add("scripts/shared-config-assets.test.mjs")
+            config = True
+            reasons[path] = "static config resource consumers"
         elif path in shared:
             direct.update(shared[path])
             config = True

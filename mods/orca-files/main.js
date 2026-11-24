@@ -13,6 +13,7 @@ import { resolveTreeKey } from "./tree-nav.js";
 import { splitGlobs, searchResults } from "./text-search.js";
 import { parseStatus } from "./git-status.js";
 import { panelFrame } from "./panel-motion.js";
+import { SPIN_PERIOD_MS } from "./ui-settings.js";
 
 const plat = () => (typeof window === "function" ? window()?.platform : null);
 // The entry of `table` for the host platform, or `fallback`.
@@ -65,7 +66,7 @@ const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", 
 const PER_FOLDER = 500, TOTAL = 5000;
 const REFRESH_INTERVAL_MS = 10000, SEARCH_DEBOUNCE_MS = 200, AUTOSAVE_DELAY_MS = 800;
 const MAX_LISTED_PATHS = 20001, MAX_NAME_QUERY_LENGTH = 2048, MAX_TREE_DEPTH = 40;
-const MAX_PREVIEW_CHARS = 400000, SPIN_PERIOD_MS = 1000;
+const MAX_PREVIEW_CHARS = 400000;
 
 // Orca mixes the accent at 70%/80% and uses `bg-input/50` (FileExplorerNameFilter.tsx:23,
 // main.css:1453-1471). Herdr stores colors as `#rrggbb[aa]`, so scale the alpha.
@@ -1134,7 +1135,7 @@ export default class Files extends View {
       // :107-144 — Refresh Explorer; Loader2-style spinner while `refresh.isRefreshing`,
       // disabled outside the files view (`aria-disabled={!canRefresh || refresh.isRefreshing}`).
       .child(btn("files-refresh", "Refresh Explorer",
-        this.loading ? svg("mods/orca-files/refresh-cw.svg").size(12).flex_none().spin(SPIN_PERIOD_MS) : svg("mods/orca-files/refresh-cw.svg").size(12).flex_none(),
+        this.loading ? svg("mods/orca-assets/refresh-cw.svg").size(12).flex_none().spin(SPIN_PERIOD_MS) : svg("mods/orca-assets/refresh-cw.svg").size(12).flex_none(),
         (_e, cx) => this.refresh(cx), files && !this.loading))
       // :145-198 — More Explorer Actions; the dropdown opens at the pointer.
       .child(btn("files-more", "More Explorer Actions", svg("mods/orca-files/ellipsis.svg").size(12).flex_none(),
