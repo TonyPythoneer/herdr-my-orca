@@ -1,7 +1,7 @@
 // The Agents page: its header, the all-agents permission card and the catalog sections. Each
 // builder takes the page (`owner`) and reads its state; the page's logic stays in main.js.
 import { div, svg } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
+import { Button, v_flex, h_flex } from "gpui-base";
 import { PERMISSION_LABELS } from "./permissions.js";
 import { defaultPermissionItems, permissionSelect } from "./permission-menu.js";
 import { permissionSummary } from "./permission-plan.js";
@@ -127,8 +127,8 @@ function permissionNoticeRow(owner, t) {
 
 function refreshButton(owner, t) {
   const busy = owner.refreshing;
-  return h_flex()
-    .id("am-refresh")
+  return Button.new("am-refresh")
+    .disabled(Boolean(busy))
     .h(30)
     .px(10)
     .gap(6)

@@ -378,3 +378,15 @@ test("agent-manager actions use native accessible buttons and disabled controls 
   press(handler("on_click", "active"), {}, cx);
   assert.deepEqual(clicks, [[{}, cx]]);
 });
+
+test("provider and refresh controls are native buttons; busy refresh cannot activate", (t) => {
+  const { page, cx } = harness(t);
+  page.refreshing = true;
+  const busy = JSON.stringify(draw(page, cx));
+  assert.match(busy, /"n":"Button.new","a":\["am-refresh"\],"c":\[\["disabled",\[true\]\]/);
+  assert.ok(!globalThis.__herdrHandlers.some(entry => entry.key === "on_click" && entry.rec.a[0] === "am-refresh"));
+  const providers = harness(t, { page: "providers" });
+  assert.match(JSON.stringify(draw(providers.page, providers.cx)), /"n":"Button.new","a":\["am-provider-add"\]/);
+  providers.page.adding = cardOf(null, { host: "http://127.0.0.1:8000/v1" }, { open: true });
+  assert.match(JSON.stringify(draw(providers.page, providers.cx)), /"n":"Button.new","a":\["am-key-eye-new"\]/);
+});
