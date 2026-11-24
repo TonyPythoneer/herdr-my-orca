@@ -214,13 +214,15 @@
      [
       [
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-files"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-files"
+           true
           ]
          ],
          [
@@ -326,13 +328,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-vault"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-vault"
+           false
           ]
          ],
          [
@@ -453,13 +457,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-workspaces"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-workspaces"
+           false
           ]
          ],
          [
@@ -580,13 +586,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-pr-checks"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-pr-checks"
+           false
           ]
          ],
          [
@@ -707,13 +715,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-ports"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-ports"
+           false
           ]
          ],
          [
@@ -834,13 +844,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-skillshare"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-skillshare"
+           false
           ]
          ],
          [
@@ -982,15 +994,11 @@
      "child",
      [
       {
-       "n": "div",
-       "a": [],
+       "n": "Button.new",
+       "a": [
+        "panel-toggle"
+       ],
        "c": [
-        [
-         "id",
-         [
-          "panel-toggle"
-         ]
-        ],
         [
          "mr",
          [
@@ -1159,13 +1167,15 @@
      [
       [
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-files"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-files"
+           false
           ]
          ],
          [
@@ -1286,13 +1296,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-vault"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-vault"
+           false
           ]
          ],
          [
@@ -1413,13 +1425,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-workspaces"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-workspaces"
+           true
           ]
          ],
          [
@@ -1525,13 +1539,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-pr-checks"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-pr-checks"
+           false
           ]
          ],
          [
@@ -1652,13 +1668,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-ports"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-ports"
+           false
           ]
          ],
          [
@@ -1779,13 +1797,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-skillshare"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-skillshare"
+           false
           ]
          ],
          [
@@ -1927,15 +1947,11 @@
      "child",
      [
       {
-       "n": "div",
-       "a": [],
+       "n": "Button.new",
+       "a": [
+        "panel-toggle"
+       ],
        "c": [
-        [
-         "id",
-         [
-          "panel-toggle"
-         ]
-        ],
         [
          "mr",
          [
@@ -2104,13 +2120,15 @@
      [
       [
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-files"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-files"
+           false
           ]
          ],
          [
@@ -2231,13 +2249,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-vault"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-vault"
+           false
           ]
          ],
          [
@@ -2358,13 +2378,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-changes"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-changes"
+           true
           ]
          ],
          [
@@ -2470,13 +2492,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-checks"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-checks"
+           false
           ]
          ],
          [
@@ -2597,13 +2621,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-ports"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-ports"
+           false
           ]
          ],
          [
@@ -2724,13 +2750,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-skillshare"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-skillshare"
+           false
           ]
          ],
          [
@@ -2872,15 +2900,11 @@
      "child",
      [
       {
-       "n": "div",
-       "a": [],
+       "n": "Button.new",
+       "a": [
+        "panel-toggle"
+       ],
        "c": [
-        [
-         "id",
-         [
-          "panel-toggle"
-         ]
-        ],
         [
          "mr",
          [
@@ -3049,13 +3073,15 @@
      [
       [
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-files"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-files"
+           true
           ]
          ],
          [
@@ -3161,13 +3187,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-vault"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-vault"
+           false
           ]
          ],
          [
@@ -3288,13 +3316,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-changes"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-changes"
+           false
           ]
          ],
          [
@@ -3415,13 +3445,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-checks"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-checks"
+           false
           ]
          ],
          [
@@ -3542,13 +3574,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-ports"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-ports"
+           false
           ]
          ],
          [
@@ -3669,13 +3703,15 @@
         ]
        },
        {
-        "n": "div",
-        "a": [],
+        "n": "Button.new",
+        "a": [
+         "panel-skillshare"
+        ],
         "c": [
          [
-          "id",
+          "selected",
           [
-           "panel-skillshare"
+           false
           ]
          ],
          [
@@ -3817,15 +3853,11 @@
      "child",
      [
       {
-       "n": "div",
-       "a": [],
+       "n": "Button.new",
+       "a": [
+        "panel-toggle"
+       ],
        "c": [
-        [
-         "id",
-         [
-          "panel-toggle"
-         ]
-        ],
         [
          "mr",
          [

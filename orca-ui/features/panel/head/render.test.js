@@ -62,7 +62,7 @@ function arrange({ spaces = [], panes = [], focused, active = "files", answers =
 
 const view = () => Object.create(PanelHead.prototype);
 const rec = (node) => JSON.parse(JSON.stringify(node.__node));
-const toolIds = (node) => rec(node).c.find(([key]) => key === "children")[1][0].map((child) => child.c.find(([key]) => key === "id")[1][0].replace(/^panel-/, ""));
+const toolIds = (node) => rec(node).c.find(([key]) => key === "children")[1][0].map((child) => child.a[0].replace(/^panel-/, ""));
 
 // Renders once and runs the probe, so the second render sees the resolved git state.
 async function settle(cx) {
@@ -284,4 +284,17 @@ test("the command bridge runs a view's commands and repaints, and ignores unknow
   ]);
   assert.equal(cx.notified, 3, "an unknown view still repaints; an empty command does not");
   delete globalThis.__herdrNextCommand;
+});
+
+test("panel tools use native accessible buttons and report their selected state", async () => {
+  resetProbe();
+  arrange({ active: "changes", spaces: [folderOf("s1", "/proj")], answers: [REPO] });
+  const v = await settle(makeCx());
+  const root = rec(v.render(makeCx()));
+  const buttons = root.c.find(([key]) => key === "children")[1][0];
+  assert.ok(buttons.every(button => button.n === "Button.new"));
+  const selected = buttons.filter(button => button.c.some(([key, args]) => key === "selected" && args[0]));
+  assert.deepEqual(selected.map(button => button.a[0]), ["panel-changes"]);
+  assert.ok(buttons.every(button => button.c.some(([key]) => key === "on_click")));
+  assert.ok(root.c.some(([key, args]) => key === "child" && args[0]?.n === "Button.new" && args[0].a[0] === "panel-toggle"));
 });
