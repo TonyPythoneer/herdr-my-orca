@@ -17,3 +17,6 @@ Scope: both layouts, landing, workspace, tabs, split panes, sidebars, panel view
 
 ## Startup fixture
 The runner seeds Herdr's own `shared.json` with `frame.welcomed: true` and the Orca layout, as previously demonstrated by the native isolated probe recorded on main. Release notes are marked presented for the detected app version; a remaining startup overlay gets one bounded relaunch. The capture fails if the configured native window remains obstructed. No coordinate guesses, no product source changes.
+
+## Deployment evidence and popup hygiene
+The first unseeded launch is captured separately if it has a startup overlay or the default layout. The observer exits, restores the exact tracked main files, applies the proven onboarding state, and relaunches. Every tracked layout, mod, theme and configuration file is checked by SHA-256 after native launch; the artifact includes deployment.json. The configured UI must be Orca without any blocking overlay. Named menus use the native documented mod.open toggle, and expected overlay transitions are asserted. The synthetic tasks fixture disables scheduled agent invocations without changing tracked product files. Toasts are not classified as modal overlays; visual review can still identify them.

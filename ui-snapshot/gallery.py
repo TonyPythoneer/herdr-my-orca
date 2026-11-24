@@ -20,12 +20,15 @@ def build(source, output):
     if run and repo:
         lines += [f"[Open this Actions run / full artifact](https://github.com/{repo}/actions/runs/{run})", ""]
     rows = data["steps"]
+    startup = data.get("startupDiagnostic")
+    deployment = data.get("deployment", {})
+    lines += ["Tracked configuration files verified after native launch: "+str(deployment.get("verifiedAfterLaunch", 0)), ""]
     counts = {k:sum(r["result"]==k for r in rows) for k in ("captured","failed","blocked","not-run")}
     lines += [" · ".join(f"{k}: {v}" for k,v in counts.items()), "",
               "Command navigation and actual accessibility/mouse operations are labeled separately. Captured does not mean visually validated.", ""]
     if data.get("fatal"):
         lines += ["**Capture stopped before completion.** See full artifact for details.", ""]
-    for r in rows:
+    for r in ([startup] if startup else []) + rows:
         lines += [f'## {r["id"]} — {r["title"]}', "", f'**{r["result"]}** · {r["mode"]}', ""]
         # Do not publish raw error text, native status, terminal logs, or paths.
         if r["result"] != "captured":

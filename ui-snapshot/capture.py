@@ -23,10 +23,41 @@ def seed_startup(config, version):
     """Use Herdr's own persisted onboarding state; never patch product JS."""
     # Proven by the isolated native runs recorded in main:
     # artifacts/orca-bundler/20261123T160823Z-window/observations.md
-    (config / "shared.json").write_text(json.dumps({"layout":"orca", "frame.welcomed":True}))
+    shared = config/"shared.json"
+    state = json.loads(shared.read_text()) if shared.exists() else {}
+    state.update({"layout":"orca", "frame.welcomed":True})
+    shared.write_text(json.dumps(state))
     match = re.search(r"\b\d+\.\d+\.\d+(?:[-+][\w.-]+)?\b", version)
     if match:
         (config / "update-notes.json").write_text(json.dumps({"presented":[match.group(0)]}))
+
+DELIVERY = ("layouts", "mods", "themes", "keys.json", "programs.json", "settings.json")
+
+def verify_delivery(target, config):
+    paths = run(["git", "-C", target, "ls-files", "-z", "--", *DELIVERY]).split("\0")
+    records = []
+    for path in filter(None, paths):
+        src, dst = target/path, config/path
+        if not src.is_file() or not dst.is_file():
+            raise RuntimeError("Missing delivery file: "+path)
+        expected = hashlib.sha256(src.read_bytes()).hexdigest()
+        actual = hashlib.sha256(dst.read_bytes()).hexdigest()
+        if expected != actual:
+            raise RuntimeError("Installed file differs from main: "+path)
+        records.append({"path":path,"sha256":actual})
+    if not records or not {"layouts/orca.json","layouts/orca-unified.json","keys.json","programs.json","settings.json"}.issubset({r["path"] for r in records}):
+        raise RuntimeError("Incomplete Orca deployment")
+    return records
+
+def blocking_overlays(status):
+    return [o for o in status.get("overlays", []) if o != "toast"]
+
+def seed_safe_tasks(config):
+    # Fixture state only: keep the real Task UI; do not execute agent reset jobs.
+    tasks = [{"id":provider+"-reset-ping","name":label+" reset ping","enabled":False,
+              "agent":provider,"trigger":{"type":"reset","provider":provider,"window":"h5","delaySeconds":5},
+              "argv":[provider, "ping"],"cwd":None} for provider,label in (("claude","Claude"),("codex","Codex"))]
+    (config/"tasks.json").write_text(json.dumps({"version":1,"tasks":tasks}))
 
 def sha(path):
     return run(["git", "-C", path, "rev-parse", "HEAD"]).strip()
@@ -34,9 +65,10 @@ def sha(path):
 def report(out, info):
     (out / "manifest.json").write_text(json.dumps(info, indent=2))
     rows = info["steps"]
+    display_rows = ([info["startupDiagnostic"]] if "startupDiagnostic" in info else []) + rows
     h = html.escape
     cards = []
-    for row in rows:
+    for row in display_rows:
         images = "".join(f'<figure><figcaption>{h(k)}</figcaption><a href="{h(v["file"])}"><img loading="lazy" src="{h(v["file"])}"></a></figure>' for k, v in row.get("images", {}).items())
         cards.append(f'<section><h2>{h(row["id"])} · {h(row["title"])}</h2><p>{h(row["mode"])} · {h(row["result"])}</p><p>{h(row["action"])}</p><p>{h(row.get("error", ""))}</p><div class="pair">{images}</div></section>')
     (out / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Main UI snapshot</title><style>body{font:16px system-ui;background:#15171a;color:#eee;margin:24px}section{border-top:1px solid #555;padding:16px 0}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}figure{margin:0}img{width:100%;height:auto}a{color:#a9cfff}p{overflow-wrap:anywhere}</style><h1>Real Herdr App · main</h1><p>Commit: '+h(info["mainSha"])+'</p><p>'+h(info.get("fatal",""))+'</p><p>Native command = state navigation, not a mouse click. AX press = native accessibility interaction.</p><p><a href="manifest.json">Machine-readable manifest</a></p>'+''.join(cards))
@@ -102,14 +134,18 @@ def main():
             (fixture / "src" / "example.js").write_text("export const sample = 2;\n")
             (fixture / "notes.txt").write_text("Untracked local fixture\n")
             # Overlay only the tracked delivery files; the app supplies built-ins.
-            for name in ("layouts", "mods", "themes", "keys.json", "programs.json", "settings.json"):
+            for name in DELIVERY:
                 src = target / name
                 if src.is_dir():
                     shutil.copytree(src, config/name, dirs_exist_ok=True)
                 else:
                     shutil.copy2(src, config/name)
-            seed_startup(config, info.get("herdr-appVersion", ""))
-            (out / "startup-fixture.json").write_text((config / "shared.json").read_text())
+            deployment = verify_delivery(target, config)
+            (out/"deployment.json").write_text(json.dumps({"mainSha":info["mainSha"],"files":deployment},indent=2))
+            info["deployment"] = {"verifiedFiles":len(deployment),"manifest":"deployment.json"}
+            seed_safe_tasks(config)
+            # First run is deliberately unseeded so its real startup popup is evidence.
+            # Onboarding is then completed via Herdr's persisted state, not fake UI.
             log = (out / "app.log").open("w")
             def launch():
                 return subprocess.Popen([app], env=env, cwd=fixture, stdout=log, stderr=subprocess.STDOUT)
@@ -137,17 +173,31 @@ def main():
                 (out/"initial-status.json").write_text(json.dumps(ready, indent=2))
                 # A new upstream release may still show release notes. The prior
                 # native retest proved relaunch clears an already-presented note.
-                if ready.get("overlays"):
-                    print("Startup overlay(s):", ready["overlays"], flush=True)
+                if blocking_overlays(ready) or ready.get("layout") != "orca":
+                    print("Initial native layout/overlays:", ready.get("layout"), ready.get("overlays"), flush=True)
                     startup = {"id":"00", "title":"Startup overlay before recovery", "mode":"initial-state",
                                "action":"Capture startup diagnostic before relaunch", "result":"captured"}
                     shot(startup, "after")
                     info["startupDiagnostic"] = startup
                     stop(proc)
+                    # Reinstall exact tracked files after the first launch seeds built-ins.
+                    for name in DELIVERY:
+                        src = target/name
+                        if src.is_dir():
+                            shutil.copytree(src, config/name, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(src, config/name)
                     seed_startup(config, info.get("herdr-appVersion", ""))
+                    seed_safe_tasks(config)
+                    (out/"startup-fixture.json").write_text((config/"shared.json").read_text())
                     proc = launch()
                     ready = wait_ready(proc)
                     (out/"relaunch-status.json").write_text(json.dumps(ready, indent=2))
+                if ready.get("layout") != "orca" or blocking_overlays(ready):
+                    raise RuntimeError("Expected clear configured Orca window: "+json.dumps(ready))
+                # Compare files after native boot, not just after copy.
+                after = verify_delivery(target, config)
+                info["deployment"]["verifiedAfterLaunch"] = len(after)
                 print("READY "+json.dumps(ready), flush=True)
                 ax = root/"ax-press"
                 ax_error = ""
@@ -162,8 +212,8 @@ def main():
                 def add(title, name=None, args=None, label=None, check=None, wait=0.8):
                     mode = "accessibility-press" if label else ("native-command" if name else "initial-state")
                     scenarios.append((title, name, args or {}, label, check, wait, mode))
-                add("First configured launch", check=lambda s:not s.get("overlays"))
-                add("Confirm startup overlay absent", check=lambda s:not s.get("overlays"))
+                add("First configured launch", check=lambda s:s.get("layout")=="orca" and not blocking_overlays(s))
+                add("Confirm startup overlay absent", check=lambda s:not blocking_overlays(s))
                 add("Switch to Orca layout", "layout.switch", {"name":"orca"}, check=lambda s:s.get("layout")=="orca")
                 add("Welcome / landing page", "layout.select", {"stack":"main","child":"main-landing"})
                 add("Create fixture workspace", "space.new", {"name":"Snapshot project","folder":str(fixture)}, check=lambda s:bool(s.get("space")),wait=2)
@@ -183,10 +233,10 @@ def main():
                 for child in ("files","changes","ports","vault","workspaces","pr-checks","checks"):
                     add("Right panel: "+child, "layout.select", {"stack":"panel-body","child":child})
                 add("Search files", "orca-panel-head.search")
-                add("Open new-tab menu", "orca-tabs.new-tab")
-                add("Dismiss new-tab menu", "overlay.close")
-                add("Open split menu", "mod.open", {"name":"orca-split-menu"})
-                add("Dismiss split menu", "overlay.close")
+                add("Open new-tab menu", "mod.open", {"name":"orca-new-menu"}, check=lambda s:"orca-new-menu" in blocking_overlays(s))
+                add("Dismiss new-tab menu", "mod.open", {"name":"orca-new-menu"}, check=lambda s:not blocking_overlays(s))
+                add("Open split menu", "mod.open", {"name":"orca-split-menu"}, check=lambda s:"orca-split-menu" in blocking_overlays(s))
+                add("Dismiss split menu", "mod.open", {"name":"orca-split-menu"}, check=lambda s:not blocking_overlays(s))
                 add("Agent manager", "layout.select", {"stack":"main","child":"main-agents"},wait=2)
                 add("Model providers", "layout.select", {"stack":"main","child":"main-providers"})
                 add("Tasks", "layout.select", {"stack":"main","child":"main-tasks"})
@@ -230,24 +280,33 @@ def main():
                             except subprocess.CalledProcessError as e:
                                 raise PermissionError(e.stderr.strip() or str(e)) from e
                         elif name == "overlay.close":
-                            overlays = status().get("overlays") or []
+                            overlays = blocking_overlays(status())
                             if not overlays:
                                 row["action"] += " (no overlay present; no-op)"
                             else:
+                                # Native mod.open is documented as a toggle for named mod overlays.
                                 command("overlay.close", id=overlays[-1])
                                 time.sleep(0.5)
-                                if overlays[-1] in (status().get("overlays") or []):
-                                    raise RuntimeError("Overlay did not close: "+overlays[-1])
+                                if overlays[-1] in blocking_overlays(status()):
+                                    command("mod.open", name=overlays[-1])
+                                    time.sleep(0.5)
+                                if blocking_overlays(status()):
+                                    raise RuntimeError("Overlay did not close: "+str(blocking_overlays(status())))
                         elif name:
                             command(name,**args)
                         time.sleep(wait)
                         shot(row,"after")
                         s = status()
                         row["status"] = s
+                        expected_modal = name == "mod.open" and title.startswith("Open") or label in ("Search worktrees","Workspace options")
+                        if not expected_modal and blocking_overlays(s):
+                            raise RuntimeError("UI obstructed by "+str(blocking_overlays(s)))
                         if i >= 3 and s.get("layout") != ("orca-unified" if i >= 42 else "orca"):
                             raise RuntimeError("Unexpected layout: "+str(s.get("layout")))
                         if s.get("errors"):
                             raise RuntimeError("Herdr reported runtime errors")
+                        if label in ("Search worktrees","Workspace options") and not blocking_overlays(s):
+                            raise RuntimeError("Expected UI popup was not opened")
                         if check and not check(s):
                             raise RuntimeError("Expected native status was not observed")
                         row["result"]="captured"

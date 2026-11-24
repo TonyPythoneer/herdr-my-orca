@@ -2,7 +2,7 @@ import unittest
 import json
 import tempfile
 from pathlib import Path
-from capture import command_args, seed_startup
+from capture import command_args, seed_startup, blocking_overlays, seed_safe_tasks
 
 class CommandArgsTests(unittest.TestCase):
     def test_name_is_not_command_parameter(self):
@@ -25,3 +25,13 @@ class StartupFixtureTests(unittest.TestCase):
             config = Path(temp)
             seed_startup(config, "unknown")
             self.assertFalse((config/"update-notes.json").exists())
+
+class SnapshotSafetyTests(unittest.TestCase):
+    def test_toast_is_not_modal(self):
+        self.assertEqual(blocking_overlays({"overlays":["toast","orca-split-menu"]}),["orca-split-menu"])
+    def test_no_tasks_execute(self):
+        with tempfile.TemporaryDirectory() as temp:
+            seed_safe_tasks(Path(temp))
+            tasks=json.loads((Path(temp)/"tasks.json").read_text())["tasks"]
+            self.assertTrue(tasks)
+            self.assertTrue(all(t["enabled"] is False for t in tasks))
