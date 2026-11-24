@@ -38,6 +38,29 @@ test("titlebar chooses padding for the rail, traffic lights, fullscreen and non-
   assert.doesNotMatch(frame, /"opacity"/);
 });
 
+// The recorder nests children as [key, args] pairs, so walk every argument until the node with this id.
+function byId(node, id) {
+  if (Array.isArray(node)) return node.map(v => byId(v, id)).find(Boolean) ?? null;
+  if (!node || typeof node !== "object") return null;
+  if (node.c?.some(([k, a]) => k === "id" && a[0] === id)) return node;
+  return byId(node.c?.map(([, a]) => a) ?? [], id);
+}
+
+test("the Agents footer button is inverted only while the agent settings page is showing", () => {
+  const view = new Chrome();
+  globalThis.__herdrProps = () => ({ footer: true, unified: true });
+  globalThis.__herdrShared = () => 350;
+  const agents = (page) => {
+    globalThis.__herdrLayout = () => ({ children: [{ id: "main", active: page }] });
+    return byId(view.render().__node, "agents").c;
+  };
+  const [on, off] = [agents("main-agents"), agents("main-terminals")];
+  const keys = c => c.map(([k]) => k);
+  // The stub theme has no colour values, so check which style calls are recorded: an active button fills itself and has no hover.
+  assert.ok(keys(on).includes("bg") && !keys(on).includes("hover"), "active button is filled, with no hover tint");
+  assert.ok(keys(off).includes("hover") && !keys(off).includes("bg"), "idle button only tints on hover");
+});
+
 test("footer seeds the catalog model, then runs a requested task on the next tick", async () => {
   const jobs = [], calls = [], files = new Map([["/home/tasks.json", null]]);
   files.set("/home/agent-config.json", JSON.stringify({ catalog: { codex: { models: [{ id: "small" }] } } }));

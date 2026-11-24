@@ -58,15 +58,19 @@ export default class WorkspaceChrome extends View {
   footer(t) {
     // Each control is a rounded-md 8px button with a 14px glyph (SidebarSettingsHelpMenu.tsx:203),
     // 18px square so it fits the 20px status bar under its 1px top border.
-    const row = (id, icon, label, action) => div().id(id).size(18).flex_none().flex().items_center().justify_center().rounded(8)
-      .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-      .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
+    // `active` inverts the button while its page is open; no hover tint then, or the inverted text would vanish.
+    const row = (id, icon, label, action, active = false) => {
+      const base = div().id(id).size(18).flex_none().flex().items_center().justify_center().rounded(8).cursor_pointer()
+        .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
+      return active ? base.bg(t.foreground).text_color(t.background) : base.text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground));
+    };
+    const onAgents = find(layout(), "main")?.active === "main-agents";
     // Same fill and top border as orca-status, so the row reads as one bar.
     const footerBar = h_flex().size_full().items_center().bg(t.surface).border_t(1).border_color(t.border).px(8).text_size(12)
       .child(h_flex().items_center().gap(8)
         // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
         // while the Agents page lives in the `main` stack (`main-agents`).
-        .child(row("agents", "bot", "Agents", () => run("orca-tabs.agent-settings")))
+        .child(row("agents", "bot", "Agents", () => run("orca-tabs.agent-settings"), onAgents))
         .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
         // Schedules: the reset ping and anything else the person adds (orca-tasks).
         .child(row("tasks", "clock", "Tasks", () => run("layout.select", { stack: "main", child: "main-tasks" })))

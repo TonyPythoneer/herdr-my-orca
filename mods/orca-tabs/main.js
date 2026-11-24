@@ -1156,6 +1156,7 @@ export default class Tabs extends View {
     if (this.settingsPageRequest?.page === currentPage) this.settingsPageRequest = null;
     const requestedPage = this.settingsPageRequest?.page ?? currentPage;
     this.syncSettingsSidebar(cx, requestedPage === "main-agents", unified);
+    if (requestedPage === "main-agents") this.closePanelForSettings(cx, unified);
     let frame;
     if (currentPage === "main-agents") {
       // The strip is not drawn here, so nothing would consume a sidebar or panel key pressed on this page;
@@ -1178,6 +1179,15 @@ export default class Tabs extends View {
   requestSettingsPage(page, cx) {
     this.settingsPageRequest = { page, sent: false };
     cx.notify();
+  }
+
+  // Agent Settings has no right sidebar. Called on every render while it is requested, so the `busy`
+  // guard stops a second call from flipping the Drawer back open.
+  closePanelForSettings(cx, unified) {
+    const panel = find(layout(), "panel");
+    if (!panel || panel.hidden || this.drawers.panel.busy) return;
+    if (unified) this.togglePanelNative(cx);
+    else run("layout.hide", { id: "panel" });
   }
 
   selectRequestedSettingsPage() {
