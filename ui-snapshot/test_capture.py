@@ -1,5 +1,8 @@
 import unittest
-from capture import command_args
+import json
+import tempfile
+from pathlib import Path
+from capture import command_args, seed_startup
 
 class CommandArgsTests(unittest.TestCase):
     def test_name_is_not_command_parameter(self):
@@ -9,3 +12,16 @@ class CommandArgsTests(unittest.TestCase):
         self.assertEqual(command_args("layout.select",stack="main",child="main-agents"),["do","layout.select","--stack","main","--child","main-agents"])
     def test_overlay_id(self):
         self.assertEqual(command_args("overlay.close",id="frame-welcome"),["do","overlay.close","--id","frame-welcome"])
+
+class StartupFixtureTests(unittest.TestCase):
+    def test_known_persisted_onboarding_state(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp)
+            seed_startup(config, "herdr-app 0.1.17")
+            self.assertEqual(json.loads((config/"shared.json").read_text()), {"layout":"orca","frame.welcomed":True})
+            self.assertEqual(json.loads((config/"update-notes.json").read_text()), {"presented":["0.1.17"]})
+    def test_unknown_version_does_not_invent_release(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp)
+            seed_startup(config, "unknown")
+            self.assertFalse((config/"update-notes.json").exists())

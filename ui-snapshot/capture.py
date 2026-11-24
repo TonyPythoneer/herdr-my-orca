@@ -5,6 +5,7 @@ import html
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,15 @@ def run(args, **kw):
 
 def command_args(command_name, **args):
     return ["do", command_name, *[part for k, v in args.items() for part in ("--"+k, str(v))]]
+
+def seed_startup(config, version):
+    """Use Herdr's own persisted onboarding state; never patch product JS."""
+    # Proven by the isolated native runs recorded in main:
+    # artifacts/orca-bundler/20261123T160823Z-window/observations.md
+    (config / "shared.json").write_text(json.dumps({"layout":"orca", "frame.welcomed":True}))
+    match = re.search(r"\b\d+\.\d+\.\d+(?:[-+][\w.-]+)?\b", version)
+    if match:
+        (config / "update-notes.json").write_text(json.dumps({"presented":[match.group(0)]}))
 
 def sha(path):
     return run(["git", "-C", path, "rev-parse", "HEAD"]).strip()
@@ -98,21 +108,47 @@ def main():
                     shutil.copytree(src, config/name, dirs_exist_ok=True)
                 else:
                     shutil.copy2(src, config/name)
+            seed_startup(config, info.get("herdr-appVersion", ""))
+            (out / "startup-fixture.json").write_text((config / "shared.json").read_text())
             log = (out / "app.log").open("w")
-            proc = subprocess.Popen([app], env=env, cwd=fixture, stdout=log, stderr=subprocess.STDOUT)
-            try:
-                deadline = time.monotonic() + 90
-                while True:
-                    if proc.poll() is not None:
-                        raise RuntimeError(f"Herdr exited: {proc.returncode}")
+            def launch():
+                return subprocess.Popen([app], env=env, cwd=fixture, stdout=log, stderr=subprocess.STDOUT)
+            def stop(process):
+                if process.poll() is None:
+                    process.terminate()
                     try:
-                        ready = status()
-                        break
-                    except Exception:
-                        if time.monotonic() >= deadline:
-                            raise RuntimeError("Native window did not answer within readiness timeout")
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+            def wait_ready(process):
+                deadline = time.monotonic() + 90
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        raise RuntimeError(f"Herdr exited: {process.returncode}")
+                    try:
+                        return status()
+                    except (OSError, ValueError, subprocess.SubprocessError):
                         time.sleep(2)
+                raise RuntimeError("Native window did not answer within readiness timeout")
+            proc = launch()
+            try:
+                ready = wait_ready(proc)
                 (out/"initial-status.json").write_text(json.dumps(ready, indent=2))
+                # A new upstream release may still show release notes. The prior
+                # native retest proved relaunch clears an already-presented note.
+                if ready.get("overlays"):
+                    print("Startup overlay(s):", ready["overlays"], flush=True)
+                    startup = {"id":"00", "title":"Startup overlay before recovery", "mode":"initial-state",
+                               "action":"Capture startup diagnostic before relaunch", "result":"captured"}
+                    shot(startup, "after")
+                    info["startupDiagnostic"] = startup
+                    stop(proc)
+                    seed_startup(config, info.get("herdr-appVersion", ""))
+                    proc = launch()
+                    ready = wait_ready(proc)
+                    (out/"relaunch-status.json").write_text(json.dumps(ready, indent=2))
+                print("READY "+json.dumps(ready), flush=True)
                 ax = root/"ax-press"
                 ax_error = ""
                 try:
@@ -126,8 +162,8 @@ def main():
                 def add(title, name=None, args=None, label=None, check=None, wait=0.8):
                     mode = "accessibility-press" if label else ("native-command" if name else "initial-state")
                     scenarios.append((title, name, args or {}, label, check, wait, mode))
-                add("First launch")
-                add("Dismiss startup overlay if present", "overlay.close", check=lambda s:not s.get("overlays"))
+                add("First configured launch", check=lambda s:not s.get("overlays"))
+                add("Confirm startup overlay absent", check=lambda s:not s.get("overlays"))
                 add("Switch to Orca layout", "layout.switch", {"name":"orca"}, check=lambda s:s.get("layout")=="orca")
                 add("Welcome / landing page", "layout.select", {"stack":"main","child":"main-landing"})
                 add("Create fixture workspace", "space.new", {"name":"Snapshot project","folder":str(fixture)}, check=lambda s:bool(s.get("space")),wait=2)
@@ -175,9 +211,12 @@ def main():
                         row["result"] = "not-run"
                         row["error"] = "Orca layout prerequisite failed"
                         continue
-                    if i > 2 and info["steps"][1]["result"] != "captured":
+                    if i > 2 and any(s["result"] != "captured" for s in info["steps"][:2]):
                         row["result"] = "not-run"
                         row["error"] = "Startup overlay prerequisite failed"
+                        continue
+                    if i > 42 and info["steps"][41]["result"] != "captured":
+                        row["error"] = "Unified layout prerequisite failed"
                         continue
                     print(f'UI_STEP {row["id"]} {title}', flush=True)
                     try:
@@ -197,19 +236,6 @@ def main():
                             else:
                                 command("overlay.close", id=overlays[-1])
                                 time.sleep(0.5)
-                                remaining = status().get("overlays") or []
-                                if i == 2 and "frame-welcome" in remaining:
-                                    if ax_error:
-                                        raise RuntimeError(ax_error)
-                                    # First-run native welcome has a verified close control near
-                                    # the upper-right of the modal at the observed 1024x681 size.
-                                    # The helper guards window aspect ratio and owning PID.
-                                    image = row["images"]["before"]
-                                    run([ax, str(proc.pid), "--welcome-close",
-                                         str(image["width"]), str(image["height"])], timeout=10)
-                                    row["mode"] = "native-command+mouse"
-                                    row["action"] += " + native welcome close click"
-                                    time.sleep(1)
                                 if overlays[-1] in (status().get("overlays") or []):
                                     raise RuntimeError("Overlay did not close: "+overlays[-1])
                         elif name:
@@ -218,6 +244,8 @@ def main():
                         shot(row,"after")
                         s = status()
                         row["status"] = s
+                        if i >= 3 and s.get("layout") != ("orca-unified" if i >= 42 else "orca"):
+                            raise RuntimeError("Unexpected layout: "+str(s.get("layout")))
                         if s.get("errors"):
                             raise RuntimeError("Herdr reported runtime errors")
                         if check and not check(s):
@@ -235,13 +263,7 @@ def main():
                     print("UI_RESULT "+json.dumps({k:v for k,v in row.items() if k != "status"}), flush=True)
                     report(out,info)
             finally:
-                if proc.poll() is None:
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait()
+                stop(proc)
                 log.close()
     except Exception as e:
         info["fatal"]=str(e)
