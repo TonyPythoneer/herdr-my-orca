@@ -66,6 +66,8 @@ jobs:
           test "${#tests[@]}" -gt 0
           echo "Running ${#tests[@]} tracked test files"
           node --test --test-timeout=60000 "${tests[@]}"
+      - name: Run UI snapshot observer unit tests (no GUI)
+        run: python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 

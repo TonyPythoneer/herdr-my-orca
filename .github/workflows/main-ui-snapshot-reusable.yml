@@ -1,0 +1,99 @@
+name: Main UI snapshot implementation
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.ref == 'refs/heads/ci/main-ui-snapshot'
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: target
+          persist-credentials: false
+      - name: Record source and prepare output
+        run: |
+          mkdir -p "$RUNNER_TEMP/ui-snapshot"
+          git -C target rev-parse HEAD | tee "$RUNNER_TEMP/ui-snapshot/main-sha.txt"
+          git -C target rev-parse HEAD > "$RUNNER_TEMP/ui-snapshot/observer-sha.txt"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/ui-snapshot/trigger-sha.txt"
+          sw_vers > "$RUNNER_TEMP/ui-snapshot/environment.txt"
+          uname -m >> "$RUNNER_TEMP/ui-snapshot/environment.txt"
+      - name: Install official native Herdr
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          curl -fsSL --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/install-app.sh"
+          sh "$RUNNER_TEMP/install-app.sh" 2>&1 | tee "$RUNNER_TEMP/ui-snapshot/install-app.log"
+          if ! test -x "$HOME/.local/bin/herdr-core"; then
+            curl -fsSL --retry 3 https://releases.herdr.dev/core/install.sh -o "$RUNNER_TEMP/install-core.sh"
+            sh "$RUNNER_TEMP/install-core.sh" 2>&1 | tee "$RUNNER_TEMP/ui-snapshot/install-core.log"
+          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check observer regression tests
+        run: python3 -m unittest discover -s target/ui-snapshot -p 'test_*.py'
+      - name: Observe native UI
+        run: python3 target/ui-snapshot/capture.py --target target --out "$RUNNER_TEMP/ui-snapshot"
+      - name: Build browser-ready gallery
+        if: always() && !cancelled()
+        run: python3 target/ui-snapshot/gallery.py --input "$RUNNER_TEMP/ui-snapshot" --output "$RUNNER_TEMP/ui-gallery"
+      - name: Report
+        if: always()
+        run: |
+          echo "## Main UI snapshot" >> "$GITHUB_STEP_SUMMARY"
+          if test -f "$RUNNER_TEMP/ui-snapshot/summary.md"; then
+            cat "$RUNNER_TEMP/ui-snapshot/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Capture did not start; inspect installation/runner logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: main-ui-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ui-snapshot/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always() && !cancelled()
+        with:
+          name: browser-gallery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ui-gallery/
+          if-no-files-found: error
+          retention-days: 14
+  publish-gallery:
+    needs: snapshot
+    if: always() && !cancelled() && github.ref == 'refs/heads/ci/main-ui-snapshot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/main-ui-snapshot
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-gallery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "${{ runner.temp }}/browser-gallery"
+      - name: Publish latest preview to this CI branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "Newer branch revision exists; skip stale gallery publication." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          test -f "$RUNNER_TEMP/browser-gallery/README.md"
+          rm -rf ui-snapshot/gallery
+          mkdir -p ui-snapshot/gallery
+          cp -R "$RUNNER_TEMP/browser-gallery/." ui-snapshot/gallery/
+          git add -- ui-snapshot/gallery
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "ci: publish latest UI snapshot [skip ci]"
+            git push origin HEAD:refs/heads/ci/main-ui-snapshot
+          fi
+          echo "[Browse screenshots directly](https://github.com/$GITHUB_REPOSITORY/tree/$(git rev-parse HEAD)/ui-snapshot/gallery)" >> "$GITHUB_STEP_SUMMARY"
