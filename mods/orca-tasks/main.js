@@ -162,16 +162,16 @@ export default class Tasks extends View {
   }
 
   toggle(cx, task) {
-    this.apply(cx, this.update(task.id, (t) => ({ ...t, enabled: !t.enabled })));
+    return this.apply(cx, this.update(task.id, (t) => ({ ...t, enabled: !t.enabled })));
   }
 
   remove(cx, task) {
-    this.apply(cx, (config) => ({ ...config, tasks: config.tasks.filter((t) => t.id !== task.id) }));
+    return this.apply(cx, (config) => ({ ...config, tasks: config.tasks.filter((t) => t.id !== task.id) }));
   }
 
   add(cx) {
     const id = `task-${Date.now().toString(36)}`;
-    this.apply(
+    return this.apply(
       cx,
       (config) => ({
         ...config,
@@ -325,7 +325,7 @@ export default class Tasks extends View {
 
   // ---- render --------------------------------------------------------------
 
-  render(cx) {
+  render() {
     const t = theme();
     return v_flex()
       .id("tm-root")
@@ -334,7 +334,7 @@ export default class Tasks extends View {
       .overflow_hidden()
       .bg(t.background)
       .text_size(12)
-      .child(this.pageHeader(t, cx))
+      .child(this.pageHeader(t))
       .child(
         v_flex()
           .id("tm-body")
@@ -357,12 +357,12 @@ export default class Tasks extends View {
                   .child("Schedules run while Herdr is open. Times are local; the last run of each task is kept by Herdr."),
               )
               .child(this.resetCard(t))
-              .child(this.taskSection(t, cx)),
+              .child(this.taskSection(t)),
           ),
       );
   }
 
-  pageHeader(t, cx) {
+  pageHeader(t) {
     return h_flex()
       .w_full()
       .max_w(760)
@@ -392,11 +392,11 @@ export default class Tasks extends View {
       )
       .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Task management"))
       .child(div().flex_1())
-      .child(this.button("tm-add", "New task", t, () => this.add(cx)));
+      .child(this.button("tm-add", "New task", t, (_event, eventCx) => eventCx.spawn((taskCx) => this.add(taskCx))));
   }
 
   // The TASKS list: header with the JSON toggle, the write error, one card per task, the editor.
-  taskSection(t, cx) {
+  taskSection(t) {
     const config = this.config;
     const error = this.error || shared("tasks.error") || "";
     const tasks = config?.tasks ?? [];
@@ -412,17 +412,17 @@ export default class Tasks extends View {
             .items_center()
             .gap(8)
             .when(this.saved, (el) => el.child(div().text_size(11).text_color(t.done).child("Saved.")))
-            .child(this.button("tm-json", this.editing ? "Close JSON" : "Edit JSON", t, () => (this.editing ? this.closeEditor(cx) : this.openEditor(cx)))),
+            .child(this.button("tm-json", this.editing ? "Close JSON" : "Edit JSON", t, (_event, eventCx) => (this.editing ? this.closeEditor(eventCx) : this.openEditor(eventCx)))),
         ),
       )
       .when(error, (el) => el.child(div().w_full().p(10).rounded(8).border_1().border_color(t.blocked).text_size(11).text_color(t.blocked).child(error)))
       .when(!config && !error, (el) => el.child(div().p(16).text_size(12).text_color(t.muted).child("Waiting for the task runner…")))
       .children(
         tasks.length
-          ? tasks.map((task) => this.taskCard(task, t, cx))
+          ? tasks.map((task) => this.taskCard(task, t))
           : [div().p(16).rounded(8).border_1().border_color(t.border).border_dashed().text_size(12).text_color(t.muted).child("No tasks. New task adds a disabled template; Edit JSON writes the file directly.")],
       )
-      .when(this.editing, (el) => el.child(this.editorCard(t, cx)));
+      .when(this.editing, (el) => el.child(this.editorCard(t)));
   }
 
   // The reset instants the reset-ping schedules fire on.
@@ -465,7 +465,7 @@ export default class Tasks extends View {
       );
   }
 
-  taskCard(task, t, cx) {
+  taskCard(task, t) {
     const live = this.state[task.id] ?? {};
     const disabled = this.exempt(task);
     return v_flex()
@@ -484,20 +484,20 @@ export default class Tasks extends View {
           .items_center()
           .gap(8)
           .child(this.mark(task.agent, t))
-          .child(this.taskSummary(task, t, cx, live, disabled))
+          .child(this.taskSummary(task, t, live, disabled))
           .child(
-            this.button(`tm-run-${task.id}`, live.running ? "…" : "Run", t, () => this.runNow(cx, task), {
+            this.button(`tm-run-${task.id}`, live.running ? "…" : "Run", t, (_event, eventCx) => this.runNow(eventCx, task), {
               label: disabled ? "Disabled: no 5h limit on this plan" : "Run now",
               disabled: disabled || live.running,
             }),
           )
-          .child(this.button(`tm-del-${task.id}`, "Delete", t, () => this.remove(cx, task), { label: `Delete ${task.name}`, color: t.dim })),
+          .child(this.button(`tm-del-${task.id}`, "Delete", t, (_event, eventCx) => eventCx.spawn((taskCx) => this.remove(taskCx, task)), { label: `Delete ${task.name}`, color: t.dim })),
       )
       .child(div().text_size(11).text_color(lastRunTone(live.last ?? null, t)).truncate().child(lastRunText(live.last ?? null)));
   }
 
   // The middle of a card: name with its switch, the schedule line and the command.
-  taskSummary(task, t, cx, live, disabled) {
+  taskSummary(task, t, live, disabled) {
     const mono = settings()?.font_family ?? "JetBrains Mono";
     return v_flex()
       .flex_1()
@@ -509,14 +509,14 @@ export default class Tasks extends View {
           .gap(6)
           .child(div().text_size(13).font_semibold().text_color(t.foreground).truncate().child(task.name))
           .when(disabled, (el) => el.child(this.disabledPill(t)))
-          .when(!disabled, (el) => el.child(this.togglePill(`tm-on-${task.id}`, task.enabled, t, () => this.toggle(cx, task))))
+          .when(!disabled, (el) => el.child(this.togglePill(`tm-on-${task.id}`, task.enabled, t, (_event, eventCx) => eventCx.spawn((taskCx) => this.toggle(taskCx, task)))))
           .when(live.running, (el) => el.child(div().text_size(10).text_color(t.accent).child("running…"))),
       )
       .child(div().text_size(11).text_color(t.muted).child(scheduleText(task, disabled, live.nextAt ?? null)))
       .child(div().text_size(11).text_color(t.dim).font_family(mono).truncate().child(taskText(task)));
   }
 
-  editorCard(t, cx) {
+  editorCard(t) {
     const mono = settings()?.font_family ?? "JetBrains Mono";
     return v_flex()
       .id("tm-editor")
@@ -534,8 +534,8 @@ export default class Tasks extends View {
           .w_full()
           .gap(8)
           .items_center()
-          .child(this.button("tm-save", "Save", t, () => this.saveEditor(cx), { border: t.accent, color: t.foreground }))
-          .child(this.button("tm-cancel", "Cancel", t, () => this.closeEditor(cx)))
+          .child(this.button("tm-save", "Save", t, (_event, eventCx) => eventCx.spawn((taskCx) => this.saveEditor(taskCx)), { border: t.accent, color: t.foreground }))
+          .child(this.button("tm-cancel", "Cancel", t, (_event, eventCx) => this.closeEditor(eventCx)))
           .child(div().flex_1()),
       );
   }

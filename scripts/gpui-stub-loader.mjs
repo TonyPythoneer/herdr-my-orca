@@ -61,6 +61,7 @@ function node(name, args) {
           if (a[0]) { const r = a[1](proxy); if (r !== proxy) rec.c.push(["when", cleanse(r)]); } return proxy;
         }
         if (key === "hover") { const inner = node("hover", []); a[0](inner); rec.c.push(["hover", inner.__node]); return proxy; }
+        if (key === "on_click" && typeof a[0] === "function") globalThis.__gpuiClickHandler?.(rec, a[0]);
         rec.c.push([key, a.map(cleanse)]); return proxy;
       };
     },
