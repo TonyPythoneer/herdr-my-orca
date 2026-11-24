@@ -84,7 +84,7 @@ test("build repairs drift, and files that already match are not rewritten", t =>
   utimesSync(kept, 1000, 1000);
   writeFileSync(join(out, "mods/orca-files/main.js"), "tampered");
   chmodSync(join(out, "mods/orca-files/tool.sh"), 0o644);
-  assert.equal(run("--root", root, "--out", out).status, 0);
+  assert.equal(run("--root", root, "--force", "--out", out).status, 0);
   assert.equal(run("--root", root, "--check", "--out", out).status, 0);
   assert.equal(statSync(kept).mtimeMs, 1_000_000);
 });
@@ -141,4 +141,48 @@ test("relative --out and --root resolve against the working directory", t => {
   assert.equal(r.status, 0, r.stderr);
   assert.equal(files(join(root, "dist")).length, 5);
   assert.deepEqual(files(out), []);
+});
+
+test("a differing copy newer than its source blocks the whole build; matching files keep their mtime", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  run("--root", root, "--out", out);
+  const at = f => join(out, "mods/orca-files", f);
+  const past = new Date(Date.now() - 100_000);
+  for (const f of ["main.js", "view.js", "mod.json", "tool.sh", "icons/a.svg"]) utimesSync(join(root, FEATURE, f), past, past);
+
+  // Equal mtimes: the changed source updates its older copy.
+  write(root, `${FEATURE}/view.js`, "export const view = 2;\n");
+  utimesSync(join(root, FEATURE, "view.js"), past, past);
+  utimesSync(at("view.js"), past, past);
+  const newer = new Date(Date.now() - 50_000);
+  utimesSync(at("mod.json"), newer, newer); // matches its source but is newer
+  assert.equal(run("--root", root, "--out", out).status, 0);
+  assert.equal(readFileSync(at("view.js"), "utf8"), "export const view = 2;\n");
+  assert.equal(statSync(at("mod.json")).mtimeMs, newer.getTime());
+
+  // A hand edit (newer, different), a mode-only change (newer) and a missing file in one build.
+  writeFileSync(at("main.js"), "hand edit");
+  chmodSync(at("tool.sh"), 0o644);
+  rmSync(at("icons/a.svg"));
+  const r = run("--root", root, "--out", out);
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.split("\n").slice(0, 2), ["mods/orca-files/main.js", "mods/orca-files/tool.sh"]);
+  assert.equal(readFileSync(at("main.js"), "utf8"), "hand edit");
+  assert.equal(existsSync(at("icons/a.svg")), false);
+
+  assert.equal(run("--root", root, "--force", "--out", out).status, 0);
+  assert.equal(run("--root", root, "--check", "--out", out).status, 0);
+});
+
+test("--force never overrides a symlinked destination, and cannot be combined with --check", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  const other = temp(t);
+  mkdirSync(join(out, "mods"));
+  symlinkSync(other, join(out, "mods/orca-files"));
+  assert.equal(run("--root", root, "--force", "--out", out).status, 1);
+  assert.deepEqual(files(other), []);
+  assert.equal(run("--root", root, "--force", "--check", "--out", out).status, 2);
+  assert.equal(run("--root", root, "--force", "--force", "--out", out).status, 2);
 });

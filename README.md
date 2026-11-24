@@ -104,7 +104,10 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   `node scripts/build-orca-ui.mjs --out .`. Its `manifest.json` lists every managed output, test,
   layout slot and key section, so the copy under `mods/` is delivery format, not an edit location.
   `node scripts/build-orca-ui.mjs --check --out .` reports drift and undeclared files in a feature's
-  mod folder. Anything no manifest lists is still edited in place.
+  mod folder. A build stops, writing nothing, when a copy that differs is newer than its source
+  (a likely hand edit, or a fresh `git checkout`); compare, then rerun with `--force` to overwrite.
+  Run `--check` before you start editing to find existing drift. Anything no manifest lists is
+  still edited in place.
 - On a Herdr error (`herdr-app check`, `status`, or the window's Copy details), do not open the
   `mods/` file it names: `herdr-app check mods/<mod> 2>&1 | node scripts/where-error.mjs` prints the
   file and line to edit (a shared copy has the same line numbers as its source in
