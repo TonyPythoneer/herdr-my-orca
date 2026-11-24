@@ -280,6 +280,15 @@ class ReportTests(unittest.TestCase):
         self.assertIn("<!-- herdr-native-benchmark-report:v1 -->",self.report["markdown"](result))
         self.assertEqual(self.aggregate("failure")["status"],"needs_investigation")
 
+    def test_scoped_aggregation_does_not_treat_unselected_routes_as_missing(self):
+        self.generate(missing="orca-unified-main")
+        selection = {"include": [{"layout":"orca","stack":"main","pages":["main-agents"]}]}
+        result = self.report["aggregate"](self.root,self.sha,self.sha,"https://example.invalid/run","success",30,selection)
+        self.assertEqual(result["status"],"complete_provisional")
+        self.assertEqual(result["coverage"]["required"],1)
+        self.assertEqual(result["coverage"]["not_selected"],23)
+        self.assertEqual([r["route_id"] for r in result["routes"]],["orca--main-agents"])
+
     def test_incomplete_and_missing_groups_are_not_passes(self):
         self.generate(missing="orca-unified-main", incomplete="orca--main-providers")
         result = self.aggregate("failure")
