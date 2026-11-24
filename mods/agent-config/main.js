@@ -36,10 +36,18 @@ const CATALOG_SCHEMA = 3;
 // Reuse a cache for ten minutes; the CLI and the upstream list are checked again after that.
 const CATALOG_TTL_MS = 10 * 60_000;
 const SETTINGS = `${appHome()}/agent-config.json`;
+// A model-list or version probe runs a login shell and may start a slow CLI.
+const CLI_TIMEOUT_MS = 60_000;
+// The style-name input is mounted by the next frame, so focus waits a moment.
+const INPUT_MOUNT_DELAY_MS = 30;
+const dangerColor = () => (settings()?.dark ? "#ef4444" : "#dc2626");
+
+const currentCatalogModels = (cached) => (cached?.schema === CATALOG_SCHEMA ? cached.models : null);
+const isFresh = (cached, cachedModels) => Boolean(cachedModels) && typeof cached.checkedAt === "number" && Date.now() - cached.checkedAt < CATALOG_TTL_MS;
 
 // The CLI's version, the last line of `--version` output: the cache is valid while it stays the same.
 async function cliVersion(command) {
-  const { stdout } = await exec("zsh", ["-lic", `${command} --version`], { timeout: 60000 });
+  const { stdout } = await exec("zsh", ["-lic", `${command} --version`], { timeout: CLI_TIMEOUT_MS });
   return stdout.trim().split("\n").pop().trim();
 }
 
@@ -78,6 +86,29 @@ function normalizeJson(text, fallback) {
   }
 }
 
+function providerGlyph(record, t) {
+  if (!record) return svg("mods/agent-config/circle.svg").size(13).text_color(t.muted);
+  const appDir = `${appHome()}/`;
+  const path = String(record.iconPath ?? "");
+  if (path.startsWith(appDir)) return image(path.slice(appDir.length)).w(20).h(20).rounded(4);
+  return svg("mods/agent-config/hard-drive.svg").size(14).text_color(t.muted);
+}
+
+function providerTooltip(remote, providerCount) {
+  if (remote) return "A model provider is set up on this computer only";
+  return providerCount > 0 ? "Choose which model source Codex starts with" : "Add a model provider";
+}
+
+// The validity badge of a JSON editor: invalid, edited since the last save, or fine.
+function jsonBadge(editor, danger, t) {
+  if (editor.error) return { text: `Invalid JSON · line ${editor.error.line}`, color: danger, bg: "#ef444414", border: "#ef444440" };
+  if (editor.dirty) return { text: "Unsaved changes", color: t.working, bg: "#eab30814", border: "#eab30840" };
+  return { text: "Valid JSON", color: t.done, bg: "#10b98114", border: "#10b98138" };
+}
+
+// The space the flyout was opened for, else the active one.
+const launchSpace = (p) => spaces().find((candidate) => candidate.id === p.space) ?? spaces().find((candidate) => candidate.active);
+
 export default class AgentConfig extends View {
   init(_props, cx) {
     this.key = props()?.key ?? "claude";
@@ -100,93 +131,112 @@ export default class AgentConfig extends View {
     // Output styles (the `claudeOutputStyles` list): the .md files of ~/.claude/output-styles.
     this.styles = BUILTIN_STYLES;
     this.naming = false; // "+ New style…" shows a name input until Enter
-    this.styleInput = InputState.new({ placeholder: "style name" });
     this.nameFocused = false; // blur only cancels once the input really had focus
     this.nameError = false;
-    this.styleInput.on("submit", (_e, cx) => this.createStyle(cx));
-    this.styleInput.on("change", (_e, cx) => { this.nameError = false; cx.notify(); });
+    this.setupStyleInput();
+    this.setupEditors();
+
+    if (checking()) return;
+
+    cx.spawn((taskCx) => this.loadSaved(taskCx));
+  }
+
+  setupStyleInput() {
+    this.styleInput = InputState.new({ placeholder: "style name" });
+    this.styleInput.on("submit", (_e, eventCx) => this.createStyle(eventCx));
+    this.styleInput.on("change", (_e, eventCx) => { this.nameError = false; eventCx.notify(); });
     this.styleInput.on("focus", () => { this.nameFocused = true; });
     // Any click elsewhere blurs the input, which covers other selects, Reset and Launch.
-    this.styleInput.on("blur", (_e, cx) => { if (this.nameFocused) this.cancelNaming(cx); });
+    this.styleInput.on("blur", (_e, eventCx) => { if (this.nameFocused) this.cancelNaming(eventCx); });
+  }
 
-    // Editors: the live text is the input's, the saved text is `values[id]`. TextareaState.new needs
-    // a live host call, so it belongs here, not in render.
+  // Editors: the live text is the input's, the saved text is `values[id]`. TextareaState.new needs
+  // a live host call, so it belongs here, not in render.
+  setupEditors() {
     this.editors = {};
     for (const [id, option] of Object.entries(this.spec.options)) {
       if (option.type !== "editor") continue;
       const editor = { input: TextareaState.new({ value: option.default ?? "", rows: 3 }), dirty: false, error: null };
       if (option.language === "json") editor.input.set_soft_wrap(false); // JSON: scroll sideways, never wrap
-      editor.input.on("change", (_e, cx) => {
+      editor.input.on("change", (_e, eventCx) => {
         editor.dirty = editor.input.value() !== this.values[id];
-        cx.notify();
+        eventCx.notify();
       });
       this.editors[id] = editor;
     }
+  }
 
-    if (checking()) return;
+  async loadSaved(cx) {
+    try {
+      this.snapshot = await readTextFile(SETTINGS).catch(() => null);
+      const all = JSON.parse(this.snapshot ?? "{}");
+      const saved = all[this.key] ?? {};
+      await this.applySaved(saved, cx);
 
-    cx.spawn(async (cx) => {
-      try {
-        this.snapshot = await readTextFile(SETTINGS).catch(() => null);
-        const all = JSON.parse(this.snapshot ?? "{}");
-        const saved = all[this.key] ?? {};
-        this.values = { ...this.values, ...readValues(this.spec, saved) };
-        for (const [id, editor] of Object.entries(this.editors)) {
-          if (this.spec.options[id].language === "json") this.values[id] = normalizeJson(this.values[id], this.spec.options[id].default);
-          editor.input.set_value(this.values[id]);
-        }
-        if (this.hasSource("claudeOutputStyles")) this.loadStyles(cx);
-        this.hidden = new Set(saved.hidden ?? []);
-        if (this.spec.options.provider) await this.loadProviders();
-        if (this.groupOption()) this.modelGroup = readGroup(this.groupOption(), saved);
-        const pickSaved = () => {
-          if (!this.models?.length) return;
-          const pick = this.models.find((m) => m.id === saved.model) ?? this.models[0];
-          this.choose(pick, saved.effort);
-        };
-        // The row's own click (launchNow) launches with this flyout's saved config, as its button does.
-        const go = () => {
-          if (props().launchNow && this.current() && !this.launched) {
-            this.launched = true;
-            this.launch(cx);
-          }
-        };
+      const cached = all.catalog?.[this.key];
+      const cachedModels = currentCatalogModels(cached);
+      if (cachedModels?.length) this.paintCached(cachedModels, saved, cx);
+      if (isFresh(cached, cachedModels)) return;
+      await this.checkCatalog(cx, saved, cached, cachedModels);
+    } catch (e) {
+      // A failed refresh keeps the cached list; only show the error when there is nothing to show.
+      if (!this.models?.length) this.error = `Could not list models: ${e?.message ?? e}`;
+      cx.notify();
+    }
+  }
 
-        const cached = all.catalog?.[this.key];
-        const cachedModels = cached?.schema === CATALOG_SCHEMA ? cached.models : null;
-        if (cachedModels?.length) {
-          // Paint the cached list before asking the CLI anything; a refresh must not show a spinner.
-          this.models = cachedModels;
-          pickSaved();
-          cx.notify();
-          go();
-        }
+  // The values, hidden models, providers and group this agent saved last time.
+  async applySaved(saved, cx) {
+    this.values = { ...this.values, ...readValues(this.spec, saved) };
+    for (const [id, editor] of Object.entries(this.editors)) {
+      if (this.spec.options[id].language === "json") this.values[id] = normalizeJson(this.values[id], this.spec.options[id].default);
+      editor.input.set_value(this.values[id]);
+    }
+    if (this.hasSource("claudeOutputStyles")) this.loadStyles(cx);
+    this.hidden = new Set(saved.hidden ?? []);
+    if (this.spec.options.provider) await this.loadProviders();
+    if (this.groupOption()) this.modelGroup = readGroup(this.groupOption(), saved);
+  }
 
-        const fresh = cachedModels && typeof cached.checkedAt === "number" && Date.now() - cached.checkedAt < CATALOG_TTL_MS;
-        if (fresh) return;
+  // Paint the cached list before asking the CLI anything; a refresh must not show a spinner.
+  paintCached(cachedModels, saved, cx) {
+    this.models = cachedModels;
+    this.pickSaved(saved);
+    cx.notify();
+    this.launchIfAsked(cx);
+  }
 
-        // Check both the CLI version and the upstream list: a model can be added without a version
-        // change. Both run in the background, so the cached list stays on screen meanwhile.
-        const [version, models] = await Promise.all([
-          cliVersion(this.spec.command).catch(() => cached?.version ?? null),
-          this.listModels(),
-        ]);
-        if (!models.length) throw new Error("no models available");
-        if (JSON.stringify(models) !== JSON.stringify(cachedModels ?? [])) {
-          this.models = models;
-          const keep = models.find((m) => m.id === this.model);
-          if (keep) this.choose(keep, this.effort);
-          else pickSaved();
-          cx.notify();
-        }
-        go();
-        this.saveCatalog(version, models);
-      } catch (e) {
-        // A failed refresh keeps the cached list; only show the error when there is nothing to show.
-        if (!this.models?.length) this.error = `Could not list models: ${e?.message ?? e}`;
-        cx.notify();
-      }
-    });
+  pickSaved(saved) {
+    if (!this.models?.length) return;
+    const pick = this.models.find((m) => m.id === saved.model) ?? this.models[0];
+    this.choose(pick, saved.effort);
+  }
+
+  // The row's own click (launchNow) launches with this flyout's saved config, as its button does.
+  launchIfAsked(cx) {
+    if (props().launchNow && this.current() && !this.launched) {
+      this.launched = true;
+      this.launch(cx);
+    }
+  }
+
+  // Check both the CLI version and the upstream list: a model can be added without a version
+  // change. Both run in the background, so the cached list stays on screen meanwhile.
+  async checkCatalog(cx, saved, cached, cachedModels) {
+    const [version, models] = await Promise.all([
+      cliVersion(this.spec.command).catch(() => cached?.version ?? null),
+      this.listModels(),
+    ]);
+    if (!models.length) throw new Error("no models available");
+    if (JSON.stringify(models) !== JSON.stringify(cachedModels ?? [])) {
+      this.models = models;
+      const keep = models.find((m) => m.id === this.model);
+      if (keep) this.choose(keep, this.effort);
+      else this.pickSaved(saved);
+      cx.notify();
+    }
+    this.launchIfAsked(cx);
+    this.saveCatalog(version, models);
   }
 
   get model() { return this.values.model; }
@@ -210,7 +260,7 @@ export default class AgentConfig extends View {
   async listModels() {
     const first = this.spec.models.default ? [{ id: "", label: this.spec.models.default, efforts: [], fallbackEffort: "" }] : [];
     try {
-      const { stdout } = await exec("zsh", ["-lic", this.spec.models.shell], { timeout: 60000 });
+      const { stdout } = await exec("zsh", ["-lic", this.spec.models.shell], { timeout: CLI_TIMEOUT_MS });
       return [...first, ...parseModels(this.spec.models.parser, stdout)];
     } catch (error) {
       if (first.length) return first;
@@ -228,7 +278,8 @@ export default class AgentConfig extends View {
     this.model = model.id;
     const efforts = model.efforts;
     const fallback = efforts.includes(model.fallbackEffort) ? model.fallbackEffort : efforts[0];
-    this.effort = efforts.includes(effort) ? effort : efforts.includes(this.effort) ? this.effort : fallback;
+    const kept = [effort, this.effort].find((level) => efforts.includes(level));
+    this.effort = kept !== undefined ? kept : fallback;
   }
 
   current() {
@@ -279,7 +330,7 @@ export default class AgentConfig extends View {
       try {
         await writeTextFile(file, serializeProviderFile(parsed.providers), text);
         await exec("chmod", ["600", file]); // the key is in this file
-      } catch {}
+      } catch { /* the provider file could not be saved: the choice is kept in memory only */ }
     });
   }
 
@@ -287,13 +338,13 @@ export default class AgentConfig extends View {
   persist(mutate) {
     this.saving = (this.saving ?? Promise.resolve()).then(async () => {
       let all = {};
-      try { all = JSON.parse(this.snapshot ?? "{}"); } catch {}
+      try { all = JSON.parse(this.snapshot ?? "{}"); } catch { /* a damaged file is rewritten from what this flyout saves */ }
       mutate(all);
       const text = `${JSON.stringify(all, null, 2)}\n`;
       try {
         await writeTextFile(SETTINGS, text, this.snapshot);
         this.snapshot = text;
-      } catch {}
+      } catch { /* the settings file could not be saved: the next save builds on the old snapshot */ }
     });
   }
 
@@ -385,11 +436,11 @@ export default class AgentConfig extends View {
 
   // Custom styles are the .md files in ~/.claude/output-styles; a missing folder just means none.
   loadStyles(cx) {
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       const { stdout } = await exec("ls", [styleDir()]).catch(() => ({ stdout: "" }));
       const custom = stdout.split("\n").filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3));
       this.styles = [...BUILTIN_STYLES, ...custom.filter((n) => !BUILTIN_STYLES.includes(n))];
-      cx.notify();
+      taskCx.notify();
     });
   }
 
@@ -404,7 +455,7 @@ export default class AgentConfig extends View {
     this.naming = true;
     this.nameFocused = false;
     this.nameError = false;
-    cx.timer.after(30, () => this.styleInput.focus()); // the input is mounted by the next frame
+    cx.timer.after(INPUT_MOUNT_DELAY_MS, () => this.styleInput.focus());
     cx.notify();
   }
 
@@ -426,7 +477,7 @@ export default class AgentConfig extends View {
     this.nameFocused = false;
     this.styleInput.set_value("");
     const id = Object.keys(this.spec.options).find((key) => this.spec.options[key].source === "claudeOutputStyles");
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       const file = `${styleDir()}/${name}.md`;
       if ((await readTextFile(file).catch(() => null)) === null) {
         await exec("mkdir", ["-p", styleDir()]);
@@ -434,7 +485,7 @@ export default class AgentConfig extends View {
       }
       this.values[id] = name;
       this.rememberPreset();
-      this.loadStyles(cx);
+      this.loadStyles(taskCx);
       this.openStyleFile(name);
     });
     cx.notify();
@@ -456,7 +507,7 @@ export default class AgentConfig extends View {
     const key = this.key;
     this.persist((all) => { if (all.catalog) delete all.catalog[key]; });
     cx.notify();
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try {
         const [version, models] = await Promise.all([cliVersion(this.spec.command).catch(() => null), this.listModels()]);
         if (!models.length) throw new Error("no models available");
@@ -468,7 +519,7 @@ export default class AgentConfig extends View {
         this.error = `Could not list models: ${e?.message ?? e}`;
       }
       this.refreshing = false;
-      cx.notify();
+      taskCx.notify();
     });
   }
 
@@ -481,70 +532,89 @@ export default class AgentConfig extends View {
   // The argv this flyout launches, or `{ error }` when something blocks it. Editors are read live: a
   // launch never saves them, and invalid JSON blocks it even when it was never saved.
   async buildLaunch(p) {
-    const spec = this.spec;
     const values = { ...this.values };
+    if (this.readEditors(values)) return { blocked: true };
+    const expansions = await this.expandItems(values);
+    if (this.spec.options.provider && this.providerId !== "none") return this.buildProviderLaunch(p, values, expansions);
+    return { argv: buildArgv(this.spec, p.argv, values, { expansions }) };
+  }
+
+  // Puts the live editor text into `values`; true when a JSON editor holds invalid JSON.
+  readEditors(values) {
     for (const [id, editor] of Object.entries(this.editors)) {
       values[id] = editor.input.value();
-      if (spec.options[id].language === "json" && values[id].trim()) {
+      if (this.spec.options[id].language === "json" && values[id].trim()) {
         try {
           JSON.parse(values[id]);
         } catch (error) {
           editor.error = describeJsonError(error, values[id]);
           editor.dirty = values[id] !== this.values[id];
-          return { blocked: true };
+          return true;
         }
       }
     }
+    return false;
+  }
 
+  async expandItems(values) {
     const expansions = {};
-    for (const [id, option] of Object.entries(spec.options)) {
+    for (const [id, option] of Object.entries(this.spec.options)) {
       for (const item of option.items ?? []) {
         if (item.expand && (values[id] ?? []).includes(item.id)) expansions[item.expand] = await EXPANSIONS[item.expand]();
       }
     }
+    return expansions;
+  }
 
-    // A provider must still be saved: the file can lose it while the flyout is open.
-    if (spec.options.provider && this.providerId !== "none") {
-      const file = `${appHome()}/${PROVIDER_FILE}`;
-      const record = parseProviderFile(await readTextFile(file).catch(() => null)).providers?.[this.providerId];
-      // The host goes into a config string, so a hand-edited one is checked again here.
-      if (!record || validateHost(record.host).error) {
-        this.providerId = "none";
-        this.open = null;
-        return { error: "Model provider is no longer set up." };
-      }
-      // oMLX wraps the agent in sh so the key comes from the provider file, never from argv, and adds
-      // no effort flag; its model flag is placed by launchArgv.
-      const provider = { ...record, id: this.providerId, configPath: file };
-      return { argv: launchArgv(buildArgv(spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, this.model) };
+  // A provider must still be saved: the file can lose it while the flyout is open.
+  async buildProviderLaunch(p, values, expansions) {
+    const file = `${appHome()}/${PROVIDER_FILE}`;
+    const record = parseProviderFile(await readTextFile(file).catch(() => null)).providers?.[this.providerId];
+    // The host goes into a config string, so a hand-edited one is checked again here.
+    if (!record || validateHost(record.host).error) {
+      this.providerId = "none";
+      this.open = null;
+      return { error: "Model provider is no longer set up." };
     }
-    return { argv: buildArgv(spec, p.argv, values, { expansions }) };
+    // oMLX wraps the agent in sh so the key comes from the provider file, never from argv, and adds
+    // no effort flag; its model flag is placed by launchArgv.
+    const provider = { ...record, id: this.providerId, configPath: file };
+    return { argv: launchArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, this.model) };
+  }
+
+  // The flyout is sticky; availability may have changed while it was open. Local settings only.
+  async disabledInManager(p) {
+    const manager = await readTextFile(`${appHome()}/agent-manager.json`).catch(() => null);
+    return managerDisabled(manager).has(p.key);
+  }
+
+  // Stops a launch: shows the reason, if there is one, and lets the next click try again.
+  failLaunch(message, cx) {
+    if (message) this.error = message;
+    this.launching = false;
+    cx?.notify();
   }
 
   async launch(cx) {
     const p = props();
     if (!this.current() || this.launching) return;
     this.launching = true; // the mcp listing awaits; a second click must not launch twice
-    // The flyout is sticky; availability may have changed while it was open. Local settings only.
-    const space = spaces().find((candidate) => candidate.id === p.space) ?? spaces().find((candidate) => candidate.active);
-    if (!space?.machine) {
-      const manager = await readTextFile(`${appHome()}/agent-manager.json`).catch(() => null);
-      if (managerDisabled(manager).has(p.key)) {
-        this.error = `${p.name ?? p.key} is disabled in Agent Manager.`;
-        this.launching = false;
-        cx?.notify();
-        return;
-      }
+    const space = launchSpace(p);
+    if (!space?.machine && await this.disabledInManager(p)) {
+      this.failLaunch(`${p.name ?? p.key} is disabled in Agent Manager.`, cx);
+      return;
     }
 
     const built = await this.buildLaunch(p);
     if (!built.argv) {
-      if (built.error) this.error = built.error;
-      this.launching = false;
-      cx?.notify();
+      this.failLaunch(built.error, cx);
       return;
     }
 
+    await this.startTerminal(p, space, built.argv);
+  }
+
+  async startTerminal(p, space, argv) {
     this.remember();
     // Launch uses the live editor text and never writes it; editors stay manual save.
     // argv elements, not shell words: no quotes around the JSON or the prompt.
@@ -552,7 +622,7 @@ export default class AgentConfig extends View {
     run("tab.new", {
       space: space?.id,
       ...(space?.folder ? { folder: space.folder } : {}),
-      argv: built.argv,
+      argv,
     });
     setShared("agent-config", null);
     closeOverlay(p.overlay);
@@ -572,7 +642,7 @@ export default class AgentConfig extends View {
       else delete variant[this.model]; // Default: no saved variant
       all.variant = variant;
       await writeTextFile(file, `${JSON.stringify(all, null, 2)}\n`, current);
-    } catch {}
+    } catch { /* best effort, as above: the launch goes on without the saved variant */ }
   }
 
   modelRow(m, t) {
@@ -629,72 +699,81 @@ export default class AgentConfig extends View {
       .child(div().text_size(10).text_color(t.muted).child("▾"));
   }
 
+  // The models the list shows: the chosen group's (opencode), else the active source's.
+  shownModels() {
+    if (!this.groupOption()) return this.activeModels() ?? [];
+    return (this.models ?? []).filter((m) => this.modelGroup === "all" || (m.group ?? (m.free ? "free" : "paid")) === this.modelGroup);
+  }
+
+  // The "-- hidden --" heading and, when expanded, the hidden models under it.
+  hiddenRows(hiddenModels, t) {
+    if (hiddenModels.length === 0) return [];
+    return [
+      div()
+        .id("hidden-section")
+        .px(14)
+        .pt(6)
+        .text_size(11)
+        .text_color(t.dim)
+        .cursor_pointer()
+        .on_click((_e, cx) => {
+          this.showHidden = !this.showHidden;
+          cx.notify();
+        })
+        .child("-- hidden --"),
+      ...(this.showHidden ? hiddenModels.map((m) => this.modelRow(m, t)) : []),
+    ];
+  }
+
+  // The group filter: a "SHOW" row with its select, and the list under it while it is open.
+  withGroupFilter(el, t) {
+    return el
+      .child(
+        h_flex()
+          .mx(6)
+          .mb(2)
+          .h(ROW.height)
+          .px(4)
+          .gap(8)
+          .items_center()
+          .child(div().flex_1().text_size(11).text_color(t.muted).child("SHOW"))
+          .child(this.groupSelect(t)),
+      )
+      .when(this.groupOpen, (inner) => inner.child(
+        v_flex()
+          .mx(6)
+          .mb(2)
+          .py(2)
+          .rounded(6)
+          .border_1()
+          .border_color(t.border)
+          .bg(t.popover)
+          .child(this.scrollList("group-list", this.groupOption().groups.map((g) =>
+            this.listRow(`group-${g.id}`, t, 4)
+              .on_click((_e, cx) => {
+                this.modelGroup = g.id;
+                this.groupOpen = false;
+                this.rememberGroup();
+                cx.notify();
+              })
+              .child(div().flex_1().text_size(12).text_color(t.foreground).child(g.label))
+              .when(this.modelGroup === g.id, (row) => row.child(div().text_color(t.accent).child("✓"))),
+          ))),
+      ));
+  }
+
   // Visible models, then the collapsed "-- hidden --" section: the list as the other agents show it.
   modelList(t) {
-    const all = this.groupOption()
-      ? (this.models ?? []).filter((m) => this.modelGroup === "all" || (m.group ?? (m.free ? "free" : "paid")) === this.modelGroup)
-      : this.activeModels() ?? [];
+    const all = this.shownModels();
     const visible = all.filter((m) => !this.hidden.has(m.id));
     const hiddenModels = all.filter((m) => this.hidden.has(m.id));
     // Rows actually rendered: visible plus (if expanded) hidden ones; the hidden heading counts
     // as a row whenever anything is hidden, so a list of only hidden models cannot collapse to
     // zero height and hide the way back. scrollList gives it its height (list-viewport.js).
-    const rows = [
-      ...visible.map((m) => this.modelRow(m, t)),
-      ...(hiddenModels.length > 0
-        ? [
-            div()
-              .id("hidden-section")
-              .px(14)
-              .pt(6)
-              .text_size(11)
-              .text_color(t.dim)
-              .cursor_pointer()
-              .on_click((_e, cx) => {
-                this.showHidden = !this.showHidden;
-                cx.notify();
-              })
-              .child("-- hidden --"),
-            ...(this.showHidden ? hiddenModels.map((m) => this.modelRow(m, t)) : []),
-          ]
-        : []),
-    ];
+    const rows = [...visible.map((m) => this.modelRow(m, t)), ...this.hiddenRows(hiddenModels, t)];
     return v_flex()
       .gap(2)
-      .when(this.groupOption(), (el) => el
-        .child(
-          h_flex()
-            .mx(6)
-            .mb(2)
-            .h(ROW.height)
-            .px(4)
-            .gap(8)
-            .items_center()
-            .child(div().flex_1().text_size(11).text_color(t.muted).child("SHOW"))
-            .child(this.groupSelect(t)),
-        )
-        .when(this.groupOpen, (inner) => inner.child(
-          v_flex()
-            .mx(6)
-            .mb(2)
-            .py(2)
-            .rounded(6)
-            .border_1()
-            .border_color(t.border)
-            .bg(t.popover)
-            .child(this.scrollList("group-list", this.groupOption().groups.map((g) =>
-              this.listRow(`group-${g.id}`, t, 4)
-                .on_click((_e, cx) => {
-                  this.modelGroup = g.id;
-                  this.groupOpen = false;
-                  this.rememberGroup();
-                  cx.notify();
-                })
-                .child(div().flex_1().text_size(12).text_color(t.foreground).child(g.label))
-                .when(this.modelGroup === g.id, (row) => row.child(div().text_color(t.accent).child("✓"))),
-            ))),
-        )),
-      )
+      .when(this.groupOption(), (el) => this.withGroupFilter(el, t))
       .child(this.scrollList("agent-config-models", rows))
       .child(
         div()
@@ -715,14 +794,7 @@ export default class AgentConfig extends View {
   // A provider's icon sits in a small tile: the file saved in this app's folder, else the default
   // drive; None gets a plain circle. Without a record the tile is None's.
   providerIcon(record, t) {
-    const home = `${appHome()}/`;
-    const path = String(record?.iconPath ?? "");
-    const glyph = !record
-      ? svg("mods/agent-config/circle.svg").size(13).text_color(t.muted)
-      : path.startsWith(home)
-        ? image(path.slice(home.length)).w(20).h(20).rounded(4)
-        : svg("mods/agent-config/hard-drive.svg").size(14).text_color(t.muted);
-    return div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(glyph);
+    return div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(providerGlyph(record, t));
   }
 
   // The model source section: one select like MODEL and EFFORT, its label inside. None, or a provider
@@ -730,7 +802,7 @@ export default class AgentConfig extends View {
   // the icon live on this one). The list opens inline below it.
   providerRow(t) {
     const ids = Object.keys(this.providers ?? {});
-    const space = spaces().find((candidate) => candidate.id === props()?.space) ?? spaces().find((candidate) => candidate.active);
+    const space = launchSpace(props() ?? {});
     const remote = Boolean(space?.machine);
     // With none saved the select still opens, for its "Add More" row.
     const enabled = !remote;
@@ -744,15 +816,9 @@ export default class AgentConfig extends View {
           .when(!enabled, (el) => el.opacity(0.5))
           .role("group")
           .accessibility_label(`Model provider: ${label}`)
-          .tooltip(
-            remote
-              ? "A model provider is set up on this computer only"
-              : ids.length > 0
-                ? "Choose which model source Codex starts with"
-                : "Add a model provider",
-          )
+          .tooltip(providerTooltip(remote, ids.length))
           .child(
-            this.selectBox("provider-select", "MODEL PROVIDER", label, this.open === "provider" && enabled, (cx) => this.toggle("provider", cx), t, null, null, !enabled),
+            this.selectBox({ id: "provider-select", label: "MODEL PROVIDER", value: label, open: this.open === "provider" && enabled, onToggle: (cx) => this.toggle("provider", cx), t, disabled: !enabled }),
           ),
       )
       .when(this.open === "provider" && enabled, (el) =>
@@ -849,7 +915,7 @@ export default class AgentConfig extends View {
       .child(Scrollbar.vertical(id).absolute().inset_0());
   }
 
-  selectBox(id, label, value, open, onToggle, t, valueEl = null, borderColor = null, disabled = false) {
+  selectBox({ id, label, value, open, onToggle, t, valueEl = null, borderColor = null, disabled = false }) {
     return h_flex()
       .id(id)
       .flex_1()
@@ -894,23 +960,42 @@ export default class AgentConfig extends View {
   selectControl(id, t) {
     const option = this.spec.options[id];
     if (option.type === "model") {
-      return this.selectBox("model-select", option.label, this.current()?.label ?? "…", this.open === "model", (cx) => this.toggle("model", cx), t);
+      return this.selectBox({ id: "model-select", label: option.label, value: this.current()?.label ?? "…", open: this.open === "model", onToggle: (cx) => this.toggle("model", cx), t });
     }
     if (option.type === "effort") {
       if ((this.current()?.efforts ?? []).length === 0) return null; // a model without effort variants has nothing to pick
-      return this.selectBox("effort-select", option.label, EFFORT_LABEL[this.effort] ?? this.effort ?? "…", this.open === "effort", (cx) => this.toggle("effort", cx), t);
+      return this.selectBox({ id: "effort-select", label: option.label, value: EFFORT_LABEL[this.effort] ?? this.effort ?? "…", open: this.open === "effort", onToggle: (cx) => this.toggle("effort", cx), t });
     }
-    // A select with a hooked list (output styles) can also ask for a new name in place.
+    return this.choiceSelect(id, option, t);
+  }
+
+  // A select with a hooked list (output styles) can also ask for a new name in place.
+  choiceSelect(id, option, t) {
     const styles = option.source === "claudeOutputStyles";
-    const value = this.values[id];
-    const label = styles && this.nameError ? "LETTERS, DIGITS, - _ ONLY" : styles && this.naming ? "NEW OUTPUT STYLE" : option.label;
-    return this.selectBox(`${id}-select`, label, value, this.open === id || (styles && this.naming), (cx) => {
-      if (styles && this.naming) return;
-      this.toggle(id, cx);
-    }, t, styles && this.naming ? div().flex_1().min_w(0).on_key_down((e, cx) => {
+    return this.selectBox({
+      id: `${id}-select`,
+      label: this.choiceLabel(option, styles),
+      value: this.values[id],
+      open: this.open === id || (styles && this.naming),
+      onToggle: (cx) => {
+        if (styles && this.naming) return;
+        this.toggle(id, cx);
+      },
+      t,
+      valueEl: styles && this.naming ? this.nameEntry() : null,
+      borderColor: styles && this.nameError ? dangerColor() : null,
+    });
+  }
+
+  choiceLabel(option, styles) {
+    if (styles && this.nameError) return "LETTERS, DIGITS, - _ ONLY";
+    return styles && this.naming ? "NEW OUTPUT STYLE" : option.label;
+  }
+
+  nameEntry() {
+    return div().flex_1().min_w(0).on_key_down((e, cx) => {
       if (e.key === "escape") { this.cancelNaming(cx); cx.stop_propagation(); }
-    }).child(Input.new(this.styleInput)) : null,
-    styles && this.nameError ? (settings()?.dark ? "#ef4444" : "#dc2626") : null);
+    }).child(Input.new(this.styleInput));
   }
 
   // The list a select opens: models, efforts, or the option's choices.
@@ -975,12 +1060,8 @@ export default class AgentConfig extends View {
     const editor = this.editors[id];
     const json = option.language === "json";
     const mono = settings()?.font_family ?? "JetBrains Mono";
-    const danger = settings()?.dark ? "#ef4444" : "#dc2626";
-    const badge = editor.error
-      ? { text: `Invalid JSON · line ${editor.error.line}`, color: danger, bg: "#ef444414", border: "#ef444440" }
-      : editor.dirty
-        ? { text: "Unsaved changes", color: t.working, bg: "#eab30814", border: "#eab30840" }
-        : { text: "Valid JSON", color: t.done, bg: "#10b98114", border: "#10b98138" };
+    const danger = dangerColor();
+    const badge = jsonBadge(editor, danger, t);
     const save = h_flex()
       .id(`save-${id}`)
       .items_center()
