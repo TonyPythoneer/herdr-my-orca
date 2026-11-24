@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Where things live. Everything the scripts assume about the repo layout is named here.
-export const FEATURES_DIR = "orca-ui/features";
+const FEATURES_DIR = "orca-ui/features";
 export const SHARED = "orca-ui/shared";
-export const MANIFEST_FILE = "manifest.json";
+const MANIFEST_FILE = "manifest.json";
 // Herdr writes these into a mod folder when it checks the mod; they are never builder output.
-export const RESERVED = ["gpui-kit.d.ts", "jsconfig.json"];
+const RESERVED = ["gpui-kit.d.ts", "jsconfig.json"];
 const FEATURE_FIELDS = ["feature", "mod", "source", "output", "files", "tests", "layoutSlots", "keys"];
 const OPTIONAL_FIELDS = ["handwritten"];
 export const MODE_MASK = 0o777;
@@ -56,8 +56,9 @@ function walkObjects(node, visit) {
 // Reads JSON that must live inside the repo; a symlink out of it is refused.
 function readJson(root, rel, fail) {
   try {
-    if (!realpathSync(join(root, rel)).startsWith(realpathSync(root) + sep)) throw new Error("resolves outside the repo");
-    return JSON.parse(readFileSync(join(root, rel), "utf8"));
+    const real = realpathSync(join(root, rel));
+    if (!real.startsWith(realpathSync(root) + sep)) throw new Error("resolves outside the repo");
+    return JSON.parse(readFileSync(real, "utf8"));
   } catch (error) { return fail(`cannot read ${rel}: ${error.message}`); }
 }
 
@@ -178,15 +179,13 @@ function row(root, kind, id, source, consumers, owner) {
 export function loadManifests({ root = ROOT } = {}) {
   const features = new Map();
   const table = new Map();
-  const owners = new Map(); // destination -> [who, manifest path]
+  const owners = new Map(); // destination -> who claimed it first
+  // Reported against the later claimant's manifest; every claimant is a manifest path.
   const claim = (dest, who, path) => {
     const parts = dest.split("/");
     if (parts.length === 3 && RESERVED.includes(parts[2])) failer(path)(`${dest} is a Herdr reserved file (${who})`);
-    if (owners.has(dest)) {
-      const [first, firstPath] = owners.get(dest);
-      failer(path.endsWith(MANIFEST_FILE) ? path : firstPath)(`${dest} is claimed by both ${first} and ${who}`);
-    }
-    owners.set(dest, [who, path]);
+    if (owners.has(dest)) failer(path)(`${dest} is claimed by both ${owners.get(dest)} and ${who}`);
+    owners.set(dest, who);
   };
 
   for (const path of discover(root)) {

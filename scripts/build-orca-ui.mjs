@@ -57,8 +57,9 @@ function pathProblem(path) {
 }
 
 // A shared copy ends with a generated-file line, last so Herdr error lines match the source.
-const GENERATED_PREFIX = `// Generated from ${SHARED}/`;
-const generatedLine = source => `// Generated from ${source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;
+const GENERATED_PREFIX = "// Generated from ";
+const generatedLine = source => `${GENERATED_PREFIX}${source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;
+const isSharedCopyLine = line => line.startsWith(`${GENERATED_PREFIX}${SHARED}/`);
 const TEMP_SUFFIX = ".orca-build-tmp";
 
 function deliverable(root, row) {
@@ -71,8 +72,7 @@ function deliverable(root, row) {
 function loadOrExit(root) {
   try { return loadManifests({ root }); }
   catch (error) {
-    if (!(error instanceof ManifestError)) throw error;
-    console.error(`${error.path}: ${error.message}`);
+    console.error(`${error instanceof ManifestError ? error.path : "orca-ui"}: ${error.message}`);
     console.error(USAGE);
     return process.exit(2);
   }
@@ -107,13 +107,14 @@ function undeclared(loaded, out) {
       if (!managed.has(dest) && !extras.has(dest)) found.push(`${dest}: not declared by any manifest`);
     }
   }
+  const featureMods = new Set([...loaded.features.values()].map(m => m.output));
   const mods = join(out, "mods");
   for (const mod of existsSync(mods) ? readdirSync(mods) : []) {
     const dir = join(mods, mod);
-    if (!lstatSync(dir).isDirectory()) continue;
-    for (const name of readdirSync(dir).filter(n => n.endsWith(".js"))) {
+    if (featureMods.has(`mods/${mod}`) || !lstatSync(dir).isDirectory()) continue;
+    for (const name of readdirSync(dir).filter(n => n.endsWith(".js") && lstatSync(join(dir, n)).isFile())) {
       const dest = `mods/${mod}/${name}`;
-      if (!managed.has(dest) && readFileSync(join(dir, name), "utf8").split("\n").some(l => l.startsWith(GENERATED_PREFIX))) {
+      if (!managed.has(dest) && readFileSync(join(dir, name), "utf8").split("\n").some(isSharedCopyLine)) {
         found.push(`${dest}: generated shared copy that no manifest lists`);
       }
     }
@@ -130,7 +131,8 @@ function replaceFile(p) {
   const tmp = `${p.to}${TEMP_SUFFIX}`;
   mkdirSync(dirname(p.to), { recursive: true });
   try {
-    writeFileSync(tmp, p.want);
+    rmSync(tmp, { force: true, recursive: true });
+    writeFileSync(tmp, p.want, { flag: "wx" });
     chmodSync(tmp, p.mode);
     renameSync(tmp, p.to);
   } catch (error) { rmSync(tmp, { force: true }); throw error; }

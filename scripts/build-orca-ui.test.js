@@ -283,3 +283,31 @@ test("an update replaces the file instead of rewriting it, so a hard link outsid
   assert.equal(readFileSync(join(elsewhere, "linked.js"), "utf8"), "export const view = 1;\n");
   assert.deepEqual(files(join(out, "mods/orca-files")).filter(f => f.endsWith("tmp")), []);
 });
+
+test("a symlink planted at the temp path is never written through", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  const outside = temp(t);
+  run("--root", root, "--out", out);
+  write(outside, "victim.txt", "keep me");
+  symlinkSync(join(outside, "victim.txt"), join(out, "mods/orca-files/view.js.orca-build-tmp"));
+  const past = new Date(Date.now() - 100_000);
+  write(root, `${FEATURE}/view.js`, "export const view = 4;\n");
+  for (const f of [join(root, FEATURE, "view.js"), join(out, "mods/orca-files/view.js")]) utimesSync(f, past, past);
+  assert.equal(run("--root", root, "--out", out).status, 0);
+  assert.equal(readFileSync(join(outside, "victim.txt"), "utf8"), "keep me");
+  assert.equal(readFileSync(join(out, "mods/orca-files/view.js"), "utf8"), "export const view = 4;\n");
+});
+
+test("check survives odd .js entries and reports an orphan in a feature mod once", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  run("--root", root, "--out", out);
+  mkdirSync(join(out, "mods/orca-menu/lib.js"));
+  symlinkSync(join(out, "nowhere"), join(out, "mods/orca-menu/dangling.js"));
+  write(out, "mods/orca-files/old.js", "x\n// Generated from orca-ui/shared/clip.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n");
+  const r = run("--root", root, "--check", "--out", out);
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout.match(/old\.js/g).length, 1);
+  assert.match(r.stdout, /1 managed file\(s\) drifted/);
+});

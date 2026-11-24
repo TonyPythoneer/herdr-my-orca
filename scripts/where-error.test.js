@@ -150,3 +150,10 @@ test("an in-place file that is a symlink out of its mod is reported as unknown, 
   assert.equal(r.status, 0);
   assert.match(r.stdout, /unknown path/);
 });
+
+test("a symlinked folder inside a mod is not an in-place edit target", t => {
+  const { root, run } = cli(t);
+  write(root, "elsewhere/x.js", "x");
+  symlinkSync(join(root, "elsewhere"), join(root, "mods/orca-panel-gap/lib"));
+  assert.match(run("mods/orca-panel-gap/lib/x.js:1").stdout, /unknown path/);
+});
