@@ -28,7 +28,7 @@ function fixture() {
 
 test('creates an already-pushed branch PR in the captured repository without invoking push', async () => {
   const f = fixture(), snapshot = await prepareCreatePr(f.git, f.gh);
-  const pr = await createPr(snapshot, f.git, f.gh, () => true, 'A title', 'body', true);
+  const pr = await createPr({ snapshot, git: f.git, gh: f.gh, current: () => true, title: 'A title', body: 'body', draft: true });
   assert.equal(pr.number, 42);
   const mutation = f.state.calls.at(-1);
   assert.ok(mutation.includes('repo=node-id')); assert.ok(mutation.includes('head=feature/a'));
@@ -37,11 +37,11 @@ test('creates an already-pushed branch PR in the captured repository without inv
 
 test('refuses unpushed branches, changed context, changed target and unsafe remote URLs', async () => {
   const f = fixture(), snapshot = await prepareCreatePr(f.git, f.gh);
-  await assert.rejects(createPr(snapshot, f.git, f.gh, () => false, 'x', '', false), /Workspace changed/);
+  await assert.rejects(createPr({ snapshot, git: f.git, gh: f.gh, current: () => false, title: 'x', body: '', draft: false }), /Workspace changed/);
   f.state.head = 'other';
-  await assert.rejects(createPr(snapshot, f.git, f.gh, () => true, 'x', '', false), /Push the current commit/);
+  await assert.rejects(createPr({ snapshot, git: f.git, gh: f.gh, current: () => true, title: 'x', body: '', draft: false }), /Push the current commit/);
   f.state.head = f.state.oid; f.state.base = 'other';
-  await assert.rejects(createPr(snapshot, f.git, f.gh, () => true, 'x', '', false), /changed/);
+  await assert.rejects(createPr({ snapshot, git: f.git, gh: f.gh, current: () => true, title: 'x', body: '', draft: false }), /changed/);
   f.state.url = 'https://token@github.com/owner/repo';
   await assert.rejects(prepareCreatePr(f.git, f.gh), /without credentials/);
   assert.equal(f.state.calls.filter(args => args.some(x => x.includes('mutation('))).length, 0);

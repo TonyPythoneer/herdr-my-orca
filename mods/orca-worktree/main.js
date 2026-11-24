@@ -7,6 +7,14 @@ import { run, props, closeOverlay, theme, spaces, panes, agents, exec, home } fr
 import { removeWorktree, REMOVE_UNAVAILABLE } from "./remove.js";
 import { ROOT, tilde, slug, ago, spaceOf, branchRows, switchBlocker } from "./helpers.js";
 
+// Pause before the filter input takes focus once the list has mounted.
+const INPUT_FOCUS_DELAY_MS = 100;
+// `git worktree add` can copy a large checkout.
+const WORKTREE_ADD_TIMEOUT_MS = 600_000;
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], SPINNER_FRAME_MS = 90;
+// Dialog action -> where the filter input's placeholder text comes from.
+const PLACEHOLDER = new Map([["open", "filter worktrees"], ["switch", "filter branches"]]);
+
 // Every checkout of a repo (`git worktree list`), the main one first, then
 // the most recently committed: { path, branch, main, at }.
 async function checkouts(repo, on) {
@@ -28,6 +36,16 @@ async function checkouts(repo, on) {
 async function git(cwd, args, on, timeout) {
   const r = await exec("git", args, { cwd, on, ...(timeout === undefined ? {} : { timeout }) });
   return { ok: r.code === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? r.stdout ?? "").trim() };
+}
+
+// The home folder on a remote host: `sh` first, PowerShell when the host has none.
+async function remoteHome(on) {
+  let result;
+  // A host without `sh` throws here; the PowerShell fallback below reports the real failure.
+  try { result = await exec("sh", ["-c", 'printf %s "$HOME"'], { on }); } catch {}
+  if (!result || result.code !== 0 || !result.stdout.trim()) result = await exec("powershell.exe", ["-NoProfile", "-Command", "[Console]::Write($HOME)"], { on });
+  if (result.code !== 0 || !result.stdout.trim()) throw new Error("Could not find the remote home folder.");
+  return result.stdout.trim().replace(/\\/g, "/");
 }
 
 // The repo a folder belongs to: its main checkout and name, and whether
@@ -55,44 +73,43 @@ export default class Worktree extends View {
     this.current = null; // switch: the branch HEAD is on
     this.blocker = ""; // switch: why Git must not be asked to switch
     this.at = 0;
-    const placeholder = this.opening ? "filter worktrees" : this.switching ? "filter branches" : "branch name";
-    this.input = InputState.new({ value: this.text, placeholder });
-    this.input.on("change", (_e, cx) => { this.text = this.input.value(); this.error = ""; this.at = 0; cx.notify(); });
-    this.input.on("submit", (_e, cx) => this.go(cx));
+    this.input = InputState.new({ value: this.text, placeholder: PLACEHOLDER.get(props()?.action) ?? "branch name" });
+    this.input.on("change", (_e, eventCx) => { this.text = this.input.value(); this.error = ""; this.at = 0; eventCx.notify(); });
+    this.input.on("submit", (_e, eventCx) => this.go(eventCx));
     this.inputFocused = true;
-    this.input.on("focus", (_e, cx) => { this.inputFocused = true; cx.notify(); });
-    this.input.on("blur", (_e, cx) => { this.inputFocused = false; cx.notify(); });
+    this.input.on("focus", (_e, eventCx) => { this.inputFocused = true; eventCx.notify(); });
+    this.input.on("blur", (_e, eventCx) => { this.inputFocused = false; eventCx.notify(); });
     this.handle = cx.focus_handle();
     this.handle.focus(); // the root is mounted from the first frame: keep the keyboard here while loading
     if (props()?.action !== "remove") this.input.focus();
     this.busy = false;
     this.error = "";
     this.repo = undefined; // undefined: looking, null: not in git
-    cx.spawn(async (cx) => {
-      try {
-        if (this.on) {
-          let result;
-          try { result = await exec("sh", ["-c", 'printf %s "$HOME"'], { on: this.on }); } catch {}
-          if (!result || result.code !== 0 || !result.stdout.trim()) result = await exec("powershell.exe", ["-NoProfile", "-Command", "[Console]::Write($HOME)"], { on: this.on });
-          if (result.code !== 0 || !result.stdout.trim()) throw new Error("Could not find the remote home folder.");
-          this.userHome = result.stdout.trim().replace(/\\/g, "/");
-        }
-        this.folder = this.initialIdentity.folder || this.userHome;
-        // The repo is set last: Enter does nothing until the warnings it consents to are known.
-        const repo = await repoOf(this.folder, this.on);
-        if (repo && (this.opening || this.switching)) this.list = await checkouts(repo, this.on);
-        // Read before `this.repo` lands, so the first frame that can draw the list knows the blocker.
-        if (repo && this.switching) await this.loadBranches(repo);
-        this.repo = repo;
-        cx.notify();
-        // The list (and with it the filter input) only mounts once loading is
-        // done, so the keyboard must move there now — a focus call made while
-        // loading lands on nothing and the dialog stays keyboard-dead.
-        this.handle.focus();
-        if (props().action !== "remove") cx.timer.after(100, () => this.input.focus());
-        if (props().branch) await this.work(cx);
-      } catch (error) { this.repo = null; this.error = String(error); cx.notify(); }
-    });
+    cx.spawn((taskCx) => this.load(taskCx));
+  }
+
+  async load(cx) {
+    try {
+      if (this.on) this.userHome = await remoteHome(this.on);
+      this.folder = this.initialIdentity.folder || this.userHome;
+      await this.loadRepo();
+      cx.notify();
+      // The list (and with it the filter input) only mounts once loading is
+      // done, so the keyboard must move there now — a focus call made while
+      // loading lands on nothing and the dialog stays keyboard-dead.
+      this.handle.focus();
+      if (props().action !== "remove") cx.timer.after(INPUT_FOCUS_DELAY_MS, () => this.input.focus());
+      if (props().branch) await this.work(cx);
+    } catch (error) { this.repo = null; this.error = String(error); cx.notify(); }
+  }
+
+  // The repo is set last: Enter does nothing until the warnings it consents to are known.
+  async loadRepo() {
+    const repo = await repoOf(this.folder, this.on);
+    if (repo && (this.opening || this.switching)) this.list = await checkouts(repo, this.on);
+    // Read before `this.repo` lands, so the first frame that can draw the list knows the blocker.
+    if (repo && this.switching) await this.loadBranches(repo);
+    this.repo = repo;
   }
 
   space() {
@@ -102,8 +119,9 @@ export default class Worktree extends View {
 
   identity() {
     const p = props() ?? {}, all = spaces(), s = p.space ? all.find((item) => item.id === p.space) : null;
-    return { spaceId: p.space ?? null, folder: p.folder ?? s?.folder ?? null, spaceFolder: s?.folder ?? null,
-      spaceMachine: s?.machine ?? null, on: p.machine ?? s?.machine ?? null, active: all.find((item) => item.active)?.id ?? null };
+    const space = { folder: s?.folder ?? null, machine: s?.machine ?? null };
+    return { spaceId: p.space ?? null, folder: p.folder ?? space.folder, spaceFolder: space.folder,
+      spaceMachine: space.machine, on: p.machine ?? space.machine, active: all.find((item) => item.active)?.id ?? null };
   }
 
   close() {
@@ -114,7 +132,7 @@ export default class Worktree extends View {
     if (this.busy || !this.repo || props()?.action === "remove") return;
     // Enter takes the highlighted branch; in this mode the input only filters, it names nothing new.
     if (this.switching) return this.act(this.visible()[this.at], cx);
-    cx.spawn(async (cx) => this.work(cx));
+    cx.spawn((taskCx) => this.work(taskCx));
   }
 
   async work(cx) {
@@ -139,7 +157,7 @@ export default class Worktree extends View {
     const path = `${ROOT(this.userHome)}/${this.repo.name}/${slug(branch)}`;
     const exists = (await git(this.repo.main, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], this.on)).ok;
     const add = exists ? ["worktree", "add", path, branch] : ["worktree", "add", "-b", branch, path, "HEAD"];
-    const r = await git(this.repo.top, add, this.on, 600_000);
+    const r = await git(this.repo.top, add, this.on, WORKTREE_ADD_TIMEOUT_MS);
     if (!r.ok) return r.err || "git worktree add failed.";
     const p = props();
     // Leave spaces unnamed so they follow the checkout folder and nest under the repo.
@@ -159,7 +177,8 @@ export default class Worktree extends View {
 
   // The mode's rows: checkouts to open, or branches to switch to.
   visible() {
-    return this.opening ? this.shown() : this.switching ? this.branchList() : [];
+    if (this.opening) return this.shown();
+    return this.switching ? this.branchList() : [];
   }
 
   act(row, cx) {
@@ -235,38 +254,8 @@ export default class Worktree extends View {
     if (e.key === "enter" && props()?.action === "remove") return this.go(cx);
   }
 
-  renderOpen(t) {
-    const r = this.repo;
-    const rows = this.shown();
-    const all = this.list ?? [];
-    const spaceList = spaces();
-    const paneList = panes();
-    const row = (c, i) => {
-      const on = i === this.at;
-      const there = spaceOf(c.path, all, this.on, spaceList, paneList);
-      return v_flex()
-        .id(`wt-${i}`)
-        .flex_none()
-        .h(44)
-        .px(10)
-        .justify_center()
-        .rounded(7)
-        .cursor_pointer()
-        .when(on, (el) => el.bg(t.selected))
-        .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
-        .on_click(() => this.open(c))
-        .child(
-          h_flex()
-            .gap(8)
-            .items_center()
-            .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(c.branch ?? "detached"))
-            .when(c.main, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child("main checkout")))
-            .when(Boolean(there), (el) => el.child(div().flex_none().text_size(11).text_color(t.accent).child("open")))
-            .when(!there && c.at > 0, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child(ago(c.at)))),
-        )
-        .child(div().truncate().text_size(11.5).text_color(t.dim).child(tilde(c.path, this.userHome ?? "")));
-    };
-    const count = rows.length === all.length ? `${all.length} checkouts` : `${rows.length}/${all.length} checkouts`;
+  // The frame every mode of the dialog draws into.
+  dialogFrame(t) {
     return v_flex()
       .id("worktree")
       .track_focus(this.handle)
@@ -275,30 +264,120 @@ export default class Worktree extends View {
       .p(16)
       .gap(10)
       .bg(t.popover)
-      .text_size(13)
+      .text_size(13);
+  }
+
+  filterInput(t) {
+    return Input.new(this.input).h(32).px(10).items_center().rounded(6).border(1).border_color(this.inputFocused ? t.accent : t.input).bg(t.background).text_color(t.foreground);
+  }
+
+  // The scrolling rows under the filter input, with the list's own scrollbar.
+  rowList(t, id, rows, row, emptyText) {
+    return div()
+      .relative()
+      .flex_1()
+      .min_h(0)
+      .child(
+        v_flex()
+          .id(id)
+          .size_full()
+          .overflow_y_scroll()
+          .children(rows.map(row))
+          .when(rows.length === 0, (el) => el.child(div().p(10).text_color(t.dim).child(emptyText))),
+      )
+      .child(Scrollbar.vertical(id).absolute().inset_0());
+  }
+
+  openRow(t, c, i, there) {
+    const on = i === this.at;
+    return v_flex()
+      .id(`wt-${i}`)
+      .flex_none()
+      .h(44)
+      .px(10)
+      .justify_center()
+      .rounded(7)
+      .cursor_pointer()
+      .when(on, (el) => el.bg(t.selected))
+      .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
+      .on_click(() => this.open(c))
+      .child(
+        h_flex()
+          .gap(8)
+          .items_center()
+          .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(c.branch ?? "detached"))
+          .when(c.main, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child("main checkout")))
+          .when(Boolean(there), (el) => el.child(div().flex_none().text_size(11).text_color(t.accent).child("open")))
+          .when(!there && c.at > 0, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child(ago(c.at)))),
+      )
+      .child(div().truncate().text_size(11.5).text_color(t.dim).child(tilde(c.path, this.userHome ?? "")));
+  }
+
+  renderOpen(t) {
+    const r = this.repo;
+    const rows = this.shown();
+    const all = this.list ?? [];
+    const spaceList = spaces();
+    const paneList = panes();
+    const row = (c, i) => this.openRow(t, c, i, spaceOf(c.path, all, this.on, spaceList, paneList));
+    const count = rows.length === all.length ? `${all.length} checkouts` : `${rows.length}/${all.length} checkouts`;
+    return this.dialogFrame(t)
       .child(h_flex().child(div().flex_1().font_semibold().text_color(t.foreground).child(`Open worktree${r ? ` of ${r.name}` : ""}`)).child(div().text_size(11).text_color(t.dim).child(r ? count : "")))
       .when(r === undefined || (r && this.list === undefined), (el) => el.child(div().text_color(t.muted).child("\u2026")))
       .when(r === null, (el) => el.child(div().text_color(t.muted).child(`${this.folder ? tilde(this.folder, this.userHome ?? "") : "This folder"} is not in a git repository.`)))
       .when(Boolean(r && this.list), (el) =>
         el
-          .child(Input.new(this.input).h(32).px(10).items_center().rounded(6).border(1).border_color(this.inputFocused ? t.accent : t.input).bg(t.background).text_color(t.foreground))
-          .child(
-            div()
-              .relative()
-              .flex_1()
-              .min_h(0)
-              .child(
-                v_flex()
-                  .id("wt-list")
-                  .size_full()
-                  .overflow_y_scroll()
-                  .children(rows.map(row))
-                  .when(rows.length === 0, (el) => el.child(div().p(10).text_color(t.dim).child("No matching worktrees."))),
-              )
-              .child(Scrollbar.vertical("wt-list").absolute().inset_0()),
-          ),
+          .child(this.filterInput(t))
+          .child(this.rowList(t, "wt-list", rows, row, "No matching worktrees.")),
       )
       .child(h_flex().justify_end().text_size(11).text_color(t.dim).child("\u2191\u2193 choose \u00b7 \u21b5 open \u00b7 esc close"));
+  }
+
+  // What the right-hand tag of a branch row says.
+  branchTag(b) {
+    if (b.current) return "current";
+    return b.held ? `in ${b.held.split("/").pop()}` : "";
+  }
+
+  switchRow(t, b, i) {
+    const on = i === this.at && !this.blocker;
+    const disabled = b.current || Boolean(b.held);
+    return h_flex()
+      .id(`br-${i}`)
+      .flex_none()
+      .h(32)
+      .px(10)
+      .gap(8)
+      .items_center()
+      .rounded(7)
+      .when(on && !disabled, (el) => el.bg(t.selected))
+      .when(!on && !disabled, (el) => el.hover((s) => s.bg(t.hover)))
+      .when(disabled, (el) => el.opacity(0.45))
+      .when(!disabled, (el) => el.cursor_pointer().on_click((_e, cx) => void this.switchTo(b, cx)))
+      .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(b.branch))
+      .child(div().flex_none().text_size(11).text_color(b.current ? t.accent : t.dim).child(this.branchTag(b)));
+  }
+
+  // The line under the title of the switch dialog: loading, not a repo, the blocker, or what the switch does.
+  switchDetail(r) {
+    if (r === undefined) return "\u2026";
+    if (r === null) return `${this.folder ? tilde(this.folder, this.userHome) : "This folder"} is not in a git repository.`;
+    return this.blocker || `Moves ${tilde(this.folder, this.userHome ?? "")} to the branch you pick.`;
+  }
+
+  // Checked before the branches are read, for the "…" placeholder.
+  branchesLoading(r) {
+    return r === undefined || (r && this.branches === undefined);
+  }
+
+  // The space's name, else the repo's.
+  switchTarget(r) {
+    return this.space()?.name || r?.name || "this checkout";
+  }
+
+  switchFooterText() {
+    if (this.busy) return "switching\u2026";
+    return this.blocker ? "esc close" : "\u2191\u2193 choose \u00b7 \u21b5 checkout \u00b7 esc close";
   }
 
   // A checkout, not a new worktree: this moves HEAD in the folder the space already has, which is
@@ -308,70 +387,40 @@ export default class Worktree extends View {
     const rows = this.blocker ? [] : this.branchList();
     const all = this.branches ?? [];
     const count = rows.length === all.length ? `${all.length} branches` : `${rows.length}/${all.length} branches`;
-    const row = (b, i) => {
-      const on = i === this.at && !this.blocker;
-      const disabled = b.current || Boolean(b.held);
-      return h_flex()
-        .id(`br-${i}`)
-        .flex_none()
-        .h(32)
-        .px(10)
-        .gap(8)
-        .items_center()
-        .rounded(7)
-        .when(on && !disabled, (el) => el.bg(t.selected))
-        .when(!on && !disabled, (el) => el.hover((s) => s.bg(t.hover)))
-        .when(disabled, (el) => el.opacity(0.45))
-        .when(!disabled, (el) => el.cursor_pointer().on_click((_e, cx) => void this.switchTo(b, cx)))
-        .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(b.branch))
-        .child(div().flex_none().text_size(11).text_color(b.current ? t.accent : t.dim)
-          .child(b.current ? "current" : b.held ? `in ${b.held.split("/").pop()}` : ""));
-    };
-    const name = this.space()?.name || r?.name || "this checkout";
-    const detail = r === undefined
-      ? "\u2026"
-      : r === null
-        ? `${this.folder ? tilde(this.folder, this.userHome) : "This folder"} is not in a git repository.`
-        : this.blocker || `Moves ${tilde(this.folder, this.userHome ?? "")} to the branch you pick.`;
-    return v_flex()
-      .id("worktree")
-      .track_focus(this.handle)
-      .on_key_down((e, cx) => this.key(e, cx))
-      .size_full()
-      .p(16)
-      .gap(10)
-      .bg(t.popover)
-      .text_size(13)
+    const row = (b, i) => this.switchRow(t, b, i);
+    const name = this.switchTarget(r);
+    const detail = this.switchDetail(r);
+    return this.dialogFrame(t)
       .child(h_flex().child(div().flex_1().font_semibold().text_color(t.foreground).child(`Checkout branch in ${name}`)).child(div().text_size(11).text_color(t.dim).child(this.blocker ? "" : count)))
-      .when(r === undefined || (r && this.branches === undefined), (el) => el.child(div().text_color(t.muted).child("\u2026")))
+      .when(this.branchesLoading(r), (el) => el.child(div().text_color(t.muted).child("\u2026")))
       .when(Boolean(r) && this.branches !== undefined, (el) => el.child(div().text_color(this.blocker ? t.blocked : t.muted).child(detail)))
       .when(Boolean(r && this.branches && !this.blocker), (el) =>
         el
-          .child(Input.new(this.input).h(32).px(10).items_center().rounded(6).border(1).border_color(this.inputFocused ? t.accent : t.input).bg(t.background).text_color(t.foreground))
-          .child(
-            div()
-              .relative()
-              .flex_1()
-              .min_h(0)
-              .child(
-                v_flex()
-                  .id("br-list")
-                  .size_full()
-                  .overflow_y_scroll()
-                  .children(rows.map(row))
-                  .when(rows.length === 0, (el) => el.child(div().p(10).text_color(t.dim).child("No matching branches."))),
-              )
-              .child(Scrollbar.vertical("br-list").absolute().inset_0()),
-          ),
+          .child(this.filterInput(t))
+          .child(this.rowList(t, "br-list", rows, row, "No matching branches.")),
       )
       .when(Boolean(this.error) && this.error !== this.blocker, (el) => el.child(div().text_color(t.blocked).child(this.error)))
       .child(div().flex_1())
       .child(h_flex().justify_end().text_size(11).text_color(t.dim).gap(6)
-        .when(this.busy, (el) => el.child(div().frames(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], 90)))
-        .child(this.busy ? "switching\u2026" : this.blocker ? "esc close" : "\u2191\u2193 choose \u00b7 \u21b5 checkout \u00b7 esc close"));
+        .when(this.busy, (el) => el.child(div().frames(SPINNER_FRAMES, SPINNER_FRAME_MS)))
+        .child(this.switchFooterText()));
   }
 
-  render(cx) {
+  // The line under the title of the new / remove dialog.
+  newDetail(remove, r) {
+    if (remove) return REMOVE_UNAVAILABLE;
+    if (r === undefined) return "…";
+    if (r === null) return `${this.folder ? tilde(this.folder, this.userHome) : "This folder"} is not in a git repository.`;
+    return `A new space on a checkout in ${tilde(ROOT(this.userHome), this.userHome)}/${r.name}/. A branch that exists is checked out; a new one starts from here.`;
+  }
+
+  newFooterText(remove, blocked) {
+    if (this.busy) return "working…";
+    if (blocked) return "esc close";
+    return remove ? "↵ remove · esc cancel" : "↵ create · esc cancel";
+  }
+
+  render(_cx) {
     const t = theme();
     if (this.opening) return this.renderOpen(t);
     if (this.switching) return this.renderSwitch(t);
@@ -379,38 +428,12 @@ export default class Worktree extends View {
     const s = this.space();
     const r = this.repo;
     const title = remove ? `Remove worktree ${s?.name ?? ""}?` : `New worktree${r ? ` of ${r.name}` : ""}`;
-    const detail =
-      remove ? REMOVE_UNAVAILABLE
-        : r === undefined
-        ? "…"
-        : r === null
-          ? `${this.folder ? tilde(this.folder, this.userHome) : "This folder"} is not in a git repository.`
-          : `A new space on a checkout in ${tilde(ROOT(this.userHome), this.userHome)}/${r.name}/. A branch that exists is checked out; a new one starts from here.`;
+    const detail = this.newDetail(remove, r);
     const blocked = !r || remove;
-    return v_flex()
-      .id("worktree")
-      .track_focus(this.handle)
-      .on_key_down((e, cx) => this.key(e, cx))
-      .size_full()
-      .p(16)
-      .gap(10)
-      .bg(t.popover)
-      .text_size(13)
+    return this.dialogFrame(t)
       .child(div().font_semibold().text_color(t.foreground).child(title))
       .child(div().text_color(t.muted).child(detail))
-      .when(!remove && !blocked, (el) =>
-        el.child(
-          Input.new(this.input)
-            .h(32)
-            .px(10)
-            .items_center()
-            .rounded(6)
-            .border(1)
-            .border_color(this.inputFocused ? t.accent : t.input)
-            .bg(t.background)
-            .text_color(t.foreground),
-        ),
-      )
+      .when(!remove && !blocked, (el) => el.child(this.filterInput(t)))
       .when(Boolean(this.error), (el) => el.child(div().text_color(t.blocked).child(this.error)))
       .child(div().flex_1())
       .child(
@@ -419,8 +442,8 @@ export default class Worktree extends View {
           .text_size(11)
           .text_color(t.dim)
           .gap(6)
-          .when(this.busy, (el) => el.child(div().frames(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], 90)))
-          .child(this.busy ? "working…" : blocked ? "esc close" : remove ? "↵ remove · esc cancel" : "↵ create · esc cancel"),
+          .when(this.busy, (el) => el.child(div().frames(SPINNER_FRAMES, SPINNER_FRAME_MS)))
+          .child(this.newFooterText(remove, blocked)),
       );
   }
 }

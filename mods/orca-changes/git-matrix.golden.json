@@ -1,0 +1,1840 @@
+{
+ "push": {
+  "base": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "detached": {
+   "error": "Cannot push a detached HEAD.",
+   "calls": [
+    "symbolic-ref --quiet HEAD"
+   ]
+  },
+  "notBranch": {
+   "error": "Cannot determine the current branch.",
+   "calls": [
+    "symbolic-ref --quiet HEAD"
+   ]
+  },
+  "refsFail": {
+   "error": "Cannot determine the push target.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "refsTwo": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "refsNone": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "refsEmpty": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "noPushRefUpstreamSame": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/up",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/up"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "noPushRefUpstreamOther": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "noPushRefTrackingDiffers": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "remoteDot": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "remoteDash": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "remoteMissing": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "refNotBranch": {
+   "error": "A single configured push target is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic"
+   ]
+  },
+  "customPush": {
+   "error": "Custom push refspecs are not supported by this panel.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push"
+   ]
+  },
+  "customPushUnknown": {
+   "error": "Cannot verify the configured push refspecs.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push"
+   ]
+  },
+  "policyUnknown": {
+   "error": "Cannot verify the push policy.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default"
+   ]
+  },
+  "policyMatching": {
+   "error": "The configured push policy does not select one branch.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default"
+   ]
+  },
+  "policyNothing": {
+   "error": "The configured push policy does not select one branch.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default"
+   ]
+  },
+  "policySimple": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "mirrorUnknown": {
+   "error": "Cannot verify the remote mirror setting.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror"
+   ]
+  },
+  "mirrorTrue": {
+   "error": "Mirror pushes are not supported by this panel.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror"
+   ]
+  },
+  "mirrorFalse": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "upstreamUnknown": {
+   "error": "Cannot verify the branch upstream.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge"
+   ]
+  },
+  "upstreamEmpty": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge"
+   ]
+  },
+  "upstreamTwo": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge"
+   ]
+  },
+  "upstreamAbsent": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "urlFail": {
+   "error": "Cannot determine the push remote.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin"
+   ]
+  },
+  "urlEmpty": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin"
+   ]
+  },
+  "urlTwo": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin"
+   ]
+  },
+  "oidFail": {
+   "error": "Cannot determine the commit to push.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "oidBad": {
+   "error": "Cannot determine the commit to push.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "oid64": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "trackingNotRemote": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": null
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "trackedFail": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "trackedBad": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "pushFails": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "pushThrows": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "pushThrowsText": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "for-each-ref --format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream) refs/heads/topic",
+    "config --get-all remote.origin.push",
+    "config --get push.default",
+    "config --bool --get remote.origin.mirror",
+    "config --get-all branch.topic.merge",
+    "remote get-url --push --all origin",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  }
+ },
+ "force": {
+  "base": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  "detached": {
+   "error": "Cannot push a detached HEAD."
+  },
+  "notBranch": {
+   "error": "Cannot determine the current branch."
+  },
+  "refsFail": {
+   "error": "Cannot determine the push target."
+  },
+  "refsTwo": {
+   "error": "A single configured push target is required."
+  },
+  "refsNone": {
+   "error": "A single configured push target is required."
+  },
+  "refsEmpty": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefUpstreamSame": {
+   "error": "Cannot determine the remote-tracking commit for Force Push."
+  },
+  "noPushRefUpstreamOther": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefTrackingDiffers": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDot": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDash": {
+   "error": "A single configured push target is required."
+  },
+  "remoteMissing": {
+   "error": "A single configured push target is required."
+  },
+  "refNotBranch": {
+   "error": "A single configured push target is required."
+  },
+  "customPush": {
+   "error": "Custom push refspecs are not supported by this panel."
+  },
+  "customPushUnknown": {
+   "error": "Cannot verify the configured push refspecs."
+  },
+  "policyUnknown": {
+   "error": "Cannot verify the push policy."
+  },
+  "policyMatching": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyNothing": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policySimple": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  "mirrorUnknown": {
+   "error": "Cannot verify the remote mirror setting."
+  },
+  "mirrorTrue": {
+   "error": "Mirror pushes are not supported by this panel."
+  },
+  "mirrorFalse": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  "upstreamUnknown": {
+   "error": "Cannot verify the branch upstream."
+  },
+  "upstreamEmpty": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamTwo": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamAbsent": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  "urlFail": {
+   "error": "Cannot determine the push remote."
+  },
+  "urlEmpty": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlTwo": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "oidFail": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidBad": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oid64": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  "trackingNotRemote": {
+   "error": "A unique remote-tracking branch is required for Force Push."
+  },
+  "trackedFail": {
+   "error": "Cannot determine the remote-tracking commit for Force Push."
+  },
+  "trackedBad": {
+   "error": "Cannot determine the remote-tracking commit for Force Push."
+  },
+  "pushFails": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  "pushThrows": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  "pushThrowsText": {
+   "ok": {
+    "branch": "refs/heads/topic",
+    "remote": "origin",
+    "ref": "refs/heads/topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": "https://u:p@example.com/r.git",
+    "leaseTracking": "refs/remotes/origin/topic",
+    "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  }
+ },
+ "pushConfigured": {
+  "base/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "base/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "base/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "base/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "detached/always": {
+   "error": "Cannot push a detached HEAD."
+  },
+  "detached/secondFalse": {
+   "error": "Cannot push a detached HEAD."
+  },
+  "detached/firstFalse": {
+   "error": "Cannot push a detached HEAD."
+  },
+  "detached/targetChanges": {
+   "error": "Cannot push a detached HEAD."
+  },
+  "notBranch/always": {
+   "error": "Cannot determine the current branch."
+  },
+  "notBranch/secondFalse": {
+   "error": "Cannot determine the current branch."
+  },
+  "notBranch/firstFalse": {
+   "error": "Cannot determine the current branch."
+  },
+  "notBranch/targetChanges": {
+   "error": "Cannot determine the current branch."
+  },
+  "refsFail/always": {
+   "error": "Cannot determine the push target."
+  },
+  "refsFail/secondFalse": {
+   "error": "Cannot determine the push target."
+  },
+  "refsFail/firstFalse": {
+   "error": "Cannot determine the push target."
+  },
+  "refsFail/targetChanges": {
+   "error": "Cannot determine the push target."
+  },
+  "refsTwo/always": {
+   "error": "A single configured push target is required."
+  },
+  "refsTwo/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refsTwo/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refsTwo/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "refsNone/always": {
+   "error": "A single configured push target is required."
+  },
+  "refsNone/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refsNone/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refsNone/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "refsEmpty/always": {
+   "error": "A single configured push target is required."
+  },
+  "refsEmpty/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refsEmpty/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refsEmpty/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefUpstreamSame/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "noPushRefUpstreamSame/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "noPushRefUpstreamSame/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "noPushRefUpstreamSame/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "noPushRefUpstreamOther/always": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefUpstreamOther/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefUpstreamOther/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefUpstreamOther/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefTrackingDiffers/always": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefTrackingDiffers/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefTrackingDiffers/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "noPushRefTrackingDiffers/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDot/always": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDot/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDot/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDot/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDash/always": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDash/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDash/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "remoteDash/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "remoteMissing/always": {
+   "error": "A single configured push target is required."
+  },
+  "remoteMissing/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "remoteMissing/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "remoteMissing/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "refNotBranch/always": {
+   "error": "A single configured push target is required."
+  },
+  "refNotBranch/secondFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refNotBranch/firstFalse": {
+   "error": "A single configured push target is required."
+  },
+  "refNotBranch/targetChanges": {
+   "error": "A single configured push target is required."
+  },
+  "customPush/always": {
+   "error": "Custom push refspecs are not supported by this panel."
+  },
+  "customPush/secondFalse": {
+   "error": "Custom push refspecs are not supported by this panel."
+  },
+  "customPush/firstFalse": {
+   "error": "Custom push refspecs are not supported by this panel."
+  },
+  "customPush/targetChanges": {
+   "error": "Custom push refspecs are not supported by this panel."
+  },
+  "customPushUnknown/always": {
+   "error": "Cannot verify the configured push refspecs."
+  },
+  "customPushUnknown/secondFalse": {
+   "error": "Cannot verify the configured push refspecs."
+  },
+  "customPushUnknown/firstFalse": {
+   "error": "Cannot verify the configured push refspecs."
+  },
+  "customPushUnknown/targetChanges": {
+   "error": "Cannot verify the configured push refspecs."
+  },
+  "policyUnknown/always": {
+   "error": "Cannot verify the push policy."
+  },
+  "policyUnknown/secondFalse": {
+   "error": "Cannot verify the push policy."
+  },
+  "policyUnknown/firstFalse": {
+   "error": "Cannot verify the push policy."
+  },
+  "policyUnknown/targetChanges": {
+   "error": "Cannot verify the push policy."
+  },
+  "policyMatching/always": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyMatching/secondFalse": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyMatching/firstFalse": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyMatching/targetChanges": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyNothing/always": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyNothing/secondFalse": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyNothing/firstFalse": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policyNothing/targetChanges": {
+   "error": "The configured push policy does not select one branch."
+  },
+  "policySimple/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "policySimple/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "policySimple/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "policySimple/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "mirrorUnknown/always": {
+   "error": "Cannot verify the remote mirror setting."
+  },
+  "mirrorUnknown/secondFalse": {
+   "error": "Cannot verify the remote mirror setting."
+  },
+  "mirrorUnknown/firstFalse": {
+   "error": "Cannot verify the remote mirror setting."
+  },
+  "mirrorUnknown/targetChanges": {
+   "error": "Cannot verify the remote mirror setting."
+  },
+  "mirrorTrue/always": {
+   "error": "Mirror pushes are not supported by this panel."
+  },
+  "mirrorTrue/secondFalse": {
+   "error": "Mirror pushes are not supported by this panel."
+  },
+  "mirrorTrue/firstFalse": {
+   "error": "Mirror pushes are not supported by this panel."
+  },
+  "mirrorTrue/targetChanges": {
+   "error": "Mirror pushes are not supported by this panel."
+  },
+  "mirrorFalse/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "mirrorFalse/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "mirrorFalse/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "mirrorFalse/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "upstreamUnknown/always": {
+   "error": "Cannot verify the branch upstream."
+  },
+  "upstreamUnknown/secondFalse": {
+   "error": "Cannot verify the branch upstream."
+  },
+  "upstreamUnknown/firstFalse": {
+   "error": "Cannot verify the branch upstream."
+  },
+  "upstreamUnknown/targetChanges": {
+   "error": "Cannot verify the branch upstream."
+  },
+  "upstreamEmpty/always": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamEmpty/secondFalse": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamEmpty/firstFalse": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamEmpty/targetChanges": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamTwo/always": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamTwo/secondFalse": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamTwo/firstFalse": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamTwo/targetChanges": {
+   "error": "Branch has multiple upstreams or invalid configuration; push cancelled."
+  },
+  "upstreamAbsent/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "upstreamAbsent/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "upstreamAbsent/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "upstreamAbsent/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "urlFail/always": {
+   "error": "Cannot determine the push remote."
+  },
+  "urlFail/secondFalse": {
+   "error": "Cannot determine the push remote."
+  },
+  "urlFail/firstFalse": {
+   "error": "Cannot determine the push remote."
+  },
+  "urlFail/targetChanges": {
+   "error": "Cannot determine the push remote."
+  },
+  "urlEmpty/always": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlEmpty/secondFalse": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlEmpty/firstFalse": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlEmpty/targetChanges": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlTwo/always": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlTwo/secondFalse": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlTwo/firstFalse": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "urlTwo/targetChanges": {
+   "error": "Push remote has multiple destinations or an invalid URL; choose one outside this panel."
+  },
+  "oidFail/always": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidFail/secondFalse": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidFail/firstFalse": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidFail/targetChanges": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidBad/always": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidBad/secondFalse": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidBad/firstFalse": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oidBad/targetChanges": {
+   "error": "Cannot determine the commit to push."
+  },
+  "oid64/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "oid64/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "oid64/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "oid64/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "trackingNotRemote/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "trackingNotRemote/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "trackingNotRemote/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "trackingNotRemote/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "trackedFail/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "trackedFail/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "trackedFail/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "trackedFail/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "trackedBad/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "pushed https://example.com/r.git\n",
+    "stderr": "warn https://example.com/r.git"
+   }
+  },
+  "trackedBad/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "trackedBad/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "trackedBad/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "pushFails/always": {
+   "ok": {
+    "code": 1,
+    "stdout": "no https://example.com/r.git",
+    "stderr": "denied"
+   }
+  },
+  "pushFails/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "pushFails/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "pushFails/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "pushThrows/always": {
+   "error": "boom https://example.com/r.git"
+  },
+  "pushThrows/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "pushThrows/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "pushThrows/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "pushThrowsText/always": {
+   "error": "text"
+  },
+  "pushThrowsText/secondFalse": {
+   "error": "Push target or branch changed; push cancelled."
+  },
+  "pushThrowsText/firstFalse": {
+   "error": "Workspace or host changed; push cancelled."
+  },
+  "pushThrowsText/targetChanges": {
+   "error": "Push target or branch changed; push cancelled."
+  }
+ },
+ "pushForceConfirmed": {
+  "base/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "base/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "base/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "base/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "policySimple/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "policySimple/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "policySimple/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "policySimple/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "mirrorFalse/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "mirrorFalse/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "mirrorFalse/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "mirrorFalse/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "upstreamAbsent/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "upstreamAbsent/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "upstreamAbsent/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "upstreamAbsent/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "oid64/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "oid64/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "oid64/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "oid64/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "pushFails/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "pushFails/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "pushFails/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "pushFails/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "pushThrows/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "pushThrows/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "pushThrows/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "pushThrows/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "pushThrowsText/always": {
+   "ok": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  "pushThrowsText/firstFalse": {
+   "error": "Workspace or host changed; Force Push cancelled."
+  },
+  "pushThrowsText/secondFalse": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  },
+  "pushThrowsText/staleTarget": {
+   "error": "Push target, branch or remote-tracking commit changed; Force Push cancelled."
+  }
+ },
+ "redaction": {
+  "https://user:secret@example.invalid/repo?token=1#f": "https://example.invalid/repo",
+  "user:pw@host:repo": "host:repo",
+  "/tmp/a@b": "/tmp/a@b",
+  "ssh://git@host/x": "ssh://host/x",
+  "plain": "plain",
+  "redact": [
+   "x https://h/p y",
+   "",
+   "",
+   "42"
+  ],
+  "args": [
+   "push",
+   "--no-follow-tags",
+   "--recurse-submodules=no",
+   "--",
+   "origin",
+   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:refs/heads/t"
+  ]
+ },
+ "pr": {
+  "base": {
+   "ok": {
+    "branch": "topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "remote": "origin",
+    "merge": "refs/heads/topic",
+    "url": "git@github.com:owner/repo.git",
+    "repoId": "R",
+    "name": "owner/repo",
+    "head": "topic",
+    "base": "main",
+    "baseOid": "base"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "noSymbolic": {
+   "error": "Cannot read current branch: bad",
+   "calls": [
+    "symbolic-ref --quiet HEAD"
+   ]
+  },
+  "notBranch": {
+   "error": "A local branch is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD"
+   ]
+  },
+  "headFail": {
+   "error": "Cannot read HEAD: command failed",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}"
+   ]
+  },
+  "remoteMissing": {
+   "error": "Missing upstream remote: no remote",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote"
+   ]
+  },
+  "remoteTwo": {
+   "error": "Expected one upstream remote.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote"
+   ]
+  },
+  "remoteNoNul": {
+   "error": "Expected one upstream remote.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote"
+   ]
+  },
+  "remoteEmpty": {
+   "error": "Expected one upstream remote.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote"
+   ]
+  },
+  "remoteNewline": {
+   "error": "Expected one upstream remote.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote"
+   ]
+  },
+  "mergeMissing": {
+   "error": "Missing upstream branch: no merge",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge"
+   ]
+  },
+  "remoteDot": {
+   "error": "A GitHub upstream branch is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge"
+   ]
+  },
+  "remoteDash": {
+   "error": "A GitHub upstream branch is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge"
+   ]
+  },
+  "mergeNotBranch": {
+   "error": "A GitHub upstream branch is required.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge"
+   ]
+  },
+  "urlFail": {
+   "error": "Cannot read upstream URL: no url",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin"
+   ]
+  },
+  "urlTwo": {
+   "error": "Multiple upstream URLs are not supported.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin"
+   ]
+  },
+  "urlHttps": {
+   "ok": {
+    "branch": "topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "remote": "origin",
+    "merge": "refs/heads/topic",
+    "url": "https://github.com/owner/repo",
+    "repoId": "R",
+    "name": "owner/repo",
+    "head": "topic",
+    "base": "main",
+    "baseOid": "base"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "urlHttpsGit": {
+   "ok": {
+    "branch": "topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "remote": "origin",
+    "merge": "refs/heads/topic",
+    "url": "https://github.com/owner/repo.git",
+    "repoId": "R",
+    "name": "owner/repo",
+    "head": "topic",
+    "base": "main",
+    "baseOid": "base"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "urlCreds": {
+   "error": "The upstream must have one standard GitHub.com URL without credentials.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin"
+   ]
+  },
+  "urlOther": {
+   "error": "The upstream must have one standard GitHub.com URL without credentials.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin"
+   ]
+  },
+  "urlDotRepo": {
+   "error": "The upstream must have one standard GitHub.com URL without credentials.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin"
+   ]
+  },
+  "urlSingleDot": {
+   "error": "The upstream must have one standard GitHub.com URL without credentials.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin"
+   ]
+  },
+  "ghFail": {
+   "error": "GitHub request failed: gh broke",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "ghFailStdout": {
+   "error": "GitHub request failed: out msg",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "ghFailNothing": {
+   "error": "GitHub request failed: command failed",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "ghBadJson": {
+   "error": "Invalid response from GitHub.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "ghErrors": {
+   "error": "a; b",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "ghNoData": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "ghNullRepo": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "noId": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "archived": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "fork": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "nameMismatch": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "nameCase": {
+   "ok": {
+    "branch": "topic",
+    "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "remote": "origin",
+    "merge": "refs/heads/topic",
+    "url": "git@github.com:owner/repo.git",
+    "repoId": "R",
+    "name": "Owner/Repo",
+    "head": "topic",
+    "base": "main",
+    "baseOid": "base"
+   },
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "noBase": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "noBaseOid": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "prefix": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "refName": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "refOid": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "refNull": {
+   "error": "Push the current commit to its GitHub upstream before creating a PR.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  },
+  "defaultBranch": {
+   "error": "The current branch is the default branch.",
+   "calls": [
+    "symbolic-ref --quiet HEAD",
+    "rev-parse --verify HEAD^{commit}",
+    "config --null --get-all branch.topic.remote",
+    "config --null --get-all branch.topic.merge",
+    "remote get-url --all origin",
+    "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic"
+   ]
+  }
+ },
+ "createPr": {
+  "ok": {
+   "ok": {
+    "pr": {
+     "number": 7,
+     "url": "https://github.com/owner/repo/pull/7"
+    },
+    "calls": [
+     "symbolic-ref --quiet HEAD",
+     "rev-parse --verify HEAD^{commit}",
+     "config --null --get-all branch.topic.remote",
+     "config --null --get-all branch.topic.merge",
+     "remote get-url --all origin",
+     "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic",
+     "api graphql --hostname github.com -f -f repo=R -f base=main -f head=topic -f title=T -f body=B -F draft=true"
+    ]
+   }
+  },
+  "notDraft": {
+   "ok": {
+    "pr": {
+     "number": 7,
+     "url": "https://github.com/owner/repo/pull/7"
+    },
+    "calls": [
+     "symbolic-ref --quiet HEAD",
+     "rev-parse --verify HEAD^{commit}",
+     "config --null --get-all branch.topic.remote",
+     "config --null --get-all branch.topic.merge",
+     "remote get-url --all origin",
+     "api graphql --hostname github.com -f -f owner=owner -f repo=repo -f head=refs/heads/topic",
+     "api graphql --hostname github.com -f -f repo=R -f base=main -f head=topic -f title=T -f body=B -F draft=false"
+    ]
+   }
+  },
+  "notCurrent": {
+   "error": "Workspace changed; PR creation cancelled."
+  },
+  "becomesStale": {
+   "error": "Branch, repository or default branch changed; open the dialog again."
+  },
+  "changedRepo": {
+   "error": "Branch, repository or default branch changed; open the dialog again."
+  },
+  "noTitle": {
+   "error": "A title is required."
+  },
+  "mutationErrors": {
+   "error": "PR result unknown. Check GitHub before retrying."
+  },
+  "noPr": {
+   "error": "PR result unknown. Check GitHub before retrying."
+  },
+  "badUrl": {
+   "error": "PR result unknown. Check GitHub before retrying."
+  },
+  "noUrl": {
+   "error": "PR result unknown. Check GitHub before retrying."
+  },
+  "noNumber": {
+   "error": "PR result unknown. Check GitHub before retrying."
+  },
+  "badJson": {
+   "error": "PR creation failed or its result is unknown. Check GitHub before retrying. Invalid response from GitHub."
+  },
+  "mutationCodeFail": {
+   "error": "PR creation failed or its result is unknown. Check GitHub before retrying. GitHub request failed: http 500"
+  }
+ }
+}

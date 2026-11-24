@@ -1,5 +1,8 @@
 import { chunkPaths, GIT_OPTIONS } from "./git-options.js";
 
+// A status or index listing longer than this is refused rather than compared.
+const MAX_GIT_OUTPUT_CHARS = 7_000_000;
+
 // shortcut: the snapshot and subsequent Git write are not atomic; use a host transaction API when available.
 export async function discardSnapshot(target, paths, exec) {
   if (!target?.root || !paths.length || paths.some((p) => !p || p.startsWith("/") || p.split("/").some((s) => !s || s === "." || s === ".."))) {
@@ -10,7 +13,7 @@ export async function discardSnapshot(target, paths, exec) {
     const opts = { cwd: target.root, on: target.on };
     for (const args of [["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ...part], ["ls-files", "--stage", "-z", "--", ...part]]) {
       const r = await exec("git", [...GIT_OPTIONS, ...args], opts);
-      if (r.code !== 0 || r.stdout.length > 7_000_000) throw new Error("Cannot verify Git state before discard.");
+      if (r.code !== 0 || r.stdout.length > MAX_GIT_OUTPUT_CHARS) throw new Error("Cannot verify Git state before discard.");
       result.push(r.stdout);
     }
     const script = `
