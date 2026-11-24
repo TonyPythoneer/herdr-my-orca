@@ -3,7 +3,6 @@
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
-- **skillshare**: the right sidebar icon opens the skillshare panel (`mods/skillshare/`, a mod this repo owns). Its CLI is also required for data and actions.
 - **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status/`). Claude and
   Codex read what the CLIs already write on this computer; Claude's quota comes live from
   Claude Code's own `rate_limits` statusline feed, with Anthropic's usage API only as the idle
@@ -95,13 +94,12 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 
 ## How the repo is organized
 
-- The repo holds only our own mods (`orca-*`, `agent-config`, and `skillshare`, which this repo
-  owns even though it wraps a local CLI). Herdr ships its own mods and layouts (`confirm`,
+- The repo holds only our own mods (`orca-*` and `agent-config`). Herdr ships its own mods and layouts (`confirm`,
   `picker`, `main`, `terminals`, …); they stay in the live config and are not tracked here.
 - Orca UI starts at [orca-ui/app.mjs](orca-ui/app.mjs): a reading map. `features` lists each
   generated feature, the screen it draws and the files to follow next; `inPlace` lists every other
   mod (edited under `mods/<mod>/`) with its layout nodes, keys, what it opens or shares, tests and
-  `next`. A test checks that all 24 mods are covered and that the entries match the repo. A feature is edited in
+  `next`. A test checks that all 23 mods are covered and that the entries match the repo. A feature is edited in
   `orca-ui/features/<area>/<feature>/` and regenerated with
   `node scripts/build-orca-ui.mjs --out .`. Its `manifest.json` lists every managed output, test,
   layout slot and key section, so the copy under `mods/` is delivery format, not an edit location.
@@ -162,3 +160,7 @@ These are runtime state or files Herdr writes itself, so they are not in this re
 
 - `programs.json` starts Claude and Codex with full-permission flags (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`). Remove them if you want the agents to ask first.
 - The `orca` layout expects the `orca-*` mods in this repo. A mod that no layout lists may still be opened by another mod (`openOverlay({ mod: "orca-menu" })`, `run("mod.open", ...)`): grep for its name before deleting it.
+
+### Retired Skillshare panel
+
+The Skillshare UI was removed from both layouts and is no longer shipped. For an existing live config, update both layout files and the panel-head mod together, and remove only the obsolete repo-owned `mods/skillshare` directory after checking for local edits. This does not uninstall the external Skillshare CLI or delete any installed skills or their data.

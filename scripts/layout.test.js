@@ -72,3 +72,11 @@ test("unified differs from orca in the declared ways", () => {
   assert.ok(!tabs(orca).some(props => props.unified), "orca tabs are not unified");
   assert.deepEqual(tabs(unified), [{ unified: true, motion: "native", pinSidebarTerminal: true }]);
 });
+
+test("retired Skillshare panel is not mounted or packaged", () => {
+  for (const layout of [orca, unified]) {
+    assert.ok(!ids(layout).includes("skillshare"));
+    walk(layout, node => assert.notEqual(node?.content?.mod, "skillshare"));
+  }
+  assert.ok(!existsSync(new URL("../mods/skillshare/mod.json", import.meta.url)));
+});

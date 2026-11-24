@@ -204,7 +204,9 @@
               },
               "content": {
                 "mod": "orca-panel-head",
-                "props": { "unified": true }
+                "props": {
+                  "unified": true
+                }
               },
               "window_drag": true
             },
@@ -284,16 +286,6 @@
                     "props": {
                       "unified": true,
                       "tab": "ports"
-                    }
-                  }
-                },
-                {
-                  "id": "skillshare",
-                  "type": "block",
-                  "content": {
-                    "mod": "skillshare",
-                    "props": {
-                      "unified": true
                     }
                   }
                 }
