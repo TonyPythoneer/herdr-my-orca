@@ -35,7 +35,9 @@ function measure(run, before, verify, count, workload) {
   verify(expected);
   if (before) assert.deepEqual(run(before), expected);
   // Batch sub-millisecond workloads symmetrically to reduce clock and scheduler noise.
-  const iterations = count <= 20 ? 64 : count <= 200 ? 8 : 1;
+  let iterations = 1;
+  if (count <= 20) iterations = 64;
+  else if (count <= 200) iterations = 8;
   for (let i = 0; i < Math.max(100, iterations * 10); i++) {
     if (before) run(before);
     run(candidate);
