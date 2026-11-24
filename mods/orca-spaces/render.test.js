@@ -184,3 +184,12 @@ test('the header, machine, status, badge and body views render as recorded', () 
   assert.deepEqual(out, JSON.parse(readFileSync(GOLDEN, 'utf8')));
   assert.ok(new Set(Object.values(out)).size >= 45);
 });
+
+test('a folderless workspace does not hide saved projects or crash the sidebar', () => {
+  const { view, cx } = liveView({
+    spaces: [{ id: 'folderless', name: 'shell', folder: null, status: 'idle', tabs: [] }],
+    storage: { 'projects.saved.v1': JSON.stringify(['/saved/one']) },
+    state: { loaded: true },
+  });
+  assert.match(JSON.stringify(rec(view.render(cx))), /Saved Projects/);
+});
