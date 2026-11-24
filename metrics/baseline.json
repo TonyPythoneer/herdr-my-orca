@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
-  "commit": "0a8226a",
+  "commit": "3f0c4b2",
   "tests": {
-    "tests": 884,
-    "pass": 884,
+    "tests": 896,
+    "pass": 896,
     "fail": 0,
     "skipped": 0,
-    "durationMs": 13825
+    "durationMs": 21967
   },
   "coverage": {
     "overall": {
-      "line": 95.66,
-      "branch": 89.22,
-      "funcs": 91.92
+      "line": 95.99,
+      "branch": 89.27,
+      "funcs": 92.02
     },
     "byMod": {
       "mods/agent-config": {
         "files": 4,
-        "line": 98.75,
+        "line": 99.12,
         "branch": 90.37,
         "funcs": 94.73
       },
@@ -60,8 +60,8 @@
       "mods/orca-files": {
         "files": 13,
         "line": 97.63,
-        "branch": 90.53,
-        "funcs": 93.5
+        "branch": 90.52,
+        "funcs": 93.4
       },
       "mods/orca-float": {
         "files": 1,
@@ -72,7 +72,7 @@
       "mods/orca-handoff": {
         "files": 3,
         "line": 85.73,
-        "branch": 68.01,
+        "branch": 67.83,
         "funcs": 85.56
       },
       "mods/orca-landing": {
@@ -84,18 +84,18 @@
       "mods/orca-menu": {
         "files": 3,
         "line": 99.49,
-        "branch": 97.84,
+        "branch": 97.73,
         "funcs": 99.25
       },
       "mods/orca-nav": {
         "files": 1,
         "line": 99.58,
-        "branch": 94.71,
+        "branch": 94.78,
         "funcs": 98.68
       },
       "mods/orca-new-menu": {
         "files": 5,
-        "line": 82.85,
+        "line": 91.94,
         "branch": 93.29,
         "funcs": 76.83
       },
@@ -114,31 +114,31 @@
       "mods/orca-spaces": {
         "files": 12,
         "line": 96.07,
-        "branch": 84.42,
+        "branch": 84.47,
         "funcs": 92.63
       },
       "mods/orca-split-menu": {
         "files": 1,
-        "line": 99.62,
-        "branch": 89.34,
-        "funcs": 78.46
+        "line": 98.12,
+        "branch": 96.47,
+        "funcs": 94.2
       },
       "mods/orca-status": {
         "files": 4,
         "line": 98.3,
-        "branch": 87.91,
+        "branch": 87.95,
         "funcs": 94.45
       },
       "mods/orca-tabs": {
         "files": 14,
         "line": 100,
-        "branch": 91.91,
+        "branch": 91.9,
         "funcs": 98.59
       },
       "mods/orca-tasks": {
         "files": 2,
         "line": 99.61,
-        "branch": 87.45,
+        "branch": 87.17,
         "funcs": 91.18
       },
       "mods/orca-worktree": {
@@ -149,9 +149,9 @@
       },
       "mods/skillshare": {
         "files": 9,
-        "line": 96.85,
-        "branch": 90.34,
-        "funcs": 96.7
+        "line": 96.86,
+        "branch": 90.35,
+        "funcs": 96.73
       },
       "orca-ui": {
         "files": 8,
@@ -161,46 +161,22 @@
       },
       "scripts": {
         "files": 6,
-        "line": 93,
-        "branch": 93.03,
-        "funcs": 93.12
+        "line": 92.44,
+        "branch": 93.25,
+        "funcs": 92.82
       }
     }
   },
   "lint": {
-    "total": 15,
-    "byRule": {
-      "no-shadow": 3,
-      "no-nested-ternary": 8,
-      "complexity": 4
-    },
-    "byArea": {
-      "mods/orca-spaces": 3,
-      "mods/skillshare": 12
-    },
-    "worstComplexity": [
-      {
-        "where": "mods/skillshare/main.js:1579",
-        "complexity": 28
-      },
-      {
-        "where": "mods/skillshare/main.js:1400",
-        "complexity": 13
-      },
-      {
-        "where": "mods/skillshare/main.js:1553",
-        "complexity": 13
-      },
-      {
-        "where": "mods/skillshare/main.js:1634",
-        "complexity": 13
-      }
-    ]
+    "total": 0,
+    "byRule": {},
+    "byArea": {},
+    "worstComplexity": []
   },
   "size": {
-    "sourceFiles": 139,
-    "sourceLines": 30036,
-    "testLines": 18147
+    "sourceFiles": 140,
+    "sourceLines": 30236,
+    "testLines": 18330
   },
   "drift": {
     "exitCode": 0,
