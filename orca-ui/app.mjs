@@ -573,6 +573,29 @@ export const inPlace = [
     ]
   },
   {
+    "mod": "orca-ports",
+    "area": "status",
+    "description": "Bottom bar plug button: counts the listening ports the open spaces own and opens the Ports popover.",
+    "layouts": [
+      "orca#status-ports",
+      "orca-unified#status-ports"
+    ],
+    "opens": [
+      "space.select",
+      "overlay:popup"
+    ],
+    "reachedBy": [
+      "command:open"
+    ],
+    "shared": [
+      "orca-ports.scan",
+      "orca-ports.overlay"
+    ],
+    "tests": [
+      "mods/orca-ports/scan.test.js"
+    ]
+  },
+  {
     "mod": "orca-status",
     "area": "status",
     "description": "Bottom status bar: provider usage, maintenance segments, float toggle, updates.",

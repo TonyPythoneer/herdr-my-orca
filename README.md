@@ -3,6 +3,15 @@
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
+- **Ports**: the bottom bar's plug button (`orca-ports/`) counts the listening ports the open
+  spaces own, and opens Orca's Ports popover above it: a `Ports` header with the two counts, one
+  section per space that owns a listener (its name, a folder button that goes there, the count),
+  the rows with the port, the process and the address, and the collapsed **External ports**
+  list. Attribution is Orca's: `lsof` reports each listener's pid, a second `lsof` reports that
+  process's folder, and a folder inside a space's checkout (or its panes' live folders) makes it
+  that space's port; everything else is external. Rows reveal open-in-browser, copy and, for a
+  port one of the spaces owns, Stop. The bar scans every 30 seconds; `herdr-app do orca-ports.open`
+  opens the popover from a key.
 - **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status/`). Claude and
   Codex read what the CLIs already write on this computer; Claude's quota comes live from
   Claude Code's own `rate_limits` statusline feed, with Anthropic's usage API only as the idle

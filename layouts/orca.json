@@ -302,6 +302,16 @@
           "content": {
             "mod": "orca-status"
           }
+        },
+        {
+          "id": "status-ports",
+          "type": "block",
+          "size": {
+            "px": 46
+          },
+          "content": {
+            "mod": "orca-ports"
+          }
         }
       ]
     }

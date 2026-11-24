@@ -7,7 +7,8 @@
         "mods/orca-files/clip.js",
         "mods/orca-handoff/clip.js",
         "mods/orca-menu/clip.js",
-        "mods/orca-agent-manager/clip.js"
+        "mods/orca-agent-manager/clip.js",
+        "mods/orca-ports/clip.js"
       ]
     },
     {
