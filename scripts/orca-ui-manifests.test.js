@@ -128,6 +128,7 @@ const BAD_SHARED = {
   "a shared file is not listed": [r => write(r, "orca-ui/shared/extra.js", "x"), /extra\.js is not listed/],
   "outputs is empty": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs = []; }), /non-empty array/],
   "an output has another name": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs[0] = "mods/orca-changes/other.js"; }), /must be mods\/<mod>\/clip\.js/],
+  "a shared output names a mod that does not exist": [r => edit(r, SHARED_MANIFEST, m => { m.files[0].outputs[0] = "mods/orca-filez/clip.js"; }), /orca-filez has no mod\.json/],
   "a shared output is a feature output": [r => {
     write(r, `${FEATURE}/clip.js`, "x");
     edit(r, MANIFEST, m => m.files.push("clip.js"));
@@ -195,4 +196,13 @@ test("every mod is a feature or has one in-place map entry, and the entry matche
     const onDisk = readdirSync(join(ROOT, "mods", e.mod)).filter(f => /\.test\.m?js$/.test(f)).map(f => `mods/${e.mod}/${f}`).sort();
     assert.deepEqual([...(e.tests ?? [])].sort(), onDisk, `${e.mod}: tests`);
   }
+});
+
+test("a manifest or layout that is a symlink out of the repo is not read", t => {
+  const root = fixture(t);
+  const outside = temp(t);
+  write(outside, "orca.json", JSON.stringify({ id: "list", content: { mod: "orca-files" } }));
+  rmSync(join(root, "layouts/orca.json"));
+  symlinkSync(join(outside, "orca.json"), join(root, "layouts/orca.json"));
+  rejects(root, /resolves outside the repo/);
 });
