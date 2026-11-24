@@ -1,15 +1,25 @@
 # Latest main UI snapshot
 
-Main commit: **734f3066dd85d10093b293bb2df7477750b0c4dc**
+Main commit: **7ae666940da5636d6a5715f37789e6f39550f007**
 
 Native App screenshots from a synthetic workspace on a disposable GitHub-hosted runner.
 Full-resolution originals, before/after pairs, and machine-readable diagnostics remain in the Actions artifact.
 
-[Open this Actions run / full artifact](https://github.com/TonyPythoneer/herdr-my-orca/actions/runs/45363936112)
+[Open this Actions run / full artifact](https://github.com/TonyPythoneer/herdr-my-orca/actions/runs/45364393855)
 
-captured: 38 · failed: 3 · blocked: 5 · not-run: 0
+Tracked configuration files verified after native launch: 612
+
+captured: 42 · failed: 0 · blocked: 4 · not-run: 0
 
 Command navigation and actual accessibility/mouse operations are labeled separately. Captured does not mean visually validated.
+
+## 00 — Startup overlay before recovery
+
+**captured** · initial-state
+
+**After**
+
+![Startup overlay before recovery — after](00-after.jpg)
 
 ## 01 — First configured launch
 
@@ -353,17 +363,15 @@ Command navigation and actual accessibility/mouse operations are labeled separat
 
 ## 30 — Dismiss split menu
 
-**failed** · native-command
-
-Incomplete operation; consult manifest.json in the full artifact.
+**captured** · native-command
 
 **Before**
 
 ![Dismiss split menu — before](30-before.jpg)
 
-**Diagnostic**
+**After**
 
-![Dismiss split menu — diagnostic](30-diagnostic.jpg)
+![Dismiss split menu — after](30-after.jpg)
 
 ## 31 — Agent manager
 
@@ -429,17 +437,15 @@ Incomplete operation; consult manifest.json in the full artifact.
 
 ## 36 — Dismiss search
 
-**failed** · native-command
-
-Incomplete operation; consult manifest.json in the full artifact.
+**captured** · native-command
 
 **Before**
 
 ![Dismiss search — before](36-before.jpg)
 
-**Diagnostic**
+**After**
 
-![Dismiss search — diagnostic](36-diagnostic.jpg)
+![Dismiss search — after](36-after.jpg)
 
 ## 37 — Workspace options (actual AX press)
 
@@ -457,31 +463,27 @@ Incomplete operation; consult manifest.json in the full artifact.
 
 ## 38 — Dismiss options
 
-**failed** · native-command
-
-Incomplete operation; consult manifest.json in the full artifact.
+**captured** · native-command
 
 **Before**
 
 ![Dismiss options — before](38-before.jpg)
 
-**Diagnostic**
+**After**
 
-![Dismiss options — diagnostic](38-diagnostic.jpg)
+![Dismiss options — after](38-after.jpg)
 
 ## 39 — Agents footer (actual AX press)
 
-**blocked** · accessibility-press
-
-Incomplete operation; consult manifest.json in the full artifact.
+**captured** · accessibility-press
 
 **Before**
 
 ![Agents footer (actual AX press) — before](39-before.jpg)
 
-**Diagnostic**
+**After**
 
-![Agents footer (actual AX press) — diagnostic](39-diagnostic.jpg)
+![Agents footer (actual AX press) — after](39-after.jpg)
 
 ## 40 — Providers footer (actual AX press)
 
