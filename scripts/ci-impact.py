@@ -102,6 +102,14 @@ def select(root, files, changed, force=False):
         elif TEST.search(path) and path in tests:
             selected.add(path)
             reasons[path] = "test-only"
+        elif path == "scripts/ci-impact-test.py":
+            reasons[path] = "selector contract test"
+        elif path == "scripts/benchmark-pages-test.py":
+            selected.add("scripts/benchmark-pages.test.js")
+            reasons[path] = "benchmark harness test only"
+        elif module(path) in mods and (path.endswith(".golden.json") or Path(path).name in ("flow-host.mjs", "flow-nodes.mjs", "golden.mjs")):
+            selected.update(p for p in tests if module(p) == module(path))
+            reasons[path] = "mod test fixture"
         elif path.startswith("ui-snapshot/"):
             snapshot = True
             reasons[path] = "snapshot observer"
@@ -113,7 +121,7 @@ def select(root, files, changed, force=False):
                 lint.add(path)
             else:
                 all_native = True
-            selected.update(p for p in tests if p.startswith("scripts/benchmark-"))
+                selected.update(p for p in tests if p.startswith("scripts/benchmark-"))
             reasons[path] = "benchmark harness"
         elif path in shared:
             direct.update(shared[path])
@@ -138,6 +146,17 @@ def select(root, files, changed, force=False):
             page_keys.update((l, s, p) for l, s, p, _ in layouts if l == Path(path).stem)
             reasons[path] = "layout integration"
             affected.update(mods)
+        elif path.startswith("scripts/") and not path.startswith(("scripts/ci-impact", "scripts/metrics", "scripts/build-orca-ui", "scripts/orca-ui-manifests", "scripts/check-config", "scripts/sync-")):
+            matching = dependent_tests(root, files, [path], tests)
+            matching.update(t for t in tests if t.startswith("scripts/") and Path(path).name in (root / t).read_text(errors="replace"))
+            if matching:
+                selected.update(matching)
+                if path.endswith((".js", ".mjs", ".cjs")) and path in files:
+                    lint.add(path)
+                reasons[path] = "script dependency tests"
+            else:
+                full = all_native = True
+                reasons[path] = "unclassified script: full fallback"
         else:
             full = True
             all_native = True

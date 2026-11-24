@@ -32,6 +32,15 @@ class ImpactTest(unittest.TestCase):
         self.assertLess(p["selected_test_files"], p["total_test_files"])
         self.assertIn("scripts/perf-spaces-virtual.test.js", [f for row in p["test_matrix"]["include"] for f in row["files"]])
 
+    def test_test_fixtures_do_not_launch_native(self):
+        p = self.plan("mods/orca-spaces/flow.golden.json")
+        self.assertGreater(p["selected_test_files"], 0)
+        self.assertFalse(p["native_mods"])
+        self.assertEqual(p["native_routes"], 0)
+        p = self.plan("scripts/benchmark-pages-test.py")
+        self.assertEqual(p["selected_test_files"], 1)
+        self.assertEqual(p["native_routes"], 0)
+
     def test_projection(self):
         p = self.plan("mods/orca-spaces/worktree-plan.js")
         self.assertTrue(p["projection_benchmark"])
