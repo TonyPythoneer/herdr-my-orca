@@ -44,13 +44,13 @@ export default class Ports extends View {
     // The bar owns the background scan (Orca scans while the popover is closed too, so the count
     // on the button is live); the popup only rescans when it opens and after a Stop.
     if (this.isPanel()) return;
-    cx.timer.every(SCAN_EVERY_MS, (cx) => this.refresh(cx));
+    cx.timer.every(SCAN_EVERY_MS, (cxInner) => this.refresh(cxInner));
     // `herdr-app do orca-ports.open` (or a key bound to it) opens the panel from elsewhere.
-    cx.spawn(async (cx) => {
+    cx.spawn(async (cxInner) => {
       for (;;) {
         const command = await nextCommand();
         if (command === "open") this.openPanel();
-        else if (command === "refresh") this.refresh(cx);
+        else if (command === "refresh") this.refresh(cxInner);
       }
     });
   }
@@ -264,7 +264,9 @@ export default class Ports extends View {
     return h_flex().id(`port-${port.id}`).w_full().h(PANEL.row).flex_none().items_start().gap(8).px(8).py(5).rounded(6)
       .when(hovered, (element) => element.bg(t.hover))
       .on_hover((on, cx) => {
-        const next = on ? port.id : this.hoveredPort === port.id ? null : this.hoveredPort;
+        let next = this.hoveredPort;
+        if (on) next = port.id;
+        else if (this.hoveredPort === port.id) next = null;
         if (next !== this.hoveredPort) {
           this.hoveredPort = next;
           cx.notify();
@@ -320,15 +322,16 @@ export default class Ports extends View {
       rows.push(this.groupHeader(t, group, index === 0));
       for (const port of group.ports) rows.push(this.portRow(t, port, false));
     }
+    const externalRows = () => {
+      if (!this.externalOpen) return [];
+      if (view.external.length === 0) return [div().px(12).py(8).text_size(11).text_color(t.muted).child("No external ports detected")];
+      return view.external.map((port) => this.portRow(t, port, true));
+    };
     const body = [
       ...(empty ? [empty] : []),
       ...rows,
       this.externalHeader(t, view),
-      ...(this.externalOpen
-        ? view.external.length > 0
-          ? view.external.map((port) => this.portRow(t, port, true))
-          : [div().px(12).py(8).text_size(11).text_color(t.muted).child("No external ports detected")]
-        : []),
+      ...externalRows(),
     ];
     // The popup is as big as this view, so its width is stated and its body capped rather than
     // stretched: `h_full`/`flex_1` would collapse inside a content-sized overlay.

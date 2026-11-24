@@ -1708,6 +1708,7 @@ export default class AgentManager extends View {
     return harness.renderSettings(t, cx, { argv: row.run, format: formatArgv, copy: copyText, enabled: row.enabled });
   }
 
+  // eslint-disable-next-line complexity -- shortcut: this function's branches are inherited from main, refactor when this area is next changed
   render(cx) {
     if (this.providersPage) return this.providersView();
     const requestedAgent = shared("agent-manager.open-agent");

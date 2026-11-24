@@ -348,6 +348,7 @@ function sidebarNode(node) {
   return null;
 }
 
+// eslint-disable-next-line complexity -- shortcut: this function's branches are inherited from main, refactor when this area is next changed
 export function settingsPageView(owner, t, cx) {
   const rows = railRows(owner.allRows().all);
   const unofficial = owner.unofficialRows();

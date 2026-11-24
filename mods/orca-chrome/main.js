@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { theme, run, props, window, setShared, shared, layout } from "herdr";
+import { theme, run, props, window, setShared, layout } from "herdr";
 import { startTaskRunner } from "./runner.js";
 
 function find(node, id) {

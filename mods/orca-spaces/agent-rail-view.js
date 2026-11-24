@@ -24,9 +24,9 @@ export function railItem(owner, row, t, tile = t.raised) {
   const control = global || row.installed === undefined ? null : railControl(row);
   const label = global ? "Global Agent Settings" : row.name;
   let item = div().id("am-rail-" + row.key).relative().w(RAIL.width).h(RAIL.row).flex_none()
-    .on_hover((hovered, cx) => {
-      if (!hovered && owner.railHover !== row.key) return;
-      const next = hovered ? row.key : null;
+    .on_hover((hoverIn, cx) => {
+      if (!hoverIn && owner.railHover !== row.key) return;
+      const next = hoverIn ? row.key : null;
       if (next === owner.railHover) return;
       owner.railHover = next;
       cx.notify();
