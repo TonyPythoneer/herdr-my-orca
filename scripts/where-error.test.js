@@ -131,3 +131,13 @@ test("the last mods/ in a path is the frame, so a prefix containing mods/ still 
   assert.equal(hit.frame, "mods/orca-panel-head/main.js:3:1");
   assert.equal(locate("mods/orca-panel-head/main.js:1 /p/mods/orca-panel-gap/main.js:2", table).length, 2);
 });
+
+test("an in-place mod with an app.mjs entry gets its tests, layouts and next in the hint", async () => {
+  const { features, inPlace } = await import("../orca-ui/app.mjs");
+  const [hit] = locate("at r (/p/mods/orca-panel-gap/main.js:40:37)", table, features, undefined, inPlace);
+  assert.equal(hit.kind, "in-place");
+  assert.equal(hit.edit, "mods/orca-panel-gap/main.js:40:37");
+  assert.match(hit.note, /^edit this file in place; mod "orca-panel-gap" is in app\.mjs; tests mods\/orca-panel-gap\/panel-motion\.test\.js; layouts orca#workspaces,/);
+  const [chrome] = locate("at r (/p/mods/orca-chrome/runner.js:9)", table, features, undefined, inPlace);
+  assert.match(chrome.note, /next mods\/orca-chrome\/runner\.js, mods\/orca-tasks\/main\.js$/);
+});

@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
-import { features } from "../orca-ui/app.mjs";
+import { features, inPlace } from "../orca-ui/app.mjs";
 import { FEATURE, edit, fixture, temp, write } from "./orca-ui-fixture.mjs";
 
 const MANIFEST = `${FEATURE}/manifest.json`;
@@ -161,4 +161,38 @@ test("loader rejects a keys.json that is not an object and a null handwritten li
   write(root, "keys.json", "{}");
   edit(root, MANIFEST, m => { m.keys = []; m.handwritten = null; });
   rejects(root, /"handwritten" must be an array/);
+});
+
+// The in-place map is hand-written, so the repo is the check: every mod is owned once, its layout
+// mounts and keys exist and match, and its tests and next files are real.
+test("every mod is a feature or has one in-place map entry, and the entry matches the repo", () => {
+  const json = path => JSON.parse(readFileSync(join(ROOT, path), "utf8"));
+  const mods = readdirSync(join(ROOT, "mods")).filter(m => existsSync(join(ROOT, "mods", m, "mod.json"))).sort();
+  const owned = [...loadManifests().features.values()].map(f => f.mod);
+  assert.equal(mods.length, 24);
+  assert.deepEqual([...owned, ...inPlace.map(e => e.mod)].sort(), mods);
+  const mounts = {};
+  for (const layout of ["orca", "orca-unified"]) {
+    // A pane header's `content` has no id of its own, so it counts for the node that carries it.
+    const walk = (node, id) => {
+      if (Array.isArray(node)) node.forEach(n => walk(n, id));
+      else if (node && typeof node === "object") {
+        const here = node.id ?? id;
+        if (here && node.content?.mod) (mounts[node.content.mod] ??= []).push(`${layout}#${here}`);
+        Object.values(node).forEach(n => walk(n, here));
+      }
+    };
+    walk(json(`layouts/${layout}.json`));
+  }
+  const keys = json("keys.json");
+  for (const e of inPlace) {
+    assert.deepEqual([...(e.layouts ?? [])].sort(), [...(mounts[e.mod] ?? [])].sort(), `${e.mod}: layouts`);
+    for (const k of e.keys ?? []) {
+      const i = k.lastIndexOf(":");
+      assert.ok(Object.hasOwn(keys[k.slice(0, i)] ?? {}, k.slice(i + 1)), `${e.mod}: key ${k}`);
+    }
+    for (const f of [...(e.tests ?? []), ...(e.next ?? [])]) assert.ok(existsSync(join(ROOT, f)), `${e.mod}: ${f}`);
+    const onDisk = readdirSync(join(ROOT, "mods", e.mod)).filter(f => /\.test\.m?js$/.test(f)).map(f => `mods/${e.mod}/${f}`).sort();
+    assert.deepEqual([...(e.tests ?? [])].sort(), onDisk, `${e.mod}: tests`);
+  }
 });
