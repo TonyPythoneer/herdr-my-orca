@@ -141,7 +141,9 @@ test("a destination that is a directory, or a symlinked mod folder, fails with n
       assert.equal(r.status, 1, flags.join());
       assert.match(r.stdout + r.stderr, /symlink/);
     }
-    assert.equal(existsSync(target) && files(target).length, existsSync(target) ? 0 : false);
+    assert.deepEqual(files(fresh), []);
+    if (existsSync(target)) assert.deepEqual(files(target), []);
+    else assert.equal(existsSync(target), false);
   }
 });
 
@@ -219,4 +221,35 @@ test("--force never overrides a symlinked destination, and cannot be combined wi
   assert.deepEqual(files(other), []);
   assert.equal(run("--root", root, "--force", "--check", "--out", out).status, 2);
   assert.equal(run("--root", root, "--force", "--force", "--out", out).status, 2);
+});
+
+test("a wrong --root exits 2 instead of building nothing", t => {
+  const out = temp(t);
+  for (const flags of [[], ["--check"]]) {
+    const r = run("--root", join(out, "typo"), ...flags, "--out", out);
+    assert.equal(r.status, 2, flags.join());
+    assert.match(r.stderr, /orca-ui\/shared\/manifest\.json: /);
+  }
+  assert.deepEqual(files(out), []);
+});
+
+test("layouts come from the repo, not the output tree: a correct layout only in --out still exits 2", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  write(out, "layouts/orca.json", readFileSync(join(root, "layouts/orca.json"), "utf8"));
+  write(root, "layouts/orca.json", JSON.stringify({ id: "root", children: [] }));
+  const r = run("--root", root, "--out", out);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /has 0 nodes with id "list"/);
+  assert.deepEqual(files(out), ["layouts/orca.json"]);
+});
+
+test("a shared source that is not UTF-8 is copied byte for byte", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  writeFileSync(join(root, "orca-ui/shared/clip.js"), Buffer.from([0x61, 0xff, 0xfe, 0x0a]));
+  assert.equal(run("--root", root, "--out", out).status, 0);
+  const copy = readFileSync(join(out, "mods/orca-menu/clip.js"));
+  assert.ok(copy.subarray(0, 4).equals(Buffer.from([0x61, 0xff, 0xfe, 0x0a])));
+  assert.equal(run("--root", root, "--check", "--out", out).status, 0);
 });

@@ -60,8 +60,8 @@ function pathProblem(path) {
 function deliverable(root, row) {
   const bytes = readFileSync(join(root, row.source));
   if (row.kind !== "shared") return bytes;
-  const text = bytes.toString("utf8");
-  return Buffer.from(`${text}${text.endsWith("\n") ? "" : "\n"}// Generated from ${row.source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`);
+  const lf = bytes.length && bytes[bytes.length - 1] === 0x0a ? "" : "\n";
+  return Buffer.concat([bytes, Buffer.from(`${lf}// Generated from ${row.source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`)]);
 }
 
 function main() {

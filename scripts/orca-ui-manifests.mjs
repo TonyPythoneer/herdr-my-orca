@@ -68,7 +68,7 @@ function parseFeature(root, path) {
   if (typeof m.mod !== "string" || !/^[A-Za-z0-9][\w.-]*$/.test(m.mod)) fail('"mod" must be one folder name');
   if (m.source !== posix.dirname(path)) fail(`"source" must be ${posix.dirname(path)}`);
   if (m.output !== `mods/${m.mod}`) fail(`"output" must be mods/${m.mod}`);
-  m.handwritten ??= [];
+  if (m.handwritten === undefined) m.handwritten = [];
   for (const key of ["files", "handwritten", "tests", "keys"]) if (!strings(m[key])) fail(`"${key}" must be an array of strings`);
   if (!m.layoutSlots || typeof m.layoutSlots !== "object" || Array.isArray(m.layoutSlots) ||
       !Object.values(m.layoutSlots).every(strings)) fail('"layoutSlots" must map layout names to arrays of ids');
@@ -105,6 +105,7 @@ function parseFeature(root, path) {
   }
   if (m.keys.length) {
     const sections = readJson(root, "keys.json", fail);
+    if (!sections || typeof sections !== "object" || Array.isArray(sections)) fail("keys.json must be an object");
     for (const key of m.keys) if (!Object.hasOwn(sections, key)) fail(`keys.json has no section "${key}"`);
   }
   return m;
@@ -112,11 +113,14 @@ function parseFeature(root, path) {
 
 export const SHARED = "orca-ui/shared";
 
-// `orca-ui/shared/manifest.json`: `{ files: [{ source, outputs }] }`. Null when the folder is absent.
+// `orca-ui/shared/manifest.json`: `{ files: [{ source, outputs }] }`. Required, so a mistyped
+// --root or a deleted folder is an error rather than a silently empty build.
 function parseShared(root) {
   const path = `${SHARED}/manifest.json`;
-  if (!existsSync(join(root, SHARED))) return null;
   const fail = message => { throw new ManifestError(message, path); };
+  let realDir;
+  try { realDir = realpathSync(join(root, SHARED)); } catch { fail(`${SHARED} does not exist`); }
+  if (realDir !== join(realpathSync(root), "orca-ui", "shared")) fail(`${SHARED} is a symlink or leaves the repo`);
   const m = readJson(root, path, fail);
   if (!m || typeof m !== "object" || Array.isArray(m) || Object.keys(m).some(k => k !== "files") || !Array.isArray(m.files)) {
     fail('manifest must be { "files": [...] }');

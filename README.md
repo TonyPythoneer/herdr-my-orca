@@ -3,7 +3,7 @@
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
-- **skillshare**: the right sidebar icon opens the skillshare panel (`mods/skillshare/`, a third-party mod tracked here). Its CLI is also required for data and actions.
+- **skillshare**: the right sidebar icon opens the skillshare panel (`mods/skillshare/`, a mod this repo owns). Its CLI is also required for data and actions.
 - **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status/`). Claude and
   Codex read what the CLIs already write on this computer; Claude's quota comes live from
   Claude Code's own `rate_limits` statusline feed, with Anthropic's usage API only as the idle

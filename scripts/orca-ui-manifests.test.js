@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
 import { features } from "../orca-ui/app.mjs";
-import { FEATURE, edit, fixture, write } from "./orca-ui-fixture.mjs";
+import { FEATURE, edit, fixture, temp, write } from "./orca-ui-fixture.mjs";
 
 const MANIFEST = `${FEATURE}/manifest.json`;
 const load = root => loadManifests({ root });
@@ -173,11 +173,24 @@ for (const [name, [mutate, pattern, path = SHARED_MANIFEST]] of Object.entries(B
   });
 }
 
-test("an empty shared manifest is fine, and a repo without orca-ui/shared has none", t => {
+test("an empty shared manifest is fine; a missing or symlinked orca-ui/shared is an error", t => {
   const root = fixture(t);
   write(root, SHARED_MANIFEST, '{ "files": [] }');
   for (const name of ["clip.js", "transcript.js"]) rmSync(join(root, "orca-ui/shared", name));
   assert.deepEqual(load(root).shared, { files: [] });
+  const elsewhere = temp(t);
+  write(elsewhere, "manifest.json", '{ "files": [] }');
   rmSync(join(root, "orca-ui/shared"), { recursive: true });
-  assert.equal(load(root).shared, null);
+  rejects(root, /does not exist/, SHARED_MANIFEST);
+  symlinkSync(elsewhere, join(root, "orca-ui/shared"));
+  rejects(root, /symlink or leaves the repo/, SHARED_MANIFEST);
+});
+
+test("loader rejects a keys.json that is not an object and a null handwritten list", t => {
+  const root = fixture(t);
+  write(root, "keys.json", "null");
+  rejects(root, /keys\.json must be an object/);
+  write(root, "keys.json", "{}");
+  edit(root, MANIFEST, m => { m.keys = []; m.handwritten = null; });
+  rejects(root, /"handwritten" must be an array/);
 });
