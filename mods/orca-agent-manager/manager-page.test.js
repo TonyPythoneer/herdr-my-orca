@@ -428,3 +428,25 @@ test("settings route selects Global, official and unofficial agents and dispatch
   press(handler("on_size_change", "am-root"), { width: 420 }, spy);
   assert.equal(page.width, 420);
 });
+
+// The full settings route exposes a real Copy control, not just the preview string.
+test("unsupported harness command copy reaches both clipboard channels without launching", (t) => {
+  const { page, cx, commands } = harness(t);
+  page.freebuffInstalled = true;
+  const copied = [], host = [];
+  globalThis.__clipboard_write_text = value => copied.push(value);
+  globalThis.__herdrExec = (command, args) => { host.push([command, args]); return { code: 0, stdout: "" }; };
+  t.after(() => { delete globalThis.__clipboard_write_text; delete globalThis.__herdrExec; });
+  page.selectRail("freebuff", cx);
+  assert.match(JSON.stringify(draw(page, cx)), /am-copy-command/);
+  const clipboard = [];
+  const spy = { ...spyCx(), write_to_clipboard: value => clipboard.push(value) };
+  press(handler("on_click", "am-copy-command"), {}, spy);
+  assert.equal(copied.length, 1);
+  assert.match(copied[0], /freebuff/);
+  assert.deepEqual(clipboard, copied);
+  assert.equal(host.length, 1);
+  assert.equal(host[0][0], "sh");
+  assert.equal(host[0][1].at(-1), copied[0]);
+  assert.deepEqual(commands, []);
+});

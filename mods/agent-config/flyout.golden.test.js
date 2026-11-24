@@ -14,6 +14,11 @@ register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
 const codexProvider = await import("./codex-provider.js");
 const viewport = await import("./list-viewport.js");
 const flyout = await import("./agent-flyout.js");
+const managerDeps = {
+  ...await import("../orca-agent-manager/codex-provider.js"),
+  ...await import("../orca-agent-manager/list-viewport.js"),
+  ...await import("../orca-agent-manager/agent-flyout.js"),
+};
 
 const SOURCE = readFileSync(new URL("./agent-config-view.js", import.meta.url), "utf8")
   .replace(/^import .*;$/gm, "").replace("export function createAgentConfigClass", "function createAgentConfigClass");
@@ -135,7 +140,7 @@ function start(world, log, settingsPage = false) {
   const answer = value => { if (value instanceof Error) throw value; return { code: 0, stdout: value ?? "" }; };
   const props = { key: world.key, space: "s1", name: world.key, argv: world.argv, launchNow: Boolean(world.launchNow), overlay: "ov", menu: "menu" };
   const scope = {
-    View: class {}, ...codexProvider, ...viewport, ...flyout,
+    View: class {}, ...(settingsPage || world.managerCopy ? managerDeps : { ...codexProvider, ...viewport, ...flyout }),
     div: recorder(handlers)("div"), image: recorder(handlers)("image"), svg: recorder(handlers)("svg"), v_flex: recorder(handlers)("v_flex"), h_flex: recorder(handlers)("h_flex"),
     TextareaState: { new: o => field(o?.value) }, InputState: { new: () => field("") },
     Textarea: { new: (...a) => recorder(handlers)("Textarea.new")(...a) }, Input: { new: (...a) => recorder(handlers)("Input.new")(...a) },
@@ -153,7 +158,7 @@ function start(world, log, settingsPage = false) {
     },
   };
   vm.createContext(scope);
-  (settingsPage ? MANAGER_SCRIPT : SCRIPT).runInContext(scope);
+  (settingsPage || world.managerCopy ? MANAGER_SCRIPT : SCRIPT).runInContext(scope);
   const cx = {
     notify: () => log.push(["notify"]), spawn: job => jobs.push(job), timer: { after: (ms, fn) => timers.push([ms, fn]) },
     stop_propagation: () => log.push(["stop"]),
@@ -277,6 +282,16 @@ test("every flyout records as before", async () => {
   const now = summary(got);
   if (!existsSync(GOLDEN)) writeFileSync(GOLDEN, `${JSON.stringify(now, null, 1)}\n`);
   assert.deepEqual(now, JSON.parse(readFileSync(GOLDEN, "utf8")));
+});
+
+// The Settings mod ships its own isolated runtime copy. Exercise it with the same
+// host fixtures and dependency copies, rather than assuming source equality is enough.
+test("the settings mod controller preserves all popup controller contracts", async () => {
+  const expected = JSON.parse(readFileSync(GOLDEN, "utf8"));
+  for (const [name, world] of Object.entries(WORLDS)) {
+    const got = summary({ [name]: await recordWorld({ ...world, managerCopy: true }) });
+    assert.deepEqual(got[name], expected[name], name);
+  }
 });
 
 test("the catalog fallback and error text are what the person reads", async () => {

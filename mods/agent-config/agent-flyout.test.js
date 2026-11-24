@@ -1,9 +1,11 @@
 // Unit tests for the agent flyout specs (generated from orca-ui/shared/agent-flyout.js): the specs are plain
 // data, every name they mention resolves, each agent's argv is what its launch used to be, and the
 // model-list parsers read output captured from the real CLIs.
-import test from "node:test";
+import test, { describe } from "node:test";
 import assert from "node:assert/strict";
-import {
+// Both mods load a local copy in production; apply the same contracts to each.
+for (const target of ["./agent-flyout.js", "../orca-agent-manager/agent-flyout.js"]) {
+const {
   DEFAULT_AGENTS_TEXT,
   DEFAULT_PROMPT,
   PI_THINKING,
@@ -18,7 +20,8 @@ import {
   readGroup,
   readValues,
   sectionsOf,
-} from "./agent-flyout.js";
+} = await import(target);
+describe(target, () => {
 
 // Names the flyout resolves in code: hooks for lists, expansions and after-launch work.
 const SOURCES = new Set(["claudeOutputStyles"]);
@@ -412,3 +415,5 @@ test("claude initialize: the models of the control response, and an error when t
   assert.throws(() => parseModels("claudeInitialize", "nothing"), /did not list/);
   assert.throws(() => parseModels("nope", ""), /no model parser/);
 });
+});
+}
