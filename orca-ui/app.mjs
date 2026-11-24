@@ -89,6 +89,7 @@ export const inPlace = [
       "agent-manager.inventory"
     ],
     "tests": [
+      "mods/orca-agent-manager/agent-rail.test.js",
       "mods/orca-agent-manager/install.test.js",
       "mods/orca-agent-manager/manager-flow.test.js",
       "mods/orca-agent-manager/manager-logic.test.js",
@@ -97,6 +98,7 @@ export const inPlace = [
       "mods/orca-agent-manager/permissions.flow.test.js",
       "mods/orca-agent-manager/permissions.test.js",
       "mods/orca-agent-manager/provider.flow.test.js",
+      "mods/orca-agent-manager/rail-view.test.js",
       "mods/orca-agent-manager/render.test.js",
       "mods/orca-agent-manager/state.test.js",
       "mods/orca-agent-manager/util.test.js"
@@ -636,6 +638,7 @@ export const inPlace = [
       "panel.openPx"
     ],
     "tests": [
+      "mods/orca-tabs/agent-settings-route.test.js",
       "mods/orca-tabs/close-plan.test.js",
       "mods/orca-tabs/drop-zone.test.js",
       "mods/orca-tabs/golden.test.js",

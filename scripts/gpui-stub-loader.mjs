@@ -14,7 +14,7 @@ const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() =
   // File IO goes through `globalThis.__herdrFiles` so a flow test can run a mod's real handlers.
   readTextFile: "async (path) => globalThis.__herdrFiles?.get(path)",
   writeTextFile: "async (path, text) => { await globalThis.__herdrFiles?.set(path, text); }",
-  setShared: "() => {}",
+  setShared: "(key, value) => globalThis.__herdrSetShared?.(key, value)",
   // Overlays close through the app, so a flow test can read what a menu did before it went away.
   closeOverlay: "(id) => globalThis.__herdrCloseOverlay?.(id)",
   // Shared values go through `globalThis.__herdrShared`, so a test can show what another mod published.

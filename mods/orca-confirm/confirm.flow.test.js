@@ -11,14 +11,14 @@ register("data:text/javascript," + encodeURIComponent(`
     const result = await record(url, ctx, next);
     if (!url.startsWith("stub:")) return result;
     return { ...result, source: result.source.replace('return "fn"', 'return globalThis.handlers.push(a) - 1')
-      .replace("export const setShared = () => {}", "export const setShared = (...args) => globalThis.publish(...args)") };
+       };
   }`));
 const { default: Confirm } = await import("./main.js");
 
 test("dialog focuses, confirms in order, cancels, and consumes only Enter and Escape", () => {
   const calls = [];
   globalThis.handlers = [];
-  globalThis.publish = (...args) => calls.push(["publish", ...args]);
+  globalThis.__herdrSetShared = (...args) => calls.push(["publish", ...args]);
   globalThis.__herdrProps = () => ({ overlay: "dialog", command: { name: "delete" }, confirmShared: { key: "target", value: "a" } });
   globalThis.__herdrCloseOverlay = id => calls.push(["close", id]);
   globalThis.__herdrRun = (...args) => calls.push(["run", ...args]);

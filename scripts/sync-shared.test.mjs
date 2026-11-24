@@ -9,7 +9,7 @@ const { table, shared } = loadManifests();
 const sharedCopies = [...table].filter(([, row]) => row.kind === "shared");
 
 test("every copy of a shared helper matches orca-ui/shared/", () => {
-  assert.equal(sharedCopies.length, 19);
+  assert.equal(sharedCopies.length, 23);
   for (const [dest, row] of sharedCopies) {
     const source = readFileSync(`${ROOT}/${row.source}`, "utf8");
     const want = `${source}${source.endsWith("\n") ? "" : "\n"}// Generated from ${row.source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;

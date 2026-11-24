@@ -51,7 +51,24 @@ const CASES = {
 test("each flyout renders as recorded", () => {
   const got = Object.fromEntries(Object.entries(CASES).map(([name, make]) => {
     const tree = make().render();
-    return [name, JSON.parse(JSON.stringify(tree?.__node ?? tree))];
+    const recorded = JSON.parse(JSON.stringify(tree?.__node ?? tree));
+    // The only intentional popup visual delta is the new robot shortcut. Keep the old
+    // snapshot as an exact baseline for everything else, rather than regenerating it.
+    let botCount = 0;
+    function stripRobot(node) {
+      if (Array.isArray(node)) {
+        for (let i = node.length - 1; i >= 0; i--) {
+          const call = node[i];
+          const child = Array.isArray(call) && call[0] === "child" ? call[1]?.[0] : null;
+          const bot = child?.c?.some(method => method[0] === "id" && method[1]?.[0] === "agent-full-settings");
+          if (bot) { assert.ok(JSON.stringify(child).includes("mods/orca-new-menu/bot.svg")); botCount++; node.splice(i, 1); }
+          else stripRobot(call);
+        }
+      } else if (node && typeof node === "object") Object.values(node).forEach(stripRobot);
+    }
+    stripRobot(recorded);
+    assert.equal(botCount, 1, name + " has exactly one robot shortcut");
+    return [name, recorded];
   }));
   if (!existsSync(SNAP)) writeFileSync(SNAP, `${JSON.stringify(got, null, 1)}\n`);
   assert.deepEqual(got, JSON.parse(readFileSync(SNAP, "utf8")));
