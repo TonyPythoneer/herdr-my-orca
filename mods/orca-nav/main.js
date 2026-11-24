@@ -186,7 +186,11 @@ function optionsButton(t) {
 // Appends the picked folder to the persisted project list (once) and opens a space on it.
 function addProject(folder) {
   if (!folder) return;
-  const existing = JSON.parse(localStorage.getItem("projects.saved.v1") || "[]");
+  let existing = [];
+  try {
+    const value = JSON.parse(localStorage.getItem("projects.saved.v1") || "[]");
+    if (Array.isArray(value)) existing = value;
+  } catch { /* A corrupted project list must not block adding a new folder. */ }
   if (!existing.includes(folder)) {
     existing.push(folder);
     localStorage.setItem("projects.saved.v1", JSON.stringify(existing));

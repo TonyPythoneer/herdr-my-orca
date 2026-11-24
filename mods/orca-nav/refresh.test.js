@@ -266,3 +266,17 @@ test('unknown row kinds render an empty value and leave options alone', () => {
   assert.equal(cx.calls, 0);
   assert.equal(localStorage.getItem('workspace.options.v1'), undefined);
 });
+
+test('adding a project recovers invalid JSON and non-array saved values', async () => {
+  for (const invalid of ['{broken', 'null', '{}', '"string"']) {
+    const { nav, cx } = fixture();
+    localStorage.setItem('projects.saved.v1', invalid);
+    const calls = [];
+    globalThis.__herdrRun = (name, args) => calls.push([name, args]);
+    globalThis.flowHost = { window: () => ({ active: true }), pickFolder: async () => '/new' };
+    handler(byId(nav.render(cx).__node, 'proj-add-repo'), 'on_click')();
+    await new Promise(r => setImmediate(r));
+    assert.deepEqual(JSON.parse(localStorage.getItem('projects.saved.v1')), ['/new']);
+    assert.deepEqual(calls, [['space.new', { folder: '/new' }]]);
+  }
+});
