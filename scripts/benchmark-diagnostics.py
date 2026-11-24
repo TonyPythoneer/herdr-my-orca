@@ -6,7 +6,7 @@ import statistics
 
 HOST_IMPORT = re.compile(r'import\s*\{([^}]+)\}\s*from\s*["\']herdr["\'];')
 VIEW = re.compile(r'\bexport default class (\w+) extends View\s*\{')
-OPERATIONS = {"exec", "readTextFile", "knownAgents", "hc"}
+OPERATIONS = {"exec", "readTextFile", "knownAgents", "hc", "spaces", "panes", "agents", "machines", "shared", "setShared", "run", "settings", "layout", "writeTextFile"}
 PREFIX = "HERDR_PAGE_DIAG "
 
 
@@ -139,3 +139,17 @@ def summarize_events(events, start_ms, end_ms, mod):
                      "sum_ms_nonexclusive": round(sum(times), 3),
                      "non_ok": sum(i["outcome"] != "ok" for i in items)})
     return sorted(rows, key=lambda r: (-r["sum_ms_nonexclusive"], r["module"], r["op"]))
+
+def count_events(events, start_ms, end_ms, mod):
+    """Completed instrumented host calls per observation; not all native operations."""
+    groups = summarize_events(events, start_ms, end_ms, mod)
+    result = {}
+    for scope in ("target", "background"):
+        scoped = [r for r in groups if r["scope"] == scope]
+        result[scope] = {
+            "host_calls": sum(r["count"] for r in scoped if r["op"] in OPERATIONS),
+            "exec_calls": sum(r["count"] for r in scoped if r["op"] == "exec"),
+            "hc_calls": sum(r["count"] for r in scoped if r["op"] == "hc"),
+            "render_calls": sum(r["count"] for r in scoped if r["op"] == "render"),
+        }
+    return result

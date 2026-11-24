@@ -19,7 +19,7 @@ register("data:text/javascript," + encodeURIComponent(`
     return { url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true };
   }
 `));
-globalThis.__hc = async () => ({ code: 0, stdout: JSON.stringify({ foreground: { cwd: "/wt" } }) });
+globalThis.__hc = async () => { globalThis.__hcCalls = (globalThis.__hcCalls ?? 0) + 1; return { code: 0, stdout: JSON.stringify({ foreground: { cwd: "/wt" } }) }; };
 const { default: Status } = await import("./main.js");
 
 test("refresh command, folder watch and timers use the callback context", async () => {
@@ -228,4 +228,30 @@ test("known spaces reuse already probed folders and skip remote folders", async 
   const known = await view.knownSpaces(snapshot, new Map([["/already", { top: "/already" }]]));
   assert.deepEqual(calls, ["/new"]);
   assert.deepEqual(known.map(s => s.checkout?.top ?? null), ["/already", "/new", "/new", null]);
+});
+
+test("performance contract: native CWD, subprocess budget and worktree cache hits", async () => {
+  const view = new Status();
+  view.wtCheckouts = new Map();
+  let subprocesses = 0;
+  globalThis.__herdrExec = async (_cmd, [, path]) => {
+    subprocesses++;
+    return { code: 0, stdout: [path, path + "/.git", path + "/.git", "main"].join("\n") };
+  };
+  const snapshot = Array.from({ length: 20 }, () => ({ folder: "/fixture" }));
+  await view.knownSpaces(snapshot);
+  const cold = subprocesses;
+  await view.knownSpaces(snapshot);
+  const warm = subprocesses - cold;
+  assert.equal(cold, 1);
+  assert.equal(warm, 0);
+  const panes = Array.from({ length: 20 }, (_, i) => ({ terminal: String(i), cwd: "/fixture" }));
+  const hcBefore = globalThis.__hcCalls ?? 0;
+  const cwds = await view.agentCwds(panes);
+  const cliFallbacks = (globalThis.__hcCalls ?? 0) - hcBefore;
+  assert.equal(Object.keys(cwds).length, 20);
+  assert.equal(cliFallbacks, 0);
+  console.log("PERF_CONTRACT " + JSON.stringify({ id: "status.refresh", scope: "host stub", workspaces: 20,
+    cold_subprocesses: cold, warm_subprocesses: warm, cache_lookup_count: 1, cache_hit_count: 1,
+    cache_hit_rate: 1, native_cwd_count: 20, cli_fallbacks: cliFallbacks }));
 });

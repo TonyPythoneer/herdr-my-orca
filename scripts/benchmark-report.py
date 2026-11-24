@@ -191,7 +191,8 @@ def diagnostics(folder, commit):
                        "max_ms":maxima[k]} for k in sorted(elapsed, key=lambda k: (-elapsed[k], k))]
             result.append({"route_id":route_id(page), "status":page.get("status"),
                            "reason":page.get("reason"), "span_count":sum(counts.values()),
-                           "top_groups":groups[:15], "report":"diagnostic/report.json"})
+                           "top_groups":groups[:15], "per_observation_counts":[{"phase":s["phase"], "counts":s.get("counts")} for s in page.get("diagnostic_spans", [])],
+                           "report":"diagnostic/report.json"})
         return {"status":"observed" if any(p["span_count"] for p in result) else "no_spans",
                 "fatal_error":d.get("fatal_error"), "pages":result,
                 "note":"Instrumented samples are not latency baselines; spans may overlap or be absent."}

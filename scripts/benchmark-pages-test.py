@@ -157,6 +157,9 @@ export default class Demo extends View {
         self.assertEqual(rows[0]["count"], 2)
         self.assertEqual(rows[0]["sum_ms_nonexclusive"], 150)
         self.assertEqual(rows[1]["scope"], "background")
+        counts = self.diag["count_events"](spans, 100, 200, "a")
+        self.assertEqual(counts["target"]["exec_calls"], 2)
+        self.assertEqual(counts["background"]["host_calls"], 1)
         self.assertEqual(self.diag["parse_events"]("HERDR_PAGE_DIAG invalid\n"), [])
 
 
