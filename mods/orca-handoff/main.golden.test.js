@@ -189,6 +189,7 @@ test("handoff uses Herdr's installed catalog and configured argv, not hardcoded 
   assert.doesNotMatch(tree, /agent-opt-claude/);
   await env.view.executeHandoff(env.cx);
   assert.deepEqual(plain(env.log.runs[0][1].argv), ["custom", "--flag"]);
+  assert.equal(env.log.runs[0][1].space, "s");
   const empty = await opened({ inventory: [] });
   await empty.view.executeHandoff(empty.cx);
   assert.deepEqual(empty.log.runs, []);

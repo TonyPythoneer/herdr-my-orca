@@ -69,7 +69,9 @@ export default class HandoffDialog extends View {
     const pane = panes().find((x) => x.pane === this.paneId || x.terminal === this.terminal);
     this.cwd = pane?.cwd || "";
     this.paneTitle = pane?.title || "";
-    this.sourceMachine = spaces().find((space) => space.tabs?.some((tab) => tab.id === pane?.tab))?.machine ?? null;
+    const sourceSpace = spaces().find((space) => space.tabs?.some((tab) => tab.id === pane?.tab));
+    this.sourceMachine = sourceSpace?.machine ?? null;
+    this.sourceSpaceId = sourceSpace?.id;
 
     const agent = agents().find((a) => a.address === this.terminal || a.pane === this.paneId);
     this.sourceAgent = agent?.app || agent?.program?.name || "Agent";
@@ -162,6 +164,7 @@ export default class HandoffDialog extends View {
     // Launch agent in a fresh tab with the continuation prompt
     run("tab.new", {
       name: `${targetAgent.name} (Handoff)`,
+      ...(this.sourceSpaceId ? { space: this.sourceSpaceId } : {}),
       folder: this.cwd || undefined,
       argv: targetAgent.run,
       task: prompt || undefined
