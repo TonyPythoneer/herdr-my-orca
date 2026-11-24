@@ -12,6 +12,7 @@ The active herdr-my-orca checkout is the source of truth for the files you edit.
 3. Done only when every changed file diffs empty, `herdr-app check ~/.config/herdr-app/mods/<mod>` exits 0 for each changed mod, and `herdr-app status` shows no errors from the files you changed. Tell the user which files went which way.
 
 Never:
+- Edit a `mods/` file that a manifest under `orca-ui/features/` lists: edit the source there, run `node scripts/build-orca-ui.mjs --out .`, and require `node scripts/build-orca-ui.mjs --check --out .` to exit 0 before syncing the regenerated files.
 - rsync, copy a directory, or `--delete`. Live holds files the repo must never get and you must never remove: `gpui-kit.d.ts` and `jsconfig.json` (written by `herdr-app check`), `*.bak*`, `AGENTS.md`, `data/`, `icons/`, `layouts/.state/`, runtime `*.json` (installed, shared, view, agent-config...), other mods (browser-url, `*-edited`).
 - Mirror a deletion or rename; list it for the user instead.
 - Leave your own probe mod (e.g. `zz-probe`) live: remove its dir, layout block and `layouts/.state` entry before finishing; never sync it.

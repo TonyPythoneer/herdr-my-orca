@@ -1,0 +1,25 @@
+{
+  "feature": "panel/head",
+  "mod": "orca-panel-head",
+  "source": "orca-ui/features/panel/head",
+  "output": "mods/orca-panel-head",
+  "files": [
+    "mod.json",
+    "main.js",
+    "panel-gating.js",
+    "panel-views.js",
+    "agent-session-history.svg",
+    "files.svg",
+    "git-branch.svg",
+    "list-checks.svg",
+    "panel-right-close.svg",
+    "plug.svg",
+    "skillshare.svg",
+    "workflow.svg"
+  ],
+  "tests": ["panel-gating.test.js", "panel-views.test.js"],
+  "layoutSlots": { "orca": ["panel-head"], "orca-unified": ["panel-head"] },
+  "commands": ["orca-panel-head.<view>"],
+  "keys": ["layout:orca"],
+  "shared": []
+}
