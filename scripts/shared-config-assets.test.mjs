@@ -13,4 +13,7 @@ test("shared config asset exists, consumer paths agree and legacy duplicates are
     assert.equal(existsSync(new URL("mods/" + mod + "/refresh-cw.svg", root)), false);
   }
   assert.equal(SPIN_PERIOD_MS, 1000);
+  const manifest = JSON.parse(readFileSync(new URL("mods/orca-assets/resources.json", root), "utf8"));
+  assert.deepEqual(manifest[asset], ["orca-agent-manager", "orca-files", "orca-status"]);
+  assert.deepEqual(manifest["mods/orca-assets/ui-settings.js"], ["orca-files", "orca-status"]);
 });

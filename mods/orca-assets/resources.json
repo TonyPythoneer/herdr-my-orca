@@ -1,0 +1,11 @@
+{
+  "mods/orca-assets/refresh-cw.svg": [
+    "orca-agent-manager",
+    "orca-files",
+    "orca-status"
+  ],
+  "mods/orca-assets/ui-settings.js": [
+    "orca-files",
+    "orca-status"
+  ]
+}
