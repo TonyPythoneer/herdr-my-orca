@@ -399,34 +399,67 @@ test("provider and refresh controls are native buttons; busy refresh cannot acti
 });
 
 // Exercise the actual V4 route independently of the historical builder snapshots.
-test("settings route selects Global, official and unofficial agents and dispatches real controls", (t) => {
+test("settings route follows the left sidebar's requests and publishes its selection", (t) => {
   const { page, cx } = harness(t);
+  const store = new Map();
+  globalThis.__herdrShared = key => store.get(key) ?? null;
+  globalThis.__herdrSetShared = (key, value) => { store.set(key, value); return null; };
+  t.after(() => { delete globalThis.__herdrShared; delete globalThis.__herdrSetShared; });
   const spy = spyCx();
   const toggled = [];
   page.toggleEnabled = row => toggled.push(row.key);
   page.freebuffInstalled = true;
   const global = JSON.stringify(draw(page, cx));
-  for (const id of ["am-agent-rail", "am-rail-select-global", "am-rail-select-claude", "am-rail-select-freebuff", "Global Agent Settings", "am-refresh"]) assert.ok(global.includes(id), id);
-  assert.ok(!global.includes("am-back"));
-  press(handler("on_click", "am-rail-toggle-claude"), {}, spy);
-  assert.deepEqual(toggled, ["claude"]);
-  assert.equal(spy.log.at(-1), "stop");
-  press(handler("on_click", "am-rail-select-claude"), {}, spy);
-  const claude = JSON.stringify(draw(page, cx));
+  for (const id of ["Global Agent Settings", "am-refresh"]) assert.ok(global.includes(id), id);
+  for (const id of ["am-agent-rail", "am-rail-select-claude", "am-back"]) assert.ok(!global.includes(id), id);
+  assert.deepEqual(store.get("agent-manager.selected"), { key: "global" });
+  const open = key => { store.set("agent-manager.open-agent", { key }); return JSON.stringify(draw(page, cx)); };
+  store.set("agent-manager.toggle-agent", { key: "claude" });
+  draw(page, cx);
+  store.set("agent-manager.toggle-agent", { key: "freebuff" });
+  draw(page, cx);
+  assert.deepEqual(toggled, ["claude", "freebuff"]);
+  assert.equal(store.get("agent-manager.toggle-agent"), null);
+  const claude = open("claude");
   assert.match(claude, /am-agent-detail-claude/);
   assert.match(claude, /Loading harness settings/);
-  press(handler("on_click", "am-rail-select-codex"), {}, spy);
-  const codex = JSON.stringify(draw(page, cx));
-  assert.match(codex, /am-agent-detail-codex/);
-  assert.match(codex, /Install this CLI/);
-  press(handler("on_click", "am-rail-select-freebuff"), {}, spy);
-  const freebuff = JSON.stringify(draw(page, cx));
+  assert.deepEqual(store.get("agent-manager.selected"), { key: "claude" });
+  assert.equal(store.get("agent-manager.open-agent"), null);
+  assert.match(open("codex"), /Install this CLI/);
+  const freebuff = open("freebuff");
   assert.match(freebuff, /Preview command/);
   assert.match(freebuff, /am-copy-command/);
-  press(handler("on_click", "am-rail-select-global"), {}, spy);
-  assert.match(JSON.stringify(draw(page, cx)), /Global Agent Settings/);
+  assert.match(open("global"), /Global Agent Settings/);
+  assert.deepEqual(store.get("agent-manager.selected"), { key: "global" });
   press(handler("on_size_change", "am-root"), { width: 420 }, spy);
   assert.equal(page.width, 420);
+});
+
+test("harness inputs are initialized after render and cached by the manager", async (t) => {
+  const { page, cx } = harness(t);
+  const row = SOME[0];
+  let resume;
+  const afterRender = new Promise(resolve => { resume = resolve; });
+  const tasks = [];
+  cx.spawn = task => tasks.push(task({
+    sleep: () => afterRender,
+    spawn() {},
+    notify() {},
+  }));
+
+  assert.equal(page.harnessFor(row, cx), null);
+  assert.equal(page.harnesses.has(row.key), false);
+  assert.equal(page.harnessFor(row, cx), null);
+  assert.equal(tasks.length, 1);
+  assert.equal(page.harnessPending.has(row.key), true);
+
+  resume();
+  await tasks[0];
+  const controller = page.harnessFor(row, cx);
+  assert.equal(controller.key, row.key);
+  assert.ok(controller.styleInput);
+  assert.equal(page.harnessPending.has(row.key), false);
+  assert.equal(tasks.length, 1);
 });
 
 // The full settings route exposes a real Copy control, not just the preview string.

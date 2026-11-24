@@ -38,7 +38,7 @@
       ],
       "children": [
         {
-          "id": "sidebar",
+          "id": "left-sidebar",
           "type": "column",
           "size": {
             "px": 280
@@ -85,19 +85,6 @@
                   }
                 }
               ]
-            },
-            {
-              "id": "sidebar-footer",
-              "type": "block",
-              "size": {
-                "px": 32
-              },
-              "content": {
-                "mod": "orca-chrome",
-                "props": {
-                  "footer": true
-                }
-              }
             }
           ]
         },
@@ -286,13 +273,37 @@
     },
     {
       "id": "status",
-      "type": "block",
+      "type": "row",
       "size": {
         "px": 20
       },
-      "content": {
-        "mod": "orca-status"
-      }
+      "gap": 0,
+      "resizable": false,
+      "children": [
+        {
+          "id": "status-footer",
+          "type": "block",
+          "size": {
+            "px": 148
+          },
+          "content": {
+            "mod": "orca-chrome",
+            "props": {
+              "footer": true
+            }
+          }
+        },
+        {
+          "id": "status-bar",
+          "type": "block",
+          "size": {
+            "weight": 1
+          },
+          "content": {
+            "mod": "orca-status"
+          }
+        }
+      ]
     }
   ]
 }

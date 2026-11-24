@@ -1171,7 +1171,7 @@ class AgentConfigCore {
   openAgentSettings() {
     const p = this.context();
     setShared("agent-manager.open-agent", { key: this.key });
-    run("layout.select", { stack: "main", child: "main-agents" });
+    run("orca-tabs.agent-settings");
     setShared("agent-config", null);
     closeOverlay(p.overlay);
     closeOverlay(p.menu);

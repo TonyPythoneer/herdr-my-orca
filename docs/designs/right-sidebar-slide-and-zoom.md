@@ -68,7 +68,7 @@ host 給 transform，要嘛是 host 自己用原生版面動畫移動節點。�
 | | 左側欄 | 右側欄 |
 |---|---|---|
 | 誰驅動每一幀 | `sidebar-native-clock`（`orca-tabs` header 裡的隱形寬度元素） | `panel-native-clock`（同一個 header 裡的另一個隱形元素） |
-| 每幀做什麼 | `sidebarNativeSize()` → `layout.resize {id:"sidebar"}` | `panelNativeSize()` → `layout.resize {id:"panel"}` |
+| 每幀做什麼 | `sidebarNativeSize()` → `layout.resize {id:"left-sidebar"}` | `panelNativeSize()` → `layout.resize {id:"panel"}` |
 | 曲線與時長 | `ease-in-out`, 500ms | `ease-in-out`, 500ms |
 | 終端機重排 | 先把 `main` 釘在舊寬度，PTY 只在結尾 reflow 一次（已量測） | 同樣先釘 `main`，但**沒有量測過** panel 的 core size events |
 | 內容在動畫期間 | `sidebarFrame()`：固定開啟寬的內框、同色蓋層淡出、往左位移 28px | 沒有 frame，內容每一幀被壓窄、換行、截斷 |
@@ -270,7 +270,7 @@ Tabs.render() 消費旗標 ──▶ togglePanelNative(cx)
       數字與短路條件（三份複本改成一份）。
 2.  **`mods/orca-tabs/main.js`**
     *   在 panel 開啟寬度穩定時 `setShared("panel.openPx", panel.size.px)`（對稱於現有的
-      `sidebar.openPx`）。
+      `left-sidebar.openPx`）。
     *   `panelNativeSize()` 加取樣：`props()?.measurePanel` 時寫
       `/tmp/panel-native-<t>.json`，內容與 sidebar 版相同（`{target, open, steps:[{ms,px}]}`）。
 3.  **`mods/orca-panel-head/main.js` 與 panel body 的五個 mod（八個 block）**

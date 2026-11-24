@@ -31,7 +31,7 @@ const THEME = Object.fromEntries(["surface", "background", "foreground", "muted"
 const node = (id, extra = {}) => ({ id, ...extra });
 const LAYOUT = ({ sidebar = {}, panel = {}, main = { active: "main-terminals" }, status = {}, lights } = {}) => ({
   id: "root", traffic_lights: lights,
-  children: [node("sidebar", { size: { px: 259 }, ...sidebar }), node("main", { size: { px: 900 }, ...main, children: [node("tabs", { size: { px: 36 } })] }),
+  children: [node("left-sidebar", { size: { px: 259 }, ...sidebar }), node("main", { size: { px: 900 }, ...main, children: [node("tabs", { size: { px: 36 } })] }),
     node("panel", { size: { px: 350 }, ...panel }), node("panel-body", { active: "files" }), node("status", { size: { px: 24 }, ...status })],
 });
 const tab = (id, extra = {}) => ({ id, name: `Tab ${id}`, status: "idle", ...extra });
@@ -152,7 +152,7 @@ SCENARIOS.push(["drop overlay without a record", { props: { drop: true, overlay:
 SCENARIOS.push(["drop overlay own zone", { props: { drop: true, overlay: "ov" }, initProps: { drop: true }, state: { zone: "down" }, shared: { "orca-tabs.drop": { tab: "a", zone: "down", strip: { ...STRIP, stripHeight: 0 } } } }]);
 SCENARIOS.push(["actions are consumed", { window: MAC, shared: { "orca-tabs.action": { kind: "unsplit-to-tab", pane: "p1" } }, panes: AGENTS }]);
 
-const GOLDEN = "a9d5431823582476599c958d93d4ac7fc1974b288cd680d0827a08fe43fbbfcb";
+const GOLDEN = "5c8a3cdf3fc4a5db91e5190d6dcf2f60ff1bfefc7579cd0b5cc8482cc57dfbac";
 
 test("golden render and commands over the state matrix", () => {
   const realNow = Date.now;

@@ -218,7 +218,7 @@ test("robot opens the selected local settings page even from a remote workspace"
   globalThis.__herdrProps=()=>({key:"codex",space:"s1",overlay:"flyout",menu:"menu"});
   view.openAgentSettings();
   assert.deepEqual(shared,[["agent-manager.open-agent",{key:"codex"}],["agent-config",null]]);
-  assert.deepEqual(runs,[["layout.select",{stack:"main",child:"main-agents"}]]);
+  assert.deepEqual(runs,[["orca-tabs.agent-settings",undefined]]);
   assert.deepEqual(closed,["flyout","menu"]);
   delete globalThis.__herdrSetShared;
   delete globalThis.__herdrCloseOverlay;

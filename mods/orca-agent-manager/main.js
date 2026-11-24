@@ -141,10 +141,7 @@ export default class AgentManager extends View {
     this.focusKey = null;
     this.installedScroll = ScrollHandle.new();
     this.availableScroll = ScrollHandle.new();
-    this.officialRailScroll = ScrollHandle.new();
-    this.unofficialRailScroll = ScrollHandle.new();
     this.railSelection = "global";
-    this.railHover = null;
     this.harnesses = new Map();
     this.harnessPending = new Set();
     this.typing = false;
@@ -171,7 +168,7 @@ export default class AgentManager extends View {
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-manager", props: {expand: "claude"}}`).
     const expand = props()?.expand;
-    if (typeof expand === "string") { this.railSelection = expand; this.focusKey = expand; this.railReveal = expand; }
+    if (typeof expand === "string") { this.railSelection = expand; this.focusKey = expand; }
 
     // The Model providers page is the same mod with `props.page`: only the provider card, no detection.
     this.providersPage = props()?.page === "providers";
@@ -462,6 +459,8 @@ export default class AgentManager extends View {
         at: Date.now(),
         agents: this.allRows().all,
         disabled: [...this.disabled],
+        // The left sidebar's agent list (orca-spaces) draws these below the official rows.
+        unofficial: this.unofficialRows(),
       });
     } catch {
       // The launch menus fall back to Herdr's own detection when the shared value cannot be set.
@@ -1622,26 +1621,8 @@ export default class AgentManager extends View {
     this.railSelection = key;
     this.focusKey = key === "global" ? null : key;
     this.permissionOpen = null;
-    this.railReveal = key;
     this.handle?.focus();
     cx.notify();
-  }
-
-  revealRail(official, unofficial, cx) {
-    const key = this.railReveal;
-    if (!key) return;
-    const i = official.findIndex(row => row.key === key);
-    const j = unofficial.findIndex(row => row.key === key);
-    if (i < 0 && j < 0 && key !== "global") return; // wait for inventory
-    this.railReveal = null;
-    // The list may have just mounted on deep-link entry. Scroll after layout.
-    cx.spawn(async taskCx => {
-      await taskCx.sleep(1);
-      if (this.railSelection !== key) return;
-      if (i >= 0 && official.length > 5) this.officialRailScroll.scroll_to_item(i);
-      if (j >= 0 && unofficial.length > 5) this.unofficialRailScroll.scroll_to_item(j);
-      taskCx.notify();
-    });
   }
 
   harnessFor(row, cx) {
@@ -1650,6 +1631,8 @@ export default class AgentManager extends View {
     this.harnessPending.add(row.key);
     cx.spawn(async taskCx => {
       try {
+        // A spawned callback can start in render; the harness allocates native input state.
+        await taskCx.sleep(1);
         const controller = new Harness();
         controller.settingsContext = { key: row.key, name: row.name, argv: row.run };
         controller.init({}, taskCx);
@@ -1730,14 +1713,22 @@ export default class AgentManager extends View {
     const requestedAgent = shared("agent-manager.open-agent");
     if (requestedAgent && typeof requestedAgent.key === "string") {
       this.railSelection = requestedAgent.key;
-      this.focusKey = requestedAgent.key;
-      this.railReveal = requestedAgent.key;
+      this.focusKey = requestedAgent.key === "global" ? null : requestedAgent.key;
       this.permissionOpen = null;
       // Reload saved options on a new entry unless the page owns an unsaved draft.
       const prior = this.harnesses.get(requestedAgent.key);
       if (prior && !Object.values(prior.editors ?? {}).some(editor => editor.dirty)) this.harnesses.delete(requestedAgent.key);
       setShared("agent-manager.open-agent", null);
     }
+    // The left sidebar's agent list asks for a switch here instead of writing agent-manager.json itself.
+    const toggle = shared("agent-manager.toggle-agent");
+    if (toggle && typeof toggle.key === "string") {
+      setShared("agent-manager.toggle-agent", null);
+      const row = this.allRows().all.concat(this.unofficialRows()).find(r => r.key === toggle.key);
+      if (row) this.toggleEnabled(row, cx);
+    }
+    // The left sidebar highlights this row; write only on change, because setShared re-renders every mod.
+    if (shared("agent-manager.selected")?.key !== this.railSelection) setShared("agent-manager.selected", { key: this.railSelection });
     return settingsPageView(this, theme(), cx);
   }
 }

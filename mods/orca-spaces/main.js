@@ -15,6 +15,7 @@ import { tip, tipMark } from "./tip.js";
 import { stopsInit, stop, focusRoot, enter, within, onStop } from "./focus.js";
 import { parseWorktreeList, place, where, base, readPair, foldKey, projectWorktreePlan, pruneGitCache, forgetProject as forgetProjectCache, agentsByRow, activeReviewKeys, planRenderRows, groupSpaceIds } from "./worktree-plan.js";
 import { cardView } from "./cards.js";
+import { agentSettingsOpen, agentRailOwner, leftSidebarAgentRail } from "./left-sidebar-agents.js";
 import { stored, workspaceOptions } from "./storage.js";
 import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUPS, BRANCH_PR_LOOKUP_PAGE_SIZE } from "./review-store.js";
 
@@ -35,8 +36,8 @@ const MAX_RETAINED_OPERATIONS = 16;
 function sidebarFrame(inner) {
   const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
   if (!props()?.unified) return inner;
-  const open = shared("sidebar.openPx");
-  const px = find(layout(), "sidebar")?.size?.px;
+  const open = shared("left-sidebar.openPx");
+  const px = find(layout(), "left-sidebar")?.size?.px;
   if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
   const k = px / open;
   // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat
@@ -198,6 +199,7 @@ export default class Spaces extends View {
     this.retainedRows = new Map();
     this.retainedPending = new Map();
     this.ownerCx = cx;
+    this.agentRail = agentRailOwner();
     // pane.go onto this list (mod.json's "focusable"): the keyboard starts at the heading's button.
     cx.spawn(async (taskCx) => {
       for (;;) {
@@ -1194,7 +1196,14 @@ export default class Spaces extends View {
         .child(svg("mods/orca-spaces/trash.svg").size(10)));
   }
 
-  render(cx) { return sidebarFrame(this.renderBody(cx)); }
+  // While the agent settings page is open the left sidebar carries the agent rail instead of projects.
+  // The rail is never framed: the narrowed sidebar is its real width, not a fade in progress.
+  render(cx) { return agentSettingsOpen() ? this.agentRailBody() : sidebarFrame(this.renderBody(cx)); }
+
+  agentRailBody() {
+    const t = theme();
+    return v_flex().size_full().min_h(0).bg(chromeFill(t)).text_size(13).child(leftSidebarAgentRail(this, t));
+  }
 
   renderBody(cx) {
     const t = theme();

@@ -31,8 +31,8 @@ export function addSidebarToggle(row, view, { t, unified, sidebar, w, leftPad })
       // Same route as the `toggle-sidebar` command: the render consumes the flag with a live render
       // context. The `cx` captured by this render is dead once the click arrives.
       if (unified) { view.wantToggle = (view.wantToggle ?? 0) + 1; ecx.notify(); return; }
-      setShared("sidebar.collapsed", !sidebar?.hidden);
-      run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "sidebar" });
+      setShared("left-sidebar.collapsed", !sidebar?.hidden);
+      run(sidebar?.hidden ? "layout.show" : "layout.hide", { id: "left-sidebar" });
       // Same x and glyph as orca-chrome's toggle (75, or 8 in full screen) so the button does not jump on collapse.
     }, toggleLeft(w, leftPad), sidebar?.hidden ? "Expand sidebar" : "Collapse sidebar")))
     // Unified: the tab strip starts on the card's left edge, i.e. at the sidebar's right edge

@@ -25,7 +25,7 @@ ROWS = {
     "orca-unified": {"tabs": 0, "panel-head": PANEL_HEAD_OFFSET},
 }
 # Header-like rows this script does not control, shown so a mismatch is easy to spot.
-OTHER = {"sidebar-footer": "layout node", "main-terminals pane header": "layout `header.height`",
+OTHER = {"status-footer": "layout node", "main-terminals pane header": "layout `header.height`",
          "files toolbar": "orca-files h(32)", "status": "layout node"}
 
 

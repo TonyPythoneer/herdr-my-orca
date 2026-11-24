@@ -1,30 +1,48 @@
-// Native GPUI rail. Global and every agent use the same coordinate system.
-import { div, svg } from "gpui-kit";
+// Native GPUI rail, moved here from the agent settings page: it now lives in the left sidebar.
+// Global and every agent use the same coordinate system.
+import { div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Link } from "gpui-base";
-import { icon } from "./parts.js";
 import { RAIL, railGeometry, railViewport, railRows, railControl } from "./agent-rail.js";
 
-export function railItem(owner, row, t) {
+const MOTION = { duration: 200, easing: "ease-out" };
+
+// The same icon tile the settings page used (orca-agent-manager parts.js).
+function icon(row, size, t) {
+  if (row.icon) {
+    return row.tint
+      ? svg(row.icon).size(size).flex_none().text_color(t.muted)
+      : image(row.icon).w(size).h(size).flex_none().rounded(3);
+  }
+  return div().size(size).flex_none().rounded(3).bg(t.raised).flex().items_center().justify_center()
+    .text_size(Math.round(size * 0.55)).text_color(t.muted).child((row.name ?? "?").slice(0, 1).toUpperCase());
+}
+export function railItem(owner, row, t, tile = t.raised) {
   const global = row.key === "global";
   const selected = owner.railSelection === row.key;
-  const g = railGeometry(selected, owner.railHover === row.key);
+  const hovered = owner.railHover === row.key;
+  const g = railGeometry(selected, hovered);
   const control = global || row.installed === undefined ? null : railControl(row);
   const label = global ? "Global Agent Settings" : row.name;
   let item = div().id("am-rail-" + row.key).relative().w(RAIL.width).h(RAIL.row).flex_none()
     .on_hover((hovered, cx) => {
-      if (hovered) owner.railHover = row.key;
-      else if (owner.railHover === row.key) owner.railHover = null;
+      if (!hovered && owner.railHover !== row.key) return;
+      const next = hovered ? row.key : null;
+      if (next === owner.railHover) return;
+      owner.railHover = next;
       cx.notify();
     });
-  if (g.indicatorHeight) item = item.child(div().absolute().left(g.indicatorLeft).top(g.indicatorTop)
-    .w(RAIL.indicatorWidth).h(g.indicatorHeight).rounded_full().bg(t.foreground));
+  item = item.child(div().absolute().left(g.indicatorLeft).top(0).bottom(0).w(RAIL.indicatorWidth).flex().items_center()
+    .child(div().id("am-rail-pill-" + row.key).w_full().h(g.indicatorHeight)
+      .rounded_r(RAIL.indicatorWidth).bg(t.foreground).transition("height", MOTION)));
   item = item.child(div().id("am-rail-select-" + row.key).absolute().left(g.avatarLeft).top(g.avatarTop)
-    .size(RAIL.avatar).rounded_full().bg(selected ? t.hover : t.raised)
+    .size(RAIL.avatar).rounded(RAIL.avatarRadius).bg(tile)
     .flex().items_center().justify_center().cursor_pointer().role("button")
-    .accessibility_label(label).tooltip(label).hover(s => s.bg(t.hover))
+    .accessibility_label(label).tooltip(label)
     .on_click((_e,cx) => owner.selectRail(row.key,cx))
-    .child(global ? svg("mods/orca-new-menu/bot.svg").size(25).text_color(t.foreground)
-      : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t))));
+    .child(div().id("am-rail-tile-" + row.key).absolute().inset_0().rounded(RAIL.avatarRadius)
+      .bg(t.hover).opacity(selected || hovered ? 1 : 0).transition("opacity", MOTION))
+    .child(div().relative().child(global ? svg("mods/orca-new-menu/bot.svg").size(25).text_color(t.foreground)
+      : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))));
   return item.child(railAction(owner, row, t, control, label));
 }
 
@@ -63,22 +81,26 @@ function railAction(owner, row, t, control, label) {
   return div().size(0);
 }
 
+// A group is a rounded box (Discord's folder) holding its title and its rows. The pills stay on the
+// rail's left edge, outside the box.
 function groupView(owner, title, rows, scroll, t) {
   const {height,scroll:overflow} = railViewport(rows.length);
   const id = "am-rail-list-" + title.toLowerCase();
-  return v_flex().w(RAIL.width).flex_none()
-    .child(div().h(23).w_full().flex().items_center().justify_center().text_size(10).text_color(t.muted).child(title))
-    .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
-      .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
-        .when(overflow, el => el.absolute().inset_0().overflow_y_scroll())
-        .children(railRows(rows).map(row => railItem(owner,row,t)))));
+  return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
+    .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
+    .child(v_flex().w(RAIL.width)
+      .child(div().h(23).w_full().flex().items_center().justify_center().text_size(10).text_color(t.muted).child(title))
+      .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
+        .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
+          .when(overflow, el => el.absolute().inset_0().overflow_y_scroll())
+          .children(railRows(rows).map(row => railItem(owner,row,t,t.surface))))));
 }
 
 export function railView(owner, official, unofficial, t) {
   return v_flex().id("am-agent-rail").w(RAIL.width).flex_none().min_h(0)
     .bg(t.surface).overflow_y_scrollbar()
     .child(railItem(owner,{key:"global"},t))
+    .child(div().w_full().h(12).flex().items_center().justify_center().child(div().w(32).h(2).rounded_full().bg(t.border)))
     .child(groupView(owner,"Official",official,owner.officialRailScroll,t))
-    .child(div().w_full().h(1).bg(t.border))
     .child(groupView(owner,"Unofficial",unofficial,owner.unofficialRailScroll,t));
 }

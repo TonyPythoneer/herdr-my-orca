@@ -59,7 +59,7 @@ function setup(t, o = {}) {
     log: [], files: new Map(), shared: { ...o.shared }, timers: [], tasks: [], clock: 1_700_000_000_000,
     panes: o.panes ?? [], terminals: o.terminals ?? [], window: o.window, settings: o.settings ?? {}, commands: [...(o.commands ?? [])],
     spaces: o.spaces ?? [{ id: "s1", active: true, folder: "/proj", tabs: [tab("a", { active: true }), tab("b"), tab("c")] }],
-    layout: { id: "root", children: [{ id: "sidebar", size: { px: 259 } }, { id: "main", size: { px: 900 }, active: "main-terminals" },
+    layout: { id: "root", children: [{ id: "left-sidebar", size: { px: 259 } }, { id: "main", size: { px: 900 }, active: "main-terminals" },
       { id: "panel", size: { px: 350 } }, { id: "panel-body", active: "files" }, { id: "status", size: { px: 24 } }], ...o.layout },
     keepResult: o.keepResult,
   };
@@ -639,12 +639,12 @@ test("the drop overlay measures the strip from the layout when the record has no
 
 test("the header's buttons act on the sidebar, the panel, the new-tab menu and the window", async (t) => {
   const w = setup(t, { window: { platform: "linux" }, spaces: [{ id: "s1", active: true, tabs: [tab("a", { active: true, zoomed: true })] }], panes: [pane("p1", "a", { zoomed: true })],
-    layout: { children: [{ id: "sidebar", size: { px: 259 }, hidden: true }, { id: "panel", size: { px: 350 }, hidden: true }, { id: "main", active: "main-terminals" }] } });
+    layout: { children: [{ id: "left-sidebar", size: { px: 259 }, hidden: true }, { id: "panel", size: { px: 350 }, hidden: true }, { id: "main", active: "main-terminals" }] } });
   const click = (id, e = {}) => handler(byId(w.render(), id), "on_click")(e, w.hcx);
   assert.equal(byId(w.render(), "sidebar-toggle") !== undefined, true, "a visible sidebar draws its own toggle, so this one only shows while hidden");
   w.log.length = 0;
   click("sidebar-toggle");
-  assert.deepEqual(w.log.filter(([kind]) => kind !== "notify" && kind !== "storage"), [["setShared", "sidebar.collapsed", false], ["run", "layout.show", { id: "sidebar" }]]);
+  assert.deepEqual(w.log.filter(([kind]) => kind !== "notify" && kind !== "storage"), [["setShared", "left-sidebar.collapsed", false], ["run", "layout.show", { id: "left-sidebar" }]]);
   w.layout.children[0].hidden = true;
   w.log.length = 0;
   click("panel-toggle");
@@ -706,7 +706,7 @@ test("a plain toggle uses layout.toggle and unified toggles run the drawers", as
   const plain = setup(t);
   plain.view.toggleSidebar(plain.cx);
   plain.view.togglePanel(plain.cx);
-  assert.deepEqual(plain.runLog(), [["layout.toggle", { id: "sidebar" }], ["layout.toggle", { id: "panel" }]]);
+  assert.deepEqual(plain.runLog(), [["layout.toggle", { id: "left-sidebar" }], ["layout.toggle", { id: "panel" }]]);
   const native = setup(t, { props: { unified: true, motion: "native" } });
   native.view.toggleSidebar(native.cx);
   native.view.togglePanel(native.cx);
@@ -723,8 +723,8 @@ test("the unified smooth collapse steps the sidebar down, hides it and publishes
   await w.runTasks();
   const resizes = w.calls("layout.resize").map((args) => args.px);
   assert.deepEqual(resizes, [259, 258, 256, 252, 247, 241, 234, 226, 217, 207, 196, 185, 174, 162, 150, 137, 125, 112, 100, 88, 77, 65, 55, 45, 35, 27, 19, 13, 8, 4, 1, 259]);
-  assert.deepEqual(w.calls("layout.hide"), [{ id: "sidebar" }]);
-  assert.deepEqual(w.log.filter(([kind]) => kind === "setShared").at(-1), ["setShared", "sidebar.collapsed", true]);
+  assert.deepEqual(w.calls("layout.hide"), [{ id: "left-sidebar" }]);
+  assert.deepEqual(w.log.filter(([kind]) => kind === "setShared").at(-1), ["setShared", "left-sidebar.collapsed", true]);
   assert.equal(w.view.drawers.sidebar.busy, false);
   assert.equal(w.view.drawers.sidebar.goal, undefined);
   assert.equal(notified(w, "handler") > 2, true);
@@ -733,9 +733,9 @@ test("the unified smooth collapse steps the sidebar down, hides it and publishes
   w.view.toggleSidebar(w.cx);
   assert.equal(w.view.drawers.sidebar.goal, 1);
   await w.runTasks();
-  assert.deepEqual(w.runLog().slice(0, 2), [["layout.resize", { id: "sidebar", px: 1 }], ["layout.show", { id: "sidebar" }]]);
-  assert.deepEqual(w.runLog().at(-1), ["layout.resize", { id: "sidebar", px: 259 }]);
-  assert.deepEqual(w.log.filter(([kind]) => kind === "setShared").at(-1), ["setShared", "sidebar.collapsed", false]);
+  assert.deepEqual(w.runLog().slice(0, 2), [["layout.resize", { id: "left-sidebar", px: 1 }], ["layout.show", { id: "left-sidebar" }]]);
+  assert.deepEqual(w.runLog().at(-1), ["layout.resize", { id: "left-sidebar", px: 259 }]);
+  assert.deepEqual(w.log.filter(([kind]) => kind === "setShared").at(-1), ["setShared", "left-sidebar.collapsed", false]);
 });
 
 test("a second sidebar press reverses the motion and a stale task stops quietly", async (t) => {
@@ -754,10 +754,10 @@ test("a second sidebar press reverses the motion and a stale task stops quietly"
 });
 
 test("a press during a late hide keeps the sidebar shown", async (t) => {
-  const w = setup(t, { props: { unified: true }, layout: { children: [{ id: "sidebar", size: { px: 100 }, hidden: true }] } });
+  const w = setup(t, { props: { unified: true }, layout: { children: [{ id: "left-sidebar", size: { px: 100 }, hidden: true }] } });
   w.view.toggleSidebar(w.cx);
   await w.runTasks();
-  assert.deepEqual(w.runLog().slice(0, 3), [["layout.resize", { id: "sidebar", px: 1 }], ["layout.show", { id: "sidebar" }], ["layout.resize", { id: "sidebar", px: 1 }]]);
+  assert.deepEqual(w.runLog().slice(0, 3), [["layout.resize", { id: "left-sidebar", px: 1 }], ["layout.show", { id: "left-sidebar" }], ["layout.resize", { id: "left-sidebar", px: 1 }]]);
   assert.equal(w.layout.children[0].hidden, false);
 });
 
@@ -868,10 +868,10 @@ test("a render with unified chrome and an idle layout resets the terminal width 
   w.render();
   assert.equal(w.tasks.length, 0);
   // Open widths are published once, and only for a settled drawer.
-  const open = setup(t, { props: { unified: true }, layout: { children: [{ id: "sidebar", size: { px: 300 } }, { id: "panel", size: { px: 410 } }] } });
+  const open = setup(t, { props: { unified: true }, layout: { children: [{ id: "left-sidebar", size: { px: 300 } }, { id: "panel", size: { px: 410 } }] } });
   open.render();
   open.render();
-  assert.deepEqual(open.log.filter(([kind, key]) => kind === "setShared" && key.endsWith(".openPx")), [["setShared", "sidebar.openPx", 300], ["setShared", "panel.openPx", 410], ["setShared", "panel.openPx", 410]]);
+  assert.deepEqual(open.log.filter(([kind, key]) => kind === "setShared" && key.endsWith(".openPx")), [["setShared", "left-sidebar.openPx", 300], ["setShared", "panel.openPx", 410], ["setShared", "panel.openPx", 410]]);
   assert.equal(open.view.drawers.sidebar.openPx, 300);
   assert.equal(open.view.drawers.panel.openPx, 410);
 });
@@ -926,7 +926,7 @@ test("a partial native drawer transition completes at the fallback deadline", as
   w.view.toggleSidebarNative(w.cx);
   await w.tasks.shift().fn(cx);
   assert.deepEqual(waits, [1, 120, 650]);
-  assert.deepEqual(w.calls("layout.resize"), [{ id: "sidebar", px: 100 }, { id: "sidebar", px: 1 }]);
+  assert.deepEqual(w.calls("layout.resize"), [{ id: "left-sidebar", px: 100 }, { id: "left-sidebar", px: 1 }]);
   await w.runTasks();
-  assert.deepEqual(w.calls("layout.hide"), [{ id: "sidebar" }]);
+  assert.deepEqual(w.calls("layout.hide"), [{ id: "left-sidebar" }]);
 });

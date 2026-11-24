@@ -51,20 +51,25 @@ export class Drawer {
   // its current width, which is what the reversal continues from).
   toggle(cx, env) {
     const node = env.find(env.layout(), this.id);
-    const open = this.open(node);
-    const target = this.nextGoal(node);
+    this.move(cx, env, { node, open: this.open(node), target: this.nextGoal(node) });
+  }
+
+  // `pin`: the width to hold `main` at for this move, worked out by the caller (null: do not hold);
+  // left out, the drawer's own spec decides.
+  move(cx, env, { node, open, target, before, after, pin }) {
     const wasHidden = Boolean(node?.hidden);
     const token = ++this.token;
     Object.assign(this, {
       busy: true, goal: target, active: false, finishing: false, lastPx: undefined,
+      afterMove: after, holdPx: pin,
       start: Date.now(), samples: env.props()?.[this.measure] ? [] : null,
     });
     cx.spawn(async taskCx => {
       await taskCx.sleep(LEAVE_RENDER_MS); // leave the render phase: notify() is only legal from a task
       if (token !== this.token) return;
-      if (!(await this.prepare(taskCx, env, { token, target, open, wasHidden }))) return;
+      if (!(await this.prepare(taskCx, env, { token, target, open, wasHidden, before }))) return;
       this.active = true;
-      this.clockPx = (target ? open : 1) / env.zoom();
+      this.clockPx = Math.max(1, Math.round(open * target)) / env.zoom();
       taskCx.notify();
       await taskCx.sleep(CLOCK_GUARD_MS);
       if (token !== this.token || !this.busy || this.finishing) return;
@@ -87,16 +92,18 @@ export class Drawer {
 
   // Before the clock starts: hold `main`, and bring a hidden node up from 1px. False when a newer
   // press took over while this one waited.
-  async prepare(cx, env, { token, target, open, wasHidden }) {
-    const pin = this.pin(open, wasHidden);
+  async prepare(cx, env, { token, target, open, wasHidden, before }) {
+    const pin = this.holdPx !== undefined ? this.holdPx : this.pin(open, wasHidden);
+    if (pin != null) env.pin(pin);
+    // The settings entry selects its page in the same dispatch as the final width.
+    before?.();
     if (pin != null) {
-      env.pin(pin);
       await cx.sleep(PIN_SETTLE_MS);
       if (token !== this.token) return false;
     }
     // Expand starts from 1px while hidden, so the node is drawn at its open width on the first
     // visible frame instead of jumping there.
-    if (target === 1 && env.find(env.layout(), this.id)?.hidden) {
+    if (target > 0 && env.find(env.layout(), this.id)?.hidden) {
       env.run("layout.resize", { id: this.id, px: 1 });
       await cx.sleep(RESIZE_SETTLE_MS);
       if (token !== this.token) return false;
@@ -110,14 +117,16 @@ export class Drawer {
   // The clock never reported: step the node from a timer along the same curve the left sidebar's
   // timer mode uses (smoothstep), feeding `size()` so there is one path for dedupe, hide and finish.
   stepByTimer(cx, env, token, target, open) {
-    const to = target ? open : 1;
-    const from = Math.max(1, Math.min(open, Math.round(env.find(env.layout(), this.id)?.size?.px ?? to)));
+    const to = Math.max(1, Math.round(open * target));
+    const current = Math.round(env.find(env.layout(), this.id)?.size?.px ?? to);
+    const from = Math.max(1, Math.min(open, current));
     const ticks = Math.max(1, Math.round(DURATION_MS / STEP_MS));
     cx.spawn(async (stepCx) => {
       for (let i = 1; i <= ticks; i++) {
         const k = i / ticks;
         const eased = k * k * (3 - 2 * k);
-        this.size({ width: (from + (to - from) * eased) / env.zoom() }, stepCx, env);
+        const px = i === ticks ? to : from + (to - from) * eased;
+        this.size({ width: px / env.zoom() }, stepCx, env);
         if (this.finishing) return;
         await stepCx.sleep(STEP_MS);
         if (token !== this.token) return;
@@ -130,7 +139,9 @@ export class Drawer {
   size(size, cx, env) {
     if (!this.busy || !this.active || this.finishing) return;
     const open = this.openPx || this.defaultOpen;
-    const px = Math.max(1, Math.min(open, Math.round(size.width * env.zoom())));
+    const to = Math.max(1, Math.round(open * this.goal));
+    const width = Math.round(size.width * env.zoom());
+    const px = Math.max(1, Math.min(Math.max(open, to), width));
     this.p = px / open;
     if (px !== this.lastPx) { // each resize repaints the terminals, so never send one that changes nothing
       this.lastPx = px;
@@ -138,8 +149,8 @@ export class Drawer {
       env.run("layout.resize", { id: this.id, px });
     }
     // The hide of a reversed collapse can land after the show of an expand: keep the node shown.
-    if (this.goal === 1 && env.find(env.layout(), this.id)?.hidden) env.run("layout.show", { id: this.id });
-    if (px !== (this.goal ? open : 1)) return;
+    if (this.goal > 0 && env.find(env.layout(), this.id)?.hidden) env.run("layout.show", { id: this.id });
+    if (px !== to) return;
     this.finishing = true;
     const token = this.token, target = this.goal, start = this.start, samples = this.samples;
     cx.spawn(async finishCx => {
@@ -152,12 +163,15 @@ export class Drawer {
         if (token !== this.token) return;
       }
       // Collapse puts the open width back while hidden, so the next show comes back at that width.
-      env.run("layout.resize", { id: this.id, px: open });
+      if (target === 0 || target === 1) env.run("layout.resize", { id: this.id, px: open });
       this.after(target);
       this.busy = false;
       env.release();
       this.active = false;
       this.lastPx = undefined;
+      const afterMove = this.afterMove;
+      this.afterMove = undefined;
+      afterMove?.();
       finishCx.notify();
     });
   }

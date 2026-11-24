@@ -24,16 +24,18 @@ test("titlebar chooses padding for the rail, traffic lights, fullscreen and non-
     [false, true, null, 75], [false, false, { platform: "macos", fullscreen: true }, 8],
     [false, true, { platform: "linux" }, 10], [true, false, null, 6],
   ]) {
-    globalThis.__herdrLayout = () => ({ traffic_lights, children: [{ id: "sidebar", hidden }] });
+    globalThis.__herdrLayout = () => ({ traffic_lights, children: [{ id: "left-sidebar", hidden }] });
     view.win = win;
     assert.deepEqual(view.render().__node.c.find(([key]) => key === "pl"), ["pl", [padding]]);
   }
   globalThis.__herdrProps = () => ({ footer: true, unified: true });
   globalThis.__herdrShared = () => 350;
-  globalThis.__herdrLayout = () => ({ children: [{ id: "sidebar", size: { px: 175 } }] });
+  globalThis.__herdrLayout = () => ({ children: [{ id: "left-sidebar", size: { px: 175 } }] });
   const frame = JSON.stringify(view.render().__node);
   assert.match(frame, /Model providers/);
-  assert.match(frame, /"left",\[-14\]/);
+  // It sits in the status bar now, so narrowing the left sidebar must not fade or slide it.
+  assert.doesNotMatch(frame, /"left",\[-/);
+  assert.doesNotMatch(frame, /"opacity"/);
 });
 
 test("footer seeds the catalog model, then runs a requested task on the next tick", async () => {

@@ -124,8 +124,8 @@ function labelOf(choices, value) {
 // Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
 function sidebarFrame(inner) {
   if (!props()?.unified) return inner;
-  const open = shared("sidebar.openPx");
-  const px = find(layout(), "sidebar")?.size?.px;
+  const open = shared("left-sidebar.openPx");
+  const px = find(layout(), "left-sidebar")?.size?.px;
   if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
   const k = px / open;
   // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat

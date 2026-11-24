@@ -127,7 +127,6 @@ test("keyboard navigation wraps across Global and both rail groups and dispatche
   for (const [key, selection] of [["up", "freebuff"], ["down", "global"], ["end", "freebuff"], ["home", "global"], ["down", "claude"]]) {
     assert.equal(press(key), true);
     assert.equal(page.railSelection, selection);
-    assert.equal(page.railReveal, selection);
   }
   assert.equal(press("enter"), true);
   assert.equal(page.railSelection, "claude");

@@ -42,7 +42,8 @@
       "source": "orca-ui/shared/list-viewport.js",
       "outputs": [
         "mods/agent-config/list-viewport.js",
-        "mods/orca-agent-manager/list-viewport.js"
+        "mods/orca-agent-manager/list-viewport.js",
+        "mods/orca-spaces/list-viewport.js"
       ]
     },
     {

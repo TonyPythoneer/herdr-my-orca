@@ -17,31 +17,11 @@ function find(node, id) {
 // Orca hides the sidebar (w-0, AppWorkspaceShell.tsx:159) and the toggle lives in the
 // titlebar, outside it (TitlebarLeftControls.tsx). Same here: show/hide the column, and
 // the toggle exists in both states, so a hidden sidebar is always recoverable.
-const sidebarHidden = () => Boolean(find(layout(), "sidebar")?.hidden);
+const sidebarHidden = () => Boolean(find(layout(), "left-sidebar")?.hidden);
 
 function toggleSidebar() {
-  setShared("sidebar.collapsed", !sidebarHidden());
-  run(sidebarHidden() ? "layout.show" : "layout.hide", { id: "sidebar" });
-}
-
-// Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
-// keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
-// Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
-// Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
-function sidebarFrame(inner) {
-  if (!props()?.unified) return inner;
-  const open = shared("sidebar.openPx");
-  const px = find(layout(), "sidebar")?.size?.px;
-  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
-  const k = px / open;
-  // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat
-  // cover in the sidebar's own colour, with the alpha the fade needs, is one blended quad.
-  const bg = theme().surface;
-  const cover = Math.max(0, Math.min(1, 1 - (k - 0.15) / 0.85));
-  const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
-  return div().size_full().overflow_hidden().relative()
-    .child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner))
-    .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
+  setShared("left-sidebar.collapsed", !sidebarHidden());
+  run(sidebarHidden() ? "layout.show" : "layout.hide", { id: "left-sidebar" });
 }
 
 // Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
@@ -73,30 +53,32 @@ export default class WorkspaceChrome extends View {
     return div().id(id).w(w).h(h).mr(4).flex_none().flex().items_center().justify_center().rounded(8).text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_click(action).child(label);
   }
-  // The sidebar's bottom row, in both layouts.
+  // The leftmost block of the bottom status row (`status-footer`, 148px: five 18px buttons, 8px gaps,
+  // 8px sides, then a divider before the status text), in both layouts. It stays put when the left sidebar collapses, so it has no sidebar frame.
   footer(t) {
-    // Orca's sidebar footer: two 4px-gap clusters either side of the row
-    // (SidebarToolbar.tsx:69-73). Each control is icon-xs 24px, rounded-md 8px,
-    // with a 14px glyph (button.tsx:41, SidebarSettingsHelpMenu.tsx:203).
-    const row = (id, icon, label, action) => div().id(id).size(24).flex_none().flex().items_center().justify_center().rounded(8)
+    // Each control is a rounded-md 8px button with a 14px glyph (SidebarSettingsHelpMenu.tsx:203),
+    // 18px square so it fits the 20px status bar under its 1px top border.
+    const row = (id, icon, label, action) => div().id(id).size(18).flex_none().flex().items_center().justify_center().rounded(8)
       .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
       .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
-    const footerBar = h_flex().size_full().items_center().justify_between().bg(props()?.unified ? t.surface : t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
-      .child(h_flex().items_center().gap(4)
+    // Same fill and top border as orca-status, so the row reads as one bar.
+    const footerBar = h_flex().size_full().items_center().bg(t.surface).border_t(1).border_color(t.border).px(8).text_size(12)
+      .child(h_flex().items_center().gap(8)
         // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
         // while the Agents page lives in the `main` stack (`main-agents`).
-        .child(row("agents", "bot", "Agents", () => run("layout.select", { stack: "main", child: "main-agents" })))
+        .child(row("agents", "bot", "Agents", () => run("orca-tabs.agent-settings")))
         .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
         // Schedules: the reset ping and anything else the person adds (orca-tasks).
         .child(row("tasks", "clock", "Tasks", () => run("layout.select", { stack: "main", child: "main-tasks" })))
         .child(row("settings", "settings", "Settings", () => run("app.settings")))
         // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
         // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).
-        .child(row("help", "circle-help", "Help", () => run("app.palette"))));
-    // Orca's right cluster holds Reveal active workspace and Workspace board
-    // (SidebarToolbar.tsx:76-112); neither has a Herdr command, so nothing is drawn.
-    // The Herdr-only `+` (Add machine) that sat here is gone: Orca's footer has no plus.
-    return sidebarFrame(footerBar);
+        .child(row("help", "circle-help", "Help", () => run("app.palette")))
+        // The divider between these buttons and the status text.
+        .child(div().w(1).h(12).flex_none().bg(tint(t.muted, 0.5))));
+    // Orca's right cluster (Reveal active workspace, Workspace board; SidebarToolbar.tsx:76-112) has
+    // no Herdr command, so nothing is drawn. Orca's footer has no `+` (Add machine) either.
+    return footerBar;
   }
 
   render() {
