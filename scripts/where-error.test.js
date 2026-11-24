@@ -124,3 +124,10 @@ test("CLI exit codes and stderr: no frame, broken manifests, unreadable input", 
   assert.equal(broken.status, 2);
   assert.match(broken.stderr, /^orca-ui\/shared\/manifest\.json: .*claimed by both/);
 });
+
+test("the last mods/ in a path is the frame, so a prefix containing mods/ still resolves", () => {
+  const [hit] = locate("at x (/data/mods/u/.config/herdr-app/mods/orca-panel-head/main.js?v=1:3:1)", table);
+  assert.equal(hit.edit, "orca-ui/features/panel/head/main.js:3:1");
+  assert.equal(hit.frame, "mods/orca-panel-head/main.js:3:1");
+  assert.equal(locate("mods/orca-panel-head/main.js:1 /p/mods/orca-panel-gap/main.js:2", table).length, 2);
+});

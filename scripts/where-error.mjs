@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
 
 // `<anything>/mods/<mod>/<file>[?v=N]:<line>[:<col>]`, the frame shape Herdr prints.
-const FRAME = /mods\/([^/\s?:()]+)\/([^\s?:()]+)(?:\?v=\d+)?:(\d+)(?::([1-9]\d*))?/g;
+const FRAME = /(?:[^\s?:()]*\/)?mods\/([^/\s?:()]+)\/([^\s?:()]+)(?:\?v=\d+)?:(\d+)(?::([1-9]\d*))?/g;
 const list = items => (items.length ? items.join(", ") : "-");
 const isFile = path => existsSync(path) && statSync(path).isFile();
 
