@@ -1,0 +1,64 @@
+{
+  "files": [
+    {
+      "source": "orca-ui/shared/clip.js",
+      "outputs": [
+        "mods/orca-changes/clip.js",
+        "mods/orca-files/clip.js",
+        "mods/orca-handoff/clip.js",
+        "mods/orca-menu/clip.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/transcript.js",
+      "outputs": [
+        "mods/orca-handoff/transcript.js",
+        "mods/orca-menu/transcript.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/review-store.js",
+      "outputs": [
+        "mods/orca-spaces/review-store.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/codex-provider.js",
+      "outputs": [
+        "mods/agent-config/codex-provider.js",
+        "mods/orca-agent-manager/codex-provider.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/agent-flyout.js",
+      "outputs": [
+        "mods/agent-config/agent-flyout.js",
+        "mods/orca-new-menu/agent-flyout.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/list-viewport.js",
+      "outputs": [
+        "mods/agent-config/list-viewport.js",
+        "mods/orca-agent-manager/list-viewport.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/tasks.js",
+      "outputs": [
+        "mods/orca-chrome/tasks.js",
+        "mods/orca-tasks/tasks.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/panel-motion.js",
+      "outputs": [
+        "mods/orca-files/panel-motion.js",
+        "mods/orca-changes/panel-motion.js",
+        "mods/orca-agents/panel-motion.js",
+        "mods/orca-panel-gap/panel-motion.js",
+        "mods/skillshare/panel-motion.js"
+      ]
+    }
+  ]
+}

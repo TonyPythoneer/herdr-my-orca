@@ -358,4 +358,4 @@ export function parseModels(parser, stdout) {
   if (!parse) throw new Error(`no model parser named ${parser}`);
   return parse(String(stdout ?? ""));
 }
-// Generated from shared/agent-flyout.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Generated from orca-ui/shared/agent-flyout.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.

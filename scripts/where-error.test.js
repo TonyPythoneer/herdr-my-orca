@@ -6,21 +6,21 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadManifests } from "./orca-ui-manifests.mjs";
 import { locate } from "./where-error.mjs";
-import { USES } from "./sync-shared.mjs";
 import { FEATURE, edit, fixture, write, withScripts } from "./orca-ui-fixture.mjs";
 
-const table = loadManifests({ uses: USES }).table;
+const table = loadManifests().table;
 
 // Frames copied from real `herdr-app check` output (herdr-app 0.1.17).
 const RENDER = `ORCA_PROBE_R
     at panelFrame (/tmp/x/mods/orca-panel-gap/panel-motion.js?v=1:22:13)
     at render (/tmp/x/mods/orca-panel-gap/main.js?v=1:40:37)`;
 
-test("a shared helper copy points at the same line in shared/, an unmigrated mod stays in place", () => {
+test("a shared helper copy points at the same line in orca-ui/shared/, an unmigrated mod stays in place", () => {
   const [helper, entry] = locate(RENDER, table);
-  assert.equal(helper.edit, "shared/panel-motion.js:22:13");
+  assert.equal(helper.edit, "orca-ui/shared/panel-motion.js:22:13");
   assert.equal(helper.kind, "shared");
   assert.match(helper.note, /orca-agents/);
+  assert.match(helper.note, /orca-files, orca-changes, orca-agents, orca-panel-gap, skillshare/);
   assert.equal(entry.edit, "mods/orca-panel-gap/main.js:40:37");
   assert.equal(entry.kind, "in-place");
   assert.match(entry.note, /not in app\.mjs/);
@@ -41,7 +41,7 @@ test("the CLI reads stdin and fails when there is no frame", () => {
   const script = fileURLToPath(new URL("./where-error.mjs", import.meta.url));
   const ok = spawnSync(process.execPath, [script], { input: RENDER, encoding: "utf8" });
   assert.equal(ok.status, 0);
-  assert.match(ok.stdout, /^shared\/panel-motion\.js:22:13$/m);
+  assert.match(ok.stdout, /^orca-ui\/shared\/panel-motion\.js:22:13$/m);
   assert.equal(spawnSync(process.execPath, [script, "no frame here"], { encoding: "utf8" }).status, 1);
 });
 
@@ -77,8 +77,8 @@ test("CLI prints the four two-line shapes, with next, in input order, via argv a
   const expected = [
     `${FEATURE}/view.js:7:5`, `  from mods/orca-files/view.js:7:5; feature "files/main"; ${tests}; ${slots}; next mods/orca-panel-gap/main.js`,
     `${FEATURE}/icons/a.svg:2`, `  from mods/orca-files/icons/a.svg:2; feature "files/main"; ${tests}; ${slots}; next mods/orca-panel-gap/main.js`,
-    "shared/clip.js:9:2", `  from mods/orca-files/clip.js:9:2; shared helper, copied into orca-changes, orca-files, orca-handoff, orca-menu; ${tests}; ${slots}; next mods/orca-panel-gap/mod.json`,
-    "shared/transcript.js:4", "  from mods/orca-handoff/transcript.js:4; shared helper, copied into orca-handoff, orca-menu; next mods/orca-panel-gap/mod.json",
+    "orca-ui/shared/clip.js:9:2", `  from mods/orca-files/clip.js:9:2; shared helper, copied into orca-changes, orca-files, orca-handoff, orca-menu; ${tests}; ${slots}; next mods/orca-panel-gap/mod.json`,
+    "orca-ui/shared/transcript.js:4", "  from mods/orca-handoff/transcript.js:4; shared helper, copied into orca-handoff, orca-menu; next mods/orca-panel-gap/mod.json",
     "mods/orca-panel-gap/main.js:11:3", "  from mods/orca-panel-gap/main.js:11:3; not in app.mjs yet: edit this file in place",
     "mods/nowhere/main.js:1:1", "  from mods/nowhere/main.js:1:1; unknown path: no such mod in this repo",
     "mods/orca-panel-gap/gone.js:1", "  from mods/orca-panel-gap/gone.js:1; unknown path: no such mod in this repo",
@@ -122,5 +122,5 @@ test("CLI exit codes and stderr: no frame, broken manifests, unreadable input", 
   write(root, `${FEATURE}/clip.js`, "x");
   const broken = run("mods/orca-files/view.js:1");
   assert.equal(broken.status, 2);
-  assert.match(broken.stderr, /^orca-ui\/features\/files\/main\/manifest\.json: .*claimed by both/);
+  assert.match(broken.stderr, /^orca-ui\/shared\/manifest\.json: .*claimed by both/);
 });

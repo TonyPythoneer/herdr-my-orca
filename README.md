@@ -111,12 +111,13 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 - On a Herdr error (`herdr-app check`, `status`, or the window's Copy details), do not open the
   `mods/` file it names: `herdr-app check mods/<mod> 2>&1 | node scripts/where-error.mjs` prints the
   file and line to edit (a shared copy has the same line numbers as its source in
-  [shared/](shared/)), plus the feature, tests, layouts and `next` hint that own it.
+  [orca-ui/shared/](orca-ui/shared/)), plus the feature, tests, layouts and `next` hint that own it.
 - A mod may import only files inside its own folder: `../x.js` and symlinks fail
-  `herdr-app check`. Code several mods need lives in [shared/](shared/) and
-  [scripts/sync-shared.mjs](scripts/sync-shared.mjs) copies it into each mod with a header line;
-  `--check` (and a test) fails on drift. Edit only the file in `shared/`. Asset paths such as
-  `mods/<other>/x.svg` may cross folders.
+  `herdr-app check`. Code several mods need lives in [orca-ui/shared/](orca-ui/shared/); its
+  `manifest.json` lists the mods each helper is copied into, and the same builder writes the copies
+  with a generated-file line as the last line, so error line numbers match the source. `--check`
+  (and a test) fails on drift. Edit only the file in `orca-ui/shared/`, never a copy. Asset paths
+  such as `mods/<other>/x.svg` may cross folders.
 - Big mods are split into pure logic files, each with its own test (for example
   `orca-agent-manager/{util,parts,views}.js`, `orca-spaces/{storage,cards}.js`,
   `orca-tabs/{drop-zone,tab-title}.js`). `scripts/gpui-stub-loader.mjs` stubs `gpui-kit`,
@@ -125,7 +126,7 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 - Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
   (see [.agents/skills/herdr-app-dev-sync/SKILL.md](.agents/skills/herdr-app-dev-sync/SKILL.md)).
 - Checks: `node --test mods scripts orca-ui/features`, `herdr-app check <mod>`, `herdr-app status`,
-  `node scripts/sync-shared.mjs --check`, `node scripts/build-orca-ui.mjs --check --out .`.
+  `node scripts/build-orca-ui.mjs --check --out .`.
 - Not used: a bundler. Measured on two sample mods with Vite+, source maps doubled the output and
   herdr-app 0.1.17 ignores them, so errors would name bundle lines
   ([evaluation](docs/plan-orca-bundler-evaluation.md)).

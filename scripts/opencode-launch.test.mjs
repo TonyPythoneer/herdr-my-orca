@@ -4,7 +4,7 @@ import { register } from "node:module";
 
 register(new URL("./gpui-stub-loader.mjs", import.meta.url));
 const { default: Flyout } = await import("../mods/agent-config/main.js");
-const { SPECS } = await import("../shared/agent-flyout.js");
+const { SPECS } = await import("../orca-ui/shared/agent-flyout.js");
 
 test("OpenCode waits for its variant before opening the tab", async () => {
   globalThis.__herdrProps = () => ({ key: "opencode", argv: ["opencode"] });

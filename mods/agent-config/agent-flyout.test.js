@@ -1,4 +1,4 @@
-// Unit tests for the agent flyout specs (generated from shared/agent-flyout.js): the specs are plain
+// Unit tests for the agent flyout specs (generated from orca-ui/shared/agent-flyout.js): the specs are plain
 // data, every name they mention resolves, each agent's argv is what its launch used to be, and the
 // model-list parsers read output captured from the real CLIs.
 import test from "node:test";

@@ -178,4 +178,4 @@ export function parseProviderFile(text) {
 export function serializeProviderFile(providers) {
   return `${JSON.stringify(providers ?? {}, null, 2)}\n`;
 }
-// Generated from shared/codex-provider.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Generated from orca-ui/shared/codex-provider.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.

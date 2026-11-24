@@ -35,4 +35,4 @@ export function panelFrame(inner) {
     .child(div().w(open).h_full().relative().left(px - open + (1 - k) * 28).child(inner))
     .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
 }
-// Generated from shared/panel-motion.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Generated from orca-ui/shared/panel-motion.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.

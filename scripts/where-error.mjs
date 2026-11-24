@@ -10,7 +10,6 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
-import { USES } from "./sync-shared.mjs";
 
 // `<anything>/mods/<mod>/<file>[?v=N]:<line>[:<col>]`, the frame shape Herdr prints.
 const FRAME = /mods\/([^/\s?:()]+)\/([^\s?:()]+)(?:\?v=\d+)?:(\d+)(?::([1-9]\d*))?/g;
@@ -52,7 +51,7 @@ export function locate(text, table, entries = [], root = ROOT) {
 
 async function main() {
   let table;
-  try { table = loadManifests({ uses: USES }).table; }
+  try { table = loadManifests().table; }
   catch (error) {
     if (!(error instanceof ManifestError)) throw error;
     console.error(`${error.path}: ${error.message}`);

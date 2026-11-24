@@ -36,4 +36,4 @@ export function viewportHeight(count, rowHeight, gap = 0) {
 
 /** Whether a list of `count` rows scrolls. */
 export const scrolls = (count) => count > FULL_ROWS;
-// Generated from shared/list-viewport.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Generated from orca-ui/shared/list-viewport.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.

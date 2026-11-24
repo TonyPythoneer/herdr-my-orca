@@ -176,4 +176,4 @@ export function buildAgentSessionContinuationPrompt({ sourceAgent, sourceWorking
     "Acknowledge that you have the context and tell me what the next step is."
   ].join("\n");
 }
-// Generated from shared/transcript.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+// Generated from orca-ui/shared/transcript.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.
