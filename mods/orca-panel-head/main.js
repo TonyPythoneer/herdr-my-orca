@@ -1,7 +1,7 @@
 // Derived from Herdr App's defaults/mods/changes/main.js (Apache-2.0, Copyright Herdr App authors).
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg } from "gpui-kit";
-import { h_flex } from "gpui-base";
+import { Button, h_flex } from "gpui-base";
 import { theme, run, layout, panes, spaces, focused, exec, nextCommand, props } from "herdr";
 import { visibleTools, fallbackChild } from "./panel-gating.js";
 import { viewCommands } from "./panel-views.js";
@@ -110,7 +110,7 @@ function selectFallback(cx, tools, active) {
 // frosted foreground-tinted fill when active and a fainter one on hover. This replaces
 // `activity-bar-buttons.tsx:175-177`'s 2px bottom bar, which the capsule supersedes.
 function toolButton(t, { id, icon, title }, isActive) {
-  return div().id(`panel-${id}`).w(32).h(24).flex_none().flex().items_center().justify_center().relative().rounded(8)
+  return Button.new(`panel-${id}`).selected(isActive).w(32).h(24).flex_none().flex().items_center().justify_center().relative().rounded(8)
     .text_color(isActive ? t.foreground : INACTIVE_ICON)
     .when(isActive, el => el.bg(tint(t.foreground, TINT_ACTIVE)))
     .when(!isActive, el => el.hover(s => s.bg(tint(t.foreground, TINT_HOVER)).text_color(t.muted)))
@@ -124,7 +124,7 @@ function toolButton(t, { id, icon, title }, isActive) {
 // toggle carries `PanelRightClose` (arrow out of the panel) for that state, and `orca-tabs`
 // carries the matching open glyph for the hidden one.
 function collapseButton(t) {
-  return div().id("panel-toggle").mr(3).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+  return Button.new("panel-toggle").mr(3).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
     .text_color(t.muted).hover(s => s.bg(tint(t.foreground, TINT_ACTIVE)).text_color(t.foreground))
     .role("button").accessibility_label("Collapse right sidebar").tooltip("Collapse right sidebar")
     .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation())
