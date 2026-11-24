@@ -53,7 +53,12 @@ jobs:
       - name: Check synchronized mod helpers
         run: node scripts/sync-shared.mjs --check
       - name: Run all existing tests
-        run: node --test mods scripts
+        shell: bash
+        run: |
+          mapfile -d '' tests < <(git ls-files -z -- 'mods/*.test.js' 'mods/*.test.mjs' 'mods/*.test.cjs' 'scripts/*.test.js' 'scripts/*.test.mjs' 'scripts/*.test.cjs')
+          test "${#tests[@]}" -gt 0
+          echo "Running ${#tests[@]} tracked test files"
+          node --test "${tests[@]}"
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 
