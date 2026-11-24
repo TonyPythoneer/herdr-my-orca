@@ -69,9 +69,7 @@ export default class HandoffDialog extends View {
     const pane = panes().find((x) => x.pane === this.paneId || x.terminal === this.terminal);
     this.cwd = pane?.cwd || "";
     this.paneTitle = pane?.title || "";
-    const sourceSpace = spaces().find((space) => space.tabs?.some((tab) => tab.id === pane?.tab));
-    this.sourceMachine = sourceSpace?.machine ?? null;
-    this.sourceSpaceId = sourceSpace?.id;
+    this.resolveSourceSpace(pane);
 
     const agent = agents().find((a) => a.address === this.terminal || a.pane === this.paneId);
     this.sourceAgent = agent?.app || agent?.program?.name || "Agent";
@@ -81,6 +79,12 @@ export default class HandoffDialog extends View {
     if (initialIndex >= 0) {
       this.selectedAgentIndex = initialIndex;
     }
+  }
+
+  resolveSourceSpace(pane) {
+    const sourceSpace = spaces().find((space) => space.tabs?.some((tab) => tab.id === pane?.tab));
+    this.sourceMachine = sourceSpace?.machine ?? null;
+    this.sourceSpaceId = sourceSpace?.id;
   }
 
   // Prefer Herdr's installed, machine-specific catalog and configured launch argv.
