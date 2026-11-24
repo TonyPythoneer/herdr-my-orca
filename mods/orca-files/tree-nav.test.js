@@ -46,3 +46,7 @@ test("an empty tree and unknown keys do nothing", () => {
   assert.deepEqual(resolveTreeKey("arrowdown", 0, []), { type: "none" });
   assert.deepEqual(resolveTreeKey("enter", 0, rows), { type: "unhandled" });
 });
+
+test("parent lookup tolerates a selection outside the current projection", () => {
+  for (const index of [-1, rows.length, rows.length + 1, undefined, 1.5]) assert.equal(parentIndex(rows, index), null);
+});
