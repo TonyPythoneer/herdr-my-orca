@@ -29,7 +29,9 @@ jobs:
           chmod +x "$RUNNER_TEMP/bin/herdr-app"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: metrics (tests, coverage, lint, drift)
+        shell: bash
         run: |
+          set -o pipefail
           export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
           node scripts/metrics.mjs --out metrics-out | tee metrics-out.log
       - uses: actions/upload-artifact@v4

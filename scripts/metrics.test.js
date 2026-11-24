@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { coverageByMod, judge, nextActions, parseCoverage, parseTestSummary, summarizeLint, toMarkdown } from "./metrics.mjs";
+import { coverageByMod, judge, nextActions, parseCoverage, parseTestSummary, summarizeLint, toMarkdown, trackedTestFiles } from "./metrics.mjs";
 
 const COVERAGE = `ℹ start of coverage report
 ℹ ------------------------------------------------------------
@@ -79,4 +79,14 @@ test("the markdown starts with the marker the PR comment looks for and shows del
   assert.ok(md.startsWith("<!-- orca-metrics -->\n## Quality report: FAIL"));
   assert.match(md, /Lint findings \| 5 \(-4\)/);
   assert.match(md, /\*\*Failures\*\*\n- x/);
+});
+
+test("tracked test discovery covers mods, scripts and nested managed features", () => {
+  assert.deepEqual(trackedTestFiles(["mods/a/a.test.js", "scripts/a.test.mjs", "orca-ui/features/panel/head/a.test.cjs", "mods/a/main.js", "artifacts/x.test.js", ""].join("\0")), ["mods/a/a.test.js", "scripts/a.test.mjs", "orca-ui/features/panel/head/a.test.cjs"]);
+});
+
+test("quality rejects incomplete test execution and missing lint output", () => {
+  const base = report();
+  assert.equal(judge(report({ tests: { ...base.tests, executionError: "runner failed" } }), base).ok, false);
+  assert.equal(judge(report({ lint: { ...base.lint, total: -1 } }), base).ok, false);
 });

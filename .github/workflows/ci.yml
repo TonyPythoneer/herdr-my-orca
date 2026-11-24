@@ -50,15 +50,22 @@ jobs:
                   compile(Path(name).read_bytes(), name, 'exec')
           PY
           git ls-files -z -- '*.sh' | xargs -0 -r -n 1 bash -n
-      - name: Check synchronized mod helpers
-        run: node scripts/sync-shared.mjs --check
+      - name: Check generated Orca UI and shared helpers
+        run: node scripts/build-orca-ui.mjs --check --out .
+      - name: Install isolated herdr-app test stand-in
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
+          chmod +x "$RUNNER_TEMP/bin/herdr-app"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Run all existing tests
         shell: bash
         run: |
-          mapfile -d '' tests < <(git ls-files -z -- 'mods/*.test.js' 'mods/*.test.mjs' 'mods/*.test.cjs' 'scripts/*.test.js' 'scripts/*.test.mjs' 'scripts/*.test.cjs')
+          export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
+          mapfile -d '' tests < <(git ls-files -z -- 'mods/*.test.js' 'mods/*.test.mjs' 'mods/*.test.cjs' 'scripts/*.test.js' 'scripts/*.test.mjs' 'scripts/*.test.cjs' 'orca-ui/features/*.test.js' 'orca-ui/features/*.test.mjs' 'orca-ui/features/*.test.cjs')
           test "${#tests[@]}" -gt 0
           echo "Running ${#tests[@]} tracked test files"
-          node --test "${tests[@]}"
+          node --test --test-timeout=60000 "${tests[@]}"
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 
