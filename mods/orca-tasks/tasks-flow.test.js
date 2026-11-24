@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 
 register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
@@ -151,4 +152,14 @@ test("cards word the last run: never, ok with note, failure with count, running 
   view.editing = true;
   view.editor = {};
   assert.match(JSON.stringify(view.render({}).__node), /Close JSON[\s\S]*tm-editor/);
+});
+
+test("task page owns every referenced icon and renders without sibling mods", () => {
+  const source = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  const refs = [...source.matchAll(/"mods\/([^/]+)\/([^"]+\.svg)"/g)];
+  assert.equal(refs.length, 4);
+  for (const [, mod, file] of refs) {
+    assert.equal(mod, "orca-tasks");
+    assert.match(readFileSync(new URL(file, import.meta.url), "utf8"), /<svg/);
+  }
 });

@@ -26,7 +26,7 @@ const PROVIDERS = ["claude", "codex"];
 // A write that lost a race is retried once against the text that won.
 const WRITE_ATTEMPTS = 2;
 const REFRESH_MS = 30_000;
-const MARKS = { claude: "mods/orca-status/claude.svg", codex: "mods/orca-status/codex.svg" };
+const MARKS = { claude: "mods/orca-tasks/claude.svg", codex: "mods/orca-tasks/codex.svg" };
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -306,10 +306,10 @@ export default class Tasks extends View {
   }
 
   mark(agent, t) {
-    const icon = MARKS[agent];
+    const icon = Object.hasOwn(MARKS, agent) ? MARKS[agent] : null;
     return icon
       ? svg(icon).size(14).flex_none().text_color(t.muted)
-      : svg("mods/orca-chrome/clock.svg").size(14).flex_none().text_color(t.muted);
+      : svg("mods/orca-tasks/clock.svg").size(14).flex_none().text_color(t.muted);
   }
 
   sectionHead(title, t, note, extra) {
@@ -388,7 +388,7 @@ export default class Tasks extends View {
           .accessibility_label("Back to terminals")
           .tooltip("Back to terminals")
           .on_click(() => run("layout.select", { stack: "main", child: TERMINALS_PAGE }))
-          .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
+          .child(svg("mods/orca-tasks/chevron-left.svg").size(16)),
       )
       .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Task management"))
       .child(div().flex_1())
