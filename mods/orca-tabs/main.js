@@ -122,6 +122,7 @@ const drawerEase = (() => {
 const DROP_STILL_TICKS = 20; // ~320ms of a motionless pointer is the release fallback, since the host has no button state.
 const TAB_DRAG_DISTANCE = 12; // `useTabDragSplit.ts:42` — dnd-kit activation distance, and how far down a press must travel before it is a split.
 const WINDOW_RETRY_MS = 50;
+const PANEL_RESTORE_TIMEOUT_MS = 1000;
 const WINDOW_RETRIES = 20;
 const OVERLAY_PROBE_MS = 300;
 const SLIDE_GRACE_MS = 60;
@@ -607,9 +608,11 @@ export default class Tabs extends View {
     // and a space never seen keeps the layout's default. Only a remembered hide is kept as hidden.
     const stored = this.panels[space.id] ?? null, want = enabled.includes(stored) ? stored : null;
     if (want) {
+      if (want !== now || panel.hidden) this.pending = { want, until: Date.now() + PANEL_RESTORE_TIMEOUT_MS };
       if (want !== now) run("layout.select", { stack: "panel-body", child: want });
       if (panel.hidden) run("layout.show", { id: "panel" });
     } else if (space.id in this.panels && this.panels[space.id] === null && !panel.hidden) {
+      this.pending = { want: null, until: Date.now() + PANEL_RESTORE_TIMEOUT_MS };
       run("layout.hide", { id: "panel" });
     }
   }

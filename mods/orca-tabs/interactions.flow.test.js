@@ -790,8 +790,12 @@ test("a remembered panel choice is restored per space and recorded when it chang
   w.log.length = 0;
   w.view.syncPanel({ id: "s1" }, panel(true), { active: "files" }, enabled);
   assert.deepEqual(w.runLog(), [["layout.select", { stack: "panel-body", child: "git" }], ["layout.show", { id: "panel" }]]);
-  assert.equal(w.view.panels.s1, null, "the state before the restore lands is what this frame records");
+  assert.equal(w.view.panels.s1, "git", "the old frame must not overwrite the saved choice");
+  assert.ok(w.view.pending);
   w.log.length = 0;
+  w.view.syncPanel({ id: "s1" }, panel(false), { active: "git" }, enabled);
+  assert.equal(w.view.pending, null);
+  assert.deepEqual(w.log, [], "arrival of the restored choice needs no storage write");
   w.view.syncPanel({ id: "s1" }, panel(false), { active: "files" }, enabled);
   assert.deepEqual(w.log, [["storage", "panels", '{"s1":"files","s2":null,"s3":"gone"}']]);
   w.log.length = 0;
@@ -800,6 +804,7 @@ test("a remembered panel choice is restored per space and recorded when it chang
   w.log.length = 0;
   w.view.syncPanel({ id: "s2" }, panel(false), { active: "files" }, enabled);
   assert.deepEqual(w.runLog(), [["layout.hide", { id: "panel" }]]);
+  assert.equal(w.view.panels.s2, null, "pending hide must not remember the old visible tool");
   w.log.length = 0;
   w.view.syncPanel({ id: "s3" }, panel(true), { active: "files" }, enabled);
   assert.deepEqual(w.runLog(), [], "a tool that is not enabled keeps the layout's default");
