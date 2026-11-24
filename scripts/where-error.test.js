@@ -28,7 +28,7 @@ test("a shared helper copy points at the same line in orca-ui/shared/, an unmigr
 
 test("a migrated feature points at its orca-ui source and its app.mjs entry", async () => {
   const { features } = await import("../orca-ui/app.mjs");
-  const [hit] = locate("at <anonymous> (/Users/u/.config/herdr-app/mods/orca-panel-head/panel-views.js?v=1:12:3)", table, features);
+  const [hit] = locate("at <anonymous> (/Users/u/.config/herdr-app/mods/orca-panel-head/panel-views.js?v=1:12:3)", table, { features });
   assert.equal(hit.edit, "orca-ui/features/panel/head/panel-views.js:12:3");
   assert.equal(hit.kind, "feature");
   assert.match(hit.note, /feature "panel\/head"/);
@@ -134,11 +134,11 @@ test("the last mods/ in a path is the frame, so a prefix containing mods/ still 
 
 test("an in-place mod with an app.mjs entry gets its tests, layouts and next in the hint", async () => {
   const { features, inPlace } = await import("../orca-ui/app.mjs");
-  const [hit] = locate("at r (/p/mods/orca-panel-gap/main.js:40:37)", table, features, undefined, inPlace);
+  const [hit] = locate("at r (/p/mods/orca-panel-gap/main.js:40:37)", table, { features, inPlace });
   assert.equal(hit.kind, "in-place");
   assert.equal(hit.edit, "mods/orca-panel-gap/main.js:40:37");
   assert.match(hit.note, /^edit this file in place; mod "orca-panel-gap" is in app\.mjs; tests mods\/orca-panel-gap\/panel-motion\.test\.js; layouts orca#workspaces,/);
-  const [chrome] = locate("at r (/p/mods/orca-chrome/runner.js:9)", table, features, undefined, inPlace);
+  const [chrome] = locate("at r (/p/mods/orca-chrome/runner.js:9)", table, { features, inPlace });
   assert.match(chrome.note, /next mods\/orca-chrome\/runner\.js, mods\/orca-tasks\/main\.js$/);
 });
 
