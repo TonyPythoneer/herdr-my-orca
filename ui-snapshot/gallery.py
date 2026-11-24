@@ -33,6 +33,7 @@ def build(source, output):
     for mod,scope in sorted(coverage.get("modScope",{}).items()):
         lines += [f"- `{mod}`: {scope}"]
     lines += [""]
+    seen_images={}
     for r in rows:
         lines += [f'## {r["id"]} — {r["mod"]}: {r["title"]}', "", f'**{r["result"]}** · {r["mode"]} · {r.get("verification", "not verified")}', ""]
         if r.get("viewport"):
@@ -56,11 +57,20 @@ def build(source, output):
                 raise ValueError("Unexpected image path")
             src = source / rel
             if not src.is_file() or src.is_symlink(): raise ValueError("Missing screenshot")
-            filename = Path(rel).stem+".jpg"
-            subprocess.run(["sips","-Z","1200","-s","format","jpeg","-s","formatOptions","75",str(src),"--out",str(output/filename)],check=True,capture_output=True)
+            digest=img.get("sha256")
+            filename=seen_images.get(digest)
+            if not filename:
+                filename=Path(rel).stem+".jpg"
+                subprocess.run(["sips","-Z","1200","-s","format","jpeg","-s","formatOptions","75",str(src),"--out",str(output/filename)],check=True,capture_output=True)
+                if digest:
+                    seen_images[digest]=filename
             action=next((a for a in r.get("actions",[]) if a["phase"]==phase),None)
             label=action["action"] if action else phase.capitalize()
-            lines += [f"**{label}**", "", f"![{r['title']} — {phase}]({filename})", ""]
+            lines += [f"**{label}**", ""]
+            if filename != Path(rel).stem+".jpg":
+                lines += [f"[Identical frame — {phase}]({filename})",""]
+            else:
+                lines += [f"![{r['title']} — {phase}]({filename})",""]
     (output/"README.md").write_text("\n".join(lines)+"\n")
 
 if __name__ == "__main__":

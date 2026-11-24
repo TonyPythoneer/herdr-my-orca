@@ -353,6 +353,8 @@ def main():
                     time.sleep(.7)
                     park()
                     state = status()
+                    if case.get("setupOverlay") and case["setupOverlay"] not in blocking_overlays(state):
+                        raise RuntimeError("Expected fixture overlay missing: "+case["setupOverlay"])
                     if state.get("layout") != layout or (blocking_overlays(state) and not case.get("setupOverlay")) or state.get("errors"):
                         raise RuntimeError("Fixture is not an unobstructed custom layout")
                 def perform(action):
@@ -379,6 +381,10 @@ def main():
                         return None
                     raise RuntimeError("Unknown action: "+kind)
                 def interact(row, control):
+                    if control.get("keyboard"):
+                        row["mode"]="native-keyboard-escape"
+                        perform({"kind":"escape"})
+                        return
                     if control.get("visible"):
                         row["mode"]="native-mouse-visible-text"
                         row["clickPoint"]=visible_click(control["label"],control.get("region"),control.get("scroll",False),control.get("right",False))
@@ -439,7 +445,7 @@ def main():
                         actual = blocking_overlays(after)
                         if expected and expected not in actual:
                             raise RuntimeError("Expected popup "+expected+"; got "+str(actual))
-                        if not expected and actual and not case.get("popover") and not case.get("setupOverlay"):
+                        if actual and (case.get("noOverlay") or (not expected and not case.get("popover"))):
                             raise RuntimeError("Unexpected blocking popup "+str(actual))
                         shot(row,"after")
                         if row["images"]["before"]["sha256"] == row["images"]["after"]["sha256"]:
@@ -471,6 +477,8 @@ def main():
                                 if value!=check["equals"]:
                                     raise RuntimeError("Fixture persistence did not match expected value")
                                 row["persistenceVerified"]=True
+                                if check["file"]=="tasks.json":
+                                    visible_click("Close JSON",(.25,.05,.70,.95),scroll=True)
                             if case.get("fixtureExists") and not (fixture/case["fixtureExists"]).is_file():
                                 raise RuntimeError("Cancel unexpectedly removed fixture file")
                             if case.get("closePane"):
@@ -502,6 +510,10 @@ def main():
                         if runtime_errors:
                             row["runtimeErrors"] = runtime_errors
                             raise RuntimeError("Native click/render handler error: "+runtime_errors[0])
+                        if case.get("paneChange") and not case.get("closePane"):
+                            # Explicitly dispose only the pane this case created, outside evidence.
+                            command("pane.close",pane=after["focused_pane"])
+                            time.sleep(.4)
                         row["result"]="captured"
                     except Exception as e:
                         row["result"]="blocked" if isinstance(e,PermissionError) else "failed"

@@ -79,3 +79,12 @@ class VisibleEvidenceTests(unittest.TestCase):
             assert_visible(rows,absent=["Close diff"])
         with self.assertRaises(RuntimeError):
             assert_visible(rows,required=["Save"])
+
+    def test_all_previously_unobserved_mods_have_an_explicit_scope_and_case(self):
+        from scenarios import MOD_SCOPE
+        covered={m for c in CASES for m in c["mods"]}
+        self.assertTrue(set(MOD_SCOPE)<=covered)
+        self.assertEqual(len({tuple(c["viewport"]) for c in CASES if c.get("viewport")}),1)
+        self.assertTrue(any(c.get("closePane") and c.get("follow") for c in CASES))
+        self.assertTrue(any(c.get("fileAssert",{}).get("file")=="tasks.json" for c in CASES))
+        self.assertTrue(any(c.get("fileAssert",{}).get("file")=="agent-manager.json" for c in CASES))

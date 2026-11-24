@@ -26,3 +26,5 @@ Every scenario normalizes its required layout, project and file-search state. A 
 
 ## Deep interaction evidence
 The macOS Vision framework reads text from the actual screenshot to locate unique visible controls and check expected content. No external OCR service or synthetic rendering is used. The suite can scroll a specified pane, resize the native window, paste synthetic JSON, and verify persisted fixture values. All intermediate images correspond to actual actions; no startup/stock screenshots. A preview-only dialog is explicitly distinguished from a live agent workflow. No credentials, real providers or external agent runs are used.
+
+Exact duplicate images are linked once in the browser gallery; the full artifact retains the original evidence. Coverage inventory now includes every repository mod with explicit dialog-only and passive-panel limitations. Native viewport resizing and permission/task persistence are hard gates, not skipped checks.
