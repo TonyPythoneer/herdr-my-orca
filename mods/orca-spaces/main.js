@@ -1193,7 +1193,7 @@ export default class Spaces extends View {
     // Missing folders are marked but never deleted silently.
     const saved = stored("projects.saved.v1", []);
     const savedRows = saved
-      .filter(folder => !sp.some(s => s.folder && s.folder === folder || s.folder.startsWith(folder + "/")))
+      .filter(folder => !sp.some(s => typeof s.folder === "string" && (s.folder === folder || s.folder.startsWith(folder + "/"))))
       .map(folder => this.savedProjectRow(folder, t));
 
     return focusRoot(this, v_flex().size_full().min_h(0).bg(chromeFill(t)).text_size(13)
