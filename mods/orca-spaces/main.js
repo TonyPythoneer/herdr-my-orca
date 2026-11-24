@@ -264,7 +264,7 @@ export default class Spaces extends View {
     this.busy = {}; // pane -> an agent working or a program in front of its shell
     this.ready = {}; // machine -> its layout was readable at the last look
     this.at = {}; // space -> its where() at the last look
-    this.watching = new Set(); // local repos' git folders
+    this.watching = new Map(); // repo -> native cancellable FolderWatch
     // Orca startupWorktreeRefreshCompleted (startup-worktree-refresh.ts:80).
     // When cached git state exists, rows paint immediately without a loading flash.
     this.loaded = Object.keys(this.git).length > 0;
@@ -384,6 +384,9 @@ export default class Spaces extends View {
   close() {
     for (const { entity } of this.retainedRows.values()) entity.release();
     this.retainedRows.clear();
+    this.closed = true;
+    this.pending?.clear();
+    for (const repo of this.watching?.keys() ?? []) this.stopWatch(repo);
   }
 
   // A saved folder can be moved or deleted between runs. Orca keeps a project whose
@@ -562,6 +565,7 @@ export default class Spaces extends View {
   // Runs git checks concurrently across hosts, matching startup-worktree-refresh.ts:51-68
   // Promise.allSettled. A serial queue caused rows to stall behind earlier repositories.
   refreshGit(keys, cx) {
+    if (this.closed) return;
     for (const k of keys) this.pending.add(k);
     if (this.refreshing) return;
     this.refreshing = true;
@@ -571,13 +575,14 @@ export default class Spaces extends View {
         this.pending.clear();
         await Promise.all(batch.map((key) => this.check(key, taskCx)));
       }
+      if (this.closed) return;
+      pruneGitCache(this.git, spaces(), this.checked);
       const used = new Set(Object.values(this.git).filter(Boolean).map((g) => readPair(g.repo)).filter(([on]) => !on).map(([, repo]) => repo));
-      for (const repo of this.watching) if (!used.has(repo)) this.watching.delete(repo);
+      for (const repo of this.watching.keys()) if (!used.has(repo)) this.stopWatch(repo);
       this.refreshing = false;
       this.refreshingAll = false;
       this.loaded = true;
       // The refresh is the only writer, so one write per completed pass is enough.
-      pruneGitCache(this.git, spaces(), this.checked);
       localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
       this.notify(taskCx);
     });
@@ -587,20 +592,19 @@ export default class Spaces extends View {
   async check(key, cx) {
     const [on, cwd] = readPair(key);
     const cached = this.git[key];
-    this.checked[key] = Date.now();
+    if (this.closed) return;
+    const started = this.checked[key] = Date.now();
+    // The refresh queue serializes checks for each key; forgetting it invalidates this result.
+    const stillCurrent = () => !this.closed && this.checked[key] === started;
     this.unsure.delete(key);
     try {
       // No optional locks: a status that touched the index would wake the watch again.
-      // Writes nothing under .git (index lock, fsmonitor cookie): watch() would wake on it.
-      const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch"], { cwd, on });
-      if (r.code !== 0) {
-        await this.refreshCatalog(cached, on);
-        // Only git's own "no" is remembered as no repo; anything else is asked again.
-        if (/not a git repository/i.test(r.stderr)) this.git[key] = null;
-        else { this.git[key] ??= null; this.unsure.add(key); }
-        return;
-      }
+      // Only branch headers are consumed; skip the untracked-file traversal.
+      const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch", "--untracked-files=no"], { cwd, on });
+      if (!stillCurrent()) return;
+      if (r.code !== 0) return await this.checkFailed(key, cached, on, stillCurrent, r.stderr);
       const { info, commonDir } = await readGitInfo(r.stdout, cwd, on);
+      if (!stillCurrent()) return;
       for (const entry of Object.values(this.git)) {
         if (entry?.repo === info.repo) entry.worktrees = info.worktrees;
       }
@@ -611,37 +615,58 @@ export default class Spaces extends View {
       if (!on && info.branch) this.lookupPRByBranch(`${commonDir}::${info.branch}`, info, cwd, cx);
       if (!on) this.watch(commonDir, cx);
     } catch {
-      await this.refreshCatalog(cached, on);
-      // Couldn't ask (the machine is away): keep what it showed, look again later.
-      this.git[key] ??= null;
-      this.unsure.add(key);
+      await this.checkFailed(key, cached, on, stillCurrent);
     }
+  }
+
+  async checkFailed(key, cached, on, stillCurrent, stderr = "") {
+    if (!stillCurrent()) return;
+    await this.refreshCatalog(cached, on, stillCurrent);
+    if (!stillCurrent()) return;
+    // Only git's own "no" is remembered as no repo; anything else is asked again.
+    if (/not a git repository/i.test(stderr)) this.git[key] = null;
+    else { this.git[key] ??= null; this.unsure.add(key); }
   }
 
   // A project's worktree list is carried by every cached place of the repo; when a place cannot be
   // read, its repo's own git directory can still say which worktrees exist.
-  async refreshCatalog(cached, on) {
+  async refreshCatalog(cached, on, stillCurrent = () => true) {
     if (!cached?.linked) return;
     try {
       const wt = await exec("git", ["--git-dir", readPair(cached.repo)[1], "worktree", "list", "--porcelain"], { on });
-      if (wt.code === 0) {
+      if (wt.code === 0 && stillCurrent()) {
         const worktrees = parseWorktreeList(wt.stdout);
         for (const entry of Object.values(this.git)) if (entry?.repo === cached.repo) entry.worktrees = worktrees;
       }
     } catch { /* the catalog is a refresh of what the row already shows: keep it as it was */ }
   }
 
+  stopWatch(repo) {
+    const pending = this.watching.get(repo);
+    this.watching.delete(repo);
+    pending?.cancel?.();
+  }
+
   watch(repo, cx) {
-    if (this.watching.has(repo)) return;
-    this.watching.add(repo);
+    if (this.closed || this.watching.has(repo)) return;
+    const pending = watchFolder(repo);
+    this.watching.set(repo, pending);
     cx.spawn(async (taskCx) => {
+      let current = pending;
       try {
-        while (this.watching.has(repo)) {
-          await watchFolder(repo);
+        for (;;) {
+          await current;
+          if (this.watching.get(repo) !== current) return;
           const mine = JSON.stringify([null, repo]);
-          if (this.watching.has(repo)) this.refreshGit(Object.keys(this.git).filter((k) => this.git[k]?.repo === mine), taskCx);
+          const keys = Object.keys(this.git).filter((k) => this.git[k]?.repo === mine);
+          if (!keys.length) break;
+          this.refreshGit(keys, taskCx);
+          if (this.watching.get(repo) !== current) return;
+          current = watchFolder(repo);
+          this.watching.set(repo, current);
         }
-      } catch { this.watching.delete(repo); }
+      } catch { /* fallback refresh remains active */ }
+      if (this.watching.get(repo) === current) this.stopWatch(repo);
     });
   }
 
@@ -825,8 +850,15 @@ export default class Spaces extends View {
     const repo = ask?.repo;
     if (!repo) return;
     const live = spaces().map((s) => where(s));
+    const candidates = Object.keys(this.git).filter(key => this.git[key]?.repo === repo);
     if (!forgetProjectCache(this.git, repo, live)) return;
-    for (const key of Object.keys(this.checked)) if (!(key in this.git)) delete this.checked[key];
+    const [on, commonDir] = readPair(repo);
+    if (!on && !Object.values(this.git).some(entry => entry?.repo === repo)) this.stopWatch(commonDir);
+    for (const key of candidates) if (!(key in this.git)) {
+      delete this.checked[key];
+      this.pending.delete(key);
+      this.unsure.delete(key);
+    }
     localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
     this.notify(cx);
   }

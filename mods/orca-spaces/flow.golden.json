@@ -37,7 +37,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -100,7 +100,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -173,7 +173,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -241,7 +241,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -314,7 +314,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -387,7 +387,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -460,7 +460,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -533,7 +533,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -606,7 +606,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -679,7 +679,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -752,7 +752,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -804,7 +804,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     "far"
    ],
    [
@@ -872,7 +872,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -935,7 +935,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -998,7 +998,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1052,7 +1052,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1085,7 +1085,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ]
   ]
@@ -1101,7 +1101,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1121,7 +1121,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ]
   ]
@@ -1149,7 +1149,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1182,7 +1182,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1215,7 +1215,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1248,7 +1248,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1291,7 +1291,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [
@@ -1321,7 +1321,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ]
   ]
@@ -1349,7 +1349,7 @@
   "calls": [
    [
     "git",
-    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no",
     null
    ],
    [

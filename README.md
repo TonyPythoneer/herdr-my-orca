@@ -129,6 +129,8 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npx eslint@9 -c eslint.config.mjs mods scripts orca-ui`
   (complexity, nesting, function length, parameters, shadowing; generated files are skipped) and
   `node --test --experimental-test-coverage mods scripts orca-ui/features`.
+  CI runs unit/contract and behavior suites separately; the aggregate check requires both.
+  The synthetic Git branch-header benchmark (`python3 scripts/benchmark-git-status.py`) reports paired p50/p95 timings, not native UI latency.
 - CI runs the full suite: `.github/workflows/quality.yml` runs the tests, coverage, lint and the drift
   check on every pull request and on pushes to `main`, `plan/**` and `refactor/**`. It posts one
   comment on the pull request (updated in place) and uploads `report.json` and `report.md` as the
@@ -139,8 +141,7 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   reviewed improvement. A pull request fails when tests fail, the drift check fails, lint findings
   rise above the baseline, or line coverage drops more than 1 point.
 - Not used: a bundler. Measured on two sample mods with Vite+, source maps doubled the output and
-  herdr-app 0.1.17 ignores them, so errors would name bundle lines
-  ([evaluation](docs/plan-orca-bundler-evaluation.md)).
+  herdr-app 0.1.17 ignores them, so errors would name bundle lines.
 
 ## Setup
 
