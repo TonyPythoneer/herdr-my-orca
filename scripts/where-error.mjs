@@ -16,8 +16,8 @@ const FRAME = /(?:[^\s?:()]*\/)?mods\/([^/\s?:()]+)\/([^\s?:()]+)(?:\?v=\d+)?:(\
 const list = items => (items.length ? items.join(", ") : "-");
 const isFile = path => existsSync(path) && statSync(path).isFile();
 
-// `entries` is app.mjs's `features`; it only adds the `next` hint.
-export function locate(text, table, entries = [], root = ROOT) {
+// `entries` is app.mjs's `features` and `inPlace` its map of mods edited in place; both only add hints.
+export function locate(text, table, entries = [], root = ROOT, inPlace = []) {
   const out = [];
   for (const [, mod, file, l, c] of text.matchAll(FRAME)) {
     const line = Number(l);
@@ -41,7 +41,11 @@ export function locate(text, table, entries = [], root = ROOT) {
         : `shared helper, copied into ${list(row.consumers)}${owned ? detail : ""}${next}`;
       out.push({ frame, edit: at(row.source), kind: row.kind, note });
     } else if (isFile(join(root, "mods", mod, "mod.json")) && isFile(join(root, "mods", mod, file))) {
-      out.push({ frame, edit: frame, kind: "in-place", note: "not in app.mjs yet: edit this file in place" });
+      const mapped = inPlace.find(e => e.mod === mod);
+      const note = mapped
+        ? `edit this file in place; mod "${mod}" is in app.mjs; tests ${list(mapped.tests ?? [])}; layouts ${list(mapped.layouts ?? [])}${mapped.next?.length ? `; next ${list(mapped.next)}` : ""}`
+        : "not in app.mjs yet: edit this file in place";
+      out.push({ frame, edit: frame, kind: "in-place", note });
     } else {
       out.push({ frame, edit: frame, kind: "unknown", note: "unknown path: no such mod in this repo" });
     }
@@ -64,8 +68,8 @@ async function main() {
     process.exit(2);
   }
   // app.mjs only adds `next`; a missing or broken one must not stop the lookup.
-  const entries = await import(pathToFileURL(join(ROOT, "orca-ui", "app.mjs")).href).then(m => m.features ?? [], () => []);
-  const hits = locate(text, table, entries);
+  const app = await import(pathToFileURL(join(ROOT, "orca-ui", "app.mjs")).href).catch(() => ({}));
+  const hits = locate(text, table, app.features ?? [], ROOT, app.inPlace ?? []);
   if (!hits.length) { console.error("no mods/<mod>/<file>:<line> frame found in the input"); process.exit(1); }
   for (const h of hits) console.log(`${h.edit}\n  from ${h.frame}; ${h.note}`);
 }

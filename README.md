@@ -98,8 +98,10 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 - The repo holds only our own mods (`orca-*`, `agent-config`, and `skillshare`, which this repo
   owns even though it wraps a local CLI). Herdr ships its own mods and layouts (`confirm`,
   `picker`, `main`, `terminals`, …); they stay in the live config and are not tracked here.
-- Orca UI starts at [orca-ui/app.mjs](orca-ui/app.mjs): a reading map that lists each migrated
-  feature, the screen it draws and the files to follow next. A feature is edited in
+- Orca UI starts at [orca-ui/app.mjs](orca-ui/app.mjs): a reading map. `features` lists each
+  generated feature, the screen it draws and the files to follow next; `inPlace` lists every other
+  mod (edited under `mods/<mod>/`) with its layout nodes, keys, what it opens or shares, tests and
+  `next`. A test checks that all 24 mods are covered and that the entries match the repo. A feature is edited in
   `orca-ui/features/<area>/<feature>/` and regenerated with
   `node scripts/build-orca-ui.mjs --out .`. Its `manifest.json` lists every managed output, test,
   layout slot and key section, so the copy under `mods/` is delivery format, not an edit location.
