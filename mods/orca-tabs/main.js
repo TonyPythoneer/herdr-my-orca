@@ -1133,7 +1133,7 @@ export default class Tabs extends View {
     this.applyTabAction(cx);
     const frame = this.stripFrame(cx, Boolean(p?.unified));
     const row = addSidebarToggle(this.headerSurface(frame), this, frame);
-    return addEndControls(addTabTrack(row, this, frame, cx), this, frame);
+    return addEndControls(addTabTrack(row, this, frame), this, frame);
   }
 
   // Live read keeps maximize/restore current (Orca subscribes to onMaximizeChanged,

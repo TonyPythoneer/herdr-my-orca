@@ -358,7 +358,10 @@ test("the strip's own handlers measure, scroll, reveal the active tab and slide 
   assert.equal(w.view.sliding(), false);
   const tree = w.render();
   const left = byId(tree, "tab-scroll-start-g0");
+  w.log.length = 0;
   handler(left, "on_click")({}, w.hcx);
+  assert.equal(notified(w, "handler"), 1, "the arrow must notify through its click context");
+  assert.equal(notified(w, "render"), 0);
   assert.equal(w.view.scrollX, 195, "three quarters of the viewport");
   assert.equal(w.view.sliding(), true);
   handler(byId(w.render(), "tab-scroll-end-g0"), "on_click")({}, w.hcx);

@@ -44,7 +44,7 @@ export function addSidebarToggle(row, view, { t, unified, sidebar, w, leftPad })
     });
 }
 
-export function addTabTrack(row, view, frame, renderCx) {
+export function addTabTrack(row, view, frame) {
   const { t, geometry, shown } = frame;
   // Orca's chevrons (`tab-bar-surface.tsx:124-146`, `:189-211`): a ghost `icon-xs` button, so
   // `mx-0.5 my-auto h-6 w-5` (2px sides, 24x20) around a 14px `ChevronLeft/Right`, shown only
@@ -57,7 +57,7 @@ export function addTabTrack(row, view, frame, renderCx) {
       .text_color(disabled ? t.dim : t.muted)
       .when(!disabled, el => el.hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground)).on_mouse_down("left", stop))
       .role("button").accessibility_label(label).tooltip(label)
-      .on_click(() => { if (!disabled) view.scrollTabStrip(direction, renderCx); })
+      .on_click((_e, cx) => { if (!disabled) view.scrollTabStrip(direction, cx); })
       .child(svg(glyph).size(14).flex_none());
   };
   const item = (tab, index, mode) => renderTabItem(view, frame, tab, index, mode);
