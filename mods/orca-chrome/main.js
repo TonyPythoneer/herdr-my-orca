@@ -29,7 +29,6 @@ function toggleSidebar() {
 // Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
 // Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
 function sidebarFrame(inner) {
-  const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
   if (!props()?.unified) return inner;
   const open = shared("sidebar.openPx");
   const px = find(layout(), "sidebar")?.size?.px;
@@ -52,6 +51,14 @@ function tint(hex, alpha) {
   return /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${a}` : hex;
 }
 
+// Left padding of the titlebar row: 6 while the sidebar is hidden; on macOS 75 beside the
+// traffic lights, or 8 in full screen; 10 on a custom titlebar.
+function titlebarPad(collapsed, mac, win) {
+  if (collapsed) return 6;
+  if (!mac) return 10;
+  return win?.fullscreen ? 8 : 75;
+}
+
 export default class WorkspaceChrome extends View {
   // The Tasks page is a stack child, so its own copy only starts once it is first shown; the
   // schedule has to run from a block that is always in the layout. This footer copy is it.
@@ -66,33 +73,36 @@ export default class WorkspaceChrome extends View {
     return div().id(id).w(w).h(h).mr(4).flex_none().flex().items_center().justify_center().rounded(8).text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_click(action).child(label);
   }
+  // The sidebar's bottom row, in both layouts.
+  footer(t) {
+    // Orca's sidebar footer: two 4px-gap clusters either side of the row
+    // (SidebarToolbar.tsx:69-73). Each control is icon-xs 24px, rounded-md 8px,
+    // with a 14px glyph (button.tsx:41, SidebarSettingsHelpMenu.tsx:203).
+    const row = (id, icon, label, action) => div().id(id).size(24).flex_none().flex().items_center().justify_center().rounded(8)
+      .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
+      .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
+    const footerBar = h_flex().size_full().items_center().justify_between().bg(props()?.unified ? t.surface : t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
+      .child(h_flex().items_center().gap(4)
+        // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
+        // while the Agents page lives in the `main` stack (`main-agents`).
+        .child(row("agents", "bot", "Agents", () => run("layout.select", { stack: "main", child: "main-agents" })))
+        .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
+        // Schedules: the reset ping and anything else the person adds (orca-tasks).
+        .child(row("tasks", "clock", "Tasks", () => run("layout.select", { stack: "main", child: "main-tasks" })))
+        .child(row("settings", "settings", "Settings", () => run("app.settings")))
+        // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
+        // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).
+        .child(row("help", "circle-help", "Help", () => run("app.palette"))));
+    // Orca's right cluster holds Reveal active workspace and Workspace board
+    // (SidebarToolbar.tsx:76-112); neither has a Herdr command, so nothing is drawn.
+    // The Herdr-only `+` (Add machine) that sat here is gone: Orca's footer has no plus.
+    return sidebarFrame(footerBar);
+  }
+
   render() {
     const t = theme();
     const collapsed = sidebarHidden();
-    if (props()?.footer) {
-      // Orca's sidebar footer: two 4px-gap clusters either side of the row
-      // (SidebarToolbar.tsx:69-73). Each control is icon-xs 24px, rounded-md 8px,
-      // with a 14px glyph (button.tsx:41, SidebarSettingsHelpMenu.tsx:203).
-      const row = (id, icon, label, action) => div().id(id).size(24).flex_none().flex().items_center().justify_center().rounded(8)
-        .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-        .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-chrome/${icon}.svg`).size(14));
-      const footerBar = h_flex().size_full().items_center().justify_between().bg(props()?.unified ? t.surface : t.chrome).border_t(1).border_color(t.border).px(8).text_size(12)
-        .child(h_flex().items_center().gap(4)
-          // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
-          // while the Agents page lives in the `main` stack (`main-agents`).
-          .child(row("agents", "bot", "Agents", () => run("layout.select", { stack: "main", child: "main-agents" })))
-          .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
-          // Schedules: the reset ping and anything else the person adds (orca-tasks).
-          .child(row("tasks", "clock", "Tasks", () => run("layout.select", { stack: "main", child: "main-tasks" })))
-          .child(row("settings", "settings", "Settings", () => run("app.settings")))
-          // Herdr has no dropdown menu; Help opens the command surface. CircleHelp,
-          // not CircleCheck (SidebarSettingsHelpMenu.tsx:233).
-          .child(row("help", "circle-help", "Help", () => run("app.palette"))));
-      return sidebarFrame(footerBar);
-        // Orca's right cluster holds Reveal active workspace and Workspace board
-        // (SidebarToolbar.tsx:76-112); neither has a Herdr command, so nothing is drawn.
-        // The Herdr-only `+` (Add machine) that sat here is gone: Orca's footer has no plus.
-    }
+    if (props()?.footer) return this.footer(t);
     // TitlebarLeftControls.tsx: with a custom titlebar (Linux/Windows) the row is the logo,
     // then the application-menu button; macOS instead reserves `.titlebar-traffic-light-pad`
     // (80px, main.css:1109-1113) or `pl-2` in full screen (line 62), and never shows the
@@ -104,7 +114,7 @@ export default class WorkspaceChrome extends View {
     if (live) this.win = live;
     const win = live ?? this.win;
     const mac = win ? win.platform === "macos" : Boolean(layout()?.traffic_lights);
-    const leftPad = collapsed ? 6 : mac ? (win?.fullscreen ? 8 : 75) : 10;
+    const leftPad = titlebarPad(collapsed, mac, win);
     return h_flex().size_full().bg(t.chrome).pl(leftPad).pr(10).gap(4).items_center().border_b(1).border_color(t.border).text_size(13.5)
       .when(!collapsed && !mac, el => el.child(h_flex().gap(0).items_center()
         .child(image("frame/welcome/herdr.png").size(16).opacity(0.75))
