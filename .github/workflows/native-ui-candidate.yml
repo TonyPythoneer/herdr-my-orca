@@ -1,0 +1,68 @@
+name: Native UI candidate acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ui-snapshot/**'
+      - '.github/workflows/native-ui-candidate.yml'
+permissions:
+  contents: read
+concurrency:
+  group: native-ui-candidate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  acceptance:
+    name: Expanded native custom UI acceptance
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: target
+          persist-credentials: false
+      - name: Record candidate and prepare evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ui-snapshot"
+          git -C target rev-parse HEAD | tee "$RUNNER_TEMP/ui-snapshot/candidate-sha.txt"
+          printf '%s\n' "${{ github.event.pull_request.head.sha }}" > "$RUNNER_TEMP/ui-snapshot/pr-head-sha.txt"
+          sw_vers > "$RUNNER_TEMP/ui-snapshot/environment.txt"
+          uname -m >> "$RUNNER_TEMP/ui-snapshot/environment.txt"
+      - name: Install official native Herdr
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          curl -fsSL --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/install-app.sh"
+          sh "$RUNNER_TEMP/install-app.sh" 2>&1 | tee "$RUNNER_TEMP/ui-snapshot/install-app.log"
+          if ! test -x "$HOME/.local/bin/herdr-core"; then
+            curl -fsSL --retry 3 https://releases.herdr.dev/core/install.sh -o "$RUNNER_TEMP/install-core.sh"
+            sh "$RUNNER_TEMP/install-core.sh" 2>&1 | tee "$RUNNER_TEMP/ui-snapshot/install-core.log"
+          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check observer tests
+        run: python3 -m unittest discover -s target/ui-snapshot -p 'test_*.py'
+      - name: Observe candidate custom UI
+        run: python3 target/ui-snapshot/capture.py --target target --out "$RUNNER_TEMP/ui-snapshot"
+      - name: Build gallery
+        if: always() && !cancelled()
+        run: python3 target/ui-snapshot/gallery.py --input "$RUNNER_TEMP/ui-snapshot" --output "$RUNNER_TEMP/ui-gallery"
+      - name: Report
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/ui-snapshot/summary.md"; then
+            cat "$RUNNER_TEMP/ui-snapshot/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-native-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ui-snapshot/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always() && !cancelled()
+        with:
+          name: candidate-browser-gallery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ui-gallery/
+          if-no-files-found: error
+          retention-days: 14
