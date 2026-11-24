@@ -49,6 +49,23 @@ def verify_delivery(target, config):
         raise RuntimeError("Incomplete Orca deployment")
     return records
 
+def normalized(text):
+    return " ".join(re.sub(r"[^a-z0-9]+"," ",text.lower()).split())
+
+def visible_matches(rows, text, region=None):
+    """Only accept confident, unambiguous visible text in the requested screen region."""
+    needle=normalized(text)
+    return [r for r in rows if r["confidence"] >= .5 and needle in normalized(r["text"])
+            and (region is None or region[0] <= r["x"] <= region[2] and region[1] <= r["y"] <= region[3])]
+
+def assert_visible(rows, required=(), absent=()):
+    for label in required:
+        if not visible_matches(rows,label):
+            raise RuntimeError("Expected visible text missing: "+label)
+    for label in absent:
+        if visible_matches(rows,label):
+            raise RuntimeError("Unexpected visible text remains: "+label)
+
 def click_errors(log_path, offset):
     """Catch GPUI errors not reflected in native status(), including expired cx."""
     with log_path.open("rb") as stream:
@@ -66,7 +83,7 @@ def seed_safe_tasks(config):
     tasks = [{"id":provider+"-reset-ping","name":label+" reset ping","enabled":False,
               "agent":provider,"trigger":{"type":"reset","provider":provider,"window":"h5","delaySeconds":5},
               "argv":[provider, "ping"],"cwd":None} for provider,label in (("claude","Claude"),("codex","Codex"))]
-    (config/"tasks.json").write_text(json.dumps({"version":1,"tasks":tasks}))
+    (config/"tasks.json").write_text(json.dumps({"version":1,"tasks":tasks},indent=2))
 
 def sha(path):
     return run(["git", "-C", path, "rev-parse", "HEAD"]).strip()
@@ -213,20 +230,64 @@ def main():
                     if isinstance(e, subprocess.CalledProcessError):
                         ax_error += " " + (e.stderr or "")
                     print("AX helper unavailable:", ax_error, flush=True)
-                from scenarios import CASES
-                def mouse(x, y, action="--click"):
+                vision = root/"screen-text"
+                run(["swiftc",Path(__file__).with_name("screen-text.swift"),"-o",vision],timeout=90)
+                from scenarios import CASES, MOD_SCOPE
+                viewport=(1024,681)
+                def dimensions(path):
+                    data=path.read_bytes()
+                    return (int.from_bytes(data[16:20],"big"),int.from_bytes(data[20:24],"big"))
+                def probe():
+                    path=root/"probe.png"
+                    cli("shot",path)
+                    return path
+                def words(path=None):
+                    return json.loads(run([vision,path or probe()],timeout=20))
+                def mouse(x, y, action="--click", extra=()):
                     if ax_error:
                         raise PermissionError(ax_error)
-                    run([ax,str(proc.pid),action,str(x),str(y),"1024","681"],timeout=10)
+                    run([ax,str(proc.pid),action,str(x),str(y),str(viewport[0]),str(viewport[1]),*extra],timeout=10)
                 def park():
-                    mouse(150,530,"--move")
-                    time.sleep(.2)
+                    mouse(min(150,viewport[0]-20),min(530,viewport[1]-50),"--move")
+                    time.sleep(1.0)
                 def dismiss_toast():
                     # The upstream version notification close control is at this
                     # calibrated position, outside all fixture custom controls.
                     # No screenshot is exported during setup.
-                    mouse(988,648)
+                    if viewport == (1024,681):
+                        mouse(988,648)
                     park()
+                def resize(size):
+                    nonlocal viewport
+                    if viewport==size:
+                        return
+                    run([ax,str(proc.pid),"--resize",str(size[0]),str(size[1])],timeout=10)
+                    time.sleep(.7)
+                    viewport=dimensions(probe())
+                    if viewport!=size:
+                        raise RuntimeError("Native viewport did not resize: "+str(viewport))
+                def visible_click(label, region=None, scroll=False, right=False):
+                    # Search the current rendered window; scroll only inside the intended pane.
+                    for attempt in range(4 if scroll else 1):
+                        rows=words()
+                        matches=visible_matches(rows,label,region)
+                        exact=[r for r in matches if normalized(r["text"])==normalized(label)]
+                        if exact:
+                            matches=exact
+                        if len(matches)==1:
+                            p=matches[0]
+                            x,y=round(p["x"]*viewport[0]),round(p["y"]*viewport[1])
+                            mouse(x,y,"--right-click" if right else "--click")
+                            park()
+                            return [x,y]
+                        if len(matches)>1:
+                            raise RuntimeError("Ambiguous visible control: "+label)
+                        if scroll:
+                            x=round(viewport[0]*((region[0]+region[2])/2 if region else .5))
+                            y=round(viewport[1]*((region[1]+region[3])/2 if region else .65))
+                            mouse(x,y,"--scroll",extra=("-420",))
+                            time.sleep(.5)
+                    raise RuntimeError("Visible control not found: "+label)
                 def ensure_workspace():
                     if not status().get("space"):
                         command("space.new",name="Snapshot project",folder=str(fixture))
@@ -234,13 +295,15 @@ def main():
                     if not status().get("space"):
                         raise RuntimeError("Synthetic workspace missing")
                 def recover():
-                    nonlocal proc
+                    nonlocal proc, viewport
                     stop(proc)
                     seed_startup(config, info.get("herdr-appVersion",""))
                     proc=launch()
                     state=wait_ready(proc)
                     if state.get("layout") != "orca" or blocking_overlays(state):
                         raise RuntimeError("Relaunch did not restore clean Orca window")
+                    viewport=dimensions(probe())
+                    resize((1024,681))
                     ensure_workspace()
                     dismiss_toast()
                 def clear():
@@ -262,6 +325,7 @@ def main():
                     command("layout.select", stack=stack, child=child)
                 def setup(case):
                     clear()
+                    resize((1024,681))
                     layout = case.get("layout","orca")
                     if status().get("layout") != layout:
                         command("layout.switch", name=layout)
@@ -282,11 +346,43 @@ def main():
                     if case.get("panel"):
                         select("panel-body",case["panel"])
                     time.sleep(.7)
+                    for action in case.get("prepare",[]):
+                        perform(action)
+                    if case.get("viewport"):
+                        resize(tuple(case["viewport"]))
+                    time.sleep(.7)
                     park()
                     state = status()
-                    if state.get("layout") != layout or blocking_overlays(state) or state.get("errors"):
+                    if state.get("layout") != layout or (blocking_overlays(state) and not case.get("setupOverlay")) or state.get("errors"):
                         raise RuntimeError("Fixture is not an unobstructed custom layout")
+                def perform(action):
+                    kind=action["kind"]
+                    if kind=="text":
+                        return visible_click(action["label"],action.get("region"),action.get("scroll",False),action.get("right",False))
+                    if kind=="mouse":
+                        mouse(*action["xy"],"--right-click" if action.get("right") else "--click")
+                        park()
+                        return list(action["xy"])
+                    if kind=="command":
+                        command(action["name"],**action.get("args",{}))
+                        time.sleep(.7)
+                        return None
+                    if kind=="escape":
+                        run([ax,str(proc.pid),"--escape"],timeout=10)
+                        park()
+                        return None
+                    if kind=="paste":
+                        if action.get("label"):
+                            visible_click(action["label"],action.get("region"),scroll=True)
+                        run([ax,str(proc.pid),"--paste",action["value"]],timeout=10)
+                        park()
+                        return None
+                    raise RuntimeError("Unknown action: "+kind)
                 def interact(row, control):
+                    if control.get("visible"):
+                        row["mode"]="native-mouse-visible-text"
+                        row["clickPoint"]=visible_click(control["label"],control.get("region"),control.get("scroll",False),control.get("right",False))
+                        return
                     if ax_error:
                         raise PermissionError(ax_error)
                     try:
@@ -308,11 +404,14 @@ def main():
                         row["mode"]="native-mouse"
                         row["clickPoint"]=[x,y]
                     park()
+                viewport=dimensions(probe())
+                resize((1024,681))
                 ensure_workspace()
                 dismiss_toast()
                 info["coverage"] = {"repositoryMods":sorted(p.parent.name for p in (target/"mods").glob("*/mod.json")),
                                     "plannedMods":sorted({m for c in CASES for m in c["mods"]}),
-                                    "scope":"Only real interactions with repository mods; no stock UI or native command screenshots."}
+                                    "scope":"Only real interactions with repository mods; no stock UI or native command screenshots.",
+                                    "modScope":MOD_SCOPE}
                 for i,case in enumerate(CASES,1):
                     row = {"id":f"{i:02d}","title":case["title"],"mod":" / ".join(case["mods"]),
                            "mods":case["mods"],"action":case["control"]["label"],"mode":"not-attempted","result":"not-run"}
@@ -321,6 +420,10 @@ def main():
                     try:
                         setup(case)
                         shot(row,"before")
+                        row["viewport"]=list(viewport)
+                        before_state=status()
+                        before_words=words(out/row["images"]["before"]["file"]) if case.get("beforeText") else []
+                        assert_visible(before_words,case.get("beforeText",[]))
                         log_offset = (out/"app.log").stat().st_size
                         interact(row,case["control"])
                         time.sleep(case.get("wait",1.0))
@@ -336,13 +439,46 @@ def main():
                         actual = blocking_overlays(after)
                         if expected and expected not in actual:
                             raise RuntimeError("Expected popup "+expected+"; got "+str(actual))
-                        if not expected and actual and not case.get("popover"):
+                        if not expected and actual and not case.get("popover") and not case.get("setupOverlay"):
                             raise RuntimeError("Unexpected blocking popup "+str(actual))
                         shot(row,"after")
                         if row["images"]["before"]["sha256"] == row["images"]["after"]["sha256"]:
                             raise RuntimeError("No visible change after interaction")
-                        row["verification"]="expected-popup" if expected else "visible-change; manual semantic review required"
-                        if expected or case.get("popover"):
+                        after_words=words(out/row["images"]["after"]["file"]) if case.get("afterText") or case.get("absentText") else []
+                        assert_visible(after_words,case.get("afterText",[]),case.get("absentText",[]))
+                        if case.get("paneChange") and after.get("focused_pane")==before_state.get("focused_pane"):
+                            raise RuntimeError("Expected a new focused pane")
+                        row["verification"]="expected-popup" if expected else ("visible-content" if case.get("afterText") or case.get("absentText") else "visible-change; manual semantic review required")
+                        if case.get("follow"):
+                            row["actions"]=[]
+                            for n,action in enumerate(case["follow"],1):
+                                point=perform(action)
+                                time.sleep(.6)
+                                phase=f'action{n:02d}'
+                                shot(row,phase)
+                                step={"action":action.get("label",action["kind"]),"phase":phase}
+                                if point:
+                                    step["clickPoint"]=point
+                                assert_visible(words(out/row["images"][phase]["file"]),action.get("afterText",[]),action.get("absentText",[]))
+                                if action.get("noOverlay") and blocking_overlays(status()):
+                                    raise RuntimeError("Expected closed dialog after "+step["action"])
+                                row["actions"].append(step)
+                            if case.get("fileAssert"):
+                                check=case["fileAssert"]
+                                value=json.loads((config/check["file"]).read_text())
+                                for key in check["path"]:
+                                    value=value[key]
+                                if value!=check["equals"]:
+                                    raise RuntimeError("Fixture persistence did not match expected value")
+                                row["persistenceVerified"]=True
+                            if case.get("fixtureExists") and not (fixture/case["fixtureExists"]).is_file():
+                                raise RuntimeError("Cancel unexpectedly removed fixture file")
+                            if case.get("closePane"):
+                                if status().get("focused_pane")==after.get("focused_pane"):
+                                    raise RuntimeError("Diff pane still focused after explicit Close diff")
+                                row["closeMode"]="explicit-native-close-button"
+                            row["verification"]="semantic-multi-step"
+                        elif expected or case.get("popover"):
                             run([ax,str(proc.pid),"--escape"],timeout=10)
                             time.sleep(.5)
                             row["escapeClosed"]=not blocking_overlays(status()) if expected else None
@@ -358,6 +494,8 @@ def main():
                             if blocking_overlays(status()):
                                 raise RuntimeError("Popup remained after Escape and outside click")
                             shot(row,"closed")
+                            if case.get("closedAbsent"):
+                                assert_visible(words(out/row["images"]["closed"]["file"]),absent=case["closedAbsent"])
                             if row["images"]["after"]["sha256"] == row["images"]["closed"]["sha256"]:
                                 raise RuntimeError("No visible change on popup dismissal")
                         runtime_errors = click_errors(out/"app.log", log_offset)

@@ -6,10 +6,44 @@ func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
     exit(1)
 }
-guard [3,7].contains(CommandLine.arguments.count),
+guard [3,4,5,7,8].contains(CommandLine.arguments.count),
       let pid = Int32(CommandLine.arguments[1]) else { fail("Usage: ax-press PID LABEL") }
 guard AXIsProcessTrusted() else { fail("macOS Accessibility permission unavailable; no interaction performed") }
 let wanted = CommandLine.arguments[2]
+if wanted == "--resize" {
+    guard CommandLine.arguments.count == 5,
+          let w = Double(CommandLine.arguments[3]), let h = Double(CommandLine.arguments[4]),
+          w >= 800, h >= 550 else { fail("Invalid viewport") }
+    let app = AXUIElementCreateApplication(pid)
+    var raw: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(app,kAXWindowsAttribute as CFString,&raw) == .success,
+          let windows = raw as? [AXUIElement], windows.count == 1 else { fail("Expected one AX window for resize") }
+    var size = CGSize(width:w,height:h)
+    guard let value = AXValueCreate(.cgSize,&size),
+          AXUIElementSetAttributeValue(windows[0], kAXSizeAttribute as CFString, value) == .success
+    else { fail("Native resize failed") }
+    exit(0)
+}
+if wanted == "--paste" {
+    guard CommandLine.arguments.count == 4,
+          let running=NSRunningApplication(processIdentifier:pid) else { fail("Missing paste target") }
+    _ = running.activate(options:[.activateAllWindows,.activateIgnoringOtherApps])
+    Thread.sleep(forTimeInterval:0.2)
+    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { fail("Paste target not foreground") }
+    let board=NSPasteboard.general
+    board.clearContents()
+    guard board.setString(CommandLine.arguments[3],forType:.string) else { fail("Cannot stage fixture text") }
+    for key: CGKeyCode in [0,9] {
+        guard let down=CGEvent(keyboardEventSource:nil,virtualKey:key,keyDown:true),
+              let up=CGEvent(keyboardEventSource:nil,virtualKey:key,keyDown:false) else { fail("Cannot create key event") }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.post(tap:.cghidEventTap)
+        up.post(tap:.cghidEventTap)
+        Thread.sleep(forTimeInterval:0.15)
+    }
+    exit(0)
+}
 if wanted == "--escape" {
     guard let running = NSRunningApplication(processIdentifier: pid) else { fail("Missing target app") }
     _ = running.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
@@ -23,8 +57,8 @@ if wanted == "--escape" {
     print("Native Escape")
     exit(0)
 }
-if ["--click","--right-click","--move"].contains(wanted) {
-    guard CommandLine.arguments.count == 7,
+if ["--click","--right-click","--move","--scroll"].contains(wanted) {
+    guard CommandLine.arguments.count == (wanted == "--scroll" ? 8 : 7),
           let x = Double(CommandLine.arguments[3]), let y = Double(CommandLine.arguments[4]),
           let w = Double(CommandLine.arguments[5]), let h = Double(CommandLine.arguments[6]),
           x >= 0, y >= 0, x < w, y < h,
@@ -53,6 +87,12 @@ if ["--click","--right-click","--move"].contains(wanted) {
     else { fail("Cannot create native mouse events") }
     move.post(tap:.cghidEventTap)
     if wanted == "--move" { exit(0) }
+    if wanted == "--scroll" {
+        guard let amount=Int32(CommandLine.arguments[7]), let event=CGEvent(scrollWheelEvent2Source:nil,units:.pixel,wheelCount:1,wheel1:amount,wheel2:0,wheel3:0) else { fail("Invalid scroll") }
+        event.location=p
+        event.post(tap:.cghidEventTap)
+        exit(0)
+    }
     Thread.sleep(forTimeInterval:0.12)
     down.post(tap:.cghidEventTap)
     Thread.sleep(forTimeInterval:0.08)

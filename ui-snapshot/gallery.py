@@ -29,8 +29,16 @@ def build(source, output):
     if data.get("fatal"):
         lines += ["**Capture stopped before completion.** See full artifact for details.", ""]
     lines += ["## Mod coverage", "", "Observed: "+", ".join(coverage.get("observedMods", [])), "", "Not observed: "+", ".join(coverage.get("unobservedMods", [])), ""]
+    lines += ["## Scope and fixture limitations", ""]
+    for mod,scope in sorted(coverage.get("modScope",{}).items()):
+        lines += [f"- `{mod}`: {scope}"]
+    lines += [""]
     for r in rows:
         lines += [f'## {r["id"]} — {r["mod"]}: {r["title"]}', "", f'**{r["result"]}** · {r["mode"]} · {r.get("verification", "not verified")}', ""]
+        if r.get("viewport"):
+            lines += ["Viewport: "+" × ".join(map(str,r["viewport"])), ""]
+        if r.get("persistenceVerified"):
+            lines += ["Verified synthetic fixture file persisted correctly.", ""]
         if r.get("closeMode"):
             lines += ["Dismissal: "+r["closeMode"], ""]
         if r.get("clickPoint"):
@@ -40,17 +48,19 @@ def build(source, output):
         # Do not publish raw error text, native status, terminal logs, or paths.
         if r["result"] != "captured":
             lines += ["Incomplete operation; consult manifest.json in the full artifact.", ""]
-        for phase in ("before","after","closed","diagnostic"):
+        for phase in ("before","after",*sorted(k for k in r.get("images",{}) if k.startswith("action")),"closed","diagnostic"):
             img = r.get("images",{}).get(phase)
             if not img: continue
             rel = img["file"]
-            if not re.fullmatch(r"screens/\d+-(before|after|closed|diagnostic)\.png",rel):
+            if not re.fullmatch(r"screens/\d+-(before|after|closed|diagnostic|action[0-9]{2})\.png",rel):
                 raise ValueError("Unexpected image path")
             src = source / rel
             if not src.is_file() or src.is_symlink(): raise ValueError("Missing screenshot")
             filename = Path(rel).stem+".jpg"
             subprocess.run(["sips","-Z","1200","-s","format","jpeg","-s","formatOptions","75",str(src),"--out",str(output/filename)],check=True,capture_output=True)
-            lines += [f"**{phase.capitalize()}**", "", f"![{r['title']} — {phase}]({filename})", ""]
+            action=next((a for a in r.get("actions",[]) if a["phase"]==phase),None)
+            label=action["action"] if action else phase.capitalize()
+            lines += [f"**{label}**", "", f"![{r['title']} — {phase}]({filename})", ""]
     (output/"README.md").write_text("\n".join(lines)+"\n")
 
 if __name__ == "__main__":

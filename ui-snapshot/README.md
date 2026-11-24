@@ -23,3 +23,6 @@ Onboarding is seeded before native launch; no native default/startup screenshots
 
 ## Isolation recovery
 Every scenario normalizes its required layout, project and file-search state. A failed click is recorded, then the isolated App is relaunched so subsequent cases are not skipped by the earlier popup. Popup dismissal records actual Escape and outside-click attempts; relaunch is recovery only, never successful dismissal. Calibrated mouse fallback is scoped to the expected 1024x681 foreground window; the two Agents buttons use distinct coordinates. The upstream update toast is dismissed during setup; it is not an observed custom feature. Pointer is parked before evidence capture.
+
+## Deep interaction evidence
+The macOS Vision framework reads text from the actual screenshot to locate unique visible controls and check expected content. No external OCR service or synthetic rendering is used. The suite can scroll a specified pane, resize the native window, paste synthetic JSON, and verify persisted fixture values. All intermediate images correspond to actual actions; no startup/stock screenshots. A preview-only dialog is explicitly distinguished from a live agent workflow. No credentials, real providers or external agent runs are used.

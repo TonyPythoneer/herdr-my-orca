@@ -68,3 +68,14 @@ class NativeLogTests(unittest.TestCase):
                 stream.write(b"WARN unrelated startup warning\n")
             self.assertEqual(len(click_errors(path,offset)),1)
             self.assertIn("cx is no longer valid",click_errors(path,offset)[0])
+
+class VisibleEvidenceTests(unittest.TestCase):
+    def test_visual_evidence_is_scoped_and_not_a_hash_only_check(self):
+        from capture import visible_matches,assert_visible
+        rows=[{"text":"Close diff","confidence":.95,"x":.64,"y":.12},
+              {"text":"Close diff","confidence":.9,"x":.9,"y":.9}]
+        self.assertEqual(len(visible_matches(rows,"Close diff",[.4,0,.7,.2])),1)
+        with self.assertRaises(RuntimeError):
+            assert_visible(rows,absent=["Close diff"])
+        with self.assertRaises(RuntimeError):
+            assert_visible(rows,required=["Save"])
