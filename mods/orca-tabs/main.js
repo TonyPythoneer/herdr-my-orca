@@ -7,7 +7,7 @@ import { selectTabPanes } from "./tab-panes.js";
 import { edgeZone } from "./drop-zone.js";
 import { sidebarEase } from "./sidebar-motion.js";
 import { Drawer } from "./drawer.js";
-import { settingsPillLeft, settingsReturnPage } from "./agent-settings-route.js";
+import { settingsPillLeft, settingsReturnPage, settingsSidebarPlan, settingsHoldPx } from "./agent-settings-route.js";
 import { stripLeadingAgentTitleDecoration } from "./tab-title.js";
 import { TAB_STRIP_SLIDE_MS } from "./tab-item.js";
 import { addSidebarToggle, addTabTrack, addEndControls } from "./header-controls.js";
@@ -75,7 +75,7 @@ function trafficLightPadding(root, w, sidebar, unified) {
     : 0;
 }
 
-const sidebarHiddenNow = () => Boolean(find(layout(), "sidebar")?.hidden);
+const sidebarHiddenNow = () => Boolean(find(layout(), "left-sidebar")?.hidden);
 
 // How long a sidebar motion takes: longer the farther it goes, with a floor for a nudge.
 function sidebarMotionMs(distance) {
@@ -137,14 +137,14 @@ function dropTrace(event, detail) {
   writeTextFile(path, JSON.stringify({ event, detail }, null, 1), null).catch(() => { /* Diagnostic output is best effort. */ });
 }
 
-// The tab column's rect, measured rather than assumed: the layout (this package's `orca` layout) sets `sidebar` to
+// The tab column's rect, measured rather than assumed: the layout (this package's `orca` layout) sets `left-sidebar` to
 // 280px and `status` to 24px, the strip reports its own top and height, and the rest is the
 // viewport. A hidden rail contributes nothing (its node is skipped, `layout.rs:551`).
 function panelRect(top, stripHeight) {
   const vp = typeof window !== "undefined" ? window.viewport_size() : null;
   if (!vp) return null;
   const root = layout();
-  const sidebar = find(root, "sidebar"), panel = find(root, "panel");
+  const sidebar = find(root, "left-sidebar"), panel = find(root, "panel");
   const zoom = settings()?.zoom || 1;
   const left = scaledWidth(sidebar, 280, zoom);
   const right = scaledWidth(panel, 350, zoom);
@@ -390,9 +390,9 @@ export default class Tabs extends View {
     this.nativeHeaderWidth = 0;
     this.drawers = {
       sidebar: new Drawer({
-        id: "sidebar", defaultOpen: 259, measure: "measureSidebar",
+        id: "left-sidebar", defaultOpen: 259, measure: "measureSidebar",
         pin: () => (props()?.pinSidebarTerminal && !this.nativePinned && this.nativeHeaderWidth > 0 ? this.nativeHeaderWidth / (settings()?.zoom || 1) : null),
-        after: (target) => setShared("sidebar.collapsed", target === 0),
+        after: (target) => setShared("left-sidebar.collapsed", target === 0),
       }),
       // Size the PTY for the open panel before moving the panel, and hold that width during motion.
       panel: new Drawer({
@@ -400,7 +400,7 @@ export default class Tabs extends View {
         pin: (open) => {
           if (!(this.nativeHeaderWidth > 0)) return null;
           const root = layout();
-          const sb = find(root, "sidebar"), panel = find(root, "panel");
+          const sb = find(root, "left-sidebar"), panel = find(root, "panel");
           const sidebarWidth = visibleSize(sb, 0);
           const panelWidth = visibleSize(panel, 0);
           return Math.max(1, this.nativeHeaderWidth / (settings()?.zoom || 1) + panelWidth - open - sidebarWidth);
@@ -505,6 +505,10 @@ export default class Tabs extends View {
         const command = await nextCommand();
         if (command === "new-tab") {
           run("tab.new", newTabArgs(spaces().find((s) => s.active)));
+          continue;
+        }
+        if (command === "agent-settings") {
+          this.requestSettingsPage("main-agents", taskCx);
           continue;
         }
         if (!props()?.unified) continue;
@@ -662,16 +666,19 @@ export default class Tabs extends View {
   toggleSidebar(cx) {
     // Only the unified layout has the header clock and the content frames, so anywhere else keeps
     // the plain toggle `keys.json` used to call.
-    if (!props()?.unified) return run("layout.toggle", { id: "sidebar" });
+    if (!props()?.unified) return run("layout.toggle", { id: "left-sidebar" });
     if (props()?.motion === "native") return this.toggleSidebarNative(cx);
-    const drawer = this.drawers.sidebar;
-    const plan = sidebarPlan(drawer, find(layout(), "sidebar"));
-    const token = ++drawer.token;
-    drawer.busy = true; drawer.goal = plan.target;
-    cx.spawn((taskCx) => this.runSidebarMotion(taskCx, token, plan));
+    this.startSidebarMotion(cx, sidebarPlan(this.drawers.sidebar, find(layout(), "left-sidebar")));
   }
 
-  async runSidebarMotion(cx, token, { open, target, from }) {
+  startSidebarMotion(cx, plan, onFinish) {
+    const drawer = this.drawers.sidebar;
+    const token = ++drawer.token;
+    drawer.busy = true; drawer.goal = plan.target;
+    cx.spawn((taskCx) => this.runSidebarMotion(taskCx, token, plan, onFinish));
+  }
+
+  async runSidebarMotion(cx, token, { open, target, from }, onFinish) {
     const drawer = this.drawers.sidebar;
     await cx.sleep(LEAVE_RENDER_MS); // leave the render phase: notify() is only legal from a task
     if (token !== drawer.token) return;
@@ -681,12 +688,16 @@ export default class Tabs extends View {
     if (!(await this.stepSidebar(cx, token, motion))) return;
     if (motion.samples) writeTextFile(`/tmp/sidebar-motion-${motion.t0}.json`, JSON.stringify({ motion: motion.kind, open, target, dur, samples: motion.samples }), null).catch(() => { /* Diagnostic output is best effort. */ });
     if (target === 0) {
-      run("layout.hide", { id: "sidebar" });
+      run("layout.hide", { id: "left-sidebar" });
       await cx.sleep(SIDEBAR_HIDE_SETTLE_MS);
       if (token !== drawer.token) return;
+      if (onFinish) run("layout.resize", { id: "left-sidebar", px: open });
     }
-    run("layout.resize", { id: "sidebar", px: open });
-    setShared("sidebar.collapsed", target === 0);
+    if (onFinish) onFinish();
+    else {
+      run("layout.resize", { id: "left-sidebar", px: open });
+      setShared("left-sidebar.collapsed", target === 0);
+    }
     drawer.busy = false; drawer.goal = undefined;
     cx.notify();
   }
@@ -695,12 +706,12 @@ export default class Tabs extends View {
   // preamble of an expand (show not yet applied), and `hidden` above may be a frame stale.
   // False when a newer press took over while this one waited.
   async showSidebarFromHidden(cx, token, target) {
-    if (target !== 1 || !sidebarHiddenNow()) return true;
+    if (target <= 0 || !sidebarHiddenNow()) return true;
     const drawer = this.drawers.sidebar;
-    run("layout.resize", { id: "sidebar", px: 1 });
+    run("layout.resize", { id: "left-sidebar", px: 1 });
     await cx.sleep(SIDEBAR_RESIZE_SETTLE_MS);
     if (token !== drawer.token) return false;
-    run("layout.show", { id: "sidebar" });
+    run("layout.show", { id: "left-sidebar" });
     await cx.sleep(SIDEBAR_SHOW_SETTLE_MS);
     return token === drawer.token;
   }
@@ -717,8 +728,8 @@ export default class Tabs extends View {
       if (px !== lastPx) { // each resize repaints the terminals, so never send one that changes nothing
         lastPx = px;
         if (samples) samples.push({ ms: Date.now() - t0, px });
-        run("layout.resize", { id: "sidebar", px });
-        if (target === 1 && sidebarHiddenNow()) run("layout.show", { id: "sidebar" }); // the hide of a reversed collapse landed late
+        run("layout.resize", { id: "left-sidebar", px });
+        if (target > 0 && sidebarHiddenNow()) run("layout.show", { id: "left-sidebar" }); // the hide of a reversed collapse landed late
         cx.notify();
       }
       if (k >= 1) return true;
@@ -1065,10 +1076,11 @@ export default class Tabs extends View {
   }
 
   syncSidebarToggle(cx, sidebar, unified) {
+    if (shared("left-sidebar.settingsPrior")) return;
     if (takeToggle(this, "wantToggle")) this.toggleSidebar(cx);
     if (unified && !this.drawers.sidebar.busy && !sidebar?.hidden && (sidebar?.size?.px ?? 0) >= DRAWER_MIN_OPEN_PX && this.drawers.sidebar.openPx !== sidebar.size.px) {
       this.drawers.sidebar.openPx = sidebar.size.px;
-      setShared("sidebar.openPx", this.drawers.sidebar.openPx);
+      setShared("left-sidebar.openPx", this.drawers.sidebar.openPx);
     }
   }
 
@@ -1106,16 +1118,13 @@ export default class Tabs extends View {
     cx.notify();
   }
 
-  headerSurface({ unified, leftPad, bar, panel, zoomK }) {
+  headerSurface(header, { unified, panel, zoomK }) {
     // `.titlebar`: 36px, border-bottom var(--border), background var(--card) #171717
     // (main.css:1072-1084). Tabs sit flush to each edge of that bar.
     // The Explorer / Source Control activity buttons are NOT here: Orca renders its activity
     // bar only inside the right sidebar (`right-sidebar-top-activity-bar.tsx:40`), which
     // `orca-panel-head` owns. Drawing them twice put two strip icons in the titlebar corner.
-    return h_flex().size_full().min_w(0).pl(leftPad).gap(0).items_center().bg(bar)
-      .when(unified && props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
-      .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.sidebar.clockPx).transition("width", { duration: 500, easing: "ease-in-out" })
-        .on_size_change((size, cx) => this.drawers.sidebar.size(size, cx, this.drawerEnv()))))
+    return header
       .when(unified, el => el.relative().child(div().id("panel-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.panel.clockPx ?? (panel?.hidden ? 1 : (panel?.size?.px ?? 350)) / zoomK).transition("width", { duration: 500, easing: "ease-in-out" })
         .on_size_change((size, cx) => this.drawers.panel.size(size, cx, this.drawerEnv()))))
       .on_mouse_move((e, cx) => {
@@ -1124,6 +1133,13 @@ export default class Tabs extends View {
         }
       })
       .on_mouse_up("left", (_e, cx) => this.releaseStrip(cx));
+  }
+
+  sidebarClock(header, unified) {
+    return header
+      .when(unified && props()?.pinSidebarTerminal, el => el.on_size_change(size => { this.nativeHeaderWidth = size.width; }))
+      .when(unified && props()?.motion === "native", el => el.relative().child(div().id("sidebar-native-clock").absolute().left(0).top(0).h(1).w(this.drawers.sidebar.clockPx).transition("width", { duration: 500, easing: "ease-in-out" })
+        .on_size_change((size, cx) => this.drawers.sidebar.size(size, cx, this.drawerEnv()))));
   }
 
   render(cx) {
@@ -1137,27 +1153,134 @@ export default class Tabs extends View {
 
     const unified = Boolean(p?.unified);
     const currentPage = find(layout(), "main")?.active;
-    if (currentPage === "main-agents") return this.settingsHeader(unified);
-    if (currentPage) this.lastAppPage = currentPage;
-    this.applyTabAction(cx);
-    const frame = this.stripFrame(cx, Boolean(p?.unified));
-    const row = addSidebarToggle(this.headerSurface(frame), this, frame);
+    if (this.settingsPageRequest?.page === currentPage) this.settingsPageRequest = null;
+    const requestedPage = this.settingsPageRequest?.page ?? currentPage;
+    this.syncSettingsSidebar(cx, requestedPage === "main-agents", unified);
+    if (requestedPage === "main-agents") this.closePanelForSettings(cx, unified);
+    let frame;
+    if (currentPage === "main-agents") {
+      // The strip is not drawn here, so nothing would consume a sidebar or panel key pressed on this page;
+      // left queued, it would fire after Back.
+      this.wantToggle = this.wantPanelToggle = 0;
+    } else {
+      if (currentPage) this.lastAppPage = currentPage;
+      this.applyTabAction(cx);
+      frame = this.stripFrame(cx, unified);
+    }
+    // The native clock is the first child of the same root on both pages.
+    const base = h_flex().size_full().min_w(0);
+    if (frame) base.pl(frame.leftPad).gap(0).items_center().bg(frame.bar);
+    const header = this.sidebarClock(base, unified);
+    if (!frame) return this.settingsHeader(header, unified);
+    const row = addSidebarToggle(this.headerSurface(header, frame), this, frame);
     return addEndControls(addTabTrack(row, this, frame), this, frame);
   }
 
-  settingsHeader(unified) {
+  requestSettingsPage(page, cx) {
+    this.settingsPageRequest = { page, sent: false };
+    cx.notify();
+  }
+
+  // Agent Settings has no right sidebar. Called on every render while it is requested, so the `busy`
+  // guard stops a second call from flipping the Drawer back open.
+  closePanelForSettings(cx, unified) {
+    const panel = find(layout(), "panel");
+    if (!panel || panel.hidden || this.drawers.panel.busy) return;
+    if (unified) this.togglePanelNative(cx);
+    else run("layout.hide", { id: "panel" });
+  }
+
+  selectRequestedSettingsPage() {
+    const request = this.settingsPageRequest;
+    if (!request || request.sent) return;
+    request.sent = true;
+    run("layout.select", { stack: "main", child: request.page });
+  }
+
+  syncSettingsSidebar(cx, open, unified) {
+    const root = layout();
+    const sidebar = find(root, "left-sidebar");
+    const prior = shared("left-sidebar.settingsPrior");
+    const drawer = this.drawers.sidebar;
+    const wide = shared("left-sidebar.openPx") || drawer.openPx || drawer.defaultOpen;
+    const plan = settingsSidebarPlan({ open, unified, prior, sidebar, busy: drawer.busy, zoom: settings()?.zoom || 1, wide });
+    if (!plan) {
+      if (!drawer.busy) {
+        if (open && prior && !sidebar?.hidden) this.showSettingsNav(false);
+        this.selectRequestedSettingsPage();
+        if (shared("left-sidebar.settingsAnchor")) setShared("left-sidebar.settingsAnchor", null);
+      }
+      return;
+    }
+    if (open && plan.flag !== prior) setShared("left-sidebar.settingsPrior", plan.flag);
+    const collapsed = Boolean(sidebar && (sidebar.hidden || sidebar.size?.px <= 2));
+    // Keep Projects and Search in their existing frame until it has faded at the narrow end.
+    if (!open || collapsed) this.showSettingsNav(!open);
+    const finish = () => {
+      if (open) this.showSettingsNav(false);
+      else setShared("left-sidebar.settingsPrior", null);
+      this.selectRequestedSettingsPage();
+      if (shared("left-sidebar.settingsAnchor")) setShared("left-sidebar.settingsAnchor", null);
+    };
+    if (plan.resize == null) {
+      if (open ? collapsed : prior.hidden && !sidebar?.hidden) {
+        run(open ? "layout.show" : "layout.hide", { id: "left-sidebar" });
+        setShared("left-sidebar.collapsed", !open);
+      }
+      return finish();
+    }
+    const restore = (open ? plan.flag : prior).px ?? wide;
+    drawer.openPx = restore;
+    if (shared("left-sidebar.openPx") !== restore) setShared("left-sidebar.openPx", restore);
+    if (plan.resize === 0 && sidebar?.hidden) return finish();
+    const from = sidebar?.hidden ? 1 : (sidebar?.size?.px ?? restore);
+    if (!sidebar?.hidden && from === plan.resize) return finish();
+    const target = plan.resize / restore;
+    if (props()?.motion === "native") {
+      const zoom = settings()?.zoom || 1;
+      // The tabs block spans the left column; the right panel is already excluded.
+      const full = this.nativeHeaderWidth / zoom;
+      const current = visibleSize(sidebar, 0);
+      const left = open ? plan.resize : current;
+      const width = settingsHoldPx({ full, sidebar: left });
+      if (width != null) setShared("left-sidebar.settingsAnchor", { left, width });
+      const hold = props()?.pinSidebarTerminal && !this.nativePinned
+        ? settingsHoldPx({ full, sidebar: open ? left : Math.min(current, plan.resize) }) : null;
+      drawer.clockPx = from / zoom;
+      drawer.move(cx, this.drawerEnv(), {
+        node: sidebar, open: restore, target, pin: hold,
+        before: open && this.settingsPageRequest ? () => this.selectRequestedSettingsPage() : undefined,
+        after: finish,
+      });
+    } else {
+      this.startSidebarMotion(cx, { open: restore, target, from: from / restore }, () => {
+        setShared("left-sidebar.collapsed", target === 0);
+        finish();
+      });
+    }
+  }
+
+  showSettingsNav(show) {
+    const nav = find(layout(), "nav-top");
+    // `layout()` can still show the old state in the next render; ask once per direction.
+    if (!nav || Boolean(nav.hidden) !== show || this.navAsked === show) return;
+    this.navAsked = show;
+    run(show ? "layout.show" : "layout.hide", { id: nav.id });
+  }
+
+  settingsHeader(header, unified) {
     const t = theme();
     const desiredLeft = this.settingsPillPosition(unified);
     const back = this.settingsBack(t);
     const w = appWindow() ?? this.windowState ?? {};
-    return h_flex().id("agent-settings-titlebar").size_full().relative().items_center().justify_center().bg(t.surface)
+    return header.relative().items_center().justify_center().bg(t.surface)
       .child(desiredLeft == null ? back : div().absolute().left(desiredLeft).top(3).child(back))
       .when(w.platform && w.platform !== "macos", el => el.child(this.settingsWindowControls(w, t)));
   }
 
   settingsPillPosition(unified) {
     const root = layout();
-    const sidebar = find(root, "sidebar"), panel = find(root, "panel");
+    const sidebar = find(root, "left-sidebar"), panel = find(root, "panel");
     const zoom = settings()?.zoom || 1;
     const vp = typeof window !== "undefined" ? window.viewport_size() : null;
     const left = unified ? 0 : this.settingsRailWidth(sidebar, 280, zoom);
@@ -1180,8 +1303,7 @@ export default class Tabs extends View {
         const active = (spaces() ?? []).find(s => s.active);
         const target = settingsReturnPage(previous, find(layout(), "main")?.children, active);
         this.landing = active?.tabs?.length ? "main-terminals" : "main-landing";
-        run("layout.select", { stack: "main", child: target });
-        eventCx.notify();
+        this.requestSettingsPage(target, eventCx);
       })
       .child(svg("mods/orca-tabs/chevron-left.svg").size(13))
       .child(div().text_size(12).child("Back to app"));
@@ -1220,7 +1342,7 @@ export default class Tabs extends View {
     // position of the active tab (which is where a newly selected tab is also revealed).
     const geometry = this.stripGeometry(shown);
     const root = layout();
-    const sidebar = find(root, "sidebar");
+    const sidebar = find(root, "left-sidebar");
     if (unified) this.recoverMainWidth(root, cx);
     const w = this.currentWindow();
     this.updateGlide(unified, sidebar, w, cx);

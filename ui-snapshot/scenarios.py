@@ -68,11 +68,11 @@ CASES = [
     case("Source Control: open and explicitly close diff","orca-changes orca-diff","example.js",(749,178),panel="changes",afterText=["Unstaged","orca-diff"],paneChange=True,closePane=True,follow=[
         mouse(650,82,afterText=["Changes","example.js"],absentText=["orca-diff","Unstaged"]) ]),
     case("Agent history tab","orca-panel-head orca-agents","Agents",(731,16),mouse_only=True,afterText=["Agent Session History"]),
-    case("Agent manager footer","orca-chrome orca-agent-manager","Agents",(20,645),mouse_only=True,afterText=["Global Agent Settings"]),
-    case("Model providers footer","orca-chrome orca-agent-manager","Model providers",(48,645),afterText=["Model providers"]),
+    case("Agent manager footer","orca-chrome orca-agent-manager","Agents",(17,671),mouse_only=True,afterText=["Global Agent Settings"]),
+    case("Model providers footer","orca-chrome orca-agent-manager","Model providers",(43,671),afterText=["Model providers"]),
     case("Agent manager: global permissions dropdown","orca-agent-manager",PERM,visible=True,region=DETAIL,page="main-agents",popover=True,afterText=["Ask for approval","Approve for me"],closedAbsent=["Approve for me"]),
     case("Agent manager: provider editor","orca-agent-manager","Add provider",(477,182),page="main-providers",afterText=["API key"]),
-    case("Task management footer","orca-chrome orca-tasks","Tasks",(76,645),afterText=["Task management"]),
+    case("Task management footer","orca-chrome orca-tasks","Tasks",(69,671),afterText=["Task management"]),
     case("Task management: JSON editor","orca-tasks","Edit JSON",(612,271),page="main-tasks",afterText=["Close JSON","Save","Cancel"],follow=[
         text("Cancel",MAIN,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]) ]),
     case("Task management: back to terminals","orca-tasks","Back to terminals",(318,68),page="main-tasks",absentText=["Task management"]),

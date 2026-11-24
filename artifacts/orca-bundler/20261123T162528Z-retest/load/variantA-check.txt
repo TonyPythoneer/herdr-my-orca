@@ -1,7 +1,0 @@
-+ env -i ... Herdr check /private/tmp/claude-501/rt-fTWP/mods/orca-panel-gap  (variant A, no indent)
-ORCA_PROBE_L
-    at <anonymous> (/private/tmp/claude-501/rt-fTWP/mods/orca-panel-gap/main.js?v=1:14:11)
-
-
-check failed: /private/tmp/claude-501/rt-fTWP/mods/orca-panel-gap
-exit=1

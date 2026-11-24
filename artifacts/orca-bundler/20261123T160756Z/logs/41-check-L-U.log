@@ -1,8 +1,0 @@
-cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
-cmd: env herdr-app check /private/tmp/claude-501/orca-bundler.X7bUqY/chk/LU
-ORCA_PROBE_L
-    at <anonymous> (/private/tmp/claude-501/orca-bundler.X7bUqY/chk/LU/main.js?v=1:27:11)
-
-
-check failed: /private/tmp/claude-501/orca-bundler.X7bUqY/chk/LU
-exit: 1

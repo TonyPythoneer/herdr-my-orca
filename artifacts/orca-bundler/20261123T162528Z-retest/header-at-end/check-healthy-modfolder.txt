@@ -1,3 +1,0 @@
-== HEALTHY check (mod folder) ==
-check passed: /private/tmp/claude-501/rt-QvSR/healthy/mods/orca-panel-gap
-exit=0

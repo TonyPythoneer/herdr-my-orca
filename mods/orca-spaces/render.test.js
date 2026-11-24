@@ -169,7 +169,7 @@ function bodyCases() {
       shared: { storage: storage(), shared: { 'spaces.unread.v1': ['a'], 'space.colors': {}, 'projects.count': 1, 'projects.allCollapsed': true } },
       collapsed: { storage: storage({ 'repos.folded': JSON.stringify([gitFor(a).repo]) }) },
       ungrouped: { storage: storage({ 'workspace.options.v1': JSON.stringify({ groupBy: 'workspace-status' }) }) },
-      narrow: { storage: storage(), shared: { 'sidebar.openPx': 240 }, layout: { id: 'sidebar', size: { px: 100 } } },
+      narrow: { storage: storage(), shared: { 'left-sidebar.openPx': 240 }, layout: { id: 'left-sidebar', size: { px: 100 } } },
       newMenu: { storage: storage(), props: { newMenu: true } },
     })) {
       const { view, cx } = liveView({ ...base, ...env, props: { unified, ...env.props }, state: { loaded: true, ...env.state } });

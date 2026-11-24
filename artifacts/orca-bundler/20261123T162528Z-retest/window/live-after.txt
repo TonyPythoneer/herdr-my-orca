@@ -1,5 +1,0 @@
-  PID STARTED                      COMMAND
-84630 Mon 23 Nov 11:26:17 2026     /Users/tonyyang/.local/bin/herdr-core --hc-launchd /tmp/hc-launchd-84430-17
-86842 Tue 24 Nov 00:22:56 2026     /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr
-86847 Tue 24 Nov 00:22:56 2026     /Users/tonyyang/.local/bin/herdr-core connect
-90861 Mon 23 Nov 11:28:21 2026     /Users/tonyyang/.local/share/herdr-core/active/Herdr Core.app/Contents/MacO

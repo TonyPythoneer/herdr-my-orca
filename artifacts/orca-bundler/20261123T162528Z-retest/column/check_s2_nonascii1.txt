@@ -1,6 +1,0 @@
-X
-    at <anonymous> (/private/tmp/claude-501/rt-iwBr/s2_nonascii1/main.js?v=1:3:31)
-
-
-check failed: /private/tmp/claude-501/rt-iwBr/s2_nonascii1
-exit=1

@@ -1,9 +1,0 @@
-$ ls -la /private/tmp/claude-501/rt-IFDF/mods/probe-ext
-total 1632
-drwxr-xr-x@ 6 tonyyang  wheel     192 24 Nov 00:25 .
-drwxr-xr-x@ 3 tonyyang  wheel      96 24 Nov 00:25 ..
--rw-r--r--@ 1 tonyyang  wheel  820731 24 Nov 00:25 gpui-kit.d.ts
--rw-r--r--@ 1 tonyyang  wheel    1397 24 Nov 00:25 jsconfig.json
--rw-r--r--@ 1 tonyyang  wheel     205 24 Nov 00:25 main.js
--rw-r--r--@ 1 tonyyang  wheel      20 24 Nov 00:25 mod.json
-exit=0

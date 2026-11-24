@@ -1,1 +1,0 @@
-env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=/private/tmp/claude-501/rt-NLl4/home HERDR_TELEMETRY=0 /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr check /private/tmp/claude-501/rt-NLl4/mods/orca-panel-gap

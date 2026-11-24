@@ -86,7 +86,10 @@ export const inPlace = [
       "tab: deep link tab.new {mod:orca-agent-manager, props:{expand}}"
     ],
     "shared": [
-      "agent-manager.inventory"
+      "agent-manager.inventory",
+      "agent-manager.selected",
+      "agent-manager.open-agent",
+      "agent-manager.toggle-agent"
     ],
     "tests": [
       "mods/orca-agent-manager/agent-rail.test.js",
@@ -98,7 +101,6 @@ export const inPlace = [
       "mods/orca-agent-manager/permissions.flow.test.js",
       "mods/orca-agent-manager/permissions.test.js",
       "mods/orca-agent-manager/provider.flow.test.js",
-      "mods/orca-agent-manager/rail-view.test.js",
       "mods/orca-agent-manager/render.test.js",
       "mods/orca-agent-manager/state.test.js",
       "mods/orca-agent-manager/util.test.js"
@@ -164,13 +166,13 @@ export const inPlace = [
   {
     "mod": "orca-chrome",
     "area": "sidebar-left",
-    "description": "Sidebar top bar with collapse toggle; footer with Agents, Tasks, Settings and Help rows.",
+    "description": "Sidebar top bar with collapse toggle; the status bar's leftmost footer with Agents, Tasks, Settings and Help buttons.",
     "layouts": [
       "orca#brand",
-      "orca#sidebar-footer",
-      "orca-unified#sidebar-footer"
+      "orca#status-footer",
+      "orca-unified#status-footer"
     ],
-    "props": "footer:true (both); unified:true on the unified footer; brand node is orca-only",
+    "props": "footer:true (both); brand node is orca-only",
     "opens": [
       "layout.select",
       "app.settings",
@@ -178,8 +180,8 @@ export const inPlace = [
       "mod.open:picker"
     ],
     "shared": [
-      "sidebar.collapsed",
-      "sidebar.openPx",
+      "left-sidebar.collapsed",
+      "left-sidebar.openPx",
       "tasks.config",
       "tasks.text",
       "tasks.state",
@@ -405,7 +407,7 @@ export const inPlace = [
       "overlay:popup props.navMenu=workspace-options"
     ],
     "shared": [
-      "sidebar.openPx",
+      "left-sidebar.openPx",
       "projects.allCollapsed",
       "projects.count"
     ],
@@ -522,11 +524,17 @@ export const inPlace = [
       "projects.allCollapsed",
       "projects.count",
       "orca-spaces.forget",
-      "pr.cache.v2"
+      "pr.cache.v2",
+      "agent-manager.inventory",
+      "agent-manager.selected",
+      "agent-manager.open-agent",
+      "agent-manager.toggle-agent"
     ],
     "tests": [
+      "mods/orca-spaces/agent-rail.test.js",
       "mods/orca-spaces/card-agents.test.js",
       "mods/orca-spaces/git-refresh.test.js",
+      "mods/orca-spaces/left-sidebar-agents.test.js",
       "mods/orca-spaces/render.test.js",
       "mods/orca-spaces/retained-row.test.js",
       "mods/orca-spaces/review-store.test.js",
@@ -565,12 +573,35 @@ export const inPlace = [
     ]
   },
   {
+    "mod": "orca-ports",
+    "area": "status",
+    "description": "Bottom bar plug button: counts the listening ports the open spaces own and opens the Ports popover.",
+    "layouts": [
+      "orca#status-ports",
+      "orca-unified#status-ports"
+    ],
+    "opens": [
+      "space.select",
+      "overlay:popup"
+    ],
+    "reachedBy": [
+      "command:open"
+    ],
+    "shared": [
+      "orca-ports.scan",
+      "orca-ports.overlay"
+    ],
+    "tests": [
+      "mods/orca-ports/scan.test.js"
+    ]
+  },
+  {
     "mod": "orca-status",
     "area": "status",
     "description": "Bottom status bar: provider usage, maintenance segments, float toggle, updates.",
     "layouts": [
-      "orca#status",
-      "orca-unified#status"
+      "orca#status-bar",
+      "orca-unified#status-bar"
     ],
     "opens": [
       "orca-float.toggle",
@@ -633,8 +664,8 @@ export const inPlace = [
       "orca-tabs.drop",
       "orca-tabs.action",
       "orca-tabs.pane-drag",
-      "sidebar.collapsed",
-      "sidebar.openPx",
+      "left-sidebar.collapsed",
+      "left-sidebar.openPx",
       "panel.openPx"
     ],
     "tests": [

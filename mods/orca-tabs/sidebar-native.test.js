@@ -14,7 +14,7 @@ test("native motion deduplicates widths and cancels a stale hide", async () => {
   const cx = cxOf(tasks);
   d.size({ width: 100 }, cx, tabs.drawerEnv());
   d.size({ width: 100 }, cx, tabs.drawerEnv());
-  assert.deepEqual(calls, [["layout.resize", { id: "sidebar", px: 100 }]]);
+  assert.deepEqual(calls, [["layout.resize", { id: "left-sidebar", px: 100 }]]);
   d.size({ width: 1 }, cx, tabs.drawerEnv());
   assert.equal(tasks.length, 1);
   d.token++;
@@ -27,7 +27,7 @@ test("native motion pins the terminal and restores its flexible width", async ()
   const calls = [], tasks = [];
   globalThis.__herdrRun = (name, args) => calls.push([name, args]);
   globalThis.__herdrProps = () => ({ pinSidebarTerminal: true });
-  globalThis.__herdrLayout = () => ({ id: "sidebar", size: { px: 259 }, hidden: false });
+  globalThis.__herdrLayout = () => ({ id: "left-sidebar", size: { px: 259 }, hidden: false });
   const tabs = new Tabs(); tabs.initDrawers();
   Object.assign(tabs.drawers.sidebar, { openPx: 259 });
   tabs.nativeHeaderWidth = 1000;
@@ -47,7 +47,7 @@ test("native motion pins the terminal and restores its flexible width", async ()
 test("closing the right panel hides it before restoring flexible terminal width", async () => {
   const calls = [], tasks = [];
   globalThis.__herdrRun = (name, args) => calls.push([name, args]);
-  globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px: 350 }, hidden: false }, { id: "sidebar", size: { px: 259 }, hidden: false }] });
+  globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px: 350 }, hidden: false }, { id: "left-sidebar", size: { px: 259 }, hidden: false }] });
   const tabs = new Tabs(); tabs.initDrawers();
   Object.assign(tabs.drawers.panel, { openPx: 350 });
   tabs.drawers.sidebar.busy = true;
@@ -80,7 +80,7 @@ test("right panel pins the terminal at its open width before showing the panel",
   globalThis.__herdrRun = (name, args) => calls.push([name, args]);
   globalThis.__herdrLayout = () => ({ children: [
     { id: "panel", size: { px: 410 }, hidden: true },
-    { id: "sidebar", size: { px: 259 }, hidden: false },
+    { id: "left-sidebar", size: { px: 259 }, hidden: false },
   ] });
   t.after(() => {
     delete globalThis.__herdrRun;
@@ -96,4 +96,55 @@ test("right panel pins the terminal at its open width before showing the panel",
     ["layout.resize", { id: "panel", px: 1 }],
     ["layout.show", { id: "panel" }],
   ]);
+});
+
+test("a move with its own hold width pins main at exactly that width, once, and lets go at the end", async () => {
+  const calls = [], tasks = [];
+  globalThis.__herdrRun = (name, args) => calls.push([name, args]);
+  globalThis.__herdrLayout = () => ({ id: "left-sidebar", size: { px: 280 }, hidden: false });
+  try {
+    const tabs = new Tabs(); tabs.initDrawers();
+    const d = tabs.drawers.sidebar, pins = [], released = [];
+    d.openPx = 280; // the caller sets it before every move
+    const env = { ...tabs.drawerEnv(), pin: px => pins.push(px), release: () => released.push(true) };
+    const cx = { spawn: fn => tasks.push(fn), sleep: async () => {}, notify() {} };
+    d.move(cx, env, { node: { id: "left-sidebar", size: { px: 280 } }, open: 280, target: 76 / 280, timed: true, pin: 1317 });
+    await tasks[0](cx);
+    assert.deepEqual(pins, [1317]);
+    d.size({ width: 76 }, cx, env);
+    await tasks.at(-1)(cx);
+    assert.deepEqual(released, [true]);
+    // Without an override the spec decides (no header measured: nothing is held).
+    pins.length = 0; tasks.length = 0;
+    d.move(cx, env, { node: { id: "left-sidebar", size: { px: 280 } }, open: 280, target: 0.5, timed: true });
+    await tasks[0](cx);
+    assert.deepEqual(pins, []);
+  } finally {
+    delete globalThis.__herdrRun; delete globalThis.__herdrLayout;
+  }
+});
+
+test("entering agent settings closes a visible right panel once, and only when it is visible", () => {
+  const calls = [], tasks = [];
+  globalThis.__herdrRun = (name, args) => calls.push([name, args]);
+  const tabs = new Tabs(); tabs.initDrawers();
+  const cx = cxOf(tasks);
+  const panel = (hidden) => globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px: 350 }, hidden }] });
+  try {
+    panel(false);
+    tabs.closePanelForSettings(cx, true);
+    tabs.closePanelForSettings(cx, true); // a repeat render while the Drawer moves must not flip it back
+    assert.equal(tasks.length, 1);
+    assert.equal(tabs.drawers.panel.goal, 0, "the drawer is heading closed");
+    panel(true);
+    Object.assign(tabs.drawers.panel, { busy: false });
+    tabs.closePanelForSettings(cx, true);
+    assert.equal(tasks.length, 1, "a hidden panel is left alone");
+    panel(false);
+    Object.assign(tabs.drawers.panel, { busy: false });
+    tabs.closePanelForSettings(cx, false);
+    assert.deepEqual(calls, [["layout.hide", { id: "panel" }]]);
+  } finally {
+    delete globalThis.__herdrRun; delete globalThis.__herdrLayout;
+  }
 });

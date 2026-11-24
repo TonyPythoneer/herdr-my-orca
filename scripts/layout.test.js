@@ -54,7 +54,7 @@ test("unified differs from orca in the declared ways", () => {
   const sidebar = layout => {
     const found = [];
     walk(layout, node => {
-      if (node?.id !== "sidebar") return;
+      if (node?.id !== "left-sidebar") return;
       found.push({ min: node.min, background: node.background });
     });
     return found;

@@ -1,3 +1,0 @@
-probe	token	source_path	line	text
-L	ORCA_PROBE_L	src/features/panel-gap/main.js (mods/orca-panel-gap/main.js in A)	14	throw new Error("ORCA_PROBE_L");  (A: same file, line 13 + 1 inserted = line 14 as well, imports shifted by 0 because './panel-motion.js' import line is unchanged)
-R	ORCA_PROBE_R	shared/panel-motion.js (src/shared/panel-motion.js)	22	  throw new Error("ORCA_PROBE_R");

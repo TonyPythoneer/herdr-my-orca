@@ -1,8 +1,0 @@
-WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real
-WARN  gpui_shell::engine::quickjs::scheduler: a reload stranded script tasks that will never settle (1 a HostModule's async function, 2 cx.timer.every(ms, fn)); re-register background work from init()
-ORCA_PROBE_R
-    at panelFrame (/private/tmp/claude-501/rt-NLl4/mods/orca-agents/panel-motion.js?v=1:23:13)
-    at render (/private/tmp/claude-501/rt-NLl4/mods/orca-agents/main.js?v=1:457:50)
-
-
-check failed: /private/tmp/claude-501/rt-NLl4/mods/orca-agents

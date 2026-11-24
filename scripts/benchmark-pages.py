@@ -523,7 +523,8 @@ def run(args):
                     for sample in attempts:
                         lo, hi = sample["diagnostic_interval_ms"]
                         result["diagnostic_spans"].append({"phase": sample["phase"],
-                            "groups": driver.diagnostics["summarize_events"](events, lo, hi, row["mod"])})
+                            "groups": driver.diagnostics["summarize_events"](events, lo, hi, row["mod"]),
+                            "counts": driver.diagnostics["count_events"](events, lo, hi, row["mod"])})
                 # A value over budget is a warning, not proof of an actual regression:
                 # polling, process dispatch and screenshot encoding all contribute.
                 result["budget_warning"] = [

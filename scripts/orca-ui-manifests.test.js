@@ -56,12 +56,12 @@ test("registry problems: a missing, duplicate, extra entry and a dead next link 
 test("the real repo loads and every managed destination is under its mod", () => {
   const { table, features: loaded, shared } = loadManifests();
   assert.deepEqual([...loaded.keys()], ["orca-ui/features/panel/head/manifest.json"]);
-  assert.equal(shared.files.length, 9);
-  assert.equal(table.size, 34);
+  assert.equal(shared.files.length, 10);
+  assert.equal(table.size, 38);
   const feature = [...table].filter(([, row]) => row.kind === "feature").map(([dest]) => dest);
   assert.equal(feature.length, 11);
   for (const dest of feature) assert.match(dest, /^mods\/orca-panel-head\/[^/]+$/);
-  assert.equal([...table.values()].filter(r => r.kind === "shared").length, 23);
+  assert.equal([...table.values()].filter(r => r.kind === "shared").length, 27);
 });
 
 test("the table maps each destination to its source, mode, tests and slots", t => {
@@ -170,7 +170,7 @@ test("every mod is a feature or has one in-place map entry, and the entry matche
   const json = path => JSON.parse(readFileSync(join(ROOT, path), "utf8"));
   const mods = readdirSync(join(ROOT, "mods")).filter(m => existsSync(join(ROOT, "mods", m, "mod.json"))).sort();
   const owned = [...loadManifests().features.values()].map(f => f.mod);
-  assert.equal(mods.length, 23);
+  assert.equal(mods.length, 24);
   assert.deepEqual([...owned, ...inPlace.map(e => e.mod)].sort(), mods);
   const mounts = {};
   for (const layout of ["orca", "orca-unified"]) {

@@ -1,2 +1,0 @@
-$ env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=/private/tmp/claude-501/rt-E34l/home HERDR_TELEMETRY=0 /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr check /private/tmp/claude-501/rt-E34l/mods/probe-inline-v3
-exit=1

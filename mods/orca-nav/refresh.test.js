@@ -203,7 +203,7 @@ function views() {
   globalThis.flowHost = { window: () => ({ active: true }) };
   const sharedValues = {};
   globalThis.__herdrShared = key => sharedValues[key];
-  const layoutTree = { children: [{ id: 'main', active: 'page-tasks' }, { id: 'sidebar', size: { px: 120 } }] };
+  const layoutTree = { children: [{ id: 'main', active: 'page-tasks' }, { id: 'left-sidebar', size: { px: 120 } }] };
   globalThis.__herdrLayout = () => layoutTree;
   const store = new Map();
   globalThis.localStorage = { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
@@ -215,9 +215,9 @@ function views() {
     for (const [name, shared, hover, options] of [
       ['plain', {}, false, {}],
       ['hover', { 'projects.count': 3, 'projects.allCollapsed': true }, true, { hideDefaultBranchWorkspace: true }],
-      ['filters', { 'projects.count': 2, 'sidebar.openPx': 240 }, true, { hideSleepingWorkspaces: true, alwaysShowDefaultBranchWorkspace: false, hideDetachedHeadWorkspaces: true, visibleWorkspaceHostIds: [null], filterRepoIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }],
-      ['narrow', { 'sidebar.openPx': 240 }, false, {}],
-      ['badcolor', { 'sidebar.openPx': 240 }, false, {}],
+      ['filters', { 'projects.count': 2, 'left-sidebar.openPx': 240 }, true, { hideSleepingWorkspaces: true, alwaysShowDefaultBranchWorkspace: false, hideDetachedHeadWorkspaces: true, visibleWorkspaceHostIds: [null], filterRepoIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }],
+      ['narrow', { 'left-sidebar.openPx': 240 }, false, {}],
+      ['badcolor', { 'left-sidebar.openPx': 240 }, false, {}],
     ]) {
       Object.keys(sharedValues).forEach(k => delete sharedValues[k]);
       Object.assign(sharedValues, shared);

@@ -7,7 +7,8 @@
         "mods/orca-files/clip.js",
         "mods/orca-handoff/clip.js",
         "mods/orca-menu/clip.js",
-        "mods/orca-agent-manager/clip.js"
+        "mods/orca-agent-manager/clip.js",
+        "mods/orca-ports/clip.js"
       ]
     },
     {
@@ -42,7 +43,8 @@
       "source": "orca-ui/shared/list-viewport.js",
       "outputs": [
         "mods/agent-config/list-viewport.js",
-        "mods/orca-agent-manager/list-viewport.js"
+        "mods/orca-agent-manager/list-viewport.js",
+        "mods/orca-spaces/list-viewport.js"
       ]
     },
     {
@@ -66,6 +68,13 @@
       "outputs": [
         "mods/agent-config/agent-config-view.js",
         "mods/orca-agent-manager/agent-config-view.js"
+      ]
+    },
+    {
+      "source": "orca-ui/shared/ui-settings.js",
+      "outputs": [
+        "mods/orca-files/ui-settings.js",
+        "mods/orca-status/ui-settings.js"
       ]
     }
   ]

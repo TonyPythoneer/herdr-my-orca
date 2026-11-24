@@ -41,7 +41,7 @@ function candidate(t, extras = {}) {
   execFileSync('python3', [fileURLToPath(new URL('./perf-spaces-virtual.py', import.meta.url)), destination]);
   const source = readFileSync(join(destination, 'main.js'), 'utf8')
     .replace(/^import .*;$/gm, '').replace('export default class Spaces', 'class Spaces');
-  const scope = { View: class {}, onStop: () => null, shared: () => null, planRenderRows, stored, workspaceOptions, ...extras };
+  const scope = { View: class {}, onStop: () => null, shared: () => null, planRenderRows, agentSettingsOpen: () => false, stored, workspaceOptions, ...extras };
   vm.runInNewContext(source + '\nglobalThis.Spaces = Spaces;', scope);
   return new scope.Spaces();
 }

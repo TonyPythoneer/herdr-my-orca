@@ -931,3 +931,32 @@ test('closing a view cancels every native watch and blocks future refreshes and 
   assert.equal(view.watching.size, 0);
   assert.equal(view.pending.size, 0);
 });
+
+test('performance contract: 100 watcher mount and cancel cycles leave no live handles', async () => {
+  let created = 0, cancelled = 0, peak = 0;
+  const tasks = [], handles = new Set();
+  const { view } = live({ host: { watchFolder: () => {
+    let resolve;
+    const p = new Promise(r => { resolve = r; });
+    created++;
+    handles.add(p);
+    peak = Math.max(peak, handles.size);
+    p.cancel = () => { assert.ok(handles.delete(p)); cancelled++; resolve([]); };
+    return p;
+  } } });
+  const cx = { spawn: fn => tasks.push(fn) };
+  view.refreshGit = () => assert.fail('stale watcher refreshed');
+  for (let i = 0; i < 100; i++) {
+    view.watch('/r', cx);
+    view.watch('/r', cx);
+    view.stopWatch('/r');
+    await tasks.shift()(cx);
+  }
+  assert.equal(created, 100);
+  assert.equal(cancelled, 100);
+  assert.equal(peak, 1);
+  assert.equal(handles.size, 0);
+  assert.equal(view.watching.size, 0);
+  console.log('PERF_CONTRACT ' + JSON.stringify({ id: 'spaces.watchers', scope: 'native handle stub',
+    cycles: 100, created, cancelled, peak, active_after: handles.size }));
+});

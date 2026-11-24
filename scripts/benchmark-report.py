@@ -191,7 +191,8 @@ def diagnostics(folder, commit):
                        "max_ms":maxima[k]} for k in sorted(elapsed, key=lambda k: (-elapsed[k], k))]
             result.append({"route_id":route_id(page), "status":page.get("status"),
                            "reason":page.get("reason"), "span_count":sum(counts.values()),
-                           "top_groups":groups[:15], "report":"diagnostic/report.json"})
+                           "top_groups":groups[:15], "per_observation_counts":[{"phase":s["phase"], "counts":s.get("counts")} for s in page.get("diagnostic_spans", [])],
+                           "report":"diagnostic/report.json"})
         return {"status":"observed" if any(p["span_count"] for p in result) else "no_spans",
                 "fatal_error":d.get("fatal_error"), "pages":result,
                 "note":"Instrumented samples are not latency baselines; spans may overlap or be absent."}
@@ -212,9 +213,15 @@ def select_diagnostic(path):
     return candidates[0]["page"]
 
 
-def aggregate(root, commit, head, run_url, matrix_result, samples):
+def aggregate(root, commit, head, run_url, matrix_result, samples, selection=None):
+    planned = PLAN
+    if selection is not None:
+        wanted = {(r["layout"], r["stack"], page) for r in selection["include"] for page in r["pages"]}
+        planned = [p for p in PLAN if (p["layout"], p["stack"], p["page"]) in wanted]
+        if not planned or len(planned) != len(wanted):
+            raise ValueError("invalid scoped native selection")
     groups, rows = [], []
-    for group in sorted({group_id(p) for p in PLAN}):
+    for group in sorted({group_id(p) for p in planned}):
         folder = root / ("native-benchmark-" + group + "-" + commit)
         data, pages, error = read_evidence(folder / "report.json", commit, group)
         try:
@@ -230,18 +237,18 @@ def aggregate(root, commit, head, run_url, matrix_result, samples):
                  "startup_first_screenshot_ms":data.get("startup_first_screenshot_ms"),
                  "diagnostics":diagnostics(folder, commit)}
         groups.append(entry)
-        for expected in PLAN:
+        for expected in planned:
             if group_id(expected) == group:
                 rows.append(summarize_route(expected, data, pages.get(route_id(expected)), error, folder, samples))
     rows.sort(key=lambda p: (p["priority"], -(p95(p, "reference_match_ms") or 0), p["route_id"]))
     counts = Counter(p["status"] for p in rows)
-    required = sum(p["fixture"] != "ssh" for p in PLAN)
+    required = sum(p["fixture"] != "ssh" for p in planned)
     blockers = [p["route_id"] for p in rows if p["status"] not in ("provisional","excluded")]
     ready = (not blockers and counts["provisional"] == required and matrix_result == "success"
              and all(g["runner"].get("capture") == "success" and g["runner"].get("validate") == "success" for g in groups))
     return {"schema":"herdr.ai-benchmark.v1", "checkout_sha":commit, "pr_head_sha":head, "run_url":run_url,
             "matrix_result":matrix_result, "status":"complete_provisional" if ready else "needs_investigation",
-            "coverage":{"planned":len(PLAN),"required":required,"provisional":counts["provisional"],
+            "coverage":{"planned":len(planned),"total_routes":len(PLAN),"not_selected":len(PLAN)-len(planned),"required":required,"provisional":counts["provisional"],
                         "excluded":counts["excluded"],"approved":0,"by_status":dict(counts)},
             "metric_contract":{"latency":"CLI dispatch to screenshot response upper bound; not input-to-display or data-ready latency",
                 "cpu":"app process only, 100% = one core", "rss":"MiB; retention is not proof of a leak",
@@ -269,7 +276,7 @@ def markdown(report):
            "## Native benchmark feedback",
            "",
            f"**{c['provisional']}/{c['required']} required routes measured (provisional)** · "
-           f"{c['excluded']} excluded · {c['approved']} visually approved · matrix: {safe(report['matrix_result'])}",
+           f"{c['excluded']} excluded · {c.get('not_selected', 0)} not selected · {c['approved']} visually approved · matrix: {safe(report['matrix_result'])}",
            "",
            f"Commit: `{safe(report['pr_head_sha'][:12])}` · [Run and artifacts]({report['run_url']})",
            "",
@@ -317,6 +324,7 @@ def main():
     p.add_argument("--run-url")
     p.add_argument("--matrix-result")
     p.add_argument("--samples", type=int, default=30)
+    p.add_argument("--selection", type=json.loads)
     a = p.parse_args()
     if a.select_diagnostic:
         print(select_diagnostic(a.select_diagnostic))
@@ -325,7 +333,7 @@ def main():
         p.error("aggregation requires input, output, commit, head, run-url and matrix-result")
     if not re.fullmatch(r"[0-9a-f]{40}", a.commit) or not re.fullmatch(r"[0-9a-f]{40}", a.head):
         p.error("expected exact 40-character commit SHA")
-    report = aggregate(a.input, a.commit, a.head, a.run_url, a.matrix_result, a.samples)
+    report = aggregate(a.input, a.commit, a.head, a.run_url, a.matrix_result, a.samples, a.selection)
     a.output.mkdir(parents=True, exist_ok=True)
     (a.output / "ai-report.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     (a.output / "report.md").write_text(markdown(report))

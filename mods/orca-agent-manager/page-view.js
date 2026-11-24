@@ -2,12 +2,12 @@
 // builder takes the page (`owner`) and reads its state; the page's logic stays in main.js.
 import { div, svg } from "gpui-kit";
 import { Button, v_flex, h_flex } from "gpui-base";
+import { layout, settings, shared } from "herdr";
 import { PERMISSION_LABELS } from "./permissions.js";
 import { defaultPermissionItems, permissionSelect } from "./permission-menu.js";
 import { permissionSummary } from "./permission-plan.js";
 import { timeLabel } from "./util.js";
 import { backButton, badge, banner, empty, group, section } from "./parts.js";
-import { railView } from "./rail-view.js";
 import { railRows } from "./agent-rail.js";
 
 // Below this width the page's side padding shrinks.
@@ -147,7 +147,7 @@ function refreshButton(owner, t) {
     .role("button")
     .accessibility_label(busy ? "Refreshing agents" : "Refresh installed agents")
     .tooltip("Re-check every agent on this computer")
-    .child(busy ? spinner(t, 12) : svg("mods/orca-agent-manager/refresh-cw.svg").size(13).flex_none().text_color(t.muted))
+    .child(busy ? spinner(t, 12) : svg("mods/orca-assets/refresh-cw.svg").size(13).flex_none().text_color(t.muted))
     .child(busy ? "Refreshing…" : "Refresh");
 }
 
@@ -339,11 +339,23 @@ export function agentsPageView(owner, t) {
 }
 
 // Settings route uses the existing native refresh and conflict controls.
+function sidebarNode(node) {
+  if (node?.id === "left-sidebar") return node;
+  for (const child of node?.children ?? []) {
+    const found = sidebarNode(child);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function settingsPageView(owner, t, cx) {
   const rows = railRows(owner.allRows().all);
   const unofficial = owner.unofficialRows();
-  owner.revealRail(rows, unofficial, cx);
-  const pad = (owner.width || 800) < NARROW_WIDTH ? 12 : 24;
+  const anchor = shared("left-sidebar.settingsAnchor");
+  const zoom = settings()?.zoom || 1;
+  const sidebar = anchor ? sidebarNode(layout()) : null;
+  const currentLeft = sidebar?.hidden ? 0 : (sidebar?.size?.px ?? anchor?.left);
+  const pad = (anchor ? anchor.width / zoom : owner.width || 800) < NARROW_WIDTH ? 12 : 24;
   const header = addBanners(v_flex().w_full().max_w(760).mx_auto().px(pad).pt(20).gap(2)
     .child(h_flex().w_full().items_center().gap(8).child(div().flex_1()).child(badge("This computer", t, { border: true })).child(refreshButton(owner, t))), owner, rows, t);
   const loading = owner.loading && !owner.agents;
@@ -356,8 +368,15 @@ export function settingsPageView(owner, t, cx) {
     .child(div().pt(12).text_size(11).text_color(t.dim).child(timeLabel(owner.lastChecked)));
   return v_flex().id("am-root").size_full().min_h(0).overflow_hidden().bg(t.background).text_size(12)
     .on_key_down((event, keyCx) => { if (owner.permissionOpen && owner.onPermissionKey(String(event.key ?? ""), keyCx)) keyCx.stop_propagation(); })
-    .on_size_change((size, sizeCx) => { if (owner.width !== size.width) { owner.width = size.width; sizeCx.notify(); } })
-    .child(h_flex().w_full().min_h(0).flex_1()
-      .child(railView(owner, rows, unofficial, t).track_focus(owner.handle).on_key_down((event, keyCx) => { if (owner.onKey(event, keyCx)) keyCx.stop_propagation(); }))
-      .child(v_flex().id("am-list").min_w(0).min_h(0).overflow_y_scrollbar().flex_1().child(header).child(body)));
+    .on_size_change((size, sizeCx) => {
+      const wasNarrow = (owner.width || 800) < NARROW_WIDTH;
+      owner.width = size.width;
+      if (!anchor && wasNarrow !== (size.width < NARROW_WIDTH)) sizeCx.notify();
+    })
+    // The agent list lives in the left sidebar (orca-spaces). Its keys go to this childless element,
+    // as they did to the rail, so a key typed in a field or on a button below never selects or toggles an agent.
+    .child(div().id("am-keys").size(0).flex_none().track_focus(owner.handle).on_key_down((event, keyCx) => { if (owner.onKey(event, keyCx)) keyCx.stop_propagation(); }))
+    .child(v_flex().id("am-list").w_full().min_w(0).min_h(0).overflow_y_scrollbar().flex_1()
+      .when(anchor, el => el.w(anchor.width / zoom).relative().left((anchor.left - currentLeft) / zoom))
+      .child(header).child(body));
 }

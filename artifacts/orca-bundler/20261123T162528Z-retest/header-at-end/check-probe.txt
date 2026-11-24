@@ -1,3 +1,0 @@
-== PROBE check ==
-herdr-app: isolated checker failed: gui/501/dev.herdr.check.77746.1795451706602252000: connect (30 seconds, job spawned): checker job did not connect before its deadline; state = xpcproxy; runs = 1; pid = 78045; last exit code = (never exited)
-exit=1

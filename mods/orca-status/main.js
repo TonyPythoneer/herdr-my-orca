@@ -8,6 +8,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand, panes, spaces, hc, setShared, checking, notify } from "herdr";
 import { probeLocal } from "./local-usage.js";
+import { SPIN_PERIOD_MS } from "./ui-settings.js";
 import { FOLLOW_EVERY_MS, FOLLOW_STATE_KEY, planFollow, parseCheckout } from "./wt-follow.js";
 import { probeAllProviders, getTightestUsageBucket, formatBucketChipLabel } from "./usage.js";
 
@@ -126,9 +127,9 @@ function segment(t, id, iconName, label, opts = {}) {
     .text_color(opts.muted ? t.muted : t.foreground)
     .when(Boolean(opts.on), el => el.role("button").accessibility_label(label).tooltip(label)
       .cursor_pointer().hover(s => s.bg("#404040b3").text_color(t.foreground)).on_click(opts.on))
-    .child(svg(`mods/orca-status/${iconName}.svg`).size(10).flex_none()
+    .child(svg(iconName === "refresh-cw" ? "mods/orca-assets/refresh-cw.svg" : `mods/orca-status/${iconName}.svg`).size(10).flex_none()
       .text_color(opts.iconColor ?? t.muted)
-      .when(Boolean(opts.spin), el => el.spin(1000)))
+      .when(Boolean(opts.spin), el => el.spin(SPIN_PERIOD_MS)))
     .child(label);
 }
 
@@ -384,7 +385,8 @@ export default class OrcaStatus extends View {
     // instead of Orca's 24; every spacing, text and glyph here is scaled by 5/6 (20/24) so the
     // layout compresses without changing the arrangement, keeping the 14/15/16 glyphs at
     // 12/11/10 and the usage bar/percentages at their scaled widths/heights.
-    return h_flex().w_full().h(20).min_h(20).flex_none().px(10).gap(13).items_center()
+    // No left inset: the footer's divider sits flush against this bar, like the gap after the ? button.
+    return h_flex().w_full().h(20).min_h(20).flex_none().pl(0).pr(10).gap(13).items_center()
       .bg(t.surface).border_t(1).border_color(t.border).text_size(10).text_color(t.foreground)
       // StatusBarSurface.tsx:136 — left usage cluster: flex min-w-0 flex-1 items-center
       .child(this.usageCluster(t, readings, drawn))
@@ -416,9 +418,9 @@ export default class OrcaStatus extends View {
           .cursor_pointer().hover(s => s.bg("#404040b3"))
           .on_click((_e, clickCx) => this.refreshUsage(clickCx, true))
           .child(
-            svg("mods/orca-status/refresh-cw.svg").size(9).flex_none()
+            svg("mods/orca-assets/refresh-cw.svg").size(9).flex_none()
               .text_color(t.muted)
-              .when(this.isRefreshing, el => el.spin(1000).text_color(t.foreground))
+              .when(this.isRefreshing, el => el.spin(SPIN_PERIOD_MS).text_color(t.foreground))
           )
       );
   }

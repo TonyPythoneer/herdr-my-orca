@@ -359,7 +359,7 @@ def main():
                         command("layout.switch", name=layout)
                         time.sleep(.7)
                     select("main","main-terminals")
-                    command("layout.show", id="sidebar")
+                    command("layout.show", id="left-sidebar")
                     command("layout.show", id="panel")
                     select("panel-body","files")
                     if case.get("group"):
