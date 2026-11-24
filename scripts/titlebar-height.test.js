@@ -33,8 +33,10 @@ test('tab padding only covers traffic lights that overlap the tab strip', () => 
   const source = readFileSync('mods/orca-tabs/main.js', 'utf8');
   const expression = source.match(/\? (Math\.max\(0, \(lights\[0\] \+ 64\).*?)\n\s*: 0;/)?.[1];
   assert.ok(expression);
-  const padding = new Function('lights', 'settings', 'sidebar', `return ${expression}`);
+  const padding = new Function('lights', 'settings', 'sidebar', 'unified = false', `return ${expression}`);
   assert.equal(padding([12, 8], () => ({ zoom: 1 }), { size: { px: 280 } }), 0);
   assert.equal(padding([12, 8], () => ({ zoom: 1 }), { hidden: true }), 76);
   assert.equal(padding([12, 8], () => ({ zoom: 1 }), { size: { px: 60 } }), 16);
+  assert.equal(padding([12, 8], () => ({ zoom: 1 }), { size: { px: 280 } }, true), 76);
+  assert.equal(padding([12, 8], () => ({ zoom: 2 }), { size: { px: 280 } }, true), 38);
 });
