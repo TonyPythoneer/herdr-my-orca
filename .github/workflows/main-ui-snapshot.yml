@@ -1,0 +1,60 @@
+name: Main UI snapshot
+on:
+  push:
+    branches: [feature/main-ui-snapshot]
+permissions:
+  contents: read
+concurrency:
+  group: main-ui-snapshot
+  cancel-in-progress: true
+jobs:
+  snapshot:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: observer
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: target
+          persist-credentials: false
+      - name: Record source and prepare output
+        run: |
+          mkdir -p "$RUNNER_TEMP/ui-snapshot"
+          git -C target rev-parse HEAD | tee "$RUNNER_TEMP/ui-snapshot/main-sha.txt"
+          git -C observer rev-parse HEAD > "$RUNNER_TEMP/ui-snapshot/observer-sha.txt"
+          sw_vers > "$RUNNER_TEMP/ui-snapshot/environment.txt"
+          uname -m >> "$RUNNER_TEMP/ui-snapshot/environment.txt"
+      - name: Install official native Herdr
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          curl -fsSL --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/install-app.sh"
+          sh "$RUNNER_TEMP/install-app.sh" 2>&1 | tee "$RUNNER_TEMP/ui-snapshot/install-app.log"
+          if ! test -x "$HOME/.local/bin/herdr-core"; then
+            curl -fsSL --retry 3 https://releases.herdr.dev/core/install.sh -o "$RUNNER_TEMP/install-core.sh"
+            sh "$RUNNER_TEMP/install-core.sh" 2>&1 | tee "$RUNNER_TEMP/ui-snapshot/install-core.log"
+          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Observe native UI
+        run: python3 observer/ui-snapshot/capture.py --target target --out "$RUNNER_TEMP/ui-snapshot"
+      - name: Report
+        if: always()
+        run: |
+          echo "## Main UI snapshot" >> "$GITHUB_STEP_SUMMARY"
+          if test -f "$RUNNER_TEMP/ui-snapshot/summary.md"; then
+            cat "$RUNNER_TEMP/ui-snapshot/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Capture did not start; inspect installation/runner logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: main-ui-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ui-snapshot/
+          if-no-files-found: error
+          retention-days: 14
