@@ -385,7 +385,8 @@ export default class OrcaStatus extends View {
     // instead of Orca's 24; every spacing, text and glyph here is scaled by 5/6 (20/24) so the
     // layout compresses without changing the arrangement, keeping the 14/15/16 glyphs at
     // 12/11/10 and the usage bar/percentages at their scaled widths/heights.
-    return h_flex().w_full().h(20).min_h(20).flex_none().px(10).gap(13).items_center()
+    // No left inset: the footer's divider sits flush against this bar, like the gap after the ? button.
+    return h_flex().w_full().h(20).min_h(20).flex_none().pl(0).pr(10).gap(13).items_center()
       .bg(t.surface).border_t(1).border_color(t.border).text_size(10).text_color(t.foreground)
       // StatusBarSurface.tsx:136 — left usage cluster: flex min-w-0 flex-1 items-center
       .child(this.usageCluster(t, readings, drawn))

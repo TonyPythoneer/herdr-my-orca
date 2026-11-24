@@ -284,7 +284,7 @@
           "id": "status-footer",
           "type": "block",
           "size": {
-            "px": 148
+            "px": 144
           },
           "content": {
             "mod": "orca-chrome",

@@ -53,8 +53,8 @@ export default class WorkspaceChrome extends View {
     return div().id(id).w(w).h(h).mr(4).flex_none().flex().items_center().justify_center().rounded(8).text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_click(action).child(label);
   }
-  // The leftmost block of the bottom status row (`status-footer`, 148px: five 18px buttons, 8px gaps,
-  // 8px sides, then a divider before the status text), in both layouts. It stays put when the left sidebar collapses, so it has no sidebar frame.
+  // The leftmost block of the bottom status row (`status-footer`, 144px: 8px side, five 18px buttons, 8px gaps, the divider,
+  // then 5px of spare so the divider is never clipped), in both layouts. It stays put when the left sidebar collapses, so it has no sidebar frame.
   footer(t) {
     // Each control is a rounded-md 8px button with a 14px glyph (SidebarSettingsHelpMenu.tsx:203),
     // 18px square so it fits the 20px status bar under its 1px top border.
@@ -66,7 +66,7 @@ export default class WorkspaceChrome extends View {
     };
     const onAgents = find(layout(), "main")?.active === "main-agents";
     // Same fill and top border as orca-status, so the row reads as one bar.
-    const footerBar = h_flex().size_full().items_center().bg(t.surface).border_t(1).border_color(t.border).px(8).text_size(12)
+    const footerBar = h_flex().size_full().items_center().bg(t.surface).border_t(1).border_color(t.border).pl(8).text_size(12)
       .child(h_flex().items_center().gap(8)
         // The Agent Manager is part of this layout's navigation: Settings is Herdr's native pane,
         // while the Agents page lives in the `main` stack (`main-agents`).
