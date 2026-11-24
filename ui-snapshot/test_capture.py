@@ -48,3 +48,9 @@ class ModInventoryTests(unittest.TestCase):
             if "xy" in c["control"]:
                 x,y=c["control"]["xy"]
                 self.assertTrue(0<=x<1024 and 0<=y<681)
+
+    def test_duplicate_agent_label_is_scoped_to_click_point(self):
+        agents=[c for c in CASES if c["control"]["label"]=="Agents"]
+        self.assertEqual(len(agents),2)
+        self.assertTrue(all(c["control"]["mouse_only"] for c in agents))
+        self.assertNotEqual(agents[0]["control"]["xy"],agents[1]["control"]["xy"])
