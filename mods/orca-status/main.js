@@ -46,7 +46,9 @@ const HOUR_S = 3600;
 const DAY_S = 86400;
 const resetIn = (iso) => {
   if (!iso) return "";
-  const s = Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 1000));
+  const timestamp = Date.parse(iso);
+  if (!Number.isFinite(timestamp)) return "";
+  const s = Math.max(0, Math.round((timestamp - Date.now()) / 1000));
   if (s < HOUR_S) return `${Math.floor(s / 60)}m`;
   if (s < DAY_S) return `${Math.floor(s / HOUR_S)}h ${Math.floor(s % HOUR_S / 60)}m`;
   return `${Math.floor(s / DAY_S)}d ${Math.floor(s % DAY_S / HOUR_S)}h`;
