@@ -47,7 +47,7 @@ function agentTitle(a, w) {
 
 function agentIcon(a, size, t) {
   const p = a.program;
-  const override = AGENT_ICON_OVERRIDES[a.app];
+  const override = Object.hasOwn(AGENT_ICON_OVERRIDES, a.app) ? AGENT_ICON_OVERRIDES[a.app] : null;
   // `mono` uses the program glyph; other overrides are bundled marks.
   if (override === "mono") return p?.icon ? svg(p.icon).size(size).flex_none().text_color(t.muted) : null;
   if (override) return OWN_FILLS.has(a.app) || !override.endsWith(".svg")

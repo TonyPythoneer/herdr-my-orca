@@ -145,3 +145,9 @@ test('a lone agent is a collapsed list; other tabs are only counted, never liste
   assert.ok(strings(render([], [tab, { id: 't2', name: '2' }]).node).includes('2 other tabs'));
   assert.equal(strings(render([agent(0)], []).node).some(x => x.includes('other tab')), false);
 });
+
+test('prototype property names use the ordinary agent icon fallback', () => {
+  const { render } = fixture();
+  const result = render([agent(0, 'constructor', 'custom.png'), agent(1, 'toString', 'other.png')]);
+  assert.deepEqual(result.images, ['custom.png', 'other.png']);
+});
