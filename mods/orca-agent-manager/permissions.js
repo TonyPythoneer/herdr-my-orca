@@ -202,21 +202,27 @@ export function normalizePermissions(value) {
       error: `agent-manager.json's \`permissions.default\` must be one of ${PERMISSION_CHOICES.join(", ")}.`,
     };
   }
-  const overrides = {};
-  if (value.overrides !== undefined && value.overrides !== null) {
-    if (typeof value.overrides !== "object" || Array.isArray(value.overrides)) {
-      return { error: "agent-manager.json's `permissions.overrides` must be an object." };
-    }
-    for (const [key, choice] of Object.entries(value.overrides)) {
-      if (!isChoice(choice)) {
-        return {
-          error: `agent-manager.json's \`permissions.overrides.${key}\` must be one of ${PERMISSION_CHOICES.join(", ")}.`,
-        };
-      }
-      overrides[key] = choice;
-    }
+  const overrides = normalizeOverrides(value.overrides);
+  if (overrides.error) return { error: overrides.error };
+  return { default: fallback, overrides: overrides.overrides };
+}
+
+/** The per-agent choices of a stored `permissions` block, or a reason they cannot be used. */
+function normalizeOverrides(stored) {
+  if (stored === undefined || stored === null) return { overrides: {} };
+  if (typeof stored !== "object" || Array.isArray(stored)) {
+    return { error: "agent-manager.json's `permissions.overrides` must be an object." };
   }
-  return { default: fallback, overrides };
+  const overrides = {};
+  for (const [key, choice] of Object.entries(stored)) {
+    if (!isChoice(choice)) {
+      return {
+        error: `agent-manager.json's \`permissions.overrides.${key}\` must be one of ${PERMISSION_CHOICES.join(", ")}.`,
+      };
+    }
+    overrides[key] = choice;
+  }
+  return { overrides };
 }
 
 /**

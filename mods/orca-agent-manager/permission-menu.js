@@ -114,6 +114,17 @@ export function permissionSelect(spec, t) {
     );
 }
 
+// Names listed under a choice before the rest become "+N".
+const DETAIL_NAMES = 3;
+
+/** The agents that take a choice, or why none does; `own` needs no detail. */
+function choiceDetail(choice, names) {
+  if (choice === "own") return null;
+  if (names.length === 0) return "No installed agent supports this choice";
+  const extra = names.length > DETAIL_NAMES ? ` +${names.length - DETAIL_NAMES}` : "";
+  return `${names.slice(0, DETAIL_NAMES).join(", ")}${extra}`;
+}
+
 /** The all-agents menu: ask, approve, full access, then each agent's own settings after a rule. */
 export function defaultPermissionItems(owner, managed) {
   const permissions = owner.permissions;
@@ -122,12 +133,11 @@ export function defaultPermissionItems(owner, managed) {
     const names = managed
       .filter((row) => (permissionChoices(row.key) ?? []).includes(choice))
       .map((row) => row.name);
-    const extra = names.length > 3 ? ` +${names.length - 3}` : "";
     return {
       id: choice,
       label: PERMISSION_LABELS[choice],
       description: PERMISSION_DESCRIPTIONS[choice],
-      detail: choice === "own" ? null : names.length ? `${names.slice(0, 3).join(", ")}${extra}` : "No installed agent supports this choice",
+      detail: choiceDetail(choice, names),
       choice,
       warn: choice === "full-access",
       separator: choice === "own",
@@ -192,18 +202,20 @@ function agentTrigger(owner, row) {
   return { choice: row.permission, label: PERMISSION_LABELS[row.permission] ?? "Custom", warn: row.permission === "full-access" };
 }
 
+// The line beside an agent's menu: why it shows the choice it shows.
+function permissionNote(row, trigger, inherited) {
+  const inheritedLabel = PERMISSION_LABELS[inherited].toLowerCase();
+  if (row.permission === "custom") return "This command sets its own permission flags; a choice here replaces them.";
+  if (row.permissionOverride) return `Set for this agent; every other agent follows ${inheritedLabel}.`;
+  if (trigger.prefix) return `Follows all agents (${inheritedLabel}).`;
+  return `${row.name} keeps its own permission settings.`;
+}
+
 /** The effective permission for one agent, right above the command it is written into. */
 export function permissionRow(owner, row, t) {
   const inherited = owner.permissions.default;
   const trigger = agentTrigger(owner, row);
-  const note =
-    row.permission === "custom"
-      ? "This command sets its own permission flags; a choice here replaces them."
-      : row.permissionOverride
-        ? `Set for this agent; every other agent follows ${PERMISSION_LABELS[inherited].toLowerCase()}.`
-        : trigger.prefix
-          ? `Follows all agents (${PERMISSION_LABELS[inherited].toLowerCase()}).`
-          : `${row.name} keeps its own permission settings.`;
+  const note = permissionNote(row, trigger, inherited);
   return v_flex()
     .w_full()
     .gap(6)

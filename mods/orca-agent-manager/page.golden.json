@@ -1,0 +1,21 @@
+{
+ "loading": "9d28394d196c862a14dcc76ab87da34b93c413bd82d58c7837524b1687cdae17",
+ "cached": "5d8b2bce1cc8775873fbabcaa0c837fb4bf24decd28d60a486cb4cbf62787753",
+ "fresh": "391d8ed291432b4674d86b7210dd3bdbf037b51ed5ae63c4b91de33e586e8a84",
+ "none-installed": "4d41aa09b1799360df5efa8d3fc207c27f3fbc9eee6b56c31e84a63cf3d4adf6",
+ "all-installed": "63fc11728f31e565485eb26ff69dd162db9fa0dc370410e3cb8e31d00f0ecec4",
+ "narrow": "aa99ce8e37b9a18a5cda065485ead6b1e50fbdfe6d9789ba043ad5459e4d82a4",
+ "refreshing": "df5c39b4cae31d50f33e5a9a2e6d583c3762690ec1b7c48a1a979ffb4ecda7d4",
+ "errors": "328cf226e3e27f7a0dfb14a0bc79e9ee257084ebff0e8324fc2b3025d7db5c59",
+ "conflict": "f7dcbaf3c6d2d43af93d0e9949a174c414fe1ab0ff96914c30d9c15c6912df26",
+ "permissions-default": "eb57767682a7fe2e73fab9c7286fa6c0a0919d3c424665c5010ec410f83329d2",
+ "permissions-own": "2cf7aea75c24da56bd72ba3a5ac58c7f3d09c2db1c2b1b47876c5438a8f4483e",
+ "permissions-custom": "a9d8c69b25f91041179379de1b65192c4893a09ea7004e89d36045f6ba36455a",
+ "permissions-menu": "3b96896729575d86d0f3a7e1abb61c741953e66134baad92188d9c306c971564",
+ "permissions-blocked": "f4c25602f7821fd404156d8230dc6fdb29b9057263f0eadd2ea9ac1cdb78abe9",
+ "providers-empty": "0ccc6efb67b782163934c4d9df2aa7e79755dcae74a83f14ff38c62838a72680",
+ "providers-error": "85bee796055842170fc30222cff4ec051ccaf4d7c40a499c4698be9ae2e6fa51",
+ "providers-cards": "1c5d395a5a7bd1a5e2b85d557624fb85531600ddd30f5eea98bd05f145f43127",
+ "providers-adding": "379260d1db76f5e52060e2bab97eabe44820d782cb3e734e449050e79704fe4d",
+ "providers-adding-link": "782811cfbba1f8084188b1f83b2e6041de42e1511d4648e82dd9bca98f25118e"
+}

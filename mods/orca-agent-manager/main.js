@@ -11,9 +11,9 @@
 // editing an unrelated programs entry does not clear it). The smallest fresh check is the
 // `command -v` probe in state.js, run in the same login shell Herdr uses. If it fails, the
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
-import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, Input, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
-import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, settings, writeTextFile } from "herdr";
+import { View, div } from "gpui-kit";
+import { v_flex, h_flex, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
+import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, writeTextFile } from "herdr";
 import {
   LIST_ROW_HEIGHT,
   applyFreshInstalled,
@@ -41,24 +41,26 @@ import {
 } from "./state.js";
 import {
   PERMISSION_LABELS,
-  PERMISSION_SHORT_LABELS,
   permissionChoices,
   readPermission,
   reconcilePermissions,
   supportsPermissions,
   withPermission,
 } from "./permissions.js";
+import { defaultPermissionNotice, planDefaultPermission } from "./permission-plan.js";
 import {
   activeSessions,
   installMethodFor,
   npmManaged,
   uninstallCommand,
 } from "./install.js";
-import { errorText, sameRun, tail, timeLabel } from "./util.js";
-import { badge, banner, empty, group, icon, permissionBadge, section } from "./parts.js";
+import { errorText, sameRun, tail } from "./util.js";
+import { icon, monoFont } from "./parts.js";
+import { agentsPageView, permissionsCardView } from "./page-view.js";
+import { modelProvidersView, providerCardView, providersPageView } from "./provider-view.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
-import { agentPermissionItems, defaultPermissionItems, permissionSelect } from "./permission-menu.js";
-import { PROVIDER_FILE, judgeModels, keyHint, linkInfo, parseProviderFile, presetFor, recordLink, serializeProviderFile, slugId, validateHost } from "./codex-provider.js";
+import { agentPermissionItems, defaultPermissionItems } from "./permission-menu.js";
+import { PROVIDER_FILE, judgeModels, linkInfo, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost } from "./codex-provider.js";
 
 const PROGRAMS = `${appHome()}/programs.json`;
 const MANAGER = `${appHome()}/agent-manager.json`;
@@ -72,17 +74,44 @@ const ownedIcon = (path) => {
   const rest = String(path ?? "").slice(prefix.length);
   return String(path ?? "").startsWith(prefix) && rest !== "" && !rest.includes("/") && rest !== ".." ? path : null;
 };
+// A missing or unreadable file reads as `undefined`, which the page treats as "not read yet".
+const readFile = (path) => readTextFile(path).catch(() => undefined);
+// How many leading bytes of a download are compared with the image signatures below.
+const MAGIC_PROBE_BYTES = 8;
+// A leftover icon file is harmless, so a failed `rm` must never fail the save, delete or cancel around it.
+const removeFile = (path) => exec("rm", ["-f", path]).catch(() => {});
 // GitHub avatars are a few KB; anything past this is not one.
 const ICON_MAX_BYTES = 256 * 1024;
 // A site serves whatever it likes at its icon URL, so the magic bytes are checked for a real image
 // (PNG, JPEG or .ico) instead of trusting the URL or the status.
 const ICO_MAGIC = "00000100";
 const IMAGE_MAGIC = ["89504e47", "ffd8ff", ICO_MAGIC];
-// An icon is drawn from its path inside this app's folder.
-const iconSrc = (path) => (String(path).startsWith(`${appHome()}/`) ? String(path).slice(appHome().length + 1) : path);
 const CACHE_KEY = "agent-manager.inventory.v1";
 const TERMINALS_PAGE = "main-terminals";
 const POLL_MS = 4000;
+// How long each outside program may run before the page gives up on it.
+const SHELL_PROBE_MS = 5000;
+const INSTALL_CHECK_MS = 30000;
+const COMMAND_PATH_MS = 10000;
+const REAL_PATH_MS = 5000;
+const NPM_ROOT_MS = 15000;
+const UNINSTALL_MS = 10 * 60_000;
+// curl asks for five seconds; the exec timeout is the same five seconds in milliseconds.
+const CURL_MAX_SECONDS = 5;
+const CURL_TIMEOUT_MS = CURL_MAX_SECONDS * 1000;
+const SAVED_NOTICE_MS = 2200;
+const PERMISSION_NOTICE_MS = 6000;
+// What must match between the confirmed install and the one found again before npm runs.
+const INSTALL_IDENTITY = ["path", "real", "npm", "root"];
+const SESSION_STARTED_MESSAGE = "A session started while you were confirming. Close it before uninstalling.";
+
+// Where each moving key puts the focus, from the focused index `at` (-1: none) in a list of `count`.
+const ROW_MOVES = {
+  down: (at, count) => (at + 1) % count,
+  up: (at, count) => (at <= 0 ? count - 1 : at - 1),
+  home: () => 0,
+  end: (_at, count) => count - 1,
+};
 
 export default class AgentManager extends View {
   init(_props, cx) {
@@ -135,9 +164,9 @@ export default class AgentManager extends View {
     this.providersPage = props()?.page === "providers";
     if (this.providersPage) {
       if (!checking()) {
-        cx.spawn(async (cx) => {
-          this.applyProviders(await readTextFile(PROVIDERS).catch(() => undefined));
-          cx.notify();
+        cx.spawn(async (taskCx) => {
+          this.applyProviders(await readFile(PROVIDERS));
+          taskCx.notify();
         });
       }
       return;
@@ -145,7 +174,7 @@ export default class AgentManager extends View {
     this.restoreCache();
     if (checking()) return;
     this.refresh(cx);
-    cx.timer.every(POLL_MS, (cx) => this.poll(cx));
+    cx.timer.every(POLL_MS, (tickCx) => this.poll(tickCx));
   }
 
   // ---- data -----------------------------------------------------------------
@@ -160,13 +189,17 @@ export default class AgentManager extends View {
         this.loading = false;
         this.fromCache = true;
       }
-    } catch {}
+    } catch {
+      // An unreadable or missing cache only means the first paint waits for the real probe.
+    }
   }
 
   cache() {
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(this.agents ?? []));
-    } catch {}
+    } catch {
+      // Storage can be blocked or full; the cache is an optimisation, never needed for correctness.
+    }
   }
 
   applyPrograms(text) {
@@ -201,18 +234,18 @@ export default class AgentManager extends View {
     // programs.json drops an override it can still carry the old one. The built-in default is
     // the canonical fallback once the file has been read; before that, Herdr's answer is all
     // there is (and it avoids showing the default for a user override on the first paint).
-    const run = override ?? (loaded ? builtin ?? agent.run : agent.run);
+    const effectiveRun = override ?? (loaded ? builtin ?? agent.run : agent.run);
     const supports = supportsPermissions(agent.key);
     return {
       override,
       customized: override !== null,
-      run,
+      run: effectiveRun,
       defaultCmd: builtin,
       builtin: isBuiltinAgent(agent.key),
       homepage: homepageFor(agent.key),
       entryError: this.programsError || !loaded ? null : parsed.error ?? null,
       supports,
-      permission: supports ? readPermission(agent.key, run) : "own",
+      permission: supports ? readPermission(agent.key, effectiveRun) : "own",
     };
   }
 
@@ -256,81 +289,98 @@ export default class AgentManager extends View {
     this.freshWarning = null;
     this.writeError = null;
     const gen = ++this.refreshGen;
-    cx.spawn(async (cx) => {
-      try {
-        let known = null;
-        let failure = null;
-        let programs;
-        let manager;
-        try {
-          [known, programs, manager] = await Promise.all([
-            knownAgents().catch((error) => {
-              failure = error;
-              return null;
-            }),
-            readTextFile(PROGRAMS).catch(() => undefined),
-            readTextFile(MANAGER).catch(() => undefined),
-          ]);
-        } catch (error) {
-          failure = error;
-        }
-        if (gen !== this.refreshGen) return;
+    cx.spawn((taskCx) => this.runRefresh(taskCx, gen));
+  }
 
-        // A refresh must not replace the snapshot a dirty draft was based on. It becomes a
-        // conflict instead; only Reload or the explicit Overwrite action may move the base.
-        // Files read while a permission pick is still being written are older than that pick.
-        const update = this.persisting ? { kind: "same" } : programsUpdate(this.programsText, programs, this.anyDirty());
-        if (update.kind === "apply") {
-          this.applyPrograms(update.text);
-          this.pendingProgramsText = undefined;
-          this.externalConflict = false;
-        } else if (update.kind === "conflict") {
-          this.pendingProgramsText = update.text;
-          this.externalConflict = true;
-        }
-        if (!this.persisting) this.applyManager(manager);
-        if (known) {
-          this.agents = known;
-          this.fromCache = false;
-          this.cache();
-        }
-        if (failure) this.detectionError = `Could not detect installed agents: ${errorText(failure)}`;
-        if (failure && !this.agents) this.loading = false;
-
-        let fresh = null;
-        if (this.agents?.length) {
-          try {
-            fresh = await this.freshInstallCheck();
-            this.freshWarning = null;
-          } catch (error) {
-            this.freshWarning = `Fresh install check failed (${errorText(error)}); showing Herdr's cached answer.`;
-          }
-        }
-        if (gen !== this.refreshGen) return;
-        if (fresh) this.agents = applyFreshInstalled(this.agents, fresh);
-        if (fresh) this.freebuffInstalled = fresh.get("freebuff");
-        if (this.agents) this.cache();
-
-        try {
-          this.syncEditors();
-        } catch {}
-        if (!this.externalConflict) this.shareInventory();
-      } finally {
-        // A newer refresh owns the flag; never leave an older one stuck as refreshing.
-        if (gen === this.refreshGen) {
-          this.loading = false;
-          this.refreshing = false;
-          this.lastChecked = Date.now();
-          cx.notify();
-        }
+  async runRefresh(cx, gen) {
+    try {
+      const disk = await this.readDisk();
+      if (gen !== this.refreshGen) return;
+      this.applyDiskRead(disk);
+      const fresh = await this.probeFresh();
+      if (gen !== this.refreshGen) return;
+      if (fresh) {
+        this.agents = applyFreshInstalled(this.agents, fresh);
+        this.freebuffInstalled = fresh.get("freebuff");
       }
-    });
+      if (this.agents) this.cache();
+      this.syncEditorsSafely();
+      if (!this.externalConflict) this.shareInventory();
+    } finally {
+      // A newer refresh owns the flag; never leave an older one stuck as refreshing.
+      if (gen === this.refreshGen) {
+        this.loading = false;
+        this.refreshing = false;
+        this.lastChecked = Date.now();
+        cx.notify();
+      }
+    }
+  }
+
+  // Herdr's agent list and both files, read together; `failure` is why the list is missing.
+  async readDisk() {
+    const disk = { known: null, failure: null, programs: undefined, manager: undefined };
+    try {
+      [disk.known, disk.programs, disk.manager] = await Promise.all([
+        knownAgents().catch((error) => {
+          disk.failure = error;
+          return null;
+        }),
+        readFile(PROGRAMS),
+        readFile(MANAGER),
+      ]);
+    } catch (error) {
+      disk.failure = error;
+    }
+    return disk;
+  }
+
+  applyDiskRead({ known, failure, programs, manager }) {
+    // A refresh must not replace the snapshot a dirty draft was based on. It becomes a
+    // conflict instead; only Reload or the explicit Overwrite action may move the base.
+    // Files read while a permission pick is still being written are older than that pick.
+    if (!this.persisting) {
+      this.adoptProgramsUpdate(programsUpdate(this.programsText, programs, this.anyDirty()));
+      this.applyManager(manager);
+    }
+    if (known) {
+      this.agents = known;
+      this.fromCache = false;
+      this.cache();
+    }
+    if (failure) this.detectionError = `Could not detect installed agents: ${errorText(failure)}`;
+    if (failure && !this.agents) this.loading = false;
+  }
+
+  // The fresh `command -v` answers, or null (with a warning) when the probe fails.
+  async probeFresh() {
+    if (!this.agents?.length) return null;
+    try {
+      const fresh = await this.freshInstallCheck();
+      this.freshWarning = null;
+      return fresh;
+    } catch (error) {
+      this.freshWarning = `Fresh install check failed (${errorText(error)}); showing Herdr's cached answer.`;
+      return null;
+    }
+  }
+
+  // An outside programs.json change either replaces the page's text or, under a dirty draft, waits.
+  adoptProgramsUpdate(update) {
+    if (update.kind === "apply") {
+      this.applyPrograms(update.text);
+      this.pendingProgramsText = undefined;
+      this.externalConflict = false;
+    } else if (update.kind === "conflict") {
+      this.pendingProgramsText = update.text;
+      this.externalConflict = true;
+    }
   }
 
   async shellPath() {
     if (this.shell) return this.shell;
     try {
-      const result = await exec("/bin/sh", ["-c", 'printf %s "${SHELL:-/bin/sh}"'], { timeout: 5000 });
+      const result = await exec("/bin/sh", ["-c", 'printf %s "${SHELL:-/bin/sh}"'], { timeout: SHELL_PROBE_MS });
       const path = result.code === 0 ? result.stdout.trim() : "";
       this.shell = path.startsWith("/") ? path : "/bin/sh";
     } catch {
@@ -349,7 +399,7 @@ export default class AgentManager extends View {
     const shell = await this.shellPath();
     const script = commandCheckScript(shell);
     const attempt = async (interactive) => {
-      const result = await exec(shell, checkArgs(shell, script, commands, interactive), { timeout: 30000 });
+      const result = await exec(shell, checkArgs(shell, script, commands, interactive), { timeout: INSTALL_CHECK_MS });
       if (result.code !== 0) throw new Error(result.stderr.trim() || `${shell} exited ${result.code}`);
       const answers = parseCommandCheck(result.stdout, commands.length);
       return new Map([...rows.map((row, index) => [row.key, answers[index]]), ["freebuff", answers[rows.length]]]);
@@ -369,32 +419,25 @@ export default class AgentManager extends View {
   // replaced; they get a conflict banner and an explicit overwrite action instead.
   poll(cx) {
     if (this.refreshing || this.persisting) return;
-    cx.spawn(async (cx) => {
-      const programs = await readTextFile(PROGRAMS).catch(() => undefined);
-      const manager = await readTextFile(MANAGER).catch(() => undefined);
-      // A pick made while the files were being read is newer than what was read.
-      if (this.persisting) return;
-      let changed = false;
-      const update = programsUpdate(this.programsText, programs, this.anyDirty());
-      if (update.kind === "apply") {
-        this.applyPrograms(update.text);
-        this.pendingProgramsText = undefined;
-        this.externalConflict = false;
-        this.writeError = null;
-        this.syncEditors();
-        changed = true;
-        this.refresh(cx);
-      } else if (update.kind === "conflict") {
-        this.pendingProgramsText = update.text;
-        this.externalConflict = true;
-        changed = true;
-      }
-      if (this.applyManager(manager)) changed = true;
-      if (changed) {
-        if (!this.externalConflict) this.shareInventory();
-        cx.notify();
-      } else if (this.externalConflict) cx.notify();
-    });
+    cx.spawn((taskCx) => this.readOutsideChanges(taskCx));
+  }
+
+  async readOutsideChanges(cx) {
+    const programs = await readFile(PROGRAMS);
+    const manager = await readFile(MANAGER);
+    // A pick made while the files were being read is newer than what was read.
+    if (this.persisting) return;
+    const update = programsUpdate(this.programsText, programs, this.anyDirty());
+    this.adoptProgramsUpdate(update);
+    if (update.kind === "apply") {
+      this.writeError = null;
+      this.syncEditors();
+      this.refresh(cx);
+    }
+    const managerChanged = this.applyManager(manager);
+    const changed = update.kind !== "none" || managerChanged;
+    if (changed && !this.externalConflict) this.shareInventory();
+    if (changed || this.externalConflict) cx.notify();
   }
 
   // The launch menus read this instead of trusting Herdr's minute-long detection cache.
@@ -406,7 +449,9 @@ export default class AgentManager extends View {
         agents: this.allRows().all,
         disabled: [...this.disabled],
       });
-    } catch {}
+    } catch {
+      // The launch menus fall back to Herdr's own detection when the shared value cannot be set.
+    }
   }
 
   syncEditors() {
@@ -418,11 +463,25 @@ export default class AgentManager extends View {
     for (const row of rows) {
       const editor = this.editors.get(row.key);
       if (!editor || editor.dirty) continue;
-      editor.originalArgs = row.run.slice(1);
-      editor.command.set_value(row.run[0] ?? "");
-      editor.args.set_value(argsToText(row.run.slice(1)));
+      this.loadEditorRun(editor, row.run);
       editor.error = null;
       editor.conflict = false;
+    }
+  }
+
+  // Puts a command into an editor's inputs, and its arguments become what the draft is compared with.
+  loadEditorRun(editor, command) {
+    editor.originalArgs = command.slice(1);
+    editor.command.set_value(command[0] ?? "");
+    editor.args.set_value(argsToText(command.slice(1)));
+  }
+
+  // An editor input that fails to update must not break the refresh or the install check around it.
+  syncEditorsSafely() {
+    try {
+      this.syncEditors();
+    } catch {
+      // The next sync retries it.
     }
   }
 
@@ -451,24 +510,24 @@ export default class AgentManager extends View {
       conflict: false,
       force: false,
     };
-    const changed = (_event, cx) => {
+    const changed = (_event, eventCx) => {
       const draft = draftRun(command.value(), args.value(), editor.originalArgs);
       const current = this.agents?.find((candidate) => candidate.key === row.key);
       const effective = current ? this.rowInfo(current).run : row.run;
       editor.dirty = Boolean(draft.error) || !sameRun(draft.run ?? [], effective);
       editor.error = null;
-      cx.notify();
+      eventCx.notify();
     };
     command.on("change", changed);
     args.on("change", changed);
-    command.on("submit", (_event, cx) => this.save(row, cx));
-    const typing = (_event, cx) => {
+    command.on("submit", (_event, eventCx) => this.save(row, eventCx));
+    const typing = (_event, eventCx) => {
       this.typing = true;
-      cx.notify();
+      eventCx.notify();
     };
-    const stopped = (_event, cx) => {
+    const stopped = (_event, eventCx) => {
       this.typing = false;
-      cx.notify();
+      eventCx.notify();
     };
     command.on("focus", typing);
     command.on("blur", stopped);
@@ -494,9 +553,7 @@ export default class AgentManager extends View {
   cancelEdit(row, cx) {
     const editor = this.editors.get(row.key);
     if (!editor) return;
-    editor.originalArgs = row.run.slice(1);
-    editor.command.set_value(row.run[0] ?? "");
-    editor.args.set_value(argsToText(row.run.slice(1)));
+    this.loadEditorRun(editor, row.run);
     editor.dirty = false;
     editor.error = null;
     editor.conflict = false;
@@ -506,6 +563,27 @@ export default class AgentManager extends View {
       this.externalConflict = false;
       this.pendingProgramsText = undefined;
     }
+    cx.notify();
+  }
+
+  // Reload from disk with every draft dropped. `rows` is what the page showed when the button was drawn.
+  reloadAllFromDisk(rows, cx) {
+    if (this.pendingProgramsText !== undefined) this.applyPrograms(this.pendingProgramsText);
+    this.pendingProgramsText = undefined;
+    this.externalConflict = false;
+    for (const [key, editor] of this.editors) {
+      editor.dirty = false;
+      editor.conflict = false;
+      editor.force = false;
+      editor.error = null;
+      const row = rows.find((candidate) => candidate.key === key);
+      if (row) {
+        editor.command.set_value(row.run[0] ?? "");
+        editor.args.set_value(argsToText(row.run.slice(1)));
+      }
+    }
+    this.writeError = null;
+    this.syncEditors();
     cx.notify();
   }
 
@@ -545,7 +623,7 @@ export default class AgentManager extends View {
     await this.writeRun(row, null, cx);
   }
 
-  async writeRun(row, run, cx) {
+  async writeRun(row, newRun, cx) {
     const editor = this.editors.get(row.key);
     if (!editor) return;
     this.writeError = null;
@@ -560,14 +638,14 @@ export default class AgentManager extends View {
       return;
     }
     const base = latest === undefined ? this.programsText : latest;
-    const written = writeRunOverride(base, row.key, run);
+    const written = writeRunOverride(base, row.key, newRun);
     if (written.error) {
       editor.error = written.error;
       cx.notify();
       return;
     }
     try {
-      await writeTextFile(PROGRAMS, written.text, base === undefined ? null : base);
+      await writeTextFile(PROGRAMS, written.text, base ?? null);
     } catch (error) {
       editor.conflict = true;
       this.pendingProgramsText = base;
@@ -586,12 +664,9 @@ export default class AgentManager extends View {
     editor.conflict = false;
     editor.force = false;
 
-    const nextRun = run ?? defaultRun(row.key) ?? row.run;
-    editor.originalArgs = nextRun.slice(1);
-    editor.command.set_value(nextRun[0] ?? "");
-    editor.args.set_value(argsToText(nextRun.slice(1)));
+    this.loadEditorRun(editor, newRun ?? defaultRun(row.key) ?? row.run);
     this.savedKey = row.key;
-    cx.timer.after(2200, () => {
+    cx.timer.after(SAVED_NOTICE_MS, () => {
       if (this.savedKey === row.key) {
         this.savedKey = null;
         cx.notify();
@@ -609,7 +684,7 @@ export default class AgentManager extends View {
   async commandPath(command) {
     try {
       const shell = await this.shellPath();
-      const result = await exec(shell, checkArgs(shell, commandPathScript(shell), [command], false), { timeout: 10000 });
+      const result = await exec(shell, checkArgs(shell, commandPathScript(shell), [command], false), { timeout: COMMAND_PATH_MS });
       return result.code === 0 ? parseCommandPath(result.stdout) : null;
     } catch {
       return null;
@@ -618,7 +693,7 @@ export default class AgentManager extends View {
 
   async realPath(path) {
     if (!path?.startsWith("/")) return null;
-    const result = await exec("realpath", [path], { timeout: 5000 });
+    const result = await exec("realpath", [path], { timeout: REAL_PATH_MS });
     return result.code === 0 ? parseCommandPath(result.stdout) : null;
   }
 
@@ -632,7 +707,7 @@ export default class AgentManager extends View {
     if (!path) return { method, path: null, managed: false };
     const npm = await this.commandPath("npm");
     if (!npm) return { method, path, managed: false };
-    const global = await exec(npm, ["root", "-g"], { timeout: 15000 });
+    const global = await exec(npm, ["root", "-g"], { timeout: NPM_ROOT_MS });
     const [real, root] = await Promise.all([
       this.realPath(path),
       this.realPath(global.code === 0 ? global.stdout.trim() : null),
@@ -646,9 +721,7 @@ export default class AgentManager extends View {
     this.agents = applyFreshInstalled(this.agents, fresh);
     this.cache();
     this.lastChecked = Date.now();
-    try {
-      this.syncEditors();
-    } catch {}
+    this.syncEditorsSafely();
     this.shareInventory();
     const row = this.agents.find((agent) => agent.key === key);
     return Boolean(row?.installed);
@@ -658,7 +731,7 @@ export default class AgentManager extends View {
     if (this.action?.phase === "running" || this.uninstall?.phase === "checking") return;
     this.uninstall = { key: row.key, phase: "checking", message: "" };
     cx.notify();
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try {
         const running = activeSessions(terminals(), row.key, row.run);
         if (running.length) {
@@ -691,7 +764,7 @@ export default class AgentManager extends View {
       } catch (error) {
         this.uninstall = { key: row.key, phase: "error", message: errorText(error) };
       } finally {
-        cx.notify();
+        taskCx.notify();
       }
     });
   }
@@ -705,69 +778,83 @@ export default class AgentManager extends View {
     const request = this.uninstall;
     if (!request || request.key !== row.key || request.phase !== "confirm") return;
     if (this.action?.phase === "running") return;
-    const running = activeSessions(terminals(), row.key, [request.status.path]);
-    if (running.length) {
-      this.uninstall = { ...request, phase: "error", message: "A session started while you were confirming. Close it before uninstalling." };
+    if (activeSessions(terminals(), row.key, [request.status.path]).length) {
+      this.uninstall = { ...request, phase: "error", message: SESSION_STARTED_MESSAGE };
       cx.notify();
       return;
     }
     const command = uninstallCommand(request.status.method);
     if (!command) return;
     this.uninstall = { ...request, phase: "running" };
-    this.action = { key: row.key, kind: "uninstall", phase: "running", message: `Uninstalling ${request.status.method.package}…` };
+    this.setUninstallAction(row, "running", `Uninstalling ${request.status.method.package}…`);
     cx.notify();
-    cx.spawn(async (cx) => {
-      let removed = false;
-      try {
-        const status = await this.npmStatusFor(row);
-        const confirmed = request.status;
-        if (!status.managed || status.path !== confirmed.path || status.real !== confirmed.real || status.npm !== confirmed.npm || status.root !== confirmed.root) {
-          this.action = null;
-          this.uninstall = { ...request, phase: "error", message: "The installation changed. Check it again before uninstalling." };
-          return;
-        }
-        if (activeSessions(terminals(), row.key, [status.path]).length) {
-          this.action = null;
-          this.uninstall = { ...request, phase: "error", message: "A session started while you were confirming. Close it before uninstalling." };
-          return;
-        }
-        const result = await exec(status.npm, command.args, { timeout: 10 * 60_000 });
-        if (result.code !== 0) {
-          const detail = tail(result.stderr || result.stdout);
-          this.action = { key: row.key, kind: "uninstall", phase: "error", message: `npm exited ${result.code}${detail ? `: ${detail}` : "."}` };
-          this.uninstall = { ...request, phase: "error", message: "The CLI was not removed." };
-          return;
-        }
-        removed = true;
-        const installed = await this.recheckAgent(row.key);
-        if (installed) {
-          this.action = { key: row.key, kind: "uninstall", phase: "warning", message: "npm finished, but the executable is still detected. It may have another copy on PATH." };
-          this.uninstall = { ...request, phase: "error", message: "The executable is still detected." };
-        } else {
-          this.action = { key: row.key, kind: "uninstall", phase: "done", message: "Uninstalled. Its command override and settings were left untouched." };
-          this.uninstall = null;
-        }
-      } catch (error) {
-        const message = removed ? "npm finished, but the executable could not be rechecked." : "Could not complete the uninstall.";
-        this.action = { key: row.key, kind: "uninstall", phase: removed ? "warning" : "error", message: `${message} ${errorText(error)}` };
-        this.uninstall = { ...request, phase: "error", message };
-      } finally {
-        cx.notify();
+    cx.spawn((taskCx) => this.runUninstall(row, request, command, taskCx));
+  }
+
+  setUninstallAction(row, phase, message) {
+    this.action = { key: row.key, kind: "uninstall", phase, message };
+  }
+
+  // The npm run itself: the install is looked at again right before it, and again after it.
+  async runUninstall(row, request, command, cx) {
+    let removed = false;
+    try {
+      const status = await this.npmStatusFor(row);
+      const stale = this.staleUninstallMessage(row, request, status);
+      if (stale) {
+        this.action = null;
+        this.uninstall = { ...request, phase: "error", message: stale };
+        return;
       }
-    });
+      const result = await exec(status.npm, command.args, { timeout: UNINSTALL_MS });
+      if (result.code !== 0) {
+        const detail = tail(result.stderr || result.stdout);
+        this.setUninstallAction(row, "error", `npm exited ${result.code}${detail ? `: ${detail}` : "."}`);
+        this.uninstall = { ...request, phase: "error", message: "The CLI was not removed." };
+        return;
+      }
+      removed = true;
+      this.finishUninstall(row, request, await this.recheckAgent(row.key));
+    } catch (error) {
+      const message = removed ? "npm finished, but the executable could not be rechecked." : "Could not complete the uninstall.";
+      this.setUninstallAction(row, removed ? "warning" : "error", `${message} ${errorText(error)}`);
+      this.uninstall = { ...request, phase: "error", message };
+    } finally {
+      cx.notify();
+    }
+  }
+
+  // Why the confirmed install can no longer be removed, or null when it is still the one confirmed.
+  staleUninstallMessage(row, request, status) {
+    const confirmed = request.status;
+    if (!status.managed || INSTALL_IDENTITY.some((field) => status[field] !== confirmed[field])) {
+      return "The installation changed. Check it again before uninstalling.";
+    }
+    if (activeSessions(terminals(), row.key, [status.path]).length) return SESSION_STARTED_MESSAGE;
+    return null;
+  }
+
+  finishUninstall(row, request, stillInstalled) {
+    if (stillInstalled) {
+      this.setUninstallAction(row, "warning", "npm finished, but the executable is still detected. It may have another copy on PATH.");
+      this.uninstall = { ...request, phase: "error", message: "The executable is still detected." };
+    } else {
+      this.setUninstallAction(row, "done", "Uninstalled. Its command override and settings were left untouched.");
+      this.uninstall = null;
+    }
   }
 
   toggleEnabled(row, cx) {
     // An uninstalled CLI has no availability to change; its switch is locked until it is installed.
     if (!row.installed) return;
     if (this.managerError) return;
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       const latest = await readTextFile(MANAGER).catch(() => this.managerText);
       const base = latest === undefined ? this.managerText : latest;
       const parsed = parseManagerConfig(base);
       if (parsed.error) {
         this.managerError = parsed.error;
-        cx.notify();
+        taskCx.notify();
         return;
       }
       const next = new Set(parsed.disabled);
@@ -775,10 +862,10 @@ export default class AgentManager extends View {
       else next.add(row.key);
       const text = serializeManagerConfig(next, this.permissions);
       try {
-        await writeTextFile(MANAGER, text, base === undefined ? null : base);
+        await writeTextFile(MANAGER, text, base ?? null);
       } catch (error) {
         this.writeError = `Could not save agent-manager.json: ${errorText(error)}`;
-        cx.notify();
+        taskCx.notify();
         return;
       }
       this.managerText = text;
@@ -786,7 +873,7 @@ export default class AgentManager extends View {
       this.disabled = next;
       this.writeError = null;
       this.shareInventory();
-      cx.notify();
+      taskCx.notify();
     });
   }
 
@@ -803,7 +890,7 @@ export default class AgentManager extends View {
   flashPermission(text, tone, cx, retry = null) {
     this.permissionNotice = { text, tone, retry };
     cx.notify();
-    cx.timer.after(6000, () => {
+    cx.timer.after(PERMISSION_NOTICE_MS, () => {
       // A notice with a retry stays until it is used or replaced.
       if (this.permissionNotice?.text === text && !this.permissionNotice.retry) {
         this.permissionNotice = null;
@@ -827,7 +914,8 @@ export default class AgentManager extends View {
 
   /** The Popover reports every open and close (press, outside press, Escape) through here. */
   setPermissionMenu(id, open, cx) {
-    this.permissionOpen = open ? id : this.permissionOpen === id ? null : this.permissionOpen;
+    if (open) this.permissionOpen = id;
+    else if (this.permissionOpen === id) this.permissionOpen = null;
     this.permissionActive = -1;
     cx.notify();
   }
@@ -867,7 +955,7 @@ export default class AgentManager extends View {
       return false;
     }
     try {
-      await writeTextFile(PROGRAMS, written.text, base === undefined ? null : base);
+      await writeTextFile(PROGRAMS, written.text, base ?? null);
     } catch (error) {
       this.flashPermission(`Could not save programs.json: ${errorText(error)}. Nothing was changed.`, "blocked", cx);
       return false;
@@ -886,7 +974,7 @@ export default class AgentManager extends View {
     const base = latest === undefined ? this.managerText : latest;
     const text = serializeManagerConfig(this.disabled, next);
     try {
-      await writeTextFile(MANAGER, text, base === undefined ? null : base);
+      await writeTextFile(MANAGER, text, base ?? null);
     } catch (error) {
       this.flashPermission(`Could not save agent-manager.json: ${errorText(error)}. The command change is kept.`, "blocked", cx);
       return false;
@@ -913,7 +1001,7 @@ export default class AgentManager extends View {
     }
     this.permissions = permissions;
     this.pendingRuns ??= new Map();
-    for (const [key, run] of runs) this.pendingRuns.set(key, run); // latest pick per agent wins
+    for (const [key, command] of runs) this.pendingRuns.set(key, command); // latest pick per agent wins
     this.pendingPermissions = permissions;
     this.persisting = (this.persisting ?? 0) + 1;
     return true;
@@ -947,7 +1035,9 @@ export default class AgentManager extends View {
       try {
         this.syncEditors();
         this.shareInventory();
-      } catch {}
+      } catch {
+        // The write is done; a draft input or the shared value failing to update must not fail it.
+      }
       cx.notify();
       return ok;
     });
@@ -956,8 +1046,8 @@ export default class AgentManager extends View {
   /** The disk wins after a failed write: drop the optimistic state and show what is stored. */
   async reloadFromDisk(cx) {
     const [programs, manager] = await Promise.all([
-      readTextFile(PROGRAMS).catch(() => undefined),
-      readTextFile(MANAGER).catch(() => undefined),
+      readFile(PROGRAMS),
+      readFile(MANAGER),
     ]);
     if (programs !== undefined) {
       this.programsText = undefined;
@@ -978,28 +1068,10 @@ export default class AgentManager extends View {
   async setDefaultPermission(choice, cx) {
     this.permissionOpen = null;
     if (!this.permissionReady(cx) || this.permissionBlocked(cx)) return false;
-    const rows = this.allRows().all.filter((row) => row.supports);
-    const custom = rows.filter((row) => row.permission === "custom").length;
-    const runs = new Map();
-    let applied = 0;
-    let unsupported = 0;
-    for (const row of rows) {
-      if (row.permission === "custom") continue;
-      const choices = permissionChoices(row.key) ?? [];
-      const next = choices.includes(choice) ? withPermission(row.key, row.run, choice) : null;
-      if (!next) {
-        unsupported += 1;
-        continue;
-      }
-      applied += 1;
-      if (!sameRun(next, row.run)) runs.set(row.key, next);
-    }
+    const plan = planDefaultPermission(this.allRows().all.filter((row) => row.supports), choice);
     // Every agent that could take the choice now has it, so no per-agent exception is left.
-    if (!this.applyPermissionChange(runs, { default: choice, overrides: {} }, cx)) return false;
-    const notes = [`Applied to ${applied} agent${applied === 1 ? "" : "s"}`];
-    if (unsupported > 0) notes.push(`${unsupported} don't support this setting`);
-    if (custom > 0) notes.push(`${custom} ${custom === 1 ? "uses" : "use"} custom launch arguments`);
-    this.flashPermission(`${notes.join("; ")}.`, "muted", cx);
+    if (!this.applyPermissionChange(plan.runs, { default: choice, overrides: {} }, cx)) return false;
+    this.flashPermission(defaultPermissionNotice(plan), "muted", cx);
     return this.persistPermissions(cx, (retryCx) => this.setDefaultPermission(choice, retryCx));
   }
 
@@ -1120,42 +1192,51 @@ export default class AgentManager extends View {
     cx?.notify();
   }
 
+  // What the card says it should save, or the first reason it cannot be saved yet.
+  readCardInput(card) {
+    const host = validateHost(card.host.value());
+    if (host.error) return { error: host.error };
+    const previous = card.id ? this.providers[card.id] : null;
+    // Nothing typed in the key box means "keep the saved key".
+    const key = card.key.value().trim() || previous?.apiKey || "";
+    if (!key) return { error: "Enter the API key." };
+    const info = linkInfo(card.link.value());
+    if (info.error) return { error: info.error };
+    const name = card.name.value().trim() || info.name || new URL(host.host).hostname;
+    return { host: host.host, key, info, name };
+  }
+
   // Saves only after a passing test: validate the card, test the server, then write the record, fix
   // its mode and save the icon. A failed test writes nothing.
   async saveCard(card, cx) {
     if (card.testing) return;
-    const host = validateHost(card.host.value());
-    if (host.error) return this.showCardStatus(card, cx, "blocked", host.error);
-    const previous = card.id ? this.providers[card.id] : null;
-    // Nothing typed in the key box means "keep the saved key".
-    const key = card.key.value().trim() || previous?.apiKey || "";
-    if (!key) return this.showCardStatus(card, cx, "blocked", "Enter the API key.");
-    const info = linkInfo(card.link.value());
-    if (info.error) return this.showCardStatus(card, cx, "blocked", info.error);
-    const name = card.name.value().trim() || info.name || new URL(host.host).hostname;
+    const input = this.readCardInput(card);
+    if (input.error) return this.showCardStatus(card, cx, "blocked", input.error);
     card.testing = true;
     card.status = null;
     cx?.notify();
-    const verdict = await this.testProvider(host.host, key);
+    const verdict = await this.testProvider(input.host, input.key);
     if (!verdict.ok) return this.showCardStatus(card, cx, "blocked", verdict.error);
-    await this.refreshIcon(card, info);
-    const saved = await this.saveProvider(card, { name, host: host.host, key, link: info.link, models: verdict.models });
+    await this.refreshIcon(card, input.info);
+    const saved = await this.saveProvider(card, { name: input.name, host: input.host, key: input.key, link: input.info.link, models: verdict.models });
     card.testing = false;
-    if (saved) {
-      if (!card.id) {
-        // The new card becomes the saved provider's own card.
-        this.adding = null;
-        this.cards.set(saved.id, card);
-        card.id = saved.id;
-      }
-      card.touched = false;
-      card.replacing = false;
-      card.reveal = false;
-      card.key.set_masked(true);
-      card.key.set_value("");
-      card.status = saved.error ? { tone: "blocked", text: saved.error } : { tone: "done", text: `Saved · ${saved.record.models.length} models` };
-    }
+    if (saved) this.adoptSavedCard(card, saved);
     cx?.notify();
+  }
+
+  adoptSavedCard(card, saved) {
+    if (!card.id) {
+      // The new card becomes the saved provider's own card.
+      this.adding = null;
+      this.cards.set(saved.id, card);
+      card.id = saved.id;
+    }
+    card.touched = false;
+    card.replacing = false;
+    card.reveal = false;
+    card.key.set_masked(true);
+    card.key.set_value("");
+    card.status = saved.error ? { tone: "blocked", text: saved.error } : { tone: "done", text: `Saved · ${saved.record.models.length} models` };
   }
 
   // `GET <host>/models` with the key in the header; the answer is judged into a fixed message.
@@ -1164,8 +1245,8 @@ export default class AgentManager extends View {
     try {
       const result = await exec(
         "curl",
-        ["-sS", "--max-time", "5", "-w", "\n%{http_code}", "-H", `Authorization: Bearer ${key}`, `${host}/models`],
-        { timeout: 5000 },
+        ["-sS", "--max-time", String(CURL_MAX_SECONDS), "-w", "\n%{http_code}", "-H", `Authorization: Bearer ${key}`, `${host}/models`],
+        { timeout: CURL_TIMEOUT_MS },
       );
       const text = result.stdout ?? "";
       const cut = text.lastIndexOf("\n");
@@ -1209,7 +1290,7 @@ export default class AgentManager extends View {
     const error = (await this.secureProviderFile()) ? null : "model-providers.json is not private to your user.";
     // The replaced icon is deleted too, but only when it is one of ours.
     const stale = ownedIcon(previous?.iconPath);
-    if (stale && stale !== iconPath) await exec("rm", ["-f", stale]).catch(() => {});
+    if (stale && stale !== iconPath) await removeFile(stale);
     return { id, record, error };
   }
 
@@ -1234,7 +1315,7 @@ export default class AgentManager extends View {
     // Only a file this page could have written is removed, and an unsaved preview goes with it.
     for (const path of new Set([record.iconPath, card.fetched.path])) {
       const stale = ownedIcon(path);
-      if (stale) await exec("rm", ["-f", stale]).catch(() => {});
+      if (stale) await removeFile(stale);
     }
     this.cards.delete(card.id);
     cx?.notify();
@@ -1259,7 +1340,7 @@ export default class AgentManager extends View {
       const path = info.iconUrl ? await this.fetchProviderIcon(info.iconUrl) : null;
       // An unsaved preview goes when it is replaced; the saved icon goes when the save lands.
       const old = ownedIcon(card.fetched.path);
-      if (old && old !== ownedIcon(this.providers[card.id]?.iconPath)) await exec("rm", ["-f", old]).catch(() => {});
+      if (old && old !== ownedIcon(this.providers[card.id]?.iconPath)) await removeFile(old);
       card.fetched = { link: info.link, path: path ?? "" };
     });
     return card.iconWork;
@@ -1271,17 +1352,17 @@ export default class AgentManager extends View {
     const dir = `${appHome()}/${ICON_DIR}`;
     const path = `${dir}/icon-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.png`;
     const partial = `${path}.download`;
-    const drop = () => exec("rm", ["-f", partial]).catch(() => {});
+    const drop = () => removeFile(partial);
     try {
       await exec("mkdir", ["-p", dir]);
       const result = await exec(
         "curl",
-        ["-sL", "--max-time", "5", "--max-filesize", String(ICON_MAX_BYTES), "-o", partial, "-w", "\n%{http_code}", url],
-        { timeout: 5000 },
+        ["-sL", "--max-time", String(CURL_MAX_SECONDS), "--max-filesize", String(ICON_MAX_BYTES), "-o", partial, "-w", "\n%{http_code}", url],
+        { timeout: CURL_TIMEOUT_MS },
       );
       const text = result.stdout ?? "";
       const status = Number(text.slice(text.lastIndexOf("\n") + 1).trim());
-      const head = (await exec("xxd", ["-p", "-l", "8", partial]).catch(() => ({ stdout: "" }))).stdout.trim();
+      const head = (await exec("xxd", ["-p", "-l", String(MAGIC_PROBE_BYTES), partial]).catch(() => ({ stdout: "" }))).stdout.trim();
       if (status !== 200 || !IMAGE_MAGIC.some((magic) => head.startsWith(magic))) {
         await drop();
         return null;
@@ -1306,40 +1387,39 @@ export default class AgentManager extends View {
     if (this.permissionOpen && this.onPermissionKey(key, cx)) return true;
     const rows = this.allRows().all;
     if (!rows.length) return false;
-    let at = rows.findIndex((row) => row.key === this.focusKey);
-    if (key === "down" || key === "up") {
-      at = key === "down" ? (at + 1) % rows.length : (at <= 0 ? rows.length - 1 : at - 1);
-      this.focusKey = rows[at].key;
-    } else if (key === "home") {
-      this.focusKey = rows[0].key;
-    } else if (key === "end") {
-      this.focusKey = rows[rows.length - 1].key;
-    } else if (key === "enter") {
-      const row = rows[Math.max(0, at)];
-      if (row) this.toggleExpand(row, cx);
+    const at = rows.findIndex((row) => row.key === this.focusKey);
+    const current = rows[Math.max(0, at)];
+    if (key === "enter") {
+      this.toggleExpand(current, cx);
       return true;
-    } else if (key === "space" || key === " ") {
-      const row = rows[Math.max(0, at)];
-      if (row) this.toggleEnabled(row, cx);
-    } else if (key.toLowerCase() === "r") {
-      this.refresh(cx);
-    } else if (key === "escape") {
-      const row = rows[Math.max(0, at)];
-      if (row && this.expanded.has(row.key)) this.expanded.delete(row.key);
-      else return false;
-    } else {
-      return false;
     }
-    const split = this.allRows();
-    const installedIndex = split.installed.findIndex((row) => row.key === this.focusKey);
-    if (installedIndex >= 0) this.installedScroll.scroll_to_item(installedIndex);
-    else {
-      const availableIndex = split.available.findIndex((row) => row.key === this.focusKey);
-      if (availableIndex >= 0) this.availableScroll.scroll_to_item(availableIndex);
-    }
+    if (!this.applyRowKey(key, { rows, at, current }, cx)) return false;
+    this.scrollToFocus();
     this.handle.focus();
     cx.notify();
     return true;
+  }
+
+  // One key on the list: false when it means nothing here. `at` is the focused row, -1 for none.
+  applyRowKey(key, { rows, at, current }, cx) {
+    const move = Object.hasOwn(ROW_MOVES, key) ? ROW_MOVES[key] : null;
+    if (move) this.focusKey = rows[move(at, rows.length)].key;
+    else if (key === "space" || key === " ") this.toggleEnabled(current, cx);
+    else if (key.toLowerCase() === "r") this.refresh(cx);
+    else if (key === "escape") return this.expanded.delete(current.key);
+    else return false;
+    return true;
+  }
+
+  scrollToFocus() {
+    const split = this.allRows();
+    const installedIndex = split.installed.findIndex((row) => row.key === this.focusKey);
+    if (installedIndex >= 0) {
+      this.installedScroll.scroll_to_item(installedIndex);
+      return;
+    }
+    const availableIndex = split.available.findIndex((row) => row.key === this.focusKey);
+    if (availableIndex >= 0) this.availableScroll.scroll_to_item(availableIndex);
   }
 
   // ---- drawing --------------------------------------------------------------
@@ -1372,6 +1452,7 @@ export default class AgentManager extends View {
   toggle(row, t) {
     const installed = Boolean(row.installed);
     const on = installed && row.enabled;
+    const verb = on ? "Disable" : "Enable";
     return div()
       .id(`am-toggle-${row.key}`)
       .w(36)
@@ -1387,7 +1468,7 @@ export default class AgentManager extends View {
       .role("switch")
       .checked(on)
       .accessibility_label(installed ? `${row.name} availability` : `${row.name} is unavailable; not installed`)
-      .tooltip(installed ? (on ? `Disable ${row.name}` : `Enable ${row.name}`) : `Install ${row.name} first; this switch is unavailable until its CLI is installed`)
+      .tooltip(installed ? `${verb} ${row.name}` : `Install ${row.name} first; this switch is unavailable until its CLI is installed`)
       .when(installed, (el) =>
         el.on_click((_event, cx) => {
           cx.stop_propagation();
@@ -1404,12 +1485,12 @@ export default class AgentManager extends View {
       );
   }
 
-  catalog(rows, t, group) {
+  catalog(rows, t, listName) {
     const viewport = listViewportHeight(rows.length, rows.some((row) => this.expanded.has(row.key)));
-    const id = `am-catalog-${group}`;
+    const id = `am-catalog-${listName}`;
     const list = v_flex()
       .id(id)
-      .track_scroll(group === "installed" ? this.installedScroll : this.availableScroll)
+      .track_scroll(listName === "installed" ? this.installedScroll : this.availableScroll)
       .w_full()
       .pl(10)
       .pr(18)
@@ -1432,7 +1513,7 @@ export default class AgentManager extends View {
 
   unofficialRow(t, installed) {
     const row = { key: "freebuff", installed, enabled: installed && !this.disabled.has("freebuff") };
-    const mono = settings()?.font_family ?? "JetBrains Mono";
+    const mono = monoFont();
     return div().w_full().flex_none().rounded(10).border_1().border_color(t.border).bg(t.surface).child(
       h_flex().w_full().h(LIST_ROW_HEIGHT - 12).my(6).px(18).gap(12).items_center()
         .child(h_flex().w(32).h(32).flex_none().items_center().justify_center().rounded(8).border_1().border_color(t.border)
@@ -1445,19 +1526,11 @@ export default class AgentManager extends View {
   }
 
   commandLine(row, t, quiet) {
-    const mono = settings()?.font_family ?? "JetBrains Mono";
+    const mono = monoFont();
     const effective = formatArgv(row.run);
-    if (!row.customized || !row.defaultCmd) {
-      return div()
-        .min_w(0)
-        .truncate()
-        .font_family(mono)
-        .text_size(11)
-        .text_color(t.muted)
-        .when(quiet, (el) => el.opacity(0.45))
-        .child(effective);
-    }
-    const fallback = div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted).child(effective);
+    const commandText = () => div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted);
+    if (!row.customized || !row.defaultCmd) return commandText().when(quiet, (el) => el.opacity(0.45)).child(effective);
+    const fallback = commandText().child(effective);
     return h_flex()
       .min_w(0)
       .gap(6)
@@ -1480,451 +1553,35 @@ export default class AgentManager extends View {
 
   // The Model providers page: a back arrow, a title and the card, nothing else.
   providersView() {
-    const t = theme();
-    return v_flex()
-      .id("am-root")
-      .size_full()
-      .min_h(0)
-      .overflow_hidden()
-      .bg(t.background)
-      .text_size(12)
-      .child(
-        h_flex()
-          .w_full()
-          .max_w(760)
-          .mx_auto()
-          .px(24)
-          .pt(20)
-          .pb(12)
-          .items_center()
-          .gap(8)
-          .child(
-            div()
-              .id("am-back")
-              .size(28)
-              .flex_none()
-              .flex()
-              .items_center()
-              .justify_center()
-              .rounded(6)
-              .text_color(t.muted)
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover).text_color(t.foreground))
-              .role("button")
-              .accessibility_label("Back to terminals")
-              .tooltip("Back to terminals")
-              .on_click(() => run("layout.select", { stack: "main", child: TERMINALS_PAGE }))
-              .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
-          )
-          .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Model providers")),
-      )
-      .child(
-        v_flex()
-          .id("am-providers")
-          .w_full()
-          .min_h(0)
-          .flex_1()
-          .overflow_y_scrollbar()
-          .child(v_flex().w_full().max_w(760).mx_auto().px(24).pb(24).child(this.modelProvidersCard(t))),
-      );
+    return providersPageView(this);
   }
 
   // One saved provider, or the one being added (`card.id` is null): a header that opens an editor.
   providerCard(card, t) {
-    const record = card.id ? this.providers[card.id] : null;
-    const info = linkInfo(card.link.value());
-    const preview = card.fetched.path ? { icon: iconSrc(card.fetched.path) } : { icon: "mods/orca-agent-manager/hard-drive.svg", tint: true };
-    const tone = card.status?.tone === "blocked" ? t.blocked : card.status?.tone === "done" ? t.done : t.muted;
-    const field = (id, label, state, extra) =>
-      v_flex()
-        .id(id)
-        .flex_1()
-        .min_w(170)
-        .gap(4)
-        .child(div().text_size(10).font_semibold().text_color(t.dim).child(label))
-        .child(
-          h_flex()
-            .w_full()
-            .h(32)
-            .px(8)
-            .gap(6)
-            .items_center()
-            .rounded(6)
-            .border_1()
-            .border_color(t.input)
-            .bg(t.background)
-            .when(extra?.before, (el) => el.child(extra.before))
-            .child(Input.new(state).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"))
-            .when(extra?.after, (el) => el.child(extra.after)),
-        );
-    const keyField =
-      record && !card.replacing
-        ? v_flex()
-            .id(`am-key-${card.id}`)
-            .flex_1()
-            .min_w(170)
-            .gap(4)
-            .child(div().text_size(10).font_semibold().text_color(t.dim).child("API KEY"))
-            .child(
-              h_flex()
-                .w_full()
-                .h(32)
-                .px(8)
-                .gap(6)
-                .items_center()
-                .rounded(6)
-                .border_1()
-                .border_color(t.input)
-                .bg(t.background)
-                .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child(keyHint(record.apiKey)))
-                .child(
-                  this.button(`am-key-replace-${card.id}`, "Replace", t, (_event, cx) => {
-                    card.replacing = true;
-                    cx.notify();
-                  }, { height: 22, px: 8, color: t.muted }),
-                ),
-            )
-        : field(`am-key-${card.id ?? "new"}`, "API KEY", card.key, {
-            after: div()
-              .id(`am-key-eye-${card.id ?? "new"}`)
-              .size(22)
-              .flex_none()
-              .flex()
-              .items_center()
-              .justify_center()
-              .rounded(5)
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover))
-              .role("button")
-              .accessibility_label(card.reveal ? "Hide key" : "Show key")
-              .tooltip(card.reveal ? "Hide key" : "Show key")
-              .on_click((_event, cx) => {
-                card.reveal = !card.reveal;
-                card.key.set_masked(!card.reveal);
-                cx.notify();
-              })
-              .child(svg(card.reveal ? "mods/orca-agent-manager/eye-off.svg" : "mods/orca-agent-manager/eye.svg").size(14).text_color(t.muted)),
-          });
-    const preset = presetFor(card.host.value());
-    const offer =
-      preset && (card.name.value().trim() === "" || card.link.value().trim() === "")
-        ? h_flex()
-            .gap(8)
-            .items_center()
-            .child(div().text_size(11).text_color(t.dim).child("Looks like"))
-            .child(
-              div()
-                .id(`am-offer-${card.id ?? "new"}`)
-                .px(8)
-                .py(2)
-                .rounded(99)
-                .border_1()
-                .border_color(t.accent)
-                .text_size(11)
-                .text_color(t.accent)
-                .cursor_pointer()
-                .hover((s) => s.bg(t.hover))
-                .on_click((_event, cx) => {
-                  if (card.name.value().trim() === "") card.name.set_value(preset.name);
-                  if (card.link.value().trim() === "") card.link.set_value(preset.link);
-                  this.linkChanged(card, cx);
-                })
-                .child(`${preset.name} · ${preset.link.replace("https://", "")}`),
-            )
-        : null;
-    const title = record?.name ?? "New provider";
-    const saved = record ? String(record.host ?? "").replace(/^https?:\/\//, "") : "";
-    return v_flex()
-      .id(`am-provider-${card.id ?? "new"}`)
-      .w_full()
-      .rounded(10)
-      .border_1()
-      .border_color(card.id ? t.border : t.accent)
-      .bg(t.raised)
-      .child(
-        h_flex()
-          .id(`am-provider-head-${card.id ?? "new"}`)
-          .w_full()
-          .p(10)
-          .gap(10)
-          .items_center()
-          .when(card.id, (el) =>
-            el.cursor_pointer().on_click((_event, cx) => {
-              card.open = !card.open;
-              cx.notify();
-            }),
-          )
-          .child(icon(record?.iconPath ? { icon: iconSrc(record.iconPath) } : { icon: "mods/orca-agent-manager/hard-drive.svg", tint: true }, 32, t))
-          .child(
-            v_flex()
-              .flex_1()
-              .min_w(0)
-              .gap(1)
-              .child(div().text_size(13).font_medium().text_color(t.foreground).child(title))
-              .child(div().min_w(0).truncate().text_size(11).text_color(t.muted).child(saved || "Not saved yet")),
-          )
-          .when(record, (el) =>
-            el
-              .child(div().flex_none().text_size(11).text_color(t.muted).child(`${record.models?.length ?? 0} models`))
-              .child(div().flex_none().text_size(11).text_color(t.done).child(`● ${new Date(record.verifiedAt).toTimeString().slice(0, 5)}`))
-              .child(div().flex_none().text_size(11).text_color(t.dim).child(card.open ? "▾" : "▸")),
-          ),
-      )
-      .when(card.open || !card.id, (el) =>
-        el.child(
-          v_flex()
-            .w_full()
-            .p(12)
-            .gap(10)
-            .border_t(1)
-            .border_color(t.border)
-            .child(
-              h_flex()
-                .w_full()
-                .gap(8)
-                .flex_wrap()
-                .child(field(`am-name-${card.id ?? "new"}`, "NAME", card.name))
-                .child(field(`am-host-${card.id ?? "new"}`, "HOST", card.host)),
-            )
-            .when(offer, (inner) => inner.child(offer))
-            .child(
-              h_flex()
-                .w_full()
-                .gap(8)
-                .flex_wrap()
-                .child(keyField)
-                .child(
-                  field(`am-link-${card.id ?? "new"}`, "PROJECT LINK · OPTIONAL (NAME AND ICON)", card.link, {
-                    before: icon(preview, 20, t),
-                  }),
-                ),
-            )
-            .child(
-              div()
-                .text_size(10)
-                .text_color(t.dim)
-                .child(
-                  info.error
-                    ? ""
-                    : "A GitHub link gives the repo name and the owner's avatar; any other https link gives its site name and favicon. The icon is downloaded once.",
-                ),
-            )
-            .child(
-              h_flex()
-                .w_full()
-                .gap(10)
-                .items_center()
-                .flex_wrap()
-                .child(
-                  this.button(`am-save-${card.id ?? "new"}`, card.testing ? "Testing…" : "Test and save", t, (_event, cx) => this.saveCard(card, cx), {
-                    height: 26,
-                    px: 12,
-                    color: t.accent,
-                    disabled: card.testing,
-                  }),
-                )
-                .when(!card.id, (inner) =>
-                  inner.child(
-                    this.button("am-cancel-new", "Cancel", t, (_event, cx) => {
-                      if (card.testing) return;
-                      const path = ownedIcon(card.fetched.path);
-                      if (path) exec("rm", ["-f", path]).catch(() => {});
-                      this.adding = null;
-                      cx.notify();
-                    }, { height: 26, px: 10, color: t.muted, disabled: card.testing }),
-                  ),
-                )
-                .when(card.status, (inner) => inner.child(div().flex_1().min_w(120).text_size(11).text_color(tone).child(card.status.text)))
-                .when(!card.status, (inner) => inner.child(div().flex_1()))
-                .when(card.id, (inner) =>
-                  inner.child(this.button(`am-delete-${card.id}`, "Delete", t, (_event, cx) => this.deleteProvider(card, cx), { height: 26, px: 10, color: t.blocked, disabled: card.testing })),
-                ),
-            ),
-        ),
-      );
+    return providerCardView(this, card, t);
   }
 
-  /** The providers: a card for each saved one, then a dashed card that starts a new one. */
   modelProvidersCard(t) {
-    const cards = [...this.cards.values()];
-    return v_flex()
-      .w_full()
-      .gap(10)
-      .when(this.providersError, (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.providersError)))
-      .when(cards.length === 0 && !this.adding, (el) =>
-        el.child(
-          div()
-            .text_size(12)
-            .line_height("18px")
-            .text_color(t.muted)
-            .child("Codex can start against a model server you run, such as oMLX. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user."),
-        ),
-      )
-      .children(cards.map((card) => this.providerCard(card, t)))
-      .when(this.adding, (el) => el.child(this.providerCard(this.adding, t)))
-      .when(!this.adding, (el) =>
-        el.child(
-          h_flex()
-            .id("am-provider-add")
-            .w_full()
-            .h(44)
-            .gap(8)
-            .items_center()
-            .justify_center()
-            .rounded(10)
-            .border_1()
-            .border_dashed()
-            .border_color(t.border)
-            .text_size(12)
-            .text_color(t.muted)
-            .cursor_pointer()
-            .hover((s) => s.border_color(t.accent).text_color(t.accent))
-            .role("button")
-            .accessibility_label("Add provider")
-            .on_click((_event, cx) => {
-              this.adding = this.makeCard(null, null);
-              this.adding.open = true;
-              cx.notify();
-            })
-            .child("＋ Add provider"),
-        ),
-      );
+    return modelProvidersView(this, t);
+  }
+
+  // Cancel on the card being added: an icon it already fetched goes with it.
+  cancelNewCard(card, cx) {
+    if (card.testing) return;
+    const path = ownedIcon(card.fetched.path);
+    if (path) removeFile(path);
+    this.adding = null;
+    cx.notify();
+  }
+
+  // The main stack's terminals page is the way back to the work.
+  showTerminals() {
+    run("layout.select", { stack: "main", child: TERMINALS_PAGE });
   }
 
   /** The all-agents permission: one choice, plus the agents that keep their own. */
   permissionsCard(rows, t) {
-    const permissions = this.currentPermissions();
-    const managed = rows.filter((row) => row.supports);
-    const exceptions = managed.filter((row) => row.permissionOverride);
-    const custom = managed.filter((row) => row.permission === "custom");
-    const exceptionLine = exceptions.length
-      ? `${exceptions.length === 1 ? "1 agent keeps its" : `${exceptions.length} agents keep their`} own permission: ${exceptions
-          .map((row) => `${row.name} (${PERMISSION_LABELS[row.permission]})`)
-          .join(", ")}.`
-      : null;
-    const noChoice = managed.filter(
-      (row) => !(permissionChoices(row.key) ?? []).includes(permissions.default),
-    );
-    const noChoiceLine =
-      permissions.default !== "own" && noChoice.length > 0
-        ? `${noChoice.length === 1 ? `1 agent has` : `${noChoice.length} agents have`} no ${PERMISSION_LABELS[permissions.default]} flag and keep ${noChoice.length === 1 ? "its" : "their"} own command: ${noChoice
-            .slice(0, 3)
-            .map((row) => row.name)
-            .join(", ")}${noChoice.length > 3 ? ` +${noChoice.length - 3}` : ""}.`
-        : null;
-    return v_flex()
-      .w_full()
-      .p(12)
-      .gap(10)
-      .rounded(10)
-      .border_1()
-      .border_color(t.border)
-      .bg(t.surface)
-      .child(
-        h_flex()
-          .w_full()
-          .items_start()
-          .gap(16)
-          .child(
-            v_flex()
-              .flex_1()
-              .min_w(0)
-              .gap(3)
-              .child(div().text_size(13).font_semibold().text_color(t.foreground).child("Permissions"))
-              .child(
-                div()
-                  .text_size(11)
-                  .line_height("16px")
-                  .text_color(t.muted)
-                  .child("How much every agent may do without asking. You can set one agent differently below."),
-              ),
-          )
-          .child(
-            permissionSelect(
-              {
-                id: "default",
-                open: this.permissionOpen === "default",
-                active: this.permissionActive,
-                choice: permissions.default,
-                label: PERMISSION_LABELS[permissions.default],
-                warn: permissions.default === "full-access",
-                width: 340,
-                items: defaultPermissionItems(this, managed),
-                onOpenChange: (open, cx) => this.setPermissionMenu("default", open, cx),
-              },
-              t,
-            ),
-          ),
-      )
-      .when(Boolean(exceptionLine) || custom.length > 0, (el) =>
-        el.child(
-          h_flex()
-            .w_full()
-            .gap(10)
-            .items_center()
-            .flex_wrap()
-            .child(
-              v_flex()
-                .flex_1()
-                .min_w(180)
-                .gap(2)
-                .when(Boolean(exceptionLine), (inner) =>
-                  inner.child(div().text_size(11).text_color(t.muted).child(exceptionLine)),
-                )
-                .when(custom.length > 0, (inner) =>
-                  inner.child(
-                    div()
-                      .text_size(11)
-                      .text_color(t.dim)
-                      .child(
-                        `${custom.length === 1 ? "1 agent sets" : `${custom.length} agents set`} permission flags in its own command; changing the default leaves ${custom.length === 1 ? "it" : "them"} alone.`,
-                      ),
-                  ),
-                ),
-            )
-            .when(Boolean(exceptionLine), (inner) =>
-              inner.child(
-                this.button(
-                  "am-permission-use-default",
-                  permissions.default === "own"
-                    ? "Reset every agent to its own settings"
-                    : `Use ${PERMISSION_LABELS[permissions.default]} for all`,
-                  t,
-                  (_event, cx) => this.setDefaultPermission(permissions.default, cx),
-                  { height: 24, px: 8 },
-                ),
-              ),
-            ),
-        ),
-      )
-      .when(Boolean(noChoiceLine), (el) =>
-        el.child(div().text_size(11).text_color(t.dim).child(noChoiceLine)),
-      )
-      .when(this.permissionNotice, (el) =>
-        el.child(
-          h_flex()
-            .w_full()
-            .gap(10)
-            .items_center()
-            .child(
-              div()
-                .flex_1()
-                .min_w(0)
-                .text_size(11)
-                .text_color(this.permissionNotice.tone === "blocked" ? t.blocked : t.muted)
-                .child(this.permissionNotice.text),
-            )
-            .when(this.permissionNotice.retry, (inner) =>
-              inner.child(
-                this.button("am-permission-retry", "Retry", t, (_event, cx) => {
-                  const retry = this.permissionNotice?.retry;
-                  this.permissionNotice = null;
-                  retry?.(cx);
-                }, { height: 24, px: 8, color: t.blocked }),
-              ),
-            ),
-        ),
-      );
+    return permissionsCardView(this, rows, t);
   }
 
   editor(row, editor, t) {
@@ -1935,257 +1592,8 @@ export default class AgentManager extends View {
     return uninstallSectionView(this, row, t);
   }
 
-  render(cx) {
+  render() {
     if (this.providersPage) return this.providersView();
-    const t = theme();
-    const split = this.allRows();
-    const rows = split.all;
-    const loading = this.loading && !this.agents;
-    const width = this.width || 800;
-    const contentPad = width < 520 ? 12 : 24;
-    const refreshButton = h_flex()
-      .id("am-refresh")
-      .h(30)
-      .px(10)
-      .gap(6)
-      .flex_none()
-      .items_center()
-      .rounded(6)
-      .border_1()
-      .border_color(t.border)
-      .bg("#00000000")
-      .text_size(12)
-      .font_medium()
-      .text_color(this.refreshing ? t.dim : t.foreground)
-      .when(!this.refreshing, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover)).on_click((_event, cx) => this.refresh(cx)))
-      .role("button")
-      .accessibility_label(this.refreshing ? "Refreshing agents" : "Refresh installed agents")
-      .tooltip("Re-check every agent on this computer")
-      .child(
-        this.refreshing
-          ? div().flex_none().text_size(12).text_color(t.muted).frames(["◐", "◓", "◑", "◒"], 120)
-          : svg("mods/orca-agent-manager/refresh-cw.svg").size(13).flex_none().text_color(t.muted),
-      )
-      .child(this.refreshing ? "Refreshing…" : "Refresh");
-
-    const conflictActions =
-      this.externalConflict && this.anyDirty()
-        ? h_flex()
-            .gap(8)
-            .child(
-              this.button("am-reload-all", "Reload from disk", t, (_event, cx) => {
-                if (this.pendingProgramsText !== undefined) this.applyPrograms(this.pendingProgramsText);
-                this.pendingProgramsText = undefined;
-                this.externalConflict = false;
-                for (const [key, editor] of this.editors) {
-                  editor.dirty = false;
-                  editor.conflict = false;
-                  editor.force = false;
-                  editor.error = null;
-                  const row = rows.find((candidate) => candidate.key === key);
-                  if (row) {
-                    editor.command.set_value(row.run[0] ?? "");
-                    editor.args.set_value(argsToText(row.run.slice(1)));
-                  }
-                }
-                this.writeError = null;
-                this.syncEditors();
-                cx.notify();
-              }, { height: 24, px: 8 }),
-            )
-            .child(
-              this.button("am-conflict-dismiss", "Dismiss", t, (_event, cx) => {
-                this.externalConflict = false;
-                cx.notify();
-              }, { height: 24, px: 8, color: t.muted }),
-            )
-        : null;
-
-    const header = v_flex()
-      .w_full()
-      .max_w(760)
-      .mx_auto()
-      .px(contentPad)
-      .pt(20)
-      .gap(2)
-      .child(
-        h_flex()
-          .w_full()
-          .items_center()
-          .gap(8)
-          .child(
-            div()
-              .id("am-back")
-              .size(28)
-              .flex_none()
-              .flex()
-              .items_center()
-              .justify_center()
-              .rounded(6)
-              .text_color(t.muted)
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover).text_color(t.foreground))
-              .role("button")
-              .accessibility_label("Back to terminals")
-              .tooltip("Back to terminals")
-              .on_click(() => {
-                this.typing = false;
-                // The main stack's terminals page is the way back to the work.
-                run("layout.select", { stack: "main", child: TERMINALS_PAGE });
-              })
-              .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
-          )
-          .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Agents"))
-          .child(badge("This computer", t, { border: true }))
-          .child(div().flex_1())
-          .child(refreshButton),
-      )
-      .child(
-        div()
-          .mt(4)
-          .text_size(12)
-          .line_height("18px")
-          .text_color(t.muted)
-          .child(
-            "Install status for the Agent CLIs Herdr can start. Uninstalled CLIs keep their switch unavailable; disabled installed agents stay installed but are hidden from the Start an agent menu. Install, uninstall, or edit a command when the CLI is outside PATH.",
-          ),
-      )
-      .when(this.managerError, (el) =>
-        el.child(
-          banner(`agent-manager.json is invalid: ${this.managerError}`, t, {
-            actions: div().text_size(11).text_color(t.blocked).child("Availability toggles are paused until the file is fixed."),
-          }),
-        ),
-      )
-      .when(this.programsError, (el) =>
-        el.child(
-          banner(this.programsError, t, {
-            actions: div().text_size(11).text_color(t.blocked).child("Built-in commands are shown; editing is paused so valid JSON is not destroyed."),
-          }),
-        ),
-      )
-      .when(this.detectionError, (el) =>
-        el.child(
-          banner(this.detectionError, t, {
-            actions: h_flex()
-              .gap(8)
-              .child(
-                this.button("am-retry-detection", "Retry", t, (_event, cx) => this.refresh(cx), { height: 24, px: 8, color: t.blocked }),
-              ),
-          }),
-        ),
-      )
-      .when(this.freshWarning, (el) =>
-        el.child(
-          banner(this.freshWarning, t, {
-            border: t.blocked,
-            bg: "#f59e0b14",
-            color: t.blocked,
-          }),
-        ),
-      )
-      .when(this.writeError && !rows.some((row) => this.editors.get(row.key)?.conflict), (el) =>
-        el.child(banner(this.writeError, t)),
-      )
-      .when(conflictActions, (el) =>
-        el.child(
-          banner("programs.json changed on disk while you were editing. Your draft is kept.", t, {
-            actions: conflictActions,
-          }),
-        ),
-      );
-
-    const sectionBody = v_flex()
-      .w_full()
-      .max_w(760)
-      .mx_auto()
-      .px(contentPad)
-      .pb(20)
-      .gap(2)
-      .when(loading, (el) =>
-        el.child(
-          h_flex()
-            .w_full()
-            .gap(8)
-            .p(16)
-            .rounded(8)
-            .border_1()
-            .border_color(t.border)
-            .border_dashed()
-            .items_center()
-            .child(div().flex_none().text_size(12).text_color(t.muted).frames(["◐", "◓", "◑", "◒"], 120))
-            .child(div().text_size(12).text_color(t.muted).child("Detecting installed agents…")),
-        ),
-      )
-      .when(!loading, (el) =>
-        el
-          .when(rows.some((row) => row.supports), (inner) => inner.child(this.permissionsCard(rows, t)))
-          .child(group("Official support", "Agents Herdr supports natively", t))
-          .child(
-            section(
-              "Installed",
-              `${split.installed.length} detected`,
-              t,
-              this.fromCache ? "showing last known result" : null,
-            ),
-          )
-          .when(split.installed.length === 0, (inner) =>
-            inner.child(empty("No agents detected. If one is installed, the probe may have timed out — try Refresh.", t)),
-          )
-          .when(split.installed.length > 0, (inner) => inner.child(this.catalog(split.installed, t, "installed")))
-          .when(split.available.length > 0, (inner) =>
-            inner
-              .child(section("Available to install", `${split.available.length} agents`, t, null, true))
-              .child(this.catalog(split.available, t, "available")),
-          )
-          .when(split.available.length === 0 && split.installed.length > 0, (inner) =>
-            inner.child(section("Available to install", "0 agents", t, "every supported agent is installed", true)),
-          )
-          .child(div().w_full().h(1).mt(16).bg(t.border))
-          .child(group("Unofficial support", "Community CLIs Herdr does not manage; they start from the Start menu", t))
-          .child(section("Installed", this.freebuffInstalled ? "1 detected" : "0 detected", t))
-          .when(this.freebuffInstalled, (inner) => inner.child(this.unofficialRow(t, true)))
-          .when(!this.freebuffInstalled, (inner) => inner.child(empty("No unofficial agents detected.", t)))
-          .child(section("Available to install", this.freebuffInstalled ? "0 agents" : "1 agent", t, null, true))
-          .when(!this.freebuffInstalled, (inner) => inner.child(this.unofficialRow(t, false)))
-          .child(
-            h_flex()
-              .w_full()
-              .pt(16)
-              .pb(4)
-              .gap(12)
-              .flex_wrap()
-              .items_center()
-              .child(div().text_size(11).text_color(t.dim).child(timeLabel(this.lastChecked)))
-              .child(div().flex_1())
-              .child(div().text_size(11).text_color(t.dim).child("↑↓ select · Enter edit · Space toggle installed · R refresh")),
-          ),
-      );
-
-    return v_flex()
-      .id("am-root")
-      .track_focus(this.handle)
-      .size_full()
-      .min_h(0)
-      .overflow_hidden()
-      .bg(t.background)
-      .text_size(12)
-      .on_key_down((event, cx) => this.onKey(event, cx))
-      .on_size_change((size, cx) => {
-        if (this.width !== size.width) {
-          this.width = size.width;
-          cx.notify();
-        }
-      })
-      .child(header.flex_none())
-      .child(
-        v_flex()
-          .id("am-list")
-          .w_full()
-          .min_h(0)
-          .overflow_y_scrollbar()
-          .flex_1()
-          .child(sectionBody),
-      );
+    return agentsPageView(this, theme());
   }
 }
