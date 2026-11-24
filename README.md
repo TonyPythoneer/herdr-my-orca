@@ -95,32 +95,37 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 
 ## How the repo is organized
 
-- The repo holds only our own mods (`orca-*`, `agent-config`, `skillshare`). Herdr ships its own
-  mods and layouts (`confirm`, `picker`, `main`, `terminals`, …); they stay in the live config
-  and are not tracked here.
-- Orca UI has one entry, `orca-ui/app.mjs`: it links each feature source, the mod it builds into
-  and the settings it uses. A migrated feature is edited in `orca-ui/features/<area>/<feature>/`
-  and regenerated with `node scripts/build-orca-ui.mjs --out .`; its `manifest.json` lists every
-  managed output, so the copy under `mods/` is delivery format, not an edit location
-  (`--check` reports drift). Anything no manifest lists is still edited in place.
+- The repo holds only our own mods (`orca-*`, `agent-config`, and `skillshare`, which this repo
+  owns even though it wraps a local CLI). Herdr ships its own mods and layouts (`confirm`,
+  `picker`, `main`, `terminals`, …); they stay in the live config and are not tracked here.
+- Orca UI starts at [orca-ui/app.mjs](orca-ui/app.mjs): a reading map that lists each migrated
+  feature, the screen it draws and the files to follow next. A feature is edited in
+  `orca-ui/features/<area>/<feature>/` and regenerated with
+  `node scripts/build-orca-ui.mjs --out .`. Its `manifest.json` lists every managed output, test,
+  layout slot and key section, so the copy under `mods/` is delivery format, not an edit location.
+  `node scripts/build-orca-ui.mjs --check --out .` reports drift and undeclared files in a feature's
+  mod folder. Anything no manifest lists is still edited in place.
 - On a Herdr error (`herdr-app check`, `status`, or the window's Copy details), do not open the
   `mods/` file it names: `herdr-app check mods/<mod> 2>&1 | node scripts/where-error.mjs` prints the
-  source file and line to edit (shared helpers one line up, migrated features in `orca-ui/`) and
-  the `app.mjs` entry, tests and layouts that own it.
+  file and line to edit (a shared copy has the same line numbers as its source in
+  [shared/](shared/)), plus the feature, tests, layouts and `next` hint that own it.
 - A mod may import only files inside its own folder: `../x.js` and symlinks fail
-  `herdr-app check`. Code several mods need lives in `shared/` and `scripts/sync-shared.mjs`
-  copies it into each mod with a header line; `--check` (and a test) fails on drift. Edit only
-  the file in `shared/`. Asset paths such as `mods/<other>/x.svg` may cross folders.
+  `herdr-app check`. Code several mods need lives in [shared/](shared/) and
+  [scripts/sync-shared.mjs](scripts/sync-shared.mjs) copies it into each mod with a header line;
+  `--check` (and a test) fails on drift. Edit only the file in `shared/`. Asset paths such as
+  `mods/<other>/x.svg` may cross folders.
 - Big mods are split into pure logic files, each with its own test (for example
   `orca-agent-manager/{util,parts,views}.js`, `orca-spaces/{storage,cards}.js`,
   `orca-tabs/{drop-zone,tab-title}.js`). `scripts/gpui-stub-loader.mjs` stubs `gpui-kit`,
   `gpui-base` and `herdr`, so `render.test.js` renders the real `main.js` and compares it with
   `render.snap.json` (delete the snapshot to re-record after an intended view change).
 - Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
-  (see `.agents/skills/herdr-app-dev-sync/SKILL.md`).
+  (see [.agents/skills/herdr-app-dev-sync/SKILL.md](.agents/skills/herdr-app-dev-sync/SKILL.md)).
 - Checks: `node --test mods scripts orca-ui/features`, `herdr-app check <mod>`, `herdr-app status`,
   `node scripts/sync-shared.mjs --check`, `node scripts/build-orca-ui.mjs --check --out .`.
-- Not used: a bundler (about 3% saved, breaks edit-live-then-sync).
+- Not used: a bundler. Measured on two sample mods with Vite+, source maps doubled the output and
+  herdr-app 0.1.17 ignores them, so errors would name bundle lines
+  ([evaluation](docs/plan-orca-bundler-evaluation.md)).
 
 ## Setup
 

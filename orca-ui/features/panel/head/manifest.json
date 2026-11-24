@@ -17,9 +17,19 @@
     "skillshare.svg",
     "workflow.svg"
   ],
-  "tests": ["panel-gating.test.js", "panel-views.test.js"],
-  "layoutSlots": { "orca": ["panel-head"], "orca-unified": ["panel-head"] },
-  "commands": ["orca-panel-head.<view>"],
-  "keys": ["layout:orca"],
-  "shared": []
+  "tests": [
+    "panel-gating.test.js",
+    "panel-views.test.js"
+  ],
+  "layoutSlots": {
+    "orca": [
+      "panel-head"
+    ],
+    "orca-unified": [
+      "panel-head"
+    ]
+  },
+  "keys": [
+    "layout:orca"
+  ]
 }
