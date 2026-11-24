@@ -17,13 +17,14 @@ export const USES = {
   "tasks.js": ["orca-chrome", "orca-tasks"],
   "panel-motion.js": ["orca-files", "orca-changes", "orca-agents", "orca-panel-gap", "skillshare"],
 };
+// The header goes last so line numbers in Herdr errors match shared/ exactly.
 const header = (name) => `// Generated from shared/${name} by scripts/sync-shared.mjs. Edit that file, not this copy.\n`;
 
 export async function copies(root = ROOT) {
   const out = [];
   for (const [name, mods] of Object.entries(USES)) {
     const source = await readFile(join(root, "shared", name), "utf8");
-    for (const mod of mods) out.push({ path: join(root, "mods", mod, name), want: header(name) + source });
+    for (const mod of mods) out.push({ path: join(root, "mods", mod, name), want: source + (source.endsWith("\n") ? "" : "\n") + header(name) });
   }
   return out;
 }

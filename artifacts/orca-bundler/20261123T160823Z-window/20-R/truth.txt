@@ -1,0 +1,14 @@
+== copy (panel-gap/panel-motion.js)
+    20	}
+    21	
+    22	export function panelFrame(inner) {
+    23	  throw new Error("ORCA_PROBE_R");
+    24	  if (props()?.overlay) return inner;
+    25	  const open = shared("panel.openPx");
+== shared/panel-motion.js (source of truth, healthy)
+    19	}
+    20	
+    21	export function panelFrame(inner) {
+    22	  if (props()?.overlay) return inner;
+    23	  const open = shared("panel.openPx");
+    24	  const px = find(layout(), "panel")?.size?.px;

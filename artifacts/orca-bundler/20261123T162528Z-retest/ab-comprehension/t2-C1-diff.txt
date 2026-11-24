@@ -1,0 +1,16 @@
+ keys.json                                | 1 -
+ mods/keys.test.js                        | 4 ++--
+ mods/orca-panel-head/main.js             | 1 -
+ mods/orca-panel-head/panel-views.js      | 1 -
+ mods/orca-panel-head/panel-views.test.js | 7 ++-----
+ mods/orca-panel-head/plug.svg            | 6 ------
+ orca-ui/app.mjs                          | 2 +-
+ 7 files changed, 5 insertions(+), 17 deletions(-)
+ M keys.json
+ M mods/keys.test.js
+ M mods/orca-panel-head/main.js
+ M mods/orca-panel-head/panel-views.js
+ M mods/orca-panel-head/panel-views.test.js
+ D mods/orca-panel-head/plug.svg
+ M orca-ui/app.mjs
+?? ANSWER.md

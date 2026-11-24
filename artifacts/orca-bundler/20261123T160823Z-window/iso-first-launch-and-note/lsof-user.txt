@@ -1,0 +1,49 @@
+== lsof 27291
+Herdr   27291 tonyyang  cwd    DIR               1,18       736                   2 /
+Herdr   27291 tonyyang    3u  unix 0xaecdfc9288c3ab4e       0t0                     /Users/tonyyang/.config/herdr-app/herdr-app.sock
+== lsof 27296
+herdr-cor 27296 tonyyang  cwd    DIR               1,18      736                   2 /
+herdr-cor 27296 tonyyang    3u  unix 0xf13c6f7df5754a64      0t0                     ->0x8f848df3b0c553e2
+herdr-cor 27296 tonyyang    4u  unix 0xf13c6f7df5754a64      0t0                     ->0x8f848df3b0c553e2
+== lsof 90861
+herdr-cor 90861 tonyyang  cwd    DIR               1,18       736                   2 /
+herdr-cor 90861 tonyyang    3u  unix 0xe342dafc6cecc608       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+herdr-cor 90861 tonyyang    4u  unix 0x43b30e8443f99ee8       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+herdr-cor 90861 tonyyang    5u  unix 0x43b30e8443f99ee8       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+herdr-cor 90861 tonyyang    6u  unix 0x43b30e8443f99ee8       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+herdr-cor 90861 tonyyang    9u  unix 0x12ff08f2ad1293cf       0t0                     ->0xd0c14b6c31a3ede
+herdr-cor 90861 tonyyang   10u  unix  0xd0c14b6c31a3ede       0t0                     ->0x12ff08f2ad1293cf
+herdr-cor 90861 tonyyang   11u  unix 0x12ff08f2ad1293cf       0t0                     ->0xd0c14b6c31a3ede
+herdr-cor 90861 tonyyang   13u  unix 0x12ff08f2ad1293cf       0t0                     ->0xd0c14b6c31a3ede
+herdr-cor 90861 tonyyang   16u  unix 0x247a44e9c9068bf0       0t0                     ->0xd436b5121218140e
+herdr-cor 90861 tonyyang   17u  unix 0xd436b5121218140e       0t0                     ->0x247a44e9c9068bf0
+herdr-cor 90861 tonyyang   18u  unix 0x247a44e9c9068bf0       0t0                     ->0xd436b5121218140e
+herdr-cor 90861 tonyyang   20u  unix 0x247a44e9c9068bf0       0t0                     ->0xd436b5121218140e
+herdr-cor 90861 tonyyang   23u  unix 0x7f373330f96776cf       0t0                     ->0x8c4d62db350b4fdd
+herdr-cor 90861 tonyyang   24u  unix 0x8c4d62db350b4fdd       0t0                     ->0x7f373330f96776cf
+herdr-cor 90861 tonyyang   25u  unix 0x7f373330f96776cf       0t0                     ->0x8c4d62db350b4fdd
+herdr-cor 90861 tonyyang   27u  unix 0x7f373330f96776cf       0t0                     ->0x8c4d62db350b4fdd
+herdr-cor 90861 tonyyang   30u  unix 0x124d74f75afb2b9c       0t0                     ->0x2f3da7444f3343f6
+herdr-cor 90861 tonyyang   31u  unix 0x2f3da7444f3343f6       0t0                     ->0x124d74f75afb2b9c
+herdr-cor 90861 tonyyang   32u  unix 0x124d74f75afb2b9c       0t0                     ->0x2f3da7444f3343f6
+herdr-cor 90861 tonyyang   34u  unix 0x124d74f75afb2b9c       0t0                     ->0x2f3da7444f3343f6
+herdr-cor 90861 tonyyang   37u  unix 0x6e0e850da4e78eeb       0t0                     ->0x332fdfb1d76fe712
+herdr-cor 90861 tonyyang   38u  unix 0x332fdfb1d76fe712       0t0                     ->0x6e0e850da4e78eeb
+herdr-cor 90861 tonyyang   39u  unix 0x6e0e850da4e78eeb       0t0                     ->0x332fdfb1d76fe712
+herdr-cor 90861 tonyyang   41u  unix 0x6e0e850da4e78eeb       0t0                     ->0x332fdfb1d76fe712
+herdr-cor 90861 tonyyang   44u  unix 0x22d26b9c1aa95383       0t0                     ->0x5e0be6b32f2e6e1f
+herdr-cor 90861 tonyyang   45u  unix 0x5e0be6b32f2e6e1f       0t0                     ->0x22d26b9c1aa95383
+herdr-cor 90861 tonyyang   46u  unix 0x22d26b9c1aa95383       0t0                     ->0x5e0be6b32f2e6e1f
+herdr-cor 90861 tonyyang   48u  unix 0x22d26b9c1aa95383       0t0                     ->0x5e0be6b32f2e6e1f
+herdr-cor 90861 tonyyang   51u  unix 0xe81c437a48f6d577       0t0                     ->0x4f934b11f8218c81
+herdr-cor 90861 tonyyang   52u  unix 0x4f934b11f8218c81       0t0                     ->0xe81c437a48f6d577
+herdr-cor 90861 tonyyang   53u  unix 0xe81c437a48f6d577       0t0                     ->0x4f934b11f8218c81
+herdr-cor 90861 tonyyang   55u  unix 0xe81c437a48f6d577       0t0                     ->0x4f934b11f8218c81
+herdr-cor 90861 tonyyang   58u  unix 0x76dd5a8de34c0672       0t0                     ->0x24af010f3ea68b03
+herdr-cor 90861 tonyyang   59u  unix 0x24af010f3ea68b03       0t0                     ->0x76dd5a8de34c0672
+herdr-cor 90861 tonyyang   60u  unix 0x76dd5a8de34c0672       0t0                     ->0x24af010f3ea68b03
+herdr-cor 90861 tonyyang   62u  unix 0x76dd5a8de34c0672       0t0                     ->0x24af010f3ea68b03
+herdr-cor 90861 tonyyang   65u  unix  0x5f0283e3853d45b       0t0                     ->0x9fc17190e4e46b7f
+herdr-cor 90861 tonyyang   66u  unix 0x9fc17190e4e46b7f       0t0                     ->0x5f0283e3853d45b
+herdr-cor 90861 tonyyang   67u  unix  0x5f0283e3853d45b       0t0                     ->0x9fc17190e4e46b7f
+herdr-cor 90861 tonyyang   69u  unix  0x5f0283e3853d45b       0t0                     ->0x9fc17190e4e46b7f

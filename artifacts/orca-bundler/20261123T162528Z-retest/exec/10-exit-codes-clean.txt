@@ -1,0 +1,16 @@
+variant=render exit=0
+  marker-render: /private/tmp/claude-501/rt-pfb0/home
+variant=top exit=0
+  marker-top: ABSENT
+variant=diag exit=0
+  marker-diag: ABSENT
+--- out-render.log
+check passed: /private/tmp/claude-501/rt-pfb0/mods/probe-exec-render
+WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real
+WARN  gpui_shell::engine::quickjs::scheduler: a reload stranded script tasks that will never settle (1 a HostModule's async function); re-register background work from init()
+--- out-top.log
+check passed: /private/tmp/claude-501/rt-pfb0/mods/probe-exec-top
+WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real
+--- out-diag.log
+check passed: /private/tmp/claude-501/rt-pfb0/mods/probe-exec-diag
+WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real

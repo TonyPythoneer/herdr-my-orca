@@ -1,0 +1,10 @@
+--- baseline/shared/panel-motion.js	2026-11-23 23:57:02
++++ probeR/panel-motion.js	2026-11-24 00:10:38
+@@ -19,6 +19,7 @@
+ }
+ 
+ export function panelFrame(inner) {
++  throw new Error("ORCA_PROBE_R");
+   if (props()?.overlay) return inner;
+   const open = shared("panel.openPx");
+   const px = find(layout(), "panel")?.size?.px;

@@ -1,0 +1,32 @@
+== RU orca-panel-gap 7:12
+  col11: ../../src/shared/panel-motion.js 22 9
+  col12: ../../src/shared/panel-motion.js 22 13
+  col13: ../../src/shared/panel-motion.js 22 13
+== RU orca-panel-gap 35:26
+  col25: ../../src/features/panel-gap/main.js 40 32
+  col26: ../../src/features/panel-gap/main.js 40 37
+  col27: ../../src/features/panel-gap/main.js 40 37
+== RU orca-agents 7:12
+  col11: ../../src/shared/panel-motion.js 22 9
+  col12: ../../src/shared/panel-motion.js 22 13
+  col13: ../../src/shared/panel-motion.js 22 13
+== RU orca-agents 256:37
+  col36: ../../src/features/agents/main.js 457 39
+  col37: ../../src/features/agents/main.js 457 50
+  col38: ../../src/features/agents/main.js 457 50
+== RM orca-panel-gap 1:146
+  col145: ../../src/shared/panel-motion.js 22 3
+  col146: ../../src/shared/panel-motion.js 22 3
+  col147: ../../src/shared/panel-motion.js 22 13
+== RM orca-panel-gap 1:816
+  col815: ../../src/features/panel-gap/main.js 40 32
+  col816: ../../src/features/panel-gap/main.js 40 32
+  col817: ../../src/features/panel-gap/main.js 40 37
+== RM orca-agents 1:228
+  col227: ../../src/shared/panel-motion.js 22 3
+  col228: ../../src/shared/panel-motion.js 22 3
+  col229: ../../src/shared/panel-motion.js 22 13
+== RM orca-agents 3:5020
+  col5019: ../../src/features/agents/main.js 459 3
+  col5020: ../../src/features/agents/main.js 459 3
+  col5021: ../../src/features/agents/main.js 459 3

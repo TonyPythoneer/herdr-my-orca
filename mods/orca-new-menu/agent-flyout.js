@@ -1,4 +1,3 @@
-// Generated from shared/agent-flyout.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // What the agent setup flyout is made of, as data: one SPEC per agent (its options, the CLI argument
 // each one becomes, the sections they sit in) and the few pure functions that read a spec. The
 // flyout (agent-config) draws any spec with one renderer per option type, and the new-menu asks
@@ -359,3 +358,4 @@ export function parseModels(parser, stdout) {
   if (!parse) throw new Error(`no model parser named ${parser}`);
   return parse(String(stdout ?? ""));
 }
+// Generated from shared/agent-flyout.js by scripts/sync-shared.mjs. Edit that file, not this copy.

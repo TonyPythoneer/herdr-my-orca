@@ -1,0 +1,8 @@
+cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
+cmd: env HOME=/private/tmp/claude-501/orca-bundler.X7bUqY/home OMP_CODING_AGENT_DIR=/private/tmp/claude-501/orca-bundler.X7bUqY/empty-agent PI_CODING_AGENT_DIR=/private/tmp/claude-501/orca-bundler.X7bUqY/empty-agent herdr-app check /private/tmp/claude-501/orca-bundler.X7bUqY/known/m1
+S1
+    at <anonymous> (/private/tmp/claude-501/orca-bundler.X7bUqY/known/m1/main.js?v=1:5:11)
+
+
+check failed: /private/tmp/claude-501/orca-bundler.X7bUqY/known/m1
+exit: 1

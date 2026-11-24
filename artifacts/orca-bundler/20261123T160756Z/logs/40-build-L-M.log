@@ -1,0 +1,15 @@
+cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
+cmd: /Users/tonyyang/git/herdr-my-orca.worktrees/orca-ui-package-plan/artifacts/orca-bundler/20261123T160756Z/build.sh /private/tmp/claude-501/orca-bundler.X7bUqY/srcL /private/tmp/claude-501/orca-bundler.X7bUqY/tool/node_modules /private/tmp/claude-501/orca-bundler.X7bUqY/baseline /private/tmp/claude-501/orca-bundler.X7bUqY/bLM M
+ℹ entry: src/features/panel-gap/main.js
+ℹ Build start
+ℹ out/panel-gap/main.js      0.14 kB │ gzip: 0.14 kB
+ℹ out/panel-gap/main.js.map  5.02 kB │ gzip: 2.27 kB
+ℹ 2 files, total: 5.16 kB
+✔ Build complete in 12ms
+ℹ entry: src/features/agents/main.js
+ℹ Build start
+ℹ out/agents/main.js      12.41 kB │ gzip:  4.35 kB
+ℹ out/agents/main.js.map  50.30 kB │ gzip: 15.47 kB
+ℹ 2 files, total: 62.70 kB
+✔ Build complete in 14ms
+exit: 0

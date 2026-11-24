@@ -1,0 +1,8 @@
+--- agents panel-motion vs shared/ diff (expect header-only)
+0a1
+> // Generated from shared/panel-motion.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+exit=1
+--- agents main.js panelFrame usage
+18:import { panelFrame } from "./panel-motion.js";
+456:  // Unified layout: a narrowing panel keeps this content at its open width (see panel-motion.js).
+457:  render(cx) { return panelFrame(this.renderBody(cx)); }

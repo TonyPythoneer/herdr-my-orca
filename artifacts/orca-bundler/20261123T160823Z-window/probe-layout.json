@@ -1,0 +1,7 @@
+{
+  "id": "root",
+  "type": "row",
+  "children": [
+    { "id": "ports", "type": "block", "content": { "mod": "orca-panel-gap", "props": { "tab": "ports" } } }
+  ]
+}

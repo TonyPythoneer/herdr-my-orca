@@ -1,0 +1,6 @@
+X
+    at <anonymous> (/private/tmp/claude-501/rt-iwBr/s3_nonascii4/main.js?v=1:3:40)
+
+
+check failed: /private/tmp/claude-501/rt-iwBr/s3_nonascii4
+exit=1

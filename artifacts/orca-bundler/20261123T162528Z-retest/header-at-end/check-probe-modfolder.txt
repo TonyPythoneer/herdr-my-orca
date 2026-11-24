@@ -1,0 +1,8 @@
+== PROBE check (mod folder) attempt 2 ==
+ORCA_PROBE_R
+    at panelFrame (/private/tmp/claude-501/rt-QvSR/mods/orca-panel-gap/panel-motion.js?v=1:22:13)
+    at render (/private/tmp/claude-501/rt-QvSR/mods/orca-panel-gap/main.js?v=1:40:37)
+
+
+check failed: /private/tmp/claude-501/rt-QvSR/mods/orca-panel-gap
+exit=1

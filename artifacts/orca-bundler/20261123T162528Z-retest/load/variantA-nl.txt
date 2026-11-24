@@ -1,0 +1,8 @@
++ nl -ba main.js | sed -n 10,16p
+    10	import { View, div, svg } from "gpui-kit";
+    11	import { v_flex } from "gpui-base";
+    12	import { theme, props } from "herdr";
+    13	import { panelFrame } from "./panel-motion.js";
+    14	throw new Error("ORCA_PROBE_L");
+    15	
+    16	const GAPS = {

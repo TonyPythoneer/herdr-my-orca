@@ -1,0 +1,2 @@
+10725
+10731 /private/tmp/claude-501/hp.VJUo/h/.local/bin/herdr-core connect

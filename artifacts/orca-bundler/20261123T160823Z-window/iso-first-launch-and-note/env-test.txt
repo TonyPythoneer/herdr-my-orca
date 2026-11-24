@@ -1,0 +1,6 @@
+== env of 36696
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+HOME=/private/tmp/claude-501/hp.r8j5gU/h
+== env of 36735
+HOME=/Users/tonyyang
+PATH=/usr/bin:/bin:/usr/sbin:/sbin

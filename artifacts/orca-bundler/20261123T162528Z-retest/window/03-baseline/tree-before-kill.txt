@@ -1,0 +1,2 @@
+13982
+13988 /private/tmp/claude-501/hp.VJUo/h/.local/bin/herdr-core connect

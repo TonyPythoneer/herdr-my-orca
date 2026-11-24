@@ -1,0 +1,2 @@
+orca-ui/features/panel/head/main.js:8:11
+  from mods/orca-panel-head/main.js:8; app.mjs feature "panel/head"; tests orca-ui/features/panel/head/panel-gating.test.js, orca-ui/features/panel/head/panel-views.test.js; layouts orca, orca-unified; next mods/orca-files/main.js

@@ -1,0 +1,6 @@
+herdr-app --version -> exit 0 (0.1.17)
+hc --version -> exit 0 (0.1.22)
+Fixtures built under $S/mods/probe-inline-{v1,v2,v3} with mod.json copied from mods/orca-panel-gap/mod.json
+env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=$S/home HERDR_TELEMETRY=0 /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr check $S/mods/probe-inline-v1 -> exit 1
+env -i ... check $S/mods/probe-inline-v2 -> exit 1
+env -i ... check $S/mods/probe-inline-v3 -> exit 1

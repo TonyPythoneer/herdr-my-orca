@@ -1,4 +1,3 @@
-// Generated from shared/codex-provider.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // The oMLX model provider for Codex: the one place that decides what a host is, what a `/models`
 // answer means, and how a provider launch is spelled. Used by orca-agent-manager (setup and test)
 // and agent-config (the Codex flyout and the launch).
@@ -179,3 +178,4 @@ export function parseProviderFile(text) {
 export function serializeProviderFile(providers) {
   return `${JSON.stringify(providers ?? {}, null, 2)}\n`;
 }
+// Generated from shared/codex-provider.js by scripts/sync-shared.mjs. Edit that file, not this copy.

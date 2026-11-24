@@ -1,0 +1,4 @@
+  PID  PPID STARTED                      COMMAND
+36696     1 Tue 24 Nov 00:09:57 2026     /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr
+36725 36696 Tue 24 Nov 00:09:57 2026     /private/tmp/claude-501/hp.r8j5gU/h/.local/bin/herdr-core connect
+36735     1 Tue 24 Nov 00:09:57 2026     /private/tmp/claude-501/hp.r8j5gU/h/.local/bin/herdr-core --hc-launchd /tmp/hc-launchd-36725-1795450197774073000-d4b53d6f4faa7cf2242d15ce703d04ae/ready

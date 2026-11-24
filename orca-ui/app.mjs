@@ -5,6 +5,10 @@
 // built copies under `mods/`; those are delivery format, not edit locations.
 //
 // Not migrated yet: `shared/` helpers and mods without an entry here are still edited in place.
+//
+// Herdr errors name the built copy (`mods/<mod>/<file>?v=1:<line>:<col>`). Do not open it: pipe
+// the error to `node scripts/where-error.mjs`, which prints the file and line to edit and the
+// entry below that owns it.
 export const features = [
   {
     id: "panel/head",

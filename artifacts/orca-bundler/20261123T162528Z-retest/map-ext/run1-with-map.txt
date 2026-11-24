@@ -1,0 +1,7 @@
+$ env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=/private/tmp/claude-501/rt-IFDF/home HERDR_TELEMETRY=0 /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr check /private/tmp/claude-501/rt-IFDF/mods/probe-ext
+ORCA_PROBE_EXT
+    at <anonymous> (/private/tmp/claude-501/rt-IFDF/mods/probe-ext/main.js?v=1:5:11)
+
+
+check failed: /private/tmp/claude-501/rt-IFDF/mods/probe-ext
+exit=1
