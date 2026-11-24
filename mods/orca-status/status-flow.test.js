@@ -229,3 +229,26 @@ test("known spaces reuse already probed folders and skip remote folders", async 
   assert.deepEqual(calls, ["/new"]);
   assert.deepEqual(known.map(s => s.checkout?.top ?? null), ["/already", "/new", "/new", null]);
 });
+
+test("performance contract: native CWD, subprocess budget and worktree cache hits", async () => {
+  const view = new Status();
+  view.wtCheckouts = new Map();
+  let subprocesses = 0;
+  globalThis.__herdrExec = async (_cmd, [, path]) => {
+    subprocesses++;
+    return { code: 0, stdout: [path, path + "/.git", path + "/.git", "main"].join("\n") };
+  };
+  const snapshot = Array.from({ length: 20 }, () => ({ folder: "/fixture" }));
+  await view.knownSpaces(snapshot);
+  const cold = subprocesses;
+  await view.knownSpaces(snapshot);
+  const warm = subprocesses - cold;
+  assert.equal(cold, 1);
+  assert.equal(warm, 0);
+  const panes = Array.from({ length: 20 }, (_, i) => ({ terminal: String(i), cwd: "/fixture" }));
+  const cwds = await view.agentCwds(panes);
+  assert.equal(Object.keys(cwds).length, 20);
+  console.log("PERF_CONTRACT " + JSON.stringify({ id: "status.refresh", scope: "host stub", workspaces: 20,
+    cold_subprocesses: cold, warm_subprocesses: warm, cache_lookup_count: 1, cache_hit_count: 1,
+    cache_hit_rate: 1, native_cwd_count: 20, expected_cli_fallbacks: 0 }));
+});

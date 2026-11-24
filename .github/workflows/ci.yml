@@ -163,11 +163,24 @@ jobs:
           test "${#selected[@]}" -gt 0
           set -o pipefail
           node --test --test-timeout=60000 --experimental-test-coverage --test-coverage-exclude='**/*.test.*' "${selected[@]}" | tee "$RUNNER_TEMP/selected-tests.log"
+      - name: Extract machine-readable performance contracts
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          log = root / "selected-tests.log"
+          rows = [json.loads(line.split("PERF_CONTRACT ", 1)[1]) for line in log.read_text().splitlines() if "PERF_CONTRACT " in line and line.split("PERF_CONTRACT ", 1)[1].startswith("{")] if log.exists() else []
+          (root / "performance-contracts.json").write_text(json.dumps({"schema":1,"scope":"selected test fixtures, not native latency","contracts":rows}, indent=2))
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: selected-tests-${{ matrix.suite }}
-          path: ${{ runner.temp }}/selected-tests.log
+          path: |
+            ${{ runner.temp }}/selected-tests.log
+            ${{ runner.temp }}/performance-contracts.json
           retention-days: 14
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code

@@ -192,3 +192,24 @@ test('row batches reuse one keyboard-mode snapshot and invalidate on mode change
   assert.equal(sharedReads(), 2);
   assert.equal(owner.retainedPending.get('0').signature, before);
 });
+
+test('performance contract: stable rows reuse retained views across 100 interactions', () => {
+  const { owner, calls, cx, draw } = fixture();
+  const count = 10, interactions = 100;
+  for (let i = 0; i < count; i++) draw(String(i));
+  owner.syncRetained(cx);
+  const directBefore = owner.direct;
+  for (let n = 0; n < interactions; n++) {
+    owner.retainedPending = new Map();
+    for (let i = 0; i < count; i++) assert.equal(draw(String(i))[0], owner.retainedRows.get(String(i)).entity);
+    assert.equal(owner.syncRetained(cx), false);
+  }
+  const rebuilds = owner.direct - directBefore;
+  assert.equal(rebuilds, 0);
+  assert.equal(calls.creates, count);
+  owner.close();
+  assert.equal(calls.releases, count);
+  console.log('PERF_CONTRACT ' + JSON.stringify({ id: 'spaces.retained', scope: 'view fixture', interactions,
+    row_requests: count * interactions, row_rebuilds: rebuilds, reuse_rate: 1 - rebuilds / (count * interactions),
+    created: calls.creates, released: calls.releases, live_after_close: owner.retainedRows.size }));
+});
