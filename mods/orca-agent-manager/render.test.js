@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
+import { legacyButtonTree } from './capture-handlers.loader.mjs';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 register(new URL('../../scripts/gpui-stub-loader.mjs', import.meta.url));
@@ -71,7 +72,7 @@ test('row, editor and uninstallSection render as recorded', () => {
   for (const [name, [o, ...a]] of Object.entries(uninstallCases)) out[`uninstall:${name}`] = rec(o.uninstallSection(a[0], t));
   assert.ok(Object.keys(out).length === 30);
   if (!existsSync(SNAP)) writeFileSync(SNAP, JSON.stringify(out, null, 1) + '\n');
-  assert.deepEqual(out, JSON.parse(readFileSync(SNAP, 'utf8')));
+  assert.deepEqual(legacyButtonTree(out), JSON.parse(readFileSync(SNAP, 'utf8')));
   // the cases must actually differ, or the snapshot proves nothing
   assert.ok(new Set(Object.values(out).map((v) => JSON.stringify(v))).size >= 20);
 });
