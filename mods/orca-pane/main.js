@@ -9,7 +9,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { panes, props, run, openOverlay, closeOverlay, spaces, shared, setShared, settings, terminals, theme } from "herdr";
+import { panes, props, run, openOverlay, closeOverlay, spaces, setShared, settings, terminals, theme } from "herdr";
 import { crewOf, crewGroups, crewMembers, crewSignature } from "./crew.js";
 import { statusMark, agentMark } from "./status.js";
 
@@ -19,6 +19,23 @@ const GROUP_WORD = { blocked: "need you", working: "working", done: "done", idle
 // Row titles fall through title -> app -> program name, the same order orca-agents uses
 // (`mods/orca-agents/main.js:22`; `report.app` is the terminal's app key).
 const titleOf = (m) => m.title?.trim() || m.report?.app || m.program?.name || m.address;
+
+const CREW_POLL_MS = 1000;
+const DRAG_POLL_MS = 16; // one frame
+const DRAG_START_PX = 8; // Orca's drag activation distance
+const DRAG_STILL_TICKS = 15; // 15 ticks at 16ms = ~240ms of stillness
+const TAB_STRIP_HEIGHT = 48; // the strip's bottom edge at zoom 1
+const STACK_SHOWN = 3; // overlapping marks drawn per crew group
+
+// A timer that has already ended may refuse a second cancel; there is nothing left to undo then.
+function cancelQuietly(timer) {
+  try { timer.cancel(); } catch { /* already ended */ }
+}
+
+// The pointer from the host, or `fallback` where there is no window (tests, headless).
+const pointerAt = (fallback = null) => (typeof window !== "undefined" ? window.mouse_position() : fallback);
+const stripBottom = () => TAB_STRIP_HEIGHT * (settings()?.zoom || 1);
+const paneMenu = (pane, terminal) => ({ mod: "orca-menu", kind: "popup", width: 240, props: { tab: "pane", target: { pane, terminal } } });
 
 export default class Pane extends View {
   init(_props, cx) {
@@ -36,18 +53,18 @@ export default class Pane extends View {
     const read = () => { this.crew = crewOf(terminals(), this.crewAddress()); };
     read();
     this.crewSeen = crewSignature(this.crew);
-    cx.timer.every(1000, (cx) => {
+    cx.timer.every(CREW_POLL_MS, (tickCx) => {
       const before = this.crewSeen;
       read();
       this.crewSeen = crewSignature(this.crew);
-      if (this.crewSeen !== before) cx.notify();
+      if (this.crewSeen !== before) tickCx.notify();
     });
 
     // Orca's card is a child of the pane's surface (`OrchestrationCrewPanel.tsx:266-278`), so a tab
     // switch takes it away. A Herdr popup is window-level; close it when its pane is gone or its
     // tab is no longer the one shown, or it would describe a pane that is not on screen.
     if (props()?.overlay) {
-      cx.timer.every(1000, () => {
+      cx.timer.every(CREW_POLL_MS, () => {
         if (this.crewPaneGone() && props()?.overlay) closeOverlay(props().overlay);
       });
     }
@@ -88,56 +105,45 @@ export default class Pane extends View {
     this.isDragging = false;
     this.still = 0;
     this.lastPos = { x: pos.x, y: pos.y };
+    this.stopPollTimer();
+    this.pollTimer = cx.timer.every(DRAG_POLL_MS, (tickCx) => this.pollPaneDrag(tickCx));
+  }
 
-    if (this.pollTimer) {
-      try { this.pollTimer.cancel(); } catch {}
-      this.pollTimer = null;
+  stopPollTimer() {
+    if (!this.pollTimer) return;
+    cancelQuietly(this.pollTimer);
+    this.pollTimer = null;
+  }
+
+  // One poll tick while a press is held: start the drag past the activation distance, then
+  // broadcast where it is and infer the release from stillness.
+  pollPaneDrag(cx) {
+    if (!this.dragStart) {
+      this.stopPollTimer();
+      return;
     }
+    const at = pointerAt();
+    if (!at) return;
+    const dist = Math.hypot(at.x - this.dragStart.x, at.y - this.dragStart.y);
+    if (!this.isDragging && dist >= DRAG_START_PX) this.isDragging = true;
+    if (!this.isDragging) return;
 
-    this.pollTimer = cx.timer.every(16, (cx) => {
-      if (!this.dragStart) {
-        if (this.pollTimer) {
-          try { this.pollTimer.cancel(); } catch {}
-          this.pollTimer = null;
-        }
-        return;
-      }
-
-      const at = typeof window !== "undefined" ? window.mouse_position() : null;
-      if (!at) return;
-
-      const dx = at.x - this.dragStart.x;
-      const dy = at.y - this.dragStart.y;
-      const dist = Math.hypot(dx, dy);
-
-      if (!this.isDragging && dist >= 8) {
-        this.isDragging = true;
-      }
-
-      if (this.isDragging) {
-        // Tab strip is at y <= 48 * zoom (terminal-tab-strip-drop-target.ts:12-16 & use-terminal-pane-tab-detach-actions.ts:16-36).
-        const zoom = settings()?.zoom || 1;
-        const inTabStrip = at.y <= 48 * zoom;
-        setShared("orca-tabs.pane-drag", {
-          active: true,
-          pane: this.dragStart.pane,
-          terminal: this.dragStart.terminal,
-          x: at.x,
-          y: at.y,
-          inTabStrip,
-        });
-
-        const moved = !this.lastPos || this.lastPos.x !== at.x || this.lastPos.y !== at.y;
-        this.lastPos = { x: at.x, y: at.y };
-        this.still = moved ? 0 : (this.still ?? 0) + 1;
-
-        // Pointer stopped moving (inferred release since host provides no global mouse-up).
-        // 15 ticks at 16ms = ~240ms of stillness.
-        if (this.still >= 15) {
-          this.finishPaneDrag(at, cx);
-        }
-      }
+    // Tab strip is at y <= 48 * zoom (terminal-tab-strip-drop-target.ts:12-16 & use-terminal-pane-tab-detach-actions.ts:16-36).
+    setShared("orca-tabs.pane-drag", {
+      active: true,
+      pane: this.dragStart.pane,
+      terminal: this.dragStart.terminal,
+      x: at.x,
+      y: at.y,
+      inTabStrip: at.y <= stripBottom(),
     });
+
+    const moved = !this.lastPos || this.lastPos.x !== at.x || this.lastPos.y !== at.y;
+    this.lastPos = { x: at.x, y: at.y };
+    this.still = moved ? 0 : (this.still ?? 0) + 1;
+
+    // Pointer stopped moving (inferred release since host provides no global mouse-up).
+    if (this.still >= DRAG_STILL_TICKS) this.finishPaneDrag(at, cx);
   }
 
   // Orca: detachTerminalPaneToTab (terminal-pane-tab-detach.ts:40-58) & handleExternalPaneDrop
@@ -149,16 +155,12 @@ export default class Pane extends View {
     this.isDragging = false;
     this.still = 0;
     this.lastPos = null;
-    if (this.pollTimer) {
-      try { this.pollTimer.cancel(); } catch {}
-      this.pollTimer = null;
-    }
+    this.stopPollTimer();
     setShared("orca-tabs.pane-drag", null);
 
     if (!drag) return;
 
-    const zoom = settings()?.zoom || 1;
-    if (at.y <= 48 * zoom) {
+    if (at.y <= stripBottom()) {
       setShared("orca-tabs.action", {
         kind: "unsplit-to-tab",
         terminal: drag.terminal,
@@ -172,18 +174,16 @@ export default class Pane extends View {
   endPaneDrag(pos, pane, terminal, cx) {
     if (!this.dragStart) return;
     const wasDragging = this.isDragging;
-    const at = typeof window !== "undefined" ? window.mouse_position() : pos;
-    this.finishPaneDrag(at, cx);
+    this.finishPaneDrag(pointerAt(pos), cx);
 
     // If mouse was released without dragging (< 8px), treat as a click to open orca-menu.
-    if (!wasDragging) {
-      openOverlay({
-        mod: "orca-menu",
-        kind: "popup",
-        width: 240,
-        props: { tab: "pane", target: { pane, terminal } }
-      });
-    }
+    if (!wasDragging) openOverlay(paneMenu(pane, terminal));
+  }
+
+  // The pane menu for this pane's header, after focusing the pane it belongs to.
+  openPaneMenu(pane, terminal) {
+    run("pane.focus", { pane });
+    openOverlay(paneMenu(pane, terminal));
   }
 
   button(id, icon, action, args) {
@@ -245,7 +245,7 @@ export default class Pane extends View {
   // `CrewAgentStack` (`CrewAgentIcons.tsx:186-215`): up to 3 overlapping 16px circles, a 13px
   // mark in each, `+N` for the rest of that group.
   agentStack(members, t) {
-    const shown = members.slice(0, 3);
+    const shown = members.slice(0, STACK_SHOWN);
     return h_flex().items_center().flex_none()
       .children(shown.map((m, i) => {
         const mark = agentMark(m, 13, t);
@@ -312,7 +312,7 @@ export default class Pane extends View {
       .child(div().min_w(0).flex_1().truncate().text_size(12).child(titleOf(m)));
   }
 
-  render(cx) {
+  render() {
     // The popup instance of this mod: its render is the crew list, not a header.
     if (props()?.overlay) return this.crewCard();
 
@@ -339,174 +339,165 @@ export default class Pane extends View {
       .when(!isFocused, (el) => el.opacity(0.95))
       .text_size(12)
       .font_family("JetBrains Mono")
-      .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
+      .on_hover((hovered, hoverCx) => { this.hovered = hovered; hoverCx.notify(); })
       .on_click(() => run("pane.focus", { pane }))
       // TerminalPaneHeaderOverlay.tsx:149 onContextMenuCapture={(e) => onPaneTitleContextMenu(e, pane.id)}
-      .on_mouse_down("right", (_e, cx) => {
-        cx.stop_propagation();
-        run("pane.focus", { pane });
-        openOverlay({ mod: "orca-menu", kind: "popup", width: 240, props: { tab: "pane", target: { pane, terminal: p.terminal } } });
+      .on_mouse_down("right", (_e, downCx) => {
+        downCx.stop_propagation();
+        this.openPaneMenu(pane, p.terminal);
       })
       // TabGroupPanel.tsx:288-301: Left side renders TabBar items (tab pill + add button)
+      .child(this.titleCluster(p, tabTitle, isFocused, paneCount))
+      // Center area: draggable handle for unsplitting to tab strip (terminal-tab-strip-drop-target.ts:12-16)
+      .child(this.dragHandle(p, paneCount))
+      // TabGroupPanel.tsx:302-314: Right action chrome (TabBarQuickCommandsButton + TabGroupPaneActionsMenu + split controls)
+      .child(this.actionCluster(p, isFocused, paneCount));
+  }
+
+  // The close control, as "Close pane" while the tab is split and "Close tab" when it is alone.
+  // TerminalPaneHeaderOverlay.tsx:125-131: terminalPaneCloseLabel(paneCount)
+  closeButton(p, paneCount, { id, size, radius, glyph }) {
+    const button = id ? div().id(id) : div();
+    return button
+      .size(size)
+      .flex()
+      .items_center()
+      .justify_center()
+      .rounded(radius)
+      .text_color("#ffffff4d")
+      .hover((s) => s.text_color("#ef4444").bg("#ffffff14"))
+      .tooltip(paneCount > 1 ? "Close pane" : "Close tab")
+      .on_click((_e, clickCx) => {
+        clickCx.stop_propagation();
+        run(paneCount > 1 ? "pane.close" : "tab.close", paneCount > 1 ? { pane: p.pane } : { id: p.tab });
+      })
+      .child(svg("mods/orca-pane/x.svg").size(glyph));
+  }
+
+  titleCluster(p, tabTitle, isFocused, paneCount) {
+    return h_flex()
+      .items_center()
+      .gap(4)
       .child(
         h_flex()
+          .h(26)
+          .px(8)
+          .gap(6)
           .items_center()
-          .gap(4)
-          .child(
-            h_flex()
-              .h(26)
-              .px(8)
-              .gap(6)
-              .items_center()
-              .rounded(4)
-              .bg(isFocused ? "#222226" : "#19191c")
-              .border_1()
-              .border_color(isFocused ? "#ffffff24" : "#ffffff0d")
-              .cursor_pointer()
-              .child(div().text_size(11).text_color("#8a8a93").child(">"))
-              .child(div().max_w(180).truncate().text_size(12).font_medium().text_color(isFocused ? "#ffffff" : "#a1a1aa").child(tabTitle || "terminal"))
-              .child(
-                div()
-                  .size(16)
-                  .flex()
-                  .items_center()
-                  .justify_center()
-                  .rounded(3)
-                  .text_color("#ffffff4d")
-                  .hover((s) => s.text_color("#ef4444").bg("#ffffff14"))
-                  // TerminalPaneHeaderOverlay.tsx:125-131: terminalPaneCloseLabel(paneCount)
-                  .tooltip(paneCount > 1 ? "Close pane" : "Close tab")
-                  .on_click((e, cx) => {
-                    cx.stop_propagation();
-                    run(paneCount > 1 ? "pane.close" : "tab.close", paneCount > 1 ? { pane } : { id: p.tab });
-                  })
-                  .child(svg("mods/orca-pane/x.svg").size(10))
-              )
-          )
-          .child(
-            div()
-              .size(24)
-              .flex()
-              .items_center()
-              .justify_center()
-              .rounded(4)
-              .text_color("#ffffff4d")
-              .hover((s) => s.text_color("#ffffffcc").bg("#ffffff14"))
-              .tooltip("Split terminal right")
-              .on_click((e, cx) => {
-                cx.stop_propagation();
-                run("pane.split", { direction: "right", pane });
-              })
-              .child(svg("mods/orca-pane/plus.svg").size(12))
-          )
+          .rounded(4)
+          .bg(isFocused ? "#222226" : "#19191c")
+          .border_1()
+          .border_color(isFocused ? "#ffffff24" : "#ffffff0d")
+          .cursor_pointer()
+          .child(div().text_size(11).text_color("#8a8a93").child(">"))
+          .child(div().max_w(180).truncate().text_size(12).font_medium().text_color(isFocused ? "#ffffff" : "#a1a1aa").child(tabTitle || "terminal"))
+          .child(this.closeButton(p, paneCount, { size: 16, radius: 3, glyph: 10 }))
       )
-      // Center area: draggable handle for unsplitting to tab strip (terminal-tab-strip-drop-target.ts:12-16)
       .child(
         div()
-          .flex_1()
-          .h_full()
+          .size(24)
           .flex()
           .items_center()
           .justify_center()
-          .cursor_grab()
-          .active((s) => s.cursor_grabbing())
-          .on_mouse_down("left", (e, cx) => {
-            this.startPaneDrag(e.position, pane, p.terminal, cx);
+          .rounded(4)
+          .text_color("#ffffff4d")
+          .hover((s) => s.text_color("#ffffffcc").bg("#ffffff14"))
+          .tooltip("Split terminal right")
+          .on_click((_e, clickCx) => {
+            clickCx.stop_propagation();
+            run("pane.split", { direction: "right", pane: p.pane });
           })
-          .on_mouse_up("left", (e, cx) => {
-            if (this.isDragging) {
-              cx.stop_propagation();
-              this.endPaneDrag(e.position, pane, p.terminal, cx);
-            } else {
-              this.dragStart = null;
-              if (this.pollTimer) { try { this.pollTimer.cancel(); } catch {} this.pollTimer = null; }
-            }
-          })
-          .on_mouse_down("right", (_e, cx) => {
-            cx.stop_propagation();
-            run("pane.focus", { pane });
-            openOverlay({ mod: "orca-menu", kind: "popup", width: 240, props: { tab: "pane", target: { pane, terminal: p.terminal } } });
-          })
-          .when(this.hovered && paneCount > 1, (el) =>
-            el.child(
-              div()
-                .flex()
-                .flex_col()
-                .gap(3)
-                .items_center()
-                .children([0, 1].map(() =>
-                  div()
-                    .flex()
-                    .gap(3)
-                    .children([0, 1, 2].map(() =>
-                      div().size(2).rounded_full().bg("#ffffff66")
-                    ))
-                ))
-            )
-          )
-      )
-      // TabGroupPanel.tsx:302-314: Right action chrome (TabBarQuickCommandsButton + TabGroupPaneActionsMenu + split controls)
+          .child(svg("mods/orca-pane/plus.svg").size(12))
+      );
+  }
+
+  // Two rows of three dots, shown while the pointer is over a split pane's handle.
+  gripDots() {
+    return div()
+      .flex()
+      .flex_col()
+      .gap(3)
+      .items_center()
+      .children([0, 1].map(() =>
+        div()
+          .flex()
+          .gap(3)
+          .children([0, 1, 2].map(() =>
+            div().size(2).rounded_full().bg("#ffffff66")
+          ))
+      ));
+  }
+
+  dragHandle(p, paneCount) {
+    const pane = p.pane;
+    return div()
+      .flex_1()
+      .h_full()
+      .flex()
+      .items_center()
+      .justify_center()
+      .cursor_grab()
+      .active((s) => s.cursor_grabbing())
+      .on_mouse_down("left", (e, downCx) => {
+        this.startPaneDrag(e.position, pane, p.terminal, downCx);
+      })
+      .on_mouse_up("left", (e, upCx) => {
+        if (this.isDragging) {
+          upCx.stop_propagation();
+          this.endPaneDrag(e.position, pane, p.terminal, upCx);
+        } else {
+          this.dragStart = null;
+          this.stopPollTimer();
+        }
+      })
+      .on_mouse_down("right", (_e, downCx) => {
+        downCx.stop_propagation();
+        this.openPaneMenu(pane, p.terminal);
+      })
+      .when(this.hovered && paneCount > 1, (el) => el.child(this.gripDots()));
+  }
+
+  actionCluster(p, isFocused, paneCount) {
+    const pane = p.pane;
+    return h_flex()
+      .items_center()
+      .gap(2)
+      .when(!isFocused, (el) => el.opacity(0.6).hover((s) => s.opacity(1.0)))
+      // Placement is ours: Orca's pill rides the pane's right corner
+      // (`OrchestrationCrewPanel.tsx:344-380`); here that corner is the header's action cluster.
+      .when(crewMembers(this.crew).length > 0, (el) => el.child(this.crewChip(pane, theme())))
+      // TabBarQuickCommandsButton.tsx:180-186: Play icon + "Command" pill
       .child(
         h_flex()
+          .h(22)
+          .px(6)
+          .gap(4)
           .items_center()
-          .gap(2)
-          .when(!isFocused, (el) => el.opacity(0.6).hover((s) => s.opacity(1.0)))
-          // Placement is ours: Orca's pill rides the pane's right corner
-          // (`OrchestrationCrewPanel.tsx:344-380`); here that corner is the header's action cluster.
-          .when(crewMembers(this.crew).length > 0, (el) => el.child(this.crewChip(pane, theme())))
-          // TabBarQuickCommandsButton.tsx:180-186: Play icon + "Command" pill
-          .child(
-            h_flex()
-              .h(22)
-              .px(6)
-              .gap(4)
-              .items_center()
-              .rounded(4)
-              .border_1()
-              .border_color("#ffffff14")
-              .text_color(isFocused ? "#ffffff" : "#a1a1aa")
-              .hover((s) => s.bg("#ffffff14").text_color("#ffffff"))
-              .tooltip("Open pane commands")
-              .on_click((e, cx) => {
-                cx.stop_propagation();
-                run("pane.focus", { pane });
-                openOverlay({ mod: "orca-menu", kind: "popup", width: 240, props: { tab: "pane", target: { pane, terminal: p.terminal } } });
-              })
-              .child(div().text_size(9).text_color("#a1a1aa").child("▷"))
-              .child(div().text_size(11).font_medium().child("Command"))
-          )
-          // TabGroupPaneActionsMenu.tsx:41-45: Ellipsis button
-          .child(
-            this.button(`ph-m-${pane}`, "ellipsis", () => {
-              run("pane.focus", { pane });
-              openOverlay({ mod: "orca-menu", kind: "popup", width: 240, props: { tab: "pane", target: { pane, terminal: p.terminal } } });
-            }).tooltip("Pane actions")
-          )
-          // Split right & split down buttons
-          .child(
-            this.button(`ph-r-${pane}`, "square-split-vertical", "pane.split", { direction: "right", pane }).tooltip("Split terminal right")
-          )
-          .child(
-            this.button(`ph-d-${pane}`, "split-down", "pane.split", { direction: "down", pane }).tooltip("Split terminal down")
-          )
-          // TerminalPaneHeaderOverlay.tsx:125-131: Close split pane or tab when alone
-          .child(
-            div()
-              .id(`ph-x-${pane}`)
-              .size(24)
-              .flex()
-              .items_center()
-              .justify_center()
-              .rounded(6)
-              .text_color("#ffffff4d")
-              .hover((s) => s.text_color("#ef4444").bg("#ffffff14"))
-              .tooltip(paneCount > 1 ? "Close pane" : "Close tab")
-              .on_click((e, cx) => {
-                cx.stop_propagation();
-                run(paneCount > 1 ? "pane.close" : "tab.close", paneCount > 1 ? { pane } : { id: p.tab });
-              })
-              .child(svg("mods/orca-pane/x.svg").size(12))
-          )
-      );
+          .rounded(4)
+          .border_1()
+          .border_color("#ffffff14")
+          .text_color(isFocused ? "#ffffff" : "#a1a1aa")
+          .hover((s) => s.bg("#ffffff14").text_color("#ffffff"))
+          .tooltip("Open pane commands")
+          .on_click((_e, clickCx) => {
+            clickCx.stop_propagation();
+            this.openPaneMenu(pane, p.terminal);
+          })
+          .child(div().text_size(9).text_color("#a1a1aa").child("▷"))
+          .child(div().text_size(11).font_medium().child("Command"))
+      )
+      // TabGroupPaneActionsMenu.tsx:41-45: Ellipsis button
+      .child(
+        this.button(`ph-m-${pane}`, "ellipsis", () => this.openPaneMenu(pane, p.terminal)).tooltip("Pane actions")
+      )
+      // Split right & split down buttons
+      .child(
+        this.button(`ph-r-${pane}`, "square-split-vertical", "pane.split", { direction: "right", pane }).tooltip("Split terminal right")
+      )
+      .child(
+        this.button(`ph-d-${pane}`, "split-down", "pane.split", { direction: "down", pane }).tooltip("Split terminal down")
+      )
+      // TerminalPaneHeaderOverlay.tsx:125-131: Close split pane or tab when alone
+      .child(this.closeButton(p, paneCount, { id: `ph-x-${pane}`, size: 24, radius: 6, glyph: 12 }));
   }
 }

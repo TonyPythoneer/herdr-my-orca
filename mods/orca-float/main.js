@@ -26,13 +26,18 @@ const DEFAULT_WIDTH = 920;
 const DEFAULT_HEIGHT = 560;
 const MIN_WIDTH = 420;
 const MIN_HEIGHT = 280;
+// `agents()` is live but does not notify a mod, so the panel looks again this often.
+const POLL_MS = 1000;
+// Hex alpha suffixes: the idle dot is neutral-500 at 40%, the list bar's fill at 60%.
+const IDLE_ALPHA = "66";
+const LIST_BAR_ALPHA = "99";
 
 // `AgentStateDot` at its default `sm` size (`src/renderer/src/components/AgentStateDot.tsx:105-197`):
 // a 10px box (`h-2.5 w-2.5`), 10px glyphs (`size-2.5`), and a 6px inner dot (`size-1.5`).
 // Statuses map to Herdr's 4-state rollup: working (AgentWorkingSpinner at the 6px *inner*
 // size, `:130-138`, not the 10px glyph slot in t.working), blocked (AgentQuestionIcon
 // message-circle-question in t.blocked), done (CircleCheck in t.done), and idle (6px dot in
-// t.idle + "66" = neutral-500/40).
+// t.idle + IDLE_ALPHA = neutral-500/40).
 function stateDot(status, t) {
   const box = div().size(10).flex_none().flex().items_center().justify_center();
   if (status === "working") {
@@ -44,7 +49,7 @@ function stateDot(status, t) {
   if (status === "done") {
     return box.child(svg("mods/orca-float/circle-check.svg").size(10).flex_none().text_color(t.done));
   }
-  return box.child(div().size(6).rounded_full().flex_none().bg(t.idle + "66"));
+  return box.child(div().size(6).rounded_full().flex_none().bg(t.idle + IDLE_ALPHA));
 }
 
 // Orca's `AgentTypeIcon` beside the state dot (`worktree-card-compact-agent-row.tsx:241-242`,
@@ -81,28 +86,39 @@ function agentMark(a, t) {
 // (orca-agents/main.js:22; `program.agent` is a boolean).
 const title = (a) => a.title?.trim() || a.app || a.program?.name || "Agent";
 
+// One row of the empty state: a 14px glyph, the label, and the chord when the app has one bound.
+function emptyRow(t, { id, icon, label, a11y, chord, onClick }) {
+  return h_flex().id(id).h(32).w_full().px(12).gap(10).rounded(6).items_center()
+    .cursor_pointer().hover((s) => s.bg(t.hover))
+    .role("button").accessibility_label(a11y)
+    .on_click(onClick)
+    .child(div().flex_none().opacity(0.9).text_color(t.foreground).child(svg(icon).size(14)))
+    .child(div().flex_1().min_w(0).truncate().text_size(14).line_height("14px").text_color(t.foreground).child(label))
+    .when(Boolean(chord), (el) => el.child(div().flex_none().text_size(10).line_height("12px").opacity(0.9).text_color(t.foreground).child(chord)));
+}
+
 export default class FloatWorkspace extends View {
   init(_props, cx) {
     // Orca starts the panel hidden; the hotkey toggles it (`floatingTerminal.toggle`).
     this.open = false;
     // The last values written to the status bar's toggle (`publish`).
     this.published = { open: null, attention: null };
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       for (;;) {
         const cmd = await nextCommand();
-        if (cmd === "toggle") this.setOpen(!this.open, cx);
-        cx.notify();
+        if (cmd === "toggle") this.setOpen(!this.open, taskCx);
+        taskCx.notify();
       }
     });
     // agents() is live but does not notify a mod; orca-agents repaints from a
     // timer for the same reason (main.js:36-43).
     this.seen = "";
-    cx.timer.every(1000, (cx) => {
+    cx.timer.every(POLL_MS, (tickCx) => {
       this.publish();
       const now = agents().map((a) => `${a.address}:${a.status}`).join(",");
       if (now === this.seen) return;
       this.seen = now;
-      cx.notify();
+      tickCx.notify();
     });
   }
 
@@ -172,27 +188,17 @@ export default class FloatWorkspace extends View {
         .child(h_flex().h(32).w_full().px(12).gap(10).rounded(6).items_center()
           .child(div().flex_none().opacity(0.9).text_color(t.foreground).child(svg("mods/orca-float/terminal-square.svg").size(14)))
           .child(div().min_w(0).truncate().text_size(14).line_height("14px").text_color(t.foreground).child("No live agent sessions")))
-        .child(h_flex().id("orca-float-new").h(32).w_full().px(12).gap(10).rounded(6).items_center()
-          .cursor_pointer().hover((s) => s.bg(t.hover))
-          .role("button").accessibility_label("New terminal")
-          .on_click((_e, cx) => {
+        .child(emptyRow(t, { id: "orca-float-new", icon: "mods/orca-float/terminal-square.svg", label: "New Terminal", a11y: "New terminal", chord: newTabChord,
+          onClick: (_e, cx) => {
             // Same pinned working directory as ⌘T and the "+" menu (docs/plan-tab-cwd.md).
             const space = spaces().find((s) => s.active);
             run("tab.new", space ? { space: space.id, ...(space.folder ? { folder: space.folder } : {}) } : {});
             this.setOpen(false, cx);
-          })
-          .child(div().flex_none().opacity(0.9).text_color(t.foreground).child(svg("mods/orca-float/terminal-square.svg").size(14)))
-          .child(div().flex_1().min_w(0).truncate().text_size(14).line_height("14px").text_color(t.foreground).child("New Terminal"))
-          .when(Boolean(newTabChord), (el) => el.child(div().flex_none().text_size(10).line_height("12px").opacity(0.9).text_color(t.foreground).child(newTabChord))))
+          } }))
         // `ShortcutKeyCombo` (`:135-152`) draws the chord as keycaps; the chord text alone
         // carries the same hint without a second chrome component.
-        .child(h_flex().id("orca-float-minimize").h(32).w_full().px(12).gap(10).rounded(6).items_center()
-          .cursor_pointer().hover((s) => s.bg(t.hover))
-          .role("button").accessibility_label("Minimize floating workspace")
-          .on_click((_e, cx) => this.setOpen(false, cx))
-          .child(div().flex_none().opacity(0.9).text_color(t.foreground).child(svg("mods/orca-float/minus.svg").size(14)))
-          .child(div().flex_1().min_w(0).truncate().text_size(14).line_height("14px").text_color(t.foreground).child("Minimize"))
-          .when(Boolean(toggleChord), (el) => el.child(div().flex_none().text_size(10).line_height("12px").opacity(0.9).text_color(t.foreground).child(toggleChord)))));
+        .child(emptyRow(t, { id: "orca-float-minimize", icon: "mods/orca-float/minus.svg", label: "Minimize", a11y: "Minimize floating workspace", chord: toggleChord,
+          onClick: (_e, cx) => this.setOpen(false, cx) })));
     return v_flex().id("orca-float").w(w).h(h).min_h(0).overflow_hidden().text_color(t.foreground)
       // Orca's floating title bar (`FloatingTerminalPanelSurface.tsx:116-117`): `h-9`
       // (36px), `border-b border-border`, over the float frame's card colour. Of its
@@ -224,7 +230,7 @@ export default class FloatWorkspace extends View {
       .child(v_flex().flex_1().min_h(0)
         .when(list.length > 0, (el) => el
           // Orca's list bar (`AiVaultSessionListBar.tsx:59-62`, via orca-agents/main.js:94-99).
-          .child(h_flex().h(32).flex_none().items_center().pl(12).pr(6).border_b(1).border_color(t.border).bg(t.raised + "99")
+          .child(h_flex().h(32).flex_none().items_center().pl(12).pr(6).border_b(1).border_color(t.border).bg(t.raised + LIST_BAR_ALPHA)
             .child(div().flex_1().min_w(0).truncate().text_size(12).font_semibold()
               .child(`${list.length} agent${list.length === 1 ? "" : "s"}`)))
           .child(v_flex().id("orca-float-list").flex_1().min_h(0).overflow_y_scrollbar()

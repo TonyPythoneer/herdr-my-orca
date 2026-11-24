@@ -79,6 +79,12 @@ export function tabStripDockedLeft(naturalLeft, viewportWidth, activeWidth) {
   return Math.min(Math.max(naturalLeft, 0), maxLeft);
 }
 
+// Which viewport edge a docked tab is stuck to: the end when it would have been past it.
+function dockSide(docked, naturalLeft) {
+  if (!docked) return null;
+  return naturalLeft > 0 ? "end" : "start";
+}
+
 /** Where the active tab is drawn, and which edge of the viewport it is stuck to, if either. */
 export function tabStripActiveSlot({
   scrollLeft,
@@ -94,7 +100,7 @@ export function tabStripActiveSlot({
     naturalLeft,
     visualLeft,
     docked,
-    side: !docked ? null : naturalLeft > 0 ? "end" : "start",
+    side: dockSide(docked, naturalLeft),
     viewportWidth,
     maxScrollLeft: tabStripMaxScroll(viewportWidth, contentWidth),
   };
