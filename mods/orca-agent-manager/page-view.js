@@ -148,7 +148,7 @@ function refreshButton(owner, t) {
     .role("button")
     .accessibility_label(busy ? "Refreshing agents" : "Refresh installed agents")
     .tooltip("Re-check every agent on this computer")
-    .child(busy ? spinner(t, 12) : svg("mods/orca-agent-manager/refresh-cw.svg").size(13).flex_none().text_color(t.muted))
+    .child(busy ? spinner(t, 12) : svg("mods/orca-assets/refresh-cw.svg").size(13).flex_none().text_color(t.muted))
     .child(busy ? "Refreshing…" : "Refresh");
 }
 

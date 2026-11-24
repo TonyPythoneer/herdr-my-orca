@@ -8,6 +8,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand, panes, spaces, hc, setShared, checking, notify } from "herdr";
 import { probeLocal } from "./local-usage.js";
+import { SPIN_PERIOD_MS } from "../orca-assets/ui-settings.js";
 import { FOLLOW_EVERY_MS, FOLLOW_STATE_KEY, planFollow, parseCheckout } from "./wt-follow.js";
 import { probeAllProviders, getTightestUsageBucket, formatBucketChipLabel } from "./usage.js";
 
@@ -126,9 +127,9 @@ function segment(t, id, iconName, label, opts = {}) {
     .text_color(opts.muted ? t.muted : t.foreground)
     .when(Boolean(opts.on), el => el.role("button").accessibility_label(label).tooltip(label)
       .cursor_pointer().hover(s => s.bg("#404040b3").text_color(t.foreground)).on_click(opts.on))
-    .child(svg(`mods/orca-status/${iconName}.svg`).size(10).flex_none()
+    .child(svg(iconName === "refresh-cw" ? "mods/orca-assets/refresh-cw.svg" : `mods/orca-status/${iconName}.svg`).size(10).flex_none()
       .text_color(opts.iconColor ?? t.muted)
-      .when(Boolean(opts.spin), el => el.spin(1000)))
+      .when(Boolean(opts.spin), el => el.spin(SPIN_PERIOD_MS)))
     .child(label);
 }
 
@@ -416,9 +417,9 @@ export default class OrcaStatus extends View {
           .cursor_pointer().hover(s => s.bg("#404040b3"))
           .on_click((_e, clickCx) => this.refreshUsage(clickCx, true))
           .child(
-            svg("mods/orca-status/refresh-cw.svg").size(9).flex_none()
+            svg("mods/orca-assets/refresh-cw.svg").size(9).flex_none()
               .text_color(t.muted)
-              .when(this.isRefreshing, el => el.spin(1000).text_color(t.foreground))
+              .when(this.isRefreshing, el => el.spin(SPIN_PERIOD_MS).text_color(t.foreground))
           )
       );
   }

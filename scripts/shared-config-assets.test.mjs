@@ -1,0 +1,16 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { SPIN_PERIOD_MS } from "../mods/orca-assets/ui-settings.js";
+
+test("shared config asset exists, consumer paths agree and legacy duplicates are removed", () => {
+  const root = new URL("../", import.meta.url);
+  const asset = "mods/orca-assets/refresh-cw.svg";
+  assert.match(readFileSync(new URL(asset, root), "utf8"), /<svg\b/);
+  for (const [mod, file] of [["orca-files","main.js"],["orca-status","main.js"],["orca-agent-manager","page-view.js"]]) {
+    const source = readFileSync(new URL("mods/" + mod + "/" + file, root), "utf8");
+    assert.ok(source.includes(asset), mod);
+    assert.equal(existsSync(new URL("mods/" + mod + "/refresh-cw.svg", root)), false);
+  }
+  assert.equal(SPIN_PERIOD_MS, 1000);
+});
