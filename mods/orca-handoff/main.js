@@ -15,6 +15,8 @@ import {
   theme,
   panes,
   agents,
+  knownAgents,
+  spaces,
   hc,
   exec
 } from "herdr";
@@ -58,6 +60,7 @@ export default class HandoffDialog extends View {
 
     this.resolveSource();
     this.startCapture(cx);
+    if (this.action === "handoff") this.loadAgentCatalog(cx);
   }
 
   // The pane and agent this dialog was opened for: working folder, title and the agent's name,
@@ -66,14 +69,38 @@ export default class HandoffDialog extends View {
     const pane = panes().find((x) => x.pane === this.paneId || x.terminal === this.terminal);
     this.cwd = pane?.cwd || "";
     this.paneTitle = pane?.title || "";
+    this.sourceMachine = spaces().find((space) => space.tabs?.some((tab) => tab.id === pane?.tab))?.machine ?? null;
 
     const agent = agents().find((a) => a.address === this.terminal || a.pane === this.paneId);
     this.sourceAgent = agent?.app || agent?.program?.name || "Agent";
 
-    const initialIndex = AGENT_CATALOG.findIndex((a) => a.id !== this.sourceAgent.toLowerCase());
+    this.agentCatalog = AGENT_CATALOG;
+    const initialIndex = this.agentCatalog.findIndex((a) => a.id !== this.sourceAgent.toLowerCase());
     if (initialIndex >= 0) {
       this.selectedAgentIndex = initialIndex;
     }
+  }
+
+  // Prefer Herdr's installed, machine-specific catalog and configured launch argv.
+  loadAgentCatalog(cx) {
+    this.loadingAgents = true;
+    cx.spawn(async (taskCx) => {
+      try {
+        const entries = await knownAgents({ on: this.sourceMachine });
+        const previous = this.agentCatalog[this.selectedAgentIndex]?.id;
+        this.agentCatalog = entries.filter((agent) => agent.installed && agent.run?.length)
+          .map((agent) => ({ id: agent.key, name: agent.name, run: agent.run }));
+        const index = this.agentCatalog.findIndex((agent) => agent.id === previous);
+        const alternative = this.agentCatalog.findIndex((agent) => agent.id !== this.sourceAgent.toLowerCase());
+        this.selectedAgentIndex = index >= 0 ? index : Math.max(0, alternative);
+        if (!this.agentCatalog.length) this.statusMessage = "No installed target agents on this machine";
+      } catch {
+        this.statusMessage = "Agent discovery unavailable; using standard launch commands";
+      } finally {
+        this.loadingAgents = false;
+        taskCx.notify();
+      }
+    });
   }
 
   // Capture terminal scrollback and buffer using `hc read`
@@ -124,11 +151,12 @@ export default class HandoffDialog extends View {
   }
 
   async executeHandoff(cx) {
-    if (this.busy) return;
+    if (this.busy || this.loadingAgents) return;
+    const catalog = this.agentCatalog ?? AGENT_CATALOG;
+    const targetAgent = catalog[this.selectedAgentIndex] ?? catalog[0];
+    if (!targetAgent) return;
     this.busy = true;
     cx.notify();
-
-    const targetAgent = AGENT_CATALOG[this.selectedAgentIndex] ?? AGENT_CATALOG[0];
     const prompt = this.getContinuationPrompt();
 
     // Launch agent in a fresh tab with the continuation prompt
@@ -293,7 +321,7 @@ export default class HandoffDialog extends View {
           .gap(6)
           .flex_wrap()
           .children(
-            AGENT_CATALOG.map((agent, i) => {
+            (this.agentCatalog ?? AGENT_CATALOG).map((agent, i) => {
               const selected = this.selectedAgentIndex === i;
               return div()
                 .id(`agent-opt-${agent.id}`)
