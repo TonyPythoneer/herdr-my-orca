@@ -339,7 +339,7 @@ export const inPlace = [
     "mod": "orca-menu",
     "area": "overlay-or-menu",
     "description": "Right-click context menu for panes, tabs, spaces and groups: split, close, copy, move.",
-    "props": "root.terminal_menu='orca-menu' in both layouts (not a node)",
+    "props": "root.terminal_menu='orca-menu' (not a node)",
     "opens": [
       "overlay:orca-tabs",
       "overlay:orca-handoff",
@@ -350,7 +350,7 @@ export const inPlace = [
     ],
     "reachedBy": [
       "overlay:popup props.tab pane|tab|space|group",
-      "terminal_menu (root, both layouts)"
+      "terminal_menu (root)"
     ],
     "shared": [
       "orca-spaces.forget",

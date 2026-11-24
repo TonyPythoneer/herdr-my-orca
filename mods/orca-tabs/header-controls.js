@@ -65,8 +65,8 @@ export function addTabTrack(row, view, frame) {
     // pinned — its slot in the track (unpainted, but still holding the width) and the overlay at
     // the clamped left — which is what keeps `contentWidth` and the scroll limits independent of
     // the dock (§4). The arrows sit outside this box, so the pinned tab can never slide under them.
-    .when(geometry.arrows.hasOverflow, el => el.child(view.glide(tabScrollButton("start", geometry.arrows.leftDisabled), "tab-scroll-start")))
-    .child(view.glide(div(), "tab-viewport").flex_shrink(1).min_w(0).h_full().overflow_hidden()
+    .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("start", geometry.arrows.leftDisabled).id("tab-scroll-start").relative()))
+    .child(div().id("tab-viewport").relative().flex_shrink(1).min_w(0).h_full().overflow_hidden()
       .on_size_change((size, cx) => {
         if (Math.abs(size.width - view.viewportWidth) < 0.5) return;
         view.viewportWidth = size.width;
@@ -77,7 +77,7 @@ export function addTabTrack(row, view, frame) {
         .when(view.sliding(), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
         .children(shown.map((c, i) => item(c, i, { hidden: geometry.docked && i === geometry.activeIndex }))))
       .when(geometry.docked, el => el.child(item(geometry.activeTab, geometry.activeIndex, { overlay: { ...geometry.slot, width: geometry.activeWidth }, sliding: view.sliding() }))))
-    .when(geometry.arrows.hasOverflow, el => el.child(view.glide(tabScrollButton("end", geometry.arrows.rightDisabled), "tab-scroll-end")));
+    .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("end", geometry.arrows.rightDisabled).id("tab-scroll-end").relative()));
 }
 
 export function addEndControls(row, view, { t, paneDrag, shown, w }) {
@@ -97,7 +97,7 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
     .on_mouse_down("left", stop).on_click(action).child(glyph);
   // TitlebarMainStrip.tsx:12-33,76 — `RightSidebarToggle`: `.sidebar-toggle mr-2`
   // (main.css:1213-1230 = 4px/8px padding around the 16px `PanelRight`, so 32x24, radius 4,
-  // muted, hover --accent + foreground). Herdr toggles it with `layout.toggle` (commands.rs:77).
+  // muted, hover --accent + foreground). `orca-tabs` runs the panel drawer when it is pressed.
   // The panel's own icon state: this copy only ever draws while the panel is hidden, so it always
   // offers `PanelRightOpen` (the arrow points back in), and `orca-panel-head` offers the close one.
   const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
@@ -124,7 +124,7 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
       )
     )
     // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-    .child(view.glide(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: view.newMenuAt() })), "tab-new"))
+    .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: view.newMenuAt() })).id("tab-new").relative())
     .child(div().flex_1())
     // TitlebarMainStrip.tsx:58-69 — the single-tab case gets a `Minimize2`
     // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,

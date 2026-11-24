@@ -149,7 +149,7 @@ SCENARIOS.push(["drop overlay without a record", { props: { drop: true, overlay:
 SCENARIOS.push(["drop overlay own zone", { props: { drop: true, overlay: "ov" }, initProps: { drop: true }, state: { zone: "down" }, shared: { "orca-tabs.drop": { tab: "a", zone: "down", strip: { ...STRIP, stripHeight: 0 } } } }]);
 SCENARIOS.push(["actions are consumed", { window: MAC, shared: { "orca-tabs.action": { kind: "unsplit-to-tab", pane: "p1" } }, panes: AGENTS }]);
 
-const GOLDEN = "6864b18b06bdb8f55581eeaa20c7c5e8c231c213717b962acc4b8e319459af51";
+const GOLDEN = "01a3828e0d0471ab8e956b3ea1213cefe7786671684184d2beff5f036effdc19";
 
 test("golden render and commands over the state matrix", () => {
   const realNow = Date.now;

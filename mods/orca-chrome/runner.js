@@ -1,4 +1,4 @@
-// The scheduler. It sits in orca-chrome because that mod's footer copy is in both layouts and
+// The scheduler. It sits in orca-chrome because that mod's footer copy is in the layout and
 // always on screen: a stack page's copy only starts the first time it is shown, so a timer in
 // the Tasks page would miss the reset after a fresh launch (AGENTS.md, "Mods").
 //

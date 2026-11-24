@@ -103,7 +103,6 @@ function sidebarPlan(drawer, node) {
 const STATUS_BAR_HEIGHT = 24; // `orca-status` draws this (`layouts/orca.json` node `status`).
 const TAB_STRIP_FALLBACK = 32; // `TAB_GROUP_TAB_STRIP_HEIGHT_PX` (tab-drop-zone.ts:4), the fallback.
 // The reference design's sidebar collapse is 300ms.
-const SIDEBAR_GLIDE_MS = 300;
 const SIDEBAR_STEP_MS = 16; // one step per frame (60fps); steps that would not change the width are skipped
 const SIDEBAR_RESIZE_SETTLE_MS = 80; // after sizing a hidden sidebar to 1px, before `show`
 const SIDEBAR_SHOW_SETTLE_MS = 50;
@@ -445,8 +444,6 @@ export default class Tabs extends View {
     this.activeTabId = undefined;
     this.revealPending = false;
     this.animatedUntil = 0;
-    this.glideShift = 0;
-    this.glideGen = 0;
     this.panels = storedPanels();
     this.seedWindow(cx);
     this.listenForCommands(cx);
@@ -1037,11 +1034,6 @@ export default class Tabs extends View {
         this.nativeRecovering = false;
       });
     }
-  }
-
-  glide(el, id) {
-    return el.id(`${id}-g${this.glideGen ?? 0}`).relative().left(this.glideShift)
-      .transition("left", { duration: SIDEBAR_GLIDE_MS, easing: "ease-out" });
   }
 
   syncSidebarToggle(cx, sidebar) {

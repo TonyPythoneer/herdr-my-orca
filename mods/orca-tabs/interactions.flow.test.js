@@ -354,18 +354,18 @@ test("the strip's own handlers measure, scroll, reveal the active tab and slide 
   assert.equal(w.view.animatedUntil, 0, "real input is not a slide");
   assert.equal(w.view.sliding(), false);
   const tree = w.render();
-  const left = byId(tree, "tab-scroll-start-g0");
+  const left = byId(tree, "tab-scroll-start");
   w.log.length = 0;
   handler(left, "on_click")({}, w.hcx);
   assert.equal(notified(w, "handler"), 1, "the arrow must notify through its click context");
   assert.equal(notified(w, "render"), 0);
   assert.equal(w.view.scrollX, 195, "three quarters of the viewport");
   assert.equal(w.view.sliding(), true);
-  handler(byId(w.render(), "tab-scroll-end-g0"), "on_click")({}, w.hcx);
+  handler(byId(w.render(), "tab-scroll-end"), "on_click")({}, w.hcx);
   assert.equal(w.view.scrollX, 420);
   w.view.scrollX = 0;
   w.render();
-  handler(byId(w.render(), "tab-scroll-start-g0"), "on_click")({}, w.hcx);
+  handler(byId(w.render(), "tab-scroll-start"), "on_click")({}, w.hcx);
   assert.equal(w.view.scrollX, 0, "a disabled arrow does nothing");
   // A tab that vanished stops counting toward the width.
   w.spaces[0].tabs.pop();
