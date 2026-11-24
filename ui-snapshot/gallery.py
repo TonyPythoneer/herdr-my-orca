@@ -12,7 +12,7 @@ def build(source, output):
         (output/"README.md").write_text("# UI snapshot unavailable\n\nCapture did not start. See the Actions run for diagnostic output.\n")
         return
     data = json.loads(manifest.read_text())
-    lines = ["# Latest main UI snapshot", "", "Main commit: **"+data["mainSha"]+"**", "",
+    lines = ["# Latest custom Orca mod interactions", "", "Main commit: **"+data["mainSha"]+"**", "",
              "Native App screenshots from a synthetic workspace on a disposable GitHub-hosted runner.",
              "Full-resolution originals, before/after pairs, and machine-readable diagnostics remain in the Actions artifact.", ""]
     run = __import__("os").environ.get("GITHUB_RUN_ID")
@@ -20,24 +20,25 @@ def build(source, output):
     if run and repo:
         lines += [f"[Open this Actions run / full artifact](https://github.com/{repo}/actions/runs/{run})", ""]
     rows = data["steps"]
-    startup = data.get("startupDiagnostic")
+    coverage = data.get("coverage", {})
     deployment = data.get("deployment", {})
     lines += ["Tracked configuration files verified after native launch: "+str(deployment.get("verifiedAfterLaunch", 0)), ""]
     counts = {k:sum(r["result"]==k for r in rows) for k in ("captured","failed","blocked","not-run")}
     lines += [" · ".join(f"{k}: {v}" for k,v in counts.items()), "",
-              "Command navigation and actual accessibility/mouse operations are labeled separately. Captured does not mean visually validated.", ""]
+              "Only custom controls. Captured means a real interaction and visible change; semantic review is required. Closed frames show the actual Escape key interaction.", ""]
     if data.get("fatal"):
         lines += ["**Capture stopped before completion.** See full artifact for details.", ""]
-    for r in ([startup] if startup else []) + rows:
-        lines += [f'## {r["id"]} — {r["title"]}', "", f'**{r["result"]}** · {r["mode"]}', ""]
+    lines += ["## Mod coverage", "", "Observed: "+", ".join(coverage.get("observedMods", [])), "", "Not observed: "+", ".join(coverage.get("unobservedMods", [])), ""]
+    for r in rows:
+        lines += [f'## {r["id"]} — {r["mod"]}: {r["title"]}', "", f'**{r["result"]}** · {r["mode"]} · {r.get("verification", "not verified")}', ""]
         # Do not publish raw error text, native status, terminal logs, or paths.
         if r["result"] != "captured":
             lines += ["Incomplete operation; consult manifest.json in the full artifact.", ""]
-        for phase in ("before","after","diagnostic"):
+        for phase in ("before","after","closed","diagnostic"):
             img = r.get("images",{}).get(phase)
             if not img: continue
             rel = img["file"]
-            if not re.fullmatch(r"screens/\d+-(before|after|diagnostic)\.png",rel):
+            if not re.fullmatch(r"screens/\d+-(before|after|closed|diagnostic)\.png",rel):
                 raise ValueError("Unexpected image path")
             src = source / rel
             if not src.is_file() or src.is_symlink(): raise ValueError("Missing screenshot")

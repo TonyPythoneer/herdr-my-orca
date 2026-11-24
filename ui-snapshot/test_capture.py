@@ -35,3 +35,16 @@ class SnapshotSafetyTests(unittest.TestCase):
             tasks=json.loads((Path(temp)/"tasks.json").read_text())["tasks"]
             self.assertTrue(tasks)
             self.assertTrue(all(t["enabled"] is False for t in tasks))
+
+from scenarios import CASES
+
+class ModInventoryTests(unittest.TestCase):
+    def test_only_custom_controls(self):
+        self.assertGreaterEqual(len(CASES),20)
+        self.assertEqual(len({c["title"] for c in CASES}),len(CASES))
+        for c in CASES:
+            self.assertTrue(c["mods"] and all(m.startswith("orca-") or m=="agent-config" for m in c["mods"]))
+            self.assertTrue(c["control"]["label"])
+            if "xy" in c["control"]:
+                x,y=c["control"]["xy"]
+                self.assertTrue(0<=x<1024 and 0<=y<681)
