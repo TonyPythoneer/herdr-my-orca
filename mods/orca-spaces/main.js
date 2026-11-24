@@ -382,10 +382,10 @@ export default class Spaces extends View {
   }
 
   close() {
-    this.closed = true;
-    for (const repo of this.watching.keys()) this.stopWatch(repo);
     for (const { entity } of this.retainedRows.values()) entity.release();
     this.retainedRows.clear();
+    this.closed = true;
+    for (const repo of this.watching?.keys() ?? []) this.stopWatch(repo);
   }
 
   // A saved folder can be moved or deleted between runs. Orca keeps a project whose
