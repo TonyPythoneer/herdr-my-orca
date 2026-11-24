@@ -7,7 +7,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, hc, home, shared, setShared } from "herdr";
+import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, hc, home, setShared } from "herdr";
 import { copyText } from "./clip.js";
 import { buildBoundedSessionTranscript } from "./transcript.js";
 import { closeSideTabs } from "./close-sides.js";
@@ -40,300 +40,404 @@ async function checkout(folder, on) {
   return common.stdout.trim() === `${top.stdout.trim()}/.git` ? "main" : "linked";
 }
 
+
+const tabsOf = (space) => space?.tabs ?? [];
+const owningSpace = (tabId) => spaces().find((s) => tabsOf(s).some((x) => x.id === tabId));
+const panesOfTab = (tabId) => panes().filter((x) => x.tab === tabId);
+const LAYOUT_CHILD = { stack: "main", child: "main-terminals" };
+
+// A row that acts on a terminal: its address and the pane it sits in.
+const terminalRow = (label, command, term, tg) => [label, command, { terminal: term.address, pane: tg.pane }];
+
+// The rows from Copy to Copy Context. Orca's order (TerminalContextMenu.tsx:204-370): Copy,
+// Add to chat, Select All, Paste, Quick Commands, agent rows, split section, title/ID block,
+// close, clear, reset. Add to chat (:209) stays out: Herdr has no chat.
+function paneClipboardRows(tg, term, isAgent) {
+  return [
+    ["Copy", "terminal.copy", {}],
+    // Herdr cannot select the buffer; this copies up to 10,000 lines instead.
+    ...(term ? [terminalRow("Copy Terminal Buffer", "orca-menu.select-all", term, tg)] : []),
+    ["Paste", "terminal.paste", {}],
+    // Orca's Quick Commands menu (:227) is its command surface; Herdr's is the palette.
+    ["Quick Commands", "app.palette", {}],
+    // Orca's agent rows (TerminalContextMenu.tsx:236-246):
+    // Hand Off to Another Agent (:236, canContinueAgentSessionInNewSession / isTuiAgent),
+    // Fork Agent Session… (:239), Copy Context (:246).
+    ...(term
+      ? [
+          ...(isAgent ? [terminalRow("Hand off to agent", "orca-menu.handoff", term, tg)] : []),
+          terminalRow("Fork Agent Session…", "orca-menu.fork", term, tg),
+          terminalRow("Copy Context", "orca-menu.copy-context", term, tg),
+        ]
+      : []),
+  ];
+}
+
+// Orca's split section (TerminalContextMenu.tsx:265-302, TabWorkspaceLayoutMenuSection.tsx:14-41).
+// Equalize Pane Sizes (:281) has no equivalent: panes are content inside one layout node.
+function paneSplitRows(tg, term, hasSiblings) {
+  return [
+    ["Split Terminal Right", "pane.split", { direction: "right", pane: tg.pane }],
+    ["Split Terminal Left", "orca-menu.split-left", { pane: tg.pane }],
+    ["Split Terminal Down", "pane.split", { direction: "down", pane: tg.pane }],
+    ["Split Terminal Up", "orca-menu.split-up", { pane: tg.pane }],
+    ...(hasSiblings
+      ? [
+          ["Move to New Tab", "orca-menu.unsplit-to-tab", { pane: tg.pane, terminal: term?.address }],
+          ["Swap with Left", "pane.swap", { pane: tg.pane, direction: "left" }],
+          ["Swap with Right", "pane.swap", { pane: tg.pane, direction: "right" }],
+          ["Swap with Above", "pane.swap", { pane: tg.pane, direction: "up" }],
+          ["Swap with Below", "pane.swap", { pane: tg.pane, direction: "down" }],
+        ]
+      : []),
+  ];
+}
+
+// Orca's title/ID block (:307-347). Orca's pane title is the tab's custom title
+// (`ClaudeAccountSwitchSessionTree.tsx:276` = `customTitle || title`), so `tab.rename`
+// names it, and an empty name drops it (`commands.rs:40`). Clear Pane Title is gated
+// on menuPaneHasCustomTitle (TerminalPaneSurface.tsx:317).
+function paneTitleRows(own, curTab) {
+  if (!own?.tab) return [];
+  return [
+    ["Set Title…", "tab.rename", { id: own.tab }],
+    ...(curTab?.named ? [["Clear Pane Title", "tab.rename", { id: own.tab, name: "" }]] : []),
+  ];
+}
+
+// Herdr-only: Orca has no right-click routing or park command; kept where the title/ID block
+// sits. Copy Session/Terminal/Pane ID (:329-347): Herdr ids go to the clipboard through
+// `clip.js`. The session id has no counterpart.
+function paneIdentityRows(term, parent, toProgram) {
+  if (!term) return [];
+  return [
+    toProgram
+      ? ["Use Herdr right-click menu", "terminal.right_click", { terminal: term.address, to: "menu" }]
+      : ["Send right-clicks to pane", "terminal.right_click", { terminal: term.address, to: "program" }],
+    ...(parent ? [[`Send back to ${parent.name || parent.address}`, "terminal.park", { terminal: term.address }]] : []),
+    ["Copy Terminal ID", "orca-menu.copy-terminal", { id: term.address }],
+  ];
+}
+
+// TerminalContextMenu.tsx:348-357: Close Pane / Close tab. Gated on canCloseTerminalPane
+// (terminal-pane-close-affordance.ts:6-14: true if paneCount > 1, or !isTabPinned). Orca's
+// close row names the tab when this is its last pane (terminal-pane-close-affordance.ts:16).
+function paneCloseRows(tg, own, alone, curTab) {
+  if (alone && curTab?.settled) return [];
+  return alone ? [["Close tab", "tab.close", { id: own?.tab }]] : [["Close Pane", "pane.close", { pane: tg.pane }]];
+}
+
+// The terminal behind the pane, the parent it can go back under, and where its right-click goes.
+function paneTerminal(tg) {
+  // A kept sub-agent can go back under its parent, still running.
+  const all = terminals();
+  const term = all.find((t) => t.address === tg.terminal);
+  const parent = term?.parent && all.find((t) => t.address === term.parent);
+  // Once they go to the program, Shift+right-click still opens this menu.
+  const toProgram = term?.labels?.["herdr.right-click"] === "program";
+  return { term, parent, toProgram };
+}
+
+const isWorking = (x) => x?.status === "working" || x?.status === "blocked";
+const paneIsAgent = (own, term) => Boolean(own?.program?.agent || isWorking(own) || term?.agent);
+
+function paneItems(tg) {
+  const { term, parent, toProgram } = paneTerminal(tg);
+  const own = panes().find((x) => x.pane === tg.pane);
+  const paneCount = own ? panesOfTab(own.tab).length : 0;
+  const alone = Boolean(own) && paneCount < 2;
+  const curTab = spaces().flatMap(tabsOf).find((t) => t.id === own?.tab);
+  return [
+    ...paneClipboardRows(tg, term, paneIsAgent(own, term)),
+    ...paneSplitRows(tg, term, Boolean(own) && paneCount > 1),
+    [own?.zoomed ? "Collapse Pane" : "Expand Pane", "pane.zoom", { pane: tg.pane }],
+    ...paneTitleRows(own, curTab),
+    ...paneIdentityRows(term, parent, toProgram),
+    ["Copy Pane ID", "orca-menu.copy-pane-id", { id: tg.pane ?? "" }],
+    ...paneCloseRows(tg, own, alone, curTab),
+    // Clear Screen (:359) and Reset Terminal (:363): no command sends input, so the
+    // terminal is driven through `hc` — Ctrl+L for a clear, `reset` for a full one.
+    ...(term
+      ? [terminalRow("Clear Screen", "orca-menu.clear-screen", term, tg), terminalRow("Reset Terminal", "orca-menu.reset-terminal", term, tg)]
+      : []),
+  ];
+}
+
+// TabWorkspaceLayoutMenuSection.tsx:42-93 — Move Tab to Split across 4 directions.
+const moveTabRows = (tg) => ["right", "left", "down", "up"].map((direction) => [
+  `Move Tab to Split ${direction[0].toUpperCase()}${direction.slice(1)}`, "orca-menu.move-tab-split", { id: tg.id, direction },
+]);
+
+// Herdr's own, not an Orca port (SortableTabContextMenu.tsx has no such rows): the same
+// inset block as Close Others, one side of this tab at a time, and left out on a side
+// that has no unpinned tab - the rule Close Others follows with `tabCount <= 1`.
+function closeSideRows(owner, tg) {
+  return [
+    ...(closeSideTabs(owner, tg.id, "right").length ? [["Close Tabs to the Right", "orca-menu.close-right", { id: tg.id }]] : []),
+    ...(closeSideTabs(owner, tg.id, "left").length ? [["Close Tabs to the Left", "orca-menu.close-left", { id: tg.id }]] : []),
+  ];
+}
+
+// Orca's order (SortableTabContextMenu.tsx:152-251): split section (:157-166,
+// TabWorkspaceLayoutMenuSection.tsx:42-93 and TerminalTabSplitMenuSection.tsx:46-77), then
+// "Continue with Terminal Agent" (:167-178, chat view only) and the
+// TabSessionSurfaceSwitchMenuItems rows (:179-185), separator (:186), Pin/Unpin
+// (:187-196), Allow Auto-Close (:197-205), Copy Tab ID (:206), separator (:207),
+// Close (:208-212), Close Others (:213-215), Close split pane (:216, CloseSplitPaneMenuItem.tsx:21-24), separator (:217),
+// Change Title (:218-222). Orca's Tab Color palette (:223-250) is left out: the tab takes
+// its colour from the strip's own state, and this menu no longer writes one. The chat-view
+// and session-switch rows
+// stay out: Herdr has no chat. Allow Auto-Close has no counterpart either: Herdr keeps a
+// tab until `tab.close`, and `hc keep --off` ends a lost terminal but closes no tab.
+function tabItems(tg) {
+  const owner = owningSpace(tg.id);
+  const several = tabsOf(owner).length > 1;
+  const tab = tabsOf(owner).find((x) => x.id === tg.id);
+  const mine = panesOfTab(tg.id);
+  const pane = (mine.find((x) => x.focused) ?? mine[0])?.pane;
+  return [
+    ...(several ? moveTabRows(tg) : []),
+    ...(pane
+      ? [
+          // TerminalTabSplitMenuSection.tsx:46-77 — Split terminal right and down
+          ["Split terminal right", "pane.split", { direction: "right", pane }],
+          ["Split terminal down", "pane.split", { direction: "down", pane }],
+        ]
+      : []),
+    // SortableTabContextMenu.tsx:187-196 — Orca's Pin/Unpin.
+    tab?.settled ? ["Unpin Tab", "tab.unsettle", { id: tg.id }] : ["Pin Tab", "tab.settle", { id: tg.id }],
+    // SortableTabContextMenu.tsx:206 & CopyTabIdMenuItem.tsx:16 — Copy Tab ID.
+    ["Copy Tab ID", "orca-menu.copy-tab-id", { id: tg.id }],
+    // SortableTabContextMenu.tsx:208-212 — Close.
+    ["Close", "tab.close", { id: tg.id }],
+    // SortableTabContextMenu.tsx:213 — inset, disabled when `tabCount <= 1`; with one tab
+    // the loop in choose() would close nothing, so leave the row out.
+    ...(several ? [["Close Others", "orca-menu.close-others", { id: tg.id }]] : []),
+    ...closeSideRows(owner, tg),
+    // Close split pane (CloseSplitPaneMenuItem.tsx:21-24) closes other panes in the split group
+    ...(mine.length > 1 ? [["Close split pane", "orca-menu.close-split-panes", { id: tg.id }]] : []),
+    // SortableTabContextMenu.tsx:218-222 — Change Title.
+    ["Change Title", "tab.rename", { id: tg.id }],
+  ];
+}
+
+// What the worktree dialog is opened with: the space when one is open, `{ folder, machine }`
+// otherwise (defaults/mods/worktree/main.js:158).
+const worktreeArgs = (space, folder, machine) =>
+  ({ ...(space ? { space } : {}), ...(folder ? { folder } : {}), ...(machine ? { machine } : {}) });
+
+// `RepoHeaderProjectActionsMenu` (repo-header-project-actions.tsx:121-186) &
+// `ProjectGroupHeaderMenu` (project-group-header-actions.tsx:25-95):
+// the ellipsis or right-click on a project group header. Its rows are project
+// actions. In Herdr, open spaces belonging to the group can be renamed or closed.
+function groupItems(tg) {
+  const open = spaces().some((s) => s.id === tg.id);
+  const inGroup = (s) => s.id === tg.id || (tg.path && (s.folder === tg.path || s.folder?.startsWith(tg.path + "/")));
+  const groupSpaces = spaces().filter(inGroup);
+  // The sidebar's own grouping (`tg.spaces`, from orca-spaces) knows the linked worktrees
+  // stored outside the project folder; the folder-prefix match above misses them.
+  // Only live spaces: a row git lists with no space open carries a made-up id
+  // (`repo:`/`wt:`), and `space.close` would fail with `no space "repo:[...]"`.
+  const groupIds = (tg.spaces?.length ? tg.spaces : groupSpaces.map((s) => s.id))
+    .filter((id) => spaces().some((s) => s.id === id));
+  const openSpace = groupSpaces[0];
+  const folder = tg.path ?? (openSpace ? place(openSpace) : null);
+  const args = worktreeArgs(open ? tg.id : openSpace?.id, folder, tg.machine);
+  return [
+    ["New worktree", "worktree", { ...args, action: "new" }],
+    ["Open worktree", "worktree", { ...args, action: "open" }],
+    ["Copy Path", "orca-menu.copy-path", { path: folder, id: tg.id }],
+    ...(openSpace ? [["Rename workspace", "space.rename", { id: openSpace.id }]] : []),
+    // Every unpinned tab of the project: the main checkout and every linked worktree, from the
+    // sidebar's own grouping (`spaces`), which knows worktrees outside the project folder.
+    ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: tg.spaces ?? [], disabled: !unpinnedTabs(tg.spaces ?? []).length }],
+    // `space.close` needs `confirmed` (the host refuses it otherwise), and a group closes
+    // as one command (close-space.js).
+    ...closeRows(groupIds),
+    // A project with no open space is only the sidebar's catalog entry: nothing to close,
+    // so Orca's Remove Project (`repo-header-project-actions.tsx:204`) is the row that
+    // makes its cards go away. With a space open, close that instead.
+    ...(tg.repo && groupIds.length === 0 ? [["Remove Project from Sidebar", "orca-menu.forget-project", { repo: tg.repo }]] : []),
+  ];
+}
+
+// Not an Orca row: Orca's card menu has no branch switch because Source Control owns it,
+// and this layout ports no Source Control. The dialog ports that picker's behaviour — one
+// checkout, in place, behind the agent and uncommitted-change blockers.
+const worktreeRows = (args, repo, linked) => [
+  ...(repo ? [["New worktree", "worktree", { ...args, action: "new" }], ["Open worktree", "worktree", { ...args, action: "open" }], ["Checkout branch", "worktree", { ...args, action: "switch" }]] : []),
+  ...(linked ? [["Remove worktree", "worktree", { ...args, action: "remove" }]] : []),
+];
+
+// The opener carries `linked`; `git` is the probe's fallback for a row whose git state
+// had not loaded, or for a caller that sends only { id, path }.
+function worktreeFacts(tg, git) {
+  const known = typeof tg.linked === "boolean";
+  return { linked: known ? tg.linked : git === "linked", repo: known || git !== null };
+}
+
+// Orca keys the menu on the worktree, not a tab (`worktree-card-surface.tsx:139-146`):
+// Update and Close belong to a tab, while Open in / Copy Path / Copy Worktree Name and
+// the worktree work are unconditional (`WorktreeContextMenuView.tsx:165-298`). A card
+// with no open space still shows the latter, from the facts its opener passes.
+function spaceItems(tg, git) {
+  const open = spaces().some((s) => s.id === tg.id);
+  const { linked, repo } = worktreeFacts(tg, git);
+  const folder = tg.top || tg.folder || tg.path || null;
+  const args = worktreeArgs(open ? tg.id : null, folder, tg.machine);
+  return [
+    ...(open ? [["Update", "space.rename", { id: tg.id }]] : []),
+    // Orca's "Open in" is a submenu of external editors (WorktreeOpenInMenu.tsx:295-325);
+    // Herdr has no external-open command, so this opens a Herdr terminal in the
+    // worktree's folder instead (terminal.open, commands.md:277).
+    ["Open in Terminal", "terminal.open", folder ? { folder } : {}],
+    ["Copy Path", "orca-menu.copy-path", { path: folder, id: tg.id }],
+    // The display name is custom, else the branch, else the folder's last segment
+    // (`worktree-default-display-name.ts:13-25`).
+    ["Copy Worktree Name", "orca-menu.copy-name", { id: tg.id, name: tg.branch ?? null, folder }],
+    // WorktreeContextMenuView.tsx:203-214 — Mark Read / Mark Unread
+    ["Mark " + (tg.unread ? "Read" : "Unread"), "orca-menu.toggle-unread", { id: tg.id }],
+    ...worktreeRows(args, repo, linked),
+    // Every unpinned tab on this worktree's spaces; greyed out when there is none.
+    ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: [tg.id], disabled: !unpinnedTabs([tg.id]).length }],
+    ...(open ? closeRows([tg.id], "Close") : []),
+    // The card has no space of its own: its project's catalog entry is what draws it, so
+    // the same Remove Project row the group header has takes the project out of the list.
+    ...(!open && tg.repo ? [["Remove Project from Sidebar", "orca-menu.forget-project", { repo: tg.repo }]] : []),
+  ];
+}
+
+const globalItems = () => [
+  ["New space", "space.new", {}],
+  ["Keybinds", "app.help", {}],
+  ["Theme: graphite", "app.theme", { name: "graphite" }],
+  ["Theme: ink", "app.theme", { name: "ink" }],
+  ["Theme: moss", "app.theme", { name: "moss" }],
+  ["Theme: atom one dark", "app.theme", { name: "atom-one-dark" }],
+];
+
 function items(p, git) {
   p = p ?? {};
   const tg = p.target ?? {};
   switch (p.tab) {
-    case "pane": {
-      // A kept sub-agent can go back under its parent, still running.
-      const all = terminals();
-      const term = all.find((t) => t.address === tg.terminal);
-      const parent = term?.parent && all.find((t) => t.address === term.parent);
-      // Once they go to the program, Shift+right-click still opens this menu.
-      const toProgram = term?.labels?.["herdr.right-click"] === "program";
-      // Orca's close row names the tab when this is its last pane
-      // (terminal-pane-close-affordance.ts:16).
-      const own = panes().find((x) => x.pane === tg.pane);
-      const alone = own && panes().filter((x) => x.tab === own.tab).length < 2;
-      const curTab = spaces().flatMap((s) => s.tabs ?? []).find((t) => t.id === own?.tab);
-      const isAgent = Boolean(own?.program?.agent || own?.status === "working" || own?.status === "blocked" || term?.agent);
-      return [
-        // Orca's order (TerminalContextMenu.tsx:204-370): Copy, Add to chat, Select All, Paste,
-        // Quick Commands, agent rows, split section, title/ID block, close, clear, reset.
-        // Add to chat (:209) stays out: Herdr has no chat.
-        ["Copy", "terminal.copy", {}],
-        // Herdr cannot select the buffer; this copies up to 10,000 lines instead.
-        ...(term ? [["Copy Terminal Buffer", "orca-menu.select-all", { terminal: term.address, pane: tg.pane }]] : []),
-        ["Paste", "terminal.paste", {}],
-        // Orca's Quick Commands menu (:227) is its command surface; Herdr's is the palette.
-        ["Quick Commands", "app.palette", {}],
-        // Orca's agent rows (TerminalContextMenu.tsx:236-246):
-        // Hand Off to Another Agent (:236, canContinueAgentSessionInNewSession / isTuiAgent),
-        // Fork Agent Session… (:239), Copy Context (:246).
-        ...(term
-          ? [
-              ...(isAgent ? [["Hand off to agent", "orca-menu.handoff", { terminal: term.address, pane: tg.pane }]] : []),
-              ["Fork Agent Session…", "orca-menu.fork", { terminal: term.address, pane: tg.pane }],
-              ["Copy Context", "orca-menu.copy-context", { terminal: term.address, pane: tg.pane }],
-            ]
-          : []),
-        // Orca's split section (TerminalContextMenu.tsx:265-302, TabWorkspaceLayoutMenuSection.tsx:14-41).
-        // Equalize Pane Sizes (:281) has no equivalent: panes are content inside one layout node.
-        ["Split Terminal Right", "pane.split", { direction: "right", pane: tg.pane }],
-        ["Split Terminal Left", "orca-menu.split-left", { pane: tg.pane }],
-        ["Split Terminal Down", "pane.split", { direction: "down", pane: tg.pane }],
-        ["Split Terminal Up", "orca-menu.split-up", { pane: tg.pane }],
-        ...(own && panes().filter((x) => x.tab === own.tab).length > 1
-          ? [
-              ["Move to New Tab", "orca-menu.unsplit-to-tab", { pane: tg.pane, terminal: term?.address }],
-              ["Swap with Left", "pane.swap", { pane: tg.pane, direction: "left" }],
-              ["Swap with Right", "pane.swap", { pane: tg.pane, direction: "right" }],
-              ["Swap with Above", "pane.swap", { pane: tg.pane, direction: "up" }],
-              ["Swap with Below", "pane.swap", { pane: tg.pane, direction: "down" }],
-            ]
-          : []),
-        [own?.zoomed ? "Collapse Pane" : "Expand Pane", "pane.zoom", { pane: tg.pane }],
-        // Orca's title/ID block (:307-347). Orca's pane title is the tab's custom title
-        // (`ClaudeAccountSwitchSessionTree.tsx:276` = `customTitle || title`), so `tab.rename`
-        // names it, and an empty name drops it (`commands.rs:40`). Clear Pane Title is gated
-        // on menuPaneHasCustomTitle (TerminalPaneSurface.tsx:317).
-        ...(own?.tab
-          ? [
-              ["Set Title…", "tab.rename", { id: own.tab }],
-              ...(curTab?.named ? [["Clear Pane Title", "tab.rename", { id: own.tab, name: "" }]] : []),
-            ]
-          : []),
-        // Herdr-only: Orca has no right-click routing or park command; kept where the
-        // title/ID block sits.
-        ...(term
-          ? [
-              toProgram
-                ? ["Use Herdr right-click menu", "terminal.right_click", { terminal: term.address, to: "menu" }]
-                : ["Send right-clicks to pane", "terminal.right_click", { terminal: term.address, to: "program" }],
-            ]
-          : []),
-        ...(parent ? [[`Send back to ${parent.name || parent.address}`, "terminal.park", { terminal: term.address }]] : []),
-        // Copy Session/Terminal/Pane ID (:329-347): Herdr ids go to the clipboard through
-        // `clip.js`. The session id has no counterpart.
-        ...(term ? [["Copy Terminal ID", "orca-menu.copy-terminal", { id: term.address }]] : []),
-        ["Copy Pane ID", "orca-menu.copy-pane-id", { id: tg.pane ?? "" }],
-        // TerminalContextMenu.tsx:348-357: Close Pane / Close tab. Gated on canCloseTerminalPane
-        // (terminal-pane-close-affordance.ts:6-14: true if paneCount > 1, or !isTabPinned).
-        ...(!(alone && curTab?.settled)
-          ? [[alone ? "Close tab" : "Close Pane", alone ? "tab.close" : "pane.close", alone ? { id: own?.tab } : { pane: tg.pane }]]
-          : []),
-        // Clear Screen (:359) and Reset Terminal (:363): no command sends input, so the
-        // terminal is driven through `hc` — Ctrl+L for a clear, `reset` for a full one.
-        ...(term
-          ? [
-              ["Clear Screen", "orca-menu.clear-screen", { terminal: term.address, pane: tg.pane }],
-              ["Reset Terminal", "orca-menu.reset-terminal", { terminal: term.address, pane: tg.pane }],
-            ]
-          : []),
-      ];
-    }
-    case "tab": {
-      // Orca's order (SortableTabContextMenu.tsx:152-251): split section (:157-166,
-      // TabWorkspaceLayoutMenuSection.tsx:42-93 and TerminalTabSplitMenuSection.tsx:46-77), then
-      // "Continue with Terminal Agent" (:167-178, chat view only) and the
-      // TabSessionSurfaceSwitchMenuItems rows (:179-185), separator (:186), Pin/Unpin
-      // (:187-196), Allow Auto-Close (:197-205), Copy Tab ID (:206), separator (:207),
-      // Close (:208-212), Close Others (:213-215), Close split pane (:216, CloseSplitPaneMenuItem.tsx:21-24), separator (:217),
-      // Change Title (:218-222). Orca's Tab Color palette (:223-250) is left out: the tab takes
-      // its colour from the strip's own state, and this menu no longer writes one. The chat-view
-      // and session-switch rows
-      // stay out: Herdr has no chat. Allow Auto-Close has no counterpart either: Herdr keeps a
-      // tab until `tab.close`, and `hc keep --off` ends a lost terminal but closes no tab.
-      const own = spaces().find((s) => (s.tabs ?? []).some((x) => x.id === tg.id));
-      const list = own?.tabs ?? [];
-      const tab = list.find((x) => x.id === tg.id);
-      const mine = panes().filter((x) => x.tab === tg.id);
-      const pane = (mine.find((x) => x.focused) ?? mine[0])?.pane;
-      return [
-        ...(list.length > 1
-          ? [
-              // TabWorkspaceLayoutMenuSection.tsx:42-93 — Move Tab to Split across 4 directions
-              ["Move Tab to Split Right", "orca-menu.move-tab-split", { id: tg.id, direction: "right" }],
-              ["Move Tab to Split Left", "orca-menu.move-tab-split", { id: tg.id, direction: "left" }],
-              ["Move Tab to Split Down", "orca-menu.move-tab-split", { id: tg.id, direction: "down" }],
-              ["Move Tab to Split Up", "orca-menu.move-tab-split", { id: tg.id, direction: "up" }],
-            ]
-          : []),
-        ...(pane
-          ? [
-              // TerminalTabSplitMenuSection.tsx:46-77 — Split terminal right and down
-              ["Split terminal right", "pane.split", { direction: "right", pane }],
-              ["Split terminal down", "pane.split", { direction: "down", pane }],
-            ]
-          : []),
-        // SortableTabContextMenu.tsx:187-196 — Orca's Pin/Unpin.
-        [tab?.settled ? "Unpin Tab" : "Pin Tab", tab?.settled ? "tab.unsettle" : "tab.settle", { id: tg.id }],
-        // SortableTabContextMenu.tsx:206 & CopyTabIdMenuItem.tsx:16 — Copy Tab ID.
-        ["Copy Tab ID", "orca-menu.copy-tab-id", { id: tg.id }],
-        // SortableTabContextMenu.tsx:208-212 — Close.
-        ["Close", "tab.close", { id: tg.id }],
-        // SortableTabContextMenu.tsx:213 — inset, disabled when `tabCount <= 1`; with one tab
-        // the loop in choose() would close nothing, so leave the row out.
-        ...(list.length > 1 ? [["Close Others", "orca-menu.close-others", { id: tg.id }]] : []),
-        // Herdr's own, not an Orca port (SortableTabContextMenu.tsx has no such rows): the same
-        // inset block as Close Others, one side of this tab at a time, and left out on a side
-        // that has no unpinned tab - the rule Close Others follows with `tabCount <= 1`.
-        ...(closeSideTabs(own, tg.id, "right").length
-          ? [["Close Tabs to the Right", "orca-menu.close-right", { id: tg.id }]]
-          : []),
-        ...(closeSideTabs(own, tg.id, "left").length
-          ? [["Close Tabs to the Left", "orca-menu.close-left", { id: tg.id }]]
-          : []),
-        // Close split pane (CloseSplitPaneMenuItem.tsx:21-24) closes other panes in the split group
-        ...(mine.length > 1 ? [["Close split pane", "orca-menu.close-split-panes", { id: tg.id }]] : []),
-        // SortableTabContextMenu.tsx:218-222 — Change Title.
-        ["Change Title", "tab.rename", { id: tg.id }],
-      ];
-    }
-    // `RepoHeaderProjectActionsMenu` (repo-header-project-actions.tsx:121-186) &
-    // `ProjectGroupHeaderMenu` (project-group-header-actions.tsx:25-95):
-    // the ellipsis or right-click on a project group header. Its rows are project
-    // actions. In Herdr, open spaces belonging to the group can be renamed or closed.
-    case "group": {
-      const open = spaces().some((s) => s.id === tg.id);
-      const groupSpaces = spaces().filter((s) => s.id === tg.id || (tg.path && (s.folder === tg.path || s.folder?.startsWith(tg.path + "/"))));
-      // The sidebar's own grouping (`tg.spaces`, from orca-spaces) knows the linked worktrees
-      // stored outside the project folder; the folder-prefix match above misses them.
-      // Only live spaces: a row git lists with no space open carries a made-up id
-      // (`repo:`/`wt:`), and `space.close` would fail with `no space "repo:[...]"`.
-      const groupIds = (tg.spaces?.length ? tg.spaces : groupSpaces.map((s) => s.id))
-        .filter((id) => spaces().some((s) => s.id === id));
-      const openSpace = groupSpaces[0];
-      const folder = tg.path ?? (openSpace ? place(openSpace) : null);
-      const args = { ...(open ? { space: tg.id } : openSpace ? { space: openSpace.id } : {}), ...(folder ? { folder } : {}), ...(tg.machine ? { machine: tg.machine } : {}) };
-      return [
-        ["New worktree", "worktree", { ...args, action: "new" }],
-        ["Open worktree", "worktree", { ...args, action: "open" }],
-        ["Copy Path", "orca-menu.copy-path", { path: folder, id: tg.id }],
-        ...(openSpace ? [["Rename workspace", "space.rename", { id: openSpace.id }]] : []),
-        // Every unpinned tab of the project: the main checkout and every linked worktree, from the
-        // sidebar's own grouping (`spaces`), which knows worktrees outside the project folder.
-        ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: tg.spaces ?? [], disabled: !unpinnedTabs(tg.spaces ?? []).length }],
-        // `space.close` needs `confirmed` (the host refuses it otherwise), and a group closes
-        // as one command (close-space.js).
-        ...closeRows(groupIds),
-        // A project with no open space is only the sidebar's catalog entry: nothing to close,
-        // so Orca's Remove Project (`repo-header-project-actions.tsx:204`) is the row that
-        // makes its cards go away. With a space open, close that instead.
-        ...(tg.repo && groupIds.length === 0 ? [["Remove Project from Sidebar", "orca-menu.forget-project", { repo: tg.repo }]] : []),
-      ];
-    }
-    case "space": {
-      // Orca keys the menu on the worktree, not a tab (`worktree-card-surface.tsx:139-146`):
-      // Update and Close belong to a tab, while Open in / Copy Path / Copy Worktree Name and
-      // the worktree work are unconditional (`WorktreeContextMenuView.tsx:165-298`). A card
-      // with no open space still shows the latter, from the facts its opener passes.
-      const open = spaces().some((s) => s.id === tg.id);
-      // The opener carries `linked`; `git` is the probe's fallback for a row whose git state
-      // had not loaded, or for a caller that sends only { id, path }.
-      const linked = typeof tg.linked === "boolean" ? tg.linked : git === "linked";
-      const repo = typeof tg.linked === "boolean" || git !== null;
-      const folder = tg.top || tg.folder || tg.path || null;
-      // The worktree dialog takes a space when one is open, `{ folder, machine }` otherwise
-      // (defaults/mods/worktree/main.js:158).
-      const args = { ...(open ? { space: tg.id } : {}), ...(folder ? { folder } : {}), ...(tg.machine ? { machine: tg.machine } : {}) };
-      return [
-        ...(open ? [["Update", "space.rename", { id: tg.id }]] : []),
-        // Orca's "Open in" is a submenu of external editors (WorktreeOpenInMenu.tsx:295-325);
-        // Herdr has no external-open command, so this opens a Herdr terminal in the
-        // worktree's folder instead (terminal.open, commands.md:277).
-        ["Open in Terminal", "terminal.open", folder ? { folder } : {}],
-        ["Copy Path", "orca-menu.copy-path", { path: folder, id: tg.id }],
-        // The display name is custom, else the branch, else the folder's last segment
-        // (`worktree-default-display-name.ts:13-25`).
-        ["Copy Worktree Name", "orca-menu.copy-name", { id: tg.id, name: tg.branch ?? null, folder }],
-        // WorktreeContextMenuView.tsx:203-214 — Mark Read / Mark Unread
-        ["Mark " + (tg.unread ? "Read" : "Unread"), "orca-menu.toggle-unread", { id: tg.id }],
-        // Not an Orca row: Orca's card menu has no branch switch because Source Control owns it,
-        // and this layout ports no Source Control. The dialog ports that picker's behaviour — one
-        // checkout, in place, behind the agent and uncommitted-change blockers.
-        ...(repo ? [["New worktree", "worktree", { ...args, action: "new" }], ["Open worktree", "worktree", { ...args, action: "open" }], ["Checkout branch", "worktree", { ...args, action: "switch" }]] : []),
-        ...(linked ? [["Remove worktree", "worktree", { ...args, action: "remove" }]] : []),
-        // Every unpinned tab on this worktree's spaces; greyed out when there is none.
-        ["Delete all tabs", "orca-menu.delete-all-tabs", { ids: [tg.id], disabled: !unpinnedTabs([tg.id]).length }],
-        ...(open ? closeRows([tg.id], "Close") : []),
-        // The card has no space of its own: its project's catalog entry is what draws it, so
-        // the same Remove Project row the group header has takes the project out of the list.
-        ...(!open && tg.repo ? [["Remove Project from Sidebar", "orca-menu.forget-project", { repo: tg.repo }]] : []),
-      ];
-    }
-    default:
-      return [
-        ["New space", "space.new", {}],
-        ["Keybinds", "app.help", {}],
-        ["Theme: graphite", "app.theme", { name: "graphite" }],
-        ["Theme: ink", "app.theme", { name: "ink" }],
-        ["Theme: moss", "app.theme", { name: "moss" }],
-        ["Theme: atom one dark", "app.theme", { name: "atom-one-dark" }],
-      ];
+    case "pane": return paneItems(tg);
+    case "tab": return tabItems(tg);
+    case "group": return groupItems(tg);
+    case "space": return spaceItems(tg, git);
+    default: return globalItems();
   }
 }
 
-// Orca's lucide glyph for each row, taken from the component named in the citation.
 // Tabs of those spaces and of any other space on the same checkout (one card), minus pinned
 // ones, without duplicates. Takes one id or a list of ids: a card, or a whole project group.
 function unpinnedTabs(ids) {
   const all = spaces();
   const out = [];
   const seen = new Set();
-  for (const id of Array.isArray(ids) ? ids : ids == null ? [] : [ids]) {
+  for (const id of toList(ids)) {
     const me = all.find((s) => s.id === id);
     if (!me) continue;
-    for (const s of all) {
-      if (s.machine !== me.machine || place(s) !== place(me)) continue;
-      for (const t of s.tabs ?? []) {
-        if (t.settled || seen.has(t.id)) continue;
-        seen.add(t.id);
-        out.push(t.id);
-      }
+    const sameCheckout = all.filter((s) => s.machine === me.machine && place(s) === place(me));
+    for (const t of sameCheckout.flatMap(tabsOf)) {
+      if (t.settled || seen.has(t.id)) continue;
+      seen.add(t.id);
+      out.push(t.id);
     }
   }
   return out;
 }
 
-function menuIcon(it, zoomed) {
-  const [, command, args] = it;
+function toList(ids) {
+  if (Array.isArray(ids)) return ids;
+  return ids == null ? [] : [ids];
+}
+
+// Orca's lucide glyph for each row, taken from the component named in the citation.
+const iconPath = (name) => `mods/orca-menu/${name}.svg`;
+const arrowIcon = (args) => `arrow-${args?.direction ?? "right"}`;
+const WORKTREE_ICONS = { new: "git-branch-plus", open: "workflow", switch: "git-fork" };
+const ICON_BY_COMMAND = new Map([
   // Orca's Remove Project is the trash glyph (repo-header-project-actions.tsx:204).
-  if (command === "orca-menu.forget-project") return "mods/orca-menu/trash.svg";
-  if (it[0] === "Clear Pane Title") return "mods/orca-menu/x.svg";
-  if (command === "mod.open" && args?.name === "orca-split-menu") return "mods/orca-menu/panel-right-close.svg";
-  if (command === "pane.split") return `mods/orca-menu/${args?.direction === "down" ? "panel-bottom-close" : "panel-right-close"}.svg`;
-  if (command === "orca-menu.split-left") return "mods/orca-menu/arrow-left.svg";
-  if (command === "orca-menu.split-up") return "mods/orca-menu/arrow-up.svg";
-  if (command === "orca-menu.move-tab-split") return `mods/orca-menu/arrow-${args?.direction ?? "right"}.svg`;
-  if (command === "orca-menu.unsplit-to-tab") return "mods/orca-menu/plus.svg";
-  if (command === "pane.swap") return `mods/orca-menu/arrow-${args?.direction ?? "right"}.svg`;
-  if (command === "pane.zoom") return `mods/orca-menu/${zoomed ? "minimize-2" : "maximize-2"}.svg`;
-  if (command === "worktree") return `mods/orca-menu/${args?.action === "new" ? "git-branch-plus" : args?.action === "open" ? "workflow" : args?.action === "switch" ? "git-fork" : "unlink"}.svg`;
-  if (command === "tab.move") return `mods/orca-menu/${it[0] === "Move Left" ? "arrow-left" : "arrow-right"}.svg`;
-  if (command === "orca-menu.close-others" || command === "orca-menu.delete-all-tabs" || command === "orca-menu.close-split-panes") return "mods/orca-menu/x.svg";
-  if (command === "tab.settle" || command === "tab.unsettle") return `mods/orca-menu/${command === "tab.unsettle" ? "pin-off" : "pin"}.svg`;
-  if (command === "orca-menu.handoff") return "mods/orca-menu/message-square-plus.svg";
-  if (command === "orca-menu.fork") return "mods/orca-menu/git-fork.svg";
-  if (command === "orca-menu.copy-context") return "mods/orca-menu/copy.svg";
+  ["orca-menu.forget-project", () => "trash"],
+  ["mod.open", (_label, args) => (args?.name === "orca-split-menu" ? "panel-right-close" : undefined)],
+  ["pane.split", (_label, args) => (args?.direction === "down" ? "panel-bottom-close" : "panel-right-close")],
+  ["orca-menu.split-left", () => "arrow-left"],
+  ["orca-menu.split-up", () => "arrow-up"],
+  ["orca-menu.move-tab-split", (_label, args) => arrowIcon(args)],
+  ["orca-menu.unsplit-to-tab", () => "plus"],
+  ["pane.swap", (_label, args) => arrowIcon(args)],
+  ["pane.zoom", (_label, _args, zoomed) => (zoomed ? "minimize-2" : "maximize-2")],
+  ["worktree", (_label, args) => WORKTREE_ICONS[args?.action] ?? "unlink"],
+  ["tab.move", (label) => (label === "Move Left" ? "arrow-left" : "arrow-right")],
+  ["orca-menu.close-others", () => "x"],
+  ["orca-menu.delete-all-tabs", () => "x"],
+  ["orca-menu.close-split-panes", () => "x"],
+  ["tab.settle", () => "pin"],
+  ["tab.unsettle", () => "pin-off"],
+  ["orca-menu.handoff", () => "message-square-plus"],
+  ["orca-menu.fork", () => "git-fork"],
+  ["orca-menu.copy-context", () => "copy"],
   // TerminalContextMenu.tsx:218, 360, 364
-  if (command === "orca-menu.select-all") return "mods/orca-menu/text-select.svg";
-  if (command === "orca-menu.clear-screen") return "mods/orca-menu/eraser.svg";
-  if (command === "orca-menu.reset-terminal") return "mods/orca-menu/rotate-ccw.svg";
+  ["orca-menu.select-all", () => "text-select"],
+  ["orca-menu.clear-screen", () => "eraser"],
+  ["orca-menu.reset-terminal", () => "rotate-ccw"],
   // WorktreeContextMenuView.tsx:204-208 — BellOff when isUnread, Bell otherwise
-  if (command === "orca-menu.toggle-unread") return it[0] === "Mark Read" ? "mods/orca-menu/bell-off.svg" : "mods/orca-menu/bell.svg";
-  const name = command === "orca-menu.copy-path" || command === "orca-menu.copy-name" || command === "orca-menu.copy-terminal" || command === "orca-menu.copy-pane-id" || command === "terminal.copy" ? "copy"
-    : command === "terminal.paste" ? "clipboard"
-    : command === "terminal.open" ? "folder-open"
-    : (command.endsWith(".close") || command === "orca-menu.close-group") ? "x"
-    : command.endsWith(".rename") ? "pencil"
-    : command.endsWith(".new") ? "plus"
-    : command === "app.help" ? "terminal" : command === "app.theme" ? "settings" : "terminal";
-  return `mods/orca-menu/${name}.svg`;
+  ["orca-menu.toggle-unread", (label) => (label === "Mark Read" ? "bell-off" : "bell")],
+  ...["orca-menu.copy-path", "orca-menu.copy-name", "orca-menu.copy-terminal", "orca-menu.copy-pane-id", "terminal.copy"].map((c) => [c, () => "copy"]),
+  ["terminal.paste", () => "clipboard"],
+  ["terminal.open", () => "folder-open"],
+  ["orca-menu.close-group", () => "x"],
+  ["app.theme", () => "settings"],
+]);
+// A command no row above names still gets a glyph from its verb.
+const ICON_BY_SUFFIX = [[".close", "x"], [".rename", "pencil"], [".new", "plus"]];
+
+function menuIcon(it, zoomed) {
+  const [label, command, args] = it;
+  if (label === "Clear Pane Title") return iconPath("x");
+  const named = ICON_BY_COMMAND.get(command)?.(label, args, zoomed);
+  return iconPath(named ?? ICON_BY_SUFFIX.find(([suffix]) => command.endsWith(suffix))?.[1] ?? "terminal");
 }
 
 // Orca's separators, by menu: DropdownMenuSeparator at mx-10 my-5
-// (dropdown-menu.tsx:208).
+// (dropdown-menu.tsx:208). Each menu names the rows that start a new block.
+const isSplitRow = (x) => x && ["pane.split", "orca-menu.split-left", "orca-menu.split-up", "orca-menu.unsplit-to-tab"].includes(x[1]);
+const TITLE_BLOCK_COMMANDS = ["tab.rename", "terminal.right_click", "terminal.park", "orca-menu.copy-terminal", "orca-menu.copy-pane-id"];
+const isTitleRow = (x) => x && (x[0] === "Set Title…" || TITLE_BLOCK_COMMANDS.includes(x[1]));
+
+// Orca's pane menu separates the Copy/Paste block from the split section
+// (TerminalContextMenu.tsx:263), and separates swap/move and zoom blocks.
+function paneBreak(it, prev) {
+  if (isSplitRow(it) && !isSplitRow(prev)) return true;
+  if (it[1] === "pane.swap" && prev[1] !== "pane.swap") return true;
+  if (it[1] === "pane.zoom" && prev[1] !== "pane.zoom") return true;
+  // TerminalContextMenu.tsx:308 — separator before title/id block
+  if (isTitleRow(it) && !isTitleRow(prev)) return true;
+  // TerminalContextMenu.tsx:358 — separator before clear screen
+  return it[1] === "orca-menu.clear-screen";
+}
+
+function tabBreak(it) {
+  // SortableTabContextMenu.tsx:186 — separator before Pin/Unpin Tab
+  // CloseSplitPaneMenuItem.tsx:20 — separator before Close split pane
+  // SortableTabContextMenu.tsx:217 — separator before Change Title
+  return ["tab.settle", "tab.unsettle", "orca-menu.close-split-panes"].includes(it[1]) || it[0] === "Change Title";
+}
+
+function spaceBreak(it, prev) {
+  // WorktreeContextMenuView.tsx:177, 196, 218, 350
+  if (it[1] === "worktree") return prev[1] !== "worktree";
+  // Orca's Remove Project closes the menu with a destructive block of its own.
+  return ["terminal.open", "orca-menu.toggle-unread", "orca-menu.forget-project"].includes(it[1]);
+}
+
+const groupBreak = (it) => ["orca-menu.copy-path", "space.rename", "orca-menu.forget-project"].includes(it[1]);
+
+// The global list is Herdr's own; keep its rows apart as before.
+const globalBreak = (it, prev) => it[1] === "app.help" || (it[1] === "app.theme" && prev[1] !== "app.theme");
+
+const BREAK_BY_MENU = { pane: paneBreak, tab: tabBreak, space: spaceBreak, group: groupBreak, global: globalBreak };
+
 function section(p, list, i) {
   const it = list[i], prev = list[i - 1];
   if (!prev) return false;
@@ -341,43 +445,8 @@ function section(p, list, i) {
   // (TerminalContextMenu.tsx:355), tab (SortableTabContextMenu.tsx:207), space (:196).
   if (it[1] === "orca-menu.delete-all-tabs") return true;
   if (it[1].endsWith(".close") || it[1] === "orca-menu.close-group") return prev[1] !== "orca-menu.delete-all-tabs";
-  // Orca's pane menu separates the Copy/Paste block from the split section
-  // (TerminalContextMenu.tsx:263), and separates swap/move and zoom blocks.
-  if (p?.tab === "pane") {
-    const isSplit = (x) => x && (x[1] === "pane.split" || x[1] === "orca-menu.split-left" || x[1] === "orca-menu.split-up" || x[1] === "orca-menu.unsplit-to-tab");
-    if (isSplit(it) && !isSplit(prev)) return true;
-    if (it[1] === "pane.swap" && prev[1] !== "pane.swap") return true;
-    if (it[1] === "pane.zoom" && prev[1] !== "pane.zoom") return true;
-    // TerminalContextMenu.tsx:308 — separator before title/id block
-    const isTitleId = (x) => x && (x[0] === "Set Title…" || x[1] === "tab.rename" || x[1] === "terminal.right_click" || x[1] === "terminal.park" || x[1] === "orca-menu.copy-terminal" || x[1] === "orca-menu.copy-pane-id");
-    if (isTitleId(it) && !isTitleId(prev)) return true;
-    // TerminalContextMenu.tsx:358 — separator before clear screen
-    if (it[1] === "orca-menu.clear-screen") return true;
-  }
-  if (p?.tab === "tab") {
-    // SortableTabContextMenu.tsx:186 — separator before Pin/Unpin Tab
-    if (it[1] === "tab.settle" || it[1] === "tab.unsettle") return true;
-    // CloseSplitPaneMenuItem.tsx:20 — separator before Close split pane
-    if (it[1] === "orca-menu.close-split-panes") return true;
-    // SortableTabContextMenu.tsx:217 — separator before Change Title
-    if (it[0] === "Change Title") return true;
-  }
-  if (p?.tab === "space") {
-    // WorktreeContextMenuView.tsx:177, 196, 218, 350
-    if (it[1] === "terminal.open") return true;
-    if (it[1] === "orca-menu.toggle-unread") return true;
-    if (it[1] === "worktree" && prev[1] !== "worktree") return true;
-    // Orca's Remove Project closes the menu with a destructive block of its own.
-    if (it[1] === "orca-menu.forget-project") return true;
-  }
-  if (p?.tab === "group") {
-    if (it[1] === "orca-menu.copy-path") return true;
-    if (it[1] === "space.rename") return true;
-    if (it[1] === "orca-menu.forget-project") return true;
-  }
-  // The global list is Herdr's own; keep its rows apart as before.
-  if (!p?.tab || p.tab === "global") return it[1] === "app.help" || (it[1] === "app.theme" && prev[1] !== "app.theme");
-  return false;
+  const menu = p?.tab || "global";
+  return Object.hasOwn(BREAK_BY_MENU, menu) ? BREAK_BY_MENU[menu](it, prev) : false;
 }
 
 // Orca's destructive row is --destructive: #ff6568 dark, #e40014 light (main.css:474,437);
@@ -388,8 +457,11 @@ function destructive() {
 
 // Orca marks pane close, close split pane (CloseSplitPaneMenuItem.tsx:21-24), and workspace close rows destructive;
 // the tab's Close is plain (TerminalContextMenu.tsx:351, WorktreeContextMenuView.tsx:353, SortableTabContextMenu.tsx:208, repo-header-project-actions.tsx:181).
+const ALWAYS_DESTRUCTIVE = ["pane.close", "orca-menu.close-split-panes", "orca-menu.delete-all-tabs", "orca-menu.forget-project"];
 function isDestructive(p, it) {
-  return it[1] === "pane.close" || (p?.tab === "pane" && it[1] === "tab.close") || it[1] === "orca-menu.close-split-panes" || it[1] === "orca-menu.delete-all-tabs" || it[1] === "orca-menu.forget-project" || ((p?.tab === "space" || p?.tab === "group") && (it[1] === "space.close" || it[1] === "orca-menu.close-group"));
+  if (ALWAYS_DESTRUCTIVE.includes(it[1])) return true;
+  if (p?.tab === "pane") return it[1] === "tab.close";
+  return (p?.tab === "space" || p?.tab === "group") && (it[1] === "space.close" || it[1] === "orca-menu.close-group");
 }
 
 // The key bound to a command, for the hint on the right.
@@ -416,19 +488,26 @@ function keyHint(chord) {
   return MODIFIER_GLYPHS.filter(([name]) => held.has(name)).map(([, glyph]) => glyph).join("") + rest.toUpperCase();
 }
 
+// SortableTab.tsx:130-131 — a named tab shows its name, an unnamed one shows what runs in it.
+function tabLabel(tab, pane) {
+  return tab.named ? (tab.name ?? "Terminal") : (pane?.title || pane?.program?.name || tab.name || "Terminal");
+}
+
+// The pane a tab is known by: the one running an agent, else its first.
+const leadPane = (tabId) => {
+  const mine = panesOfTab(tabId);
+  return mine.find((x) => x.program?.agent) ?? mine[0];
+};
+
 // The tab menu's own header: which tab these rows act on. A right-click can land on a background
 // tab, while Orca's menu belongs to the tab it acts on (SortableTabContextMenu.tsx), so Herdr
 // needs to say it. It is not a row - ↑/↓ skip it and Enter never runs it.
 function contextHeader(p, t) {
   const tg = p?.target ?? {};
-  const space = spaces().find((s) => s.id === tg.space) ??
-    spaces().find((s) => (s.tabs ?? []).some((x) => x.id === tg.id));
-  const tab = (space?.tabs ?? []).find((x) => x.id === tg.id);
+  const space = spaces().find((s) => s.id === tg.space) ?? owningSpace(tg.id);
+  const tab = tabsOf(space).find((x) => x.id === tg.id);
   if (!tab) return div();
-  // SortableTab.tsx:130-131 — a named tab shows its name, an unnamed one shows what runs in it.
-  const mine = panes().filter((x) => x.tab === tab.id);
-  const pane = mine.find((x) => x.program?.agent) ?? mine[0];
-  const label = tab.named ? (tab.name ?? "Terminal") : (pane?.title || pane?.program?.name || tab.name || "Terminal");
+  const label = tabLabel(tab, leadPane(tab.id));
   const where = [space?.name, space?.branch].filter(Boolean).join(" · ");
   return v_flex().px(8).pt(6).pb(8).gap(3)
     .child(h_flex().items_center().gap(7)
@@ -443,9 +522,269 @@ function contextHeader(p, t) {
 // Orca's tab Close is plain there (SortableTabContextMenu.tsx:208) and Herdr closes several tabs
 // from one menu, so these rows wear Orca's destructive colour only while they are the current row
 // (hover, ↑/↓): the red is a warning about what Enter is about to do, not decoration.
+const CLOSE_ROW_COMMANDS = ["tab.close", "orca-menu.close-others", "orca-menu.close-right", "orca-menu.close-left"];
 function closeRow(p, it) {
-  return p?.tab === "tab" && (it[1] === "tab.close" || it[1] === "orca-menu.close-others" ||
-    it[1] === "orca-menu.close-right" || it[1] === "orca-menu.close-left");
+  return p?.tab === "tab" && CLOSE_ROW_COMMANDS.includes(it[1]);
+}
+
+// Orca's Copy Tab ID and Close Others are `inset`: no icon, 32px left pad
+// (CopyTabIdMenuItem.tsx:24, SortableTabContextMenu.tsx:208). Herdr's Close to the
+// Right/Left sit in the same block.
+const INSET_COMMANDS = ["orca-menu.copy-tab-id", "orca-menu.close-others", "orca-menu.close-right", "orca-menu.close-left"];
+
+// What a row asks of the host. Each action gets the row's args and { p, cx, command }; choose()
+// closes the overlay once it returns.
+const ORCA_PREFIX = "orca-menu.";
+const CONFIRM_DIALOG = { width: 384, height: 180 };
+const PINNED_CLOSE_DIALOG = { width: 384, height: 200 };
+const AGENT_CLOSE_DIALOG = { width: 384, height: 240 };
+const COMMAND_CLOSE_DIALOG = { width: 384, height: 208 };
+const WORKTREE_PICKER_DIALOG = { width: 560, height: 480 };
+const WORKTREE_CONFIRM_DIALOG = { width: 440, height: 260 };
+const HANDOFF_DIALOG = { width: 480, height: 380 };
+const FORK_DIALOG = { width: 480, height: 320 };
+// Lines of scrollback taken from a terminal: Copy Context cleans and bounds its text, the
+// buffer copy takes everything Herdr will give.
+const CONTEXT_LINES = 1000;
+const BUFFER_LINES = 10000;
+
+const openConfirmClose = (confirmClose, size = CONFIRM_DIALOG) =>
+  openOverlay({ mod: "orca-tabs", kind: "dialog", modal: true, ...size, props: { confirmClose } });
+// Focus the pane that was right-clicked, so a command meant for the focused pane lands there.
+const focusPane = (args) => { if (args?.pane) run("pane.focus", { pane: args.pane }); };
+const paneArg = (args) => (args?.pane ? { pane: args.pane } : {});
+
+function targetSpace(p) {
+  const target = p?.target ?? {};
+  const space = spaces().find((s) => s.id === (target.id ?? ""));
+  return { target, space, folder: space ? place(space) : "" };
+}
+
+function copyPath(args, { p, cx }) {
+  const { target, space, folder } = targetSpace(p);
+  copyText(args?.path || target.path || target.folder || target.top || folder || (space ? home() : ""), cx);
+}
+
+// Display name: explicit custom name (space.named), else branch name, else folder basename
+// (Orca spec: worktree-default-display-name.ts:13-25 resolveWorktreeDisplayName).
+const customName = ({ target, space }) => ((space?.named || target.named) ? (space?.name || target.name) : null);
+
+function folderName(args, { target, space, folder }) {
+  const folderPath = String(args?.folder ?? target.folder ?? target.path ?? folder ?? "");
+  return folderPath.replace(/\/+$/, "").split("/").pop() || space?.name || "";
+}
+
+const displayName = (args, at) => customName(at) || args?.name || at.target.branch || folderName(args, at);
+
+const copyName = (args, { p, cx }) => copyText(displayName(args, targetSpace(p)), cx);
+
+// Remove Project from Sidebar: the catalog and the rows drawn from it belong to
+// orca-spaces, so hand the repo over through the shared store and ping its loop
+// (setShared alone does not wake another mod, AGENTS.md rule 10).
+function forgetProject(args) {
+  if (!args?.repo) return;
+  setShared("orca-spaces.forget", { repo: args.repo, at: Date.now() });
+  run("orca-spaces.forget-project");
+}
+
+// WorktreeContextMenuView.tsx:203-214 — toggle read / unread
+function toggleUnread(args) {
+  try {
+    const list = stored("spaces.unread.v1", []);
+    const set = new Set(Array.isArray(list) ? list : []);
+    if (!set.delete(args.id)) set.add(args.id);
+    const updated = [...set];
+    localStorage.setItem("spaces.unread.v1", JSON.stringify(updated));
+    setShared("spaces.unread.v1", updated);
+  } catch { /* storage is unavailable: the unread mark stays as it was */ }
+}
+
+// Close Others — SortableTabContextMenu.tsx:213 & useBulkTabCloseConfirmation (bulk-tab-close-confirmation.ts:5-15)
+function closeOthers(args) {
+  const tabIds = tabsOf(owningSpace(args.id)).filter((x) => x.id !== args.id && !x.settled).map((x) => x.id);
+  if (tabIds.length > 0) openConfirmClose({ kind: "bulk", scope: "others", tabIds });
+}
+
+// Herdr's own rows (Orca has none). The same confirmation as Close Others, and the ids are
+// read again here rather than taken from the row, so a tab closed or pinned while the menu
+// was open is honored.
+const closeSide = (side) => (args) => {
+  const tabIds = closeSideTabs(owningSpace(args.id), args.id, side);
+  if (tabIds.length > 0) openConfirmClose({ kind: "bulk", scope: side, tabIds });
+};
+
+// Same confirmation as Close Others; pinned tabs were left out of `tabIds` already.
+function deleteAllTabs(args) {
+  // Spaces may have changed since the menu opened: ask again, not the list it carried.
+  const ids = unpinnedTabs(args.ids ?? [args.id]);
+  if (ids.length === 0) return;
+  // A project group spans several checkouts; say so in the dialog. One checkout needs no
+  // extra line, since the worktree-level dialog says the same thing.
+  const wanted = new Set(ids);
+  const owners = new Set(spaces().filter((s) => tabsOf(s).some((t) => wanted.has(t.id))).map((s) => `${s.machine ?? ""}\u0000${place(s)}`));
+  const detail = owners.size > 1 ? `${ids.length} tabs in ${owners.size} worktrees` : undefined;
+  openConfirmClose({ kind: "bulk", scope: "all", tabIds: ids, ...(detail ? { detail } : {}) });
+}
+
+function closeSplitPanes(args) {
+  const mine = panesOfTab(args.id);
+  const keep = mine.find((x) => x.focused) ?? mine[0];
+  for (const x of mine) if (x !== keep) run("pane.close", { pane: x.pane });
+}
+
+// Split on one side, then swap the new pane over the old one for the other side.
+const splitThenSwap = (direction, swap) => (args) => {
+  focusPane(args);
+  run("pane.split", { direction, ...paneArg(args) });
+  run("pane.swap", { direction: swap });
+};
+
+// Copy Context (terminal-pane-menu-agent-session-actions.ts:58-65 & terminal-agent-session-fork.ts:139):
+// Extracts up to 1000 lines scrollback, cleans and bounds transcript to clipboard.
+function copyContext(args, { cx }) {
+  if (!args.terminal) return;
+  focusPane(args);
+  hc(["read", "--lines", String(CONTEXT_LINES), args.terminal]).then((r) => {
+    if (!r?.stdout) return;
+    const clean = buildBoundedSessionTranscript(r.stdout);
+    if (clean) copyText(clean, cx);
+  }).catch(() => { /* an unreadable terminal copies nothing */ });
+}
+
+// Select All: Herdr cannot select, so the screen and scrollback buffer go to the clipboard (TerminalContextMenu.tsx:217).
+function selectAll(args, { cx }) {
+  if (!args.terminal) return;
+  focusPane(args);
+  hc(["read", "--lines", String(BUFFER_LINES), args.terminal]).then((r) => {
+    if (r?.code === 0 && r.stdout.trim()) copyText(r.stdout, cx);
+  }).catch(() => { /* an unreadable terminal copies nothing */ });
+}
+
+// Clear Screen / Reset Terminal: `hc` writes to the terminal; Ctrl+L clears the screen,
+// `reset` restores the terminal modes (TerminalContextMenu.tsx:359-369).
+const writeToTerminal = (hcArgs) => (args) => {
+  if (!args.terminal) return;
+  focusPane(args);
+  void hc(hcArgs(args.terminal));
+};
+
+// A dialog that acts on a terminal: the handoff and fork rows of the pane menu.
+const terminalDialog = (size, action) => (args) => {
+  focusPane(args);
+  openOverlay({ mod: "orca-handoff", kind: "dialog", ...size, props: { action, terminal: args.terminal, pane: args.pane } });
+};
+
+const copyId = (args, { cx }) => copyText(args.id ?? "", cx);
+
+const ORCA_ACTIONS = new Map([
+  // CopyTabIdMenuItem.tsx:16 — writeClipboardText(`orcaTabId: ${unifiedTabId}`)
+  ["orca-menu.copy-tab-id", (args, { cx }) => copyText(`orcaTabId: ${args.id ?? ""}`, cx)],
+  ["orca-menu.copy-path", copyPath],
+  ["orca-menu.copy-name", copyName],
+  ["orca-menu.close-group", (args) => { for (const id of (args?.ids ?? [])) run("space.close", { id, confirmed: true }); }],
+  ["orca-menu.forget-project", forgetProject],
+  ["orca-menu.toggle-unread", toggleUnread],
+  ["orca-menu.close-others", closeOthers],
+  ["orca-menu.close-right", closeSide("right")],
+  ["orca-menu.close-left", closeSide("left")],
+  ["orca-menu.delete-all-tabs", deleteAllTabs],
+  ["orca-menu.move-tab-split", (args) => setShared("orca-tabs.action", { kind: "move-tab-split", tab: args.id, direction: args.direction })],
+  ["orca-menu.unsplit-to-tab", (args) => setShared("orca-tabs.action", { kind: "unsplit-to-tab", terminal: args.terminal, pane: args.pane })],
+  ["orca-menu.close-split-panes", closeSplitPanes],
+  ["orca-menu.split-left", splitThenSwap("right", "left")],
+  ["orca-menu.split-up", splitThenSwap("down", "up")],
+  ["orca-menu.copy-terminal", copyId],
+  ["orca-menu.copy-pane-id", copyId],
+  ["orca-menu.copy-context", copyContext],
+  // Hand Off to Another Agent (AgentSessionContinuationDialog.tsx:59)
+  ["orca-menu.handoff", terminalDialog(HANDOFF_DIALOG, "handoff")],
+  // Fork Agent Session (TerminalAgentSessionForkDialog.tsx:25)
+  ["orca-menu.fork", terminalDialog(FORK_DIALOG, "fork")],
+  ["orca-menu.select-all", selectAll],
+  ["orca-menu.clear-screen", writeToTerminal((terminal) => ["keys", terminal, "ctrl+l"])],
+  ["orca-menu.reset-terminal", writeToTerminal((terminal) => ["send", terminal, "reset"])],
+]);
+
+// `terminal.copy`/`terminal.paste` act on the focused terminal (commands.md:285-287), so
+// focus the pane that was right-clicked before the overlay gives focus back.
+function copyOrPaste(args, { p, command }) {
+  const tg = p?.target ?? {};
+  if (tg.pane || tg.terminal) run("pane.focus", tg.pane ? { pane: tg.pane } : { terminal: tg.terminal });
+  run(command, args);
+}
+
+// TerminalTabSplitMenuSection.tsx:37-39: activate inactive tab before splitting
+function splitPane(args, { p }) {
+  if (p?.tab === "tab" && p?.target?.id) run("tab.select", { id: p.target.id });
+  focusPane(args);
+  run("pane.split", args);
+}
+
+function openTerminalInSpace(args, { p, command }) {
+  if (p?.tab !== "space") return run(command, args);
+  const tg = p?.target ?? {};
+  if (spaces().some((s) => s.id === tg.id)) {
+    // Activate target space, then open the terminal tab in it (WorktreeRowOpenInSubMenu.tsx:11-28)
+    run("space.select", { id: tg.id });
+    run("terminal.open", args);
+  } else {
+    // Unopened worktree card: create a space for it and switch to terminals layout
+    // (matching orca-spaces/main.js:1062 & 1153)
+    const folder = args?.folder || tg.folder || tg.top || tg.path;
+    run("space.new", worktreeArgs(null, folder, tg.machine));
+  }
+  run("layout.select", { ...LAYOUT_CHILD });
+}
+
+const openWorktreeDialog = (args) => {
+  const picker = args.action === "open" || args.action === "switch";
+  openOverlay({ mod: "orca-worktree", kind: "dialog", ...(picker ? WORKTREE_PICKER_DIALOG : WORKTREE_CONFIRM_DIALOG), props: args });
+};
+
+// Close tab confirmation — terminal-tab-actions.ts:121-131 & running-terminal-close-guard.ts:56-97
+function closeTab(args) {
+  const tab = tabsOf(owningSpace(args.id)).find((x) => x.id === args.id);
+  if (tab && !confirmCloseTab(tab)) return;
+  run("tab.close", args);
+}
+
+// Ask first when closing would lose something; true when the tab can close without asking.
+function confirmCloseTab(tab) {
+  const tabPanes = panesOfTab(tab.id);
+  const pane = tabPanes.find((x) => x.program?.agent) ?? tabPanes[0];
+  const label = tabLabel(tab, pane);
+  if (tab.settled && !storageFlag("orca.confirmClosePinnedTab", "false")) {
+    openConfirmClose({ kind: "pinned", tabId: tab.id, tabLabel: label }, PINNED_CLOSE_DIALOG);
+    return false;
+  }
+  const isAgent = tabPanes.some((x) => x.program?.agent || x.status === "working" || x.status === "blocked") ||
+    tab.status === "working" || tab.status === "blocked";
+  const isRunningCommand = tabPanes.some((x) => x.program && !x.program.shell && !x.program.agent);
+  if (storageFlag("orca.skipCloseTerminalWithRunningProcessConfirm", "true") || !(isAgent || isRunningCommand)) return true;
+  openConfirmClose({ kind: isAgent ? "agent" : "command", tabId: tab.id, tabLabel: label }, isAgent ? AGENT_CLOSE_DIALOG : COMMAND_CLOSE_DIALOG);
+  return false;
+}
+
+// Whether a stored setting has this value; an unreadable store counts as not set.
+function storageFlag(key, value) {
+  try { return localStorage.getItem(key) === value; } catch { return false; }
+}
+
+const HOST_ACTIONS = new Map([
+  ["terminal.copy", copyOrPaste],
+  ["terminal.paste", copyOrPaste],
+  ["pane.swap", (args) => { focusPane(args); run("pane.swap", { direction: args.direction, ...paneArg(args) }); }],
+  ["pane.zoom", (args) => { focusPane(args); run("pane.zoom", args); }],
+  ["pane.split", splitPane],
+  ["terminal.open", openTerminalInSpace],
+  ["worktree", openWorktreeDialog],
+  ["tab.close", closeTab],
+]);
+
+// A red row, else muted when greyed out, else plain.
+function rowColor(accent, off, { t, bad }) {
+  if (accent) return bad;
+  return off ? t.muted : t.foreground;
 }
 
 export default class Menu extends View {
@@ -461,358 +800,88 @@ export default class Menu extends View {
     // loaded needs the checkout probe.
     const folder = space ? place(space) : tg.folder ?? tg.top ?? null;
     if (p?.tab === "space" && folder && typeof tg.linked !== "boolean")
-      cx.spawn(async (cx) => {
+      cx.spawn(async (taskCx) => {
         this.git = await checkout(folder, tg.machine ?? space?.machine ?? null).catch(() => null);
-        cx.notify();
+        taskCx.notify();
       });
   }
 
   choose(i, cx) {
-    const pProps = props();
-    const it = items(pProps, this.git)[i];
+    const p = props();
+    const it = items(p, this.git)[i];
     if (!it || it[2]?.disabled) return;
-    const overlayId = pProps?.overlay;
-    // `terminal.copy`/`terminal.paste` act on the focused terminal (commands.md:285-287), so
-    // focus the pane that was right-clicked before the overlay gives focus back.
-    if (it[1] === "terminal.copy" || it[1] === "terminal.paste") {
-      const tg = pProps?.target ?? {};
-      if (tg.pane || tg.terminal) run("pane.focus", tg.pane ? { pane: tg.pane } : { terminal: tg.terminal });
-      run(it[1], it[2]);
-      closeOverlay(overlayId);
-      return;
-    }
-    if (it[1].startsWith("orca-menu.")) {
-      const target = pProps?.target ?? {};
-      const space = spaces().find((s) => s.id === (target.id ?? ""));
-      const folder = space ? place(space) : "";
-      // CopyTabIdMenuItem.tsx:16 — writeClipboardText(`orcaTabId: ${unifiedTabId}`)
-      if (it[1] === "orca-menu.copy-tab-id") copyText(`orcaTabId: ${it[2].id ?? ""}`, cx);
-      if (it[1] === "orca-menu.copy-path") {
-        const p = it[2]?.path || target.path || target.folder || target.top || folder || (space ? home() : "");
-        copyText(p, cx);
-      }
-      // Display name: explicit custom name (space.named), else branch name, else folder basename
-      // (Orca spec: worktree-default-display-name.ts:13-25 resolveWorktreeDisplayName).
-      if (it[1] === "orca-menu.copy-name") {
-        const customName = (space?.named || target.named) ? (space?.name || target.name) : null;
-        const branchName = it[2]?.name || target.branch || null;
-        const folderPath = String(it[2]?.folder ?? target.folder ?? target.path ?? folder ?? "");
-        const fallback = folderPath.replace(/\/+$/, "").split("/").pop() || space?.name || "";
-        const name = customName || branchName || fallback;
-        copyText(name, cx);
-      }
-      if (it[1] === "orca-menu.close-group") {
-        for (const id of (it[2]?.ids ?? [])) {
-          run("space.close", { id, confirmed: true });
-        }
-        closeOverlay(overlayId);
-        return;
-      }
-      // Remove Project from Sidebar: the catalog and the rows drawn from it belong to
-      // orca-spaces, so hand the repo over through the shared store and ping its loop
-      // (setShared alone does not wake another mod, AGENTS.md rule 10).
-      if (it[1] === "orca-menu.forget-project") {
-        if (it[2]?.repo) {
-          setShared("orca-spaces.forget", { repo: it[2].repo, at: Date.now() });
-          run("orca-spaces.forget-project");
-        }
-        closeOverlay(overlayId);
-        return;
-      }
-      // WorktreeContextMenuView.tsx:203-214 — toggle read / unread
-      if (it[1] === "orca-menu.toggle-unread") {
-        try {
-          const list = stored("spaces.unread.v1", []);
-          const set = new Set(Array.isArray(list) ? list : []);
-          set.has(it[2].id) ? set.delete(it[2].id) : set.add(it[2].id);
-          const updated = [...set];
-          localStorage.setItem("spaces.unread.v1", JSON.stringify(updated));
-          setShared("spaces.unread.v1", updated);
-        } catch {}
-        closeOverlay(overlayId);
-        return;
-      }
-      // Close Others — SortableTabContextMenu.tsx:213 & useBulkTabCloseConfirmation (bulk-tab-close-confirmation.ts:5-15)
-      if (it[1] === "orca-menu.close-others") {
-        const owner = spaces().find((s) => (s.tabs ?? []).some((x) => x.id === it[2].id));
-        const targetIds = (owner?.tabs ?? []).filter((x) => x.id !== it[2].id && !x.settled).map((x) => x.id);
-        if (targetIds.length > 0) {
-          openOverlay({
-            mod: "orca-tabs",
-            kind: "dialog",
-            modal: true,
-            width: 384,
-            height: 180,
-            props: {
-              confirmClose: {
-                kind: "bulk",
-                scope: "others",
-                tabIds: targetIds,
-              }
-            }
-          });
-        }
-        closeOverlay(overlayId);
-        return;
-      }
-      // Herdr's own rows (Orca has none). The same confirmation as Close Others, and the ids are
-      // read again here rather than taken from the row, so a tab closed or pinned while the menu
-      // was open is honored.
-      if (it[1] === "orca-menu.close-right" || it[1] === "orca-menu.close-left") {
-        const side = it[1] === "orca-menu.close-right" ? "right" : "left";
-        const owner = spaces().find((s) => (s.tabs ?? []).some((x) => x.id === it[2].id));
-        const targetIds = closeSideTabs(owner, it[2].id, side);
-        if (targetIds.length > 0) {
-          openOverlay({
-            mod: "orca-tabs",
-            kind: "dialog",
-            modal: true,
-            width: 384,
-            height: 180,
-            props: {
-              confirmClose: {
-                kind: "bulk",
-                scope: side,
-                tabIds: targetIds,
-              }
-            }
-          });
-        }
-        closeOverlay(overlayId);
-        return;
-      }
-      // Same confirmation as Close Others; pinned tabs were left out of `tabIds` already.
-      if (it[1] === "orca-menu.delete-all-tabs") {
-        // Spaces may have changed since the menu opened: ask again, not the list it carried.
-        const ids = unpinnedTabs(it[2].ids ?? [it[2].id]);
-        if (ids.length > 0) {
-          // A project group spans several checkouts; say so in the dialog. One checkout needs no
-          // extra line, since the worktree-level dialog says the same thing.
-          const wanted = new Set(ids);
-          const owners = new Set();
-          for (const s of spaces()) {
-            if ((s.tabs ?? []).some((t) => wanted.has(t.id)))
-              owners.add(`${s.machine ?? ""}\u0000${place(s)}`);
-          }
-          const detail = owners.size > 1 ? `${ids.length} tabs in ${owners.size} worktrees` : undefined;
-          openOverlay({ mod: "orca-tabs", kind: "dialog", modal: true, width: 384, height: 180,
-            props: { confirmClose: { kind: "bulk", scope: "all", tabIds: ids, ...(detail ? { detail } : {}) } } });
-        }
-        closeOverlay(overlayId);
-        return;
-      }
-      if (it[1] === "orca-menu.move-tab-split") {
-        setShared("orca-tabs.action", {
-          kind: "move-tab-split",
-          tab: it[2].id,
-          direction: it[2].direction,
-        });
-        closeOverlay(overlayId);
-        return;
-      }
-      if (it[1] === "orca-menu.unsplit-to-tab") {
-        setShared("orca-tabs.action", {
-          kind: "unsplit-to-tab",
-          terminal: it[2].terminal,
-          pane: it[2].pane,
-        });
-        closeOverlay(overlayId);
-        return;
-      }
-      if (it[1] === "orca-menu.close-split-panes") {
-        const mine = panes().filter((x) => x.tab === it[2].id);
-        const keep = mine.find((x) => x.focused) ?? mine[0];
-        for (const x of mine) if (x !== keep) run("pane.close", { pane: x.pane });
-        closeOverlay(overlayId);
-        return;
-      }
-      if (it[1] === "orca-menu.split-left") {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        run("pane.split", { direction: "right", ...(it[2]?.pane ? { pane: it[2].pane } : {}) });
-        run("pane.swap", { direction: "left" });
-        closeOverlay(overlayId);
-        return;
-      }
-      if (it[1] === "orca-menu.split-up") {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        run("pane.split", { direction: "down", ...(it[2]?.pane ? { pane: it[2].pane } : {}) });
-        run("pane.swap", { direction: "up" });
-        closeOverlay(overlayId);
-        return;
-      }
-      if (it[1] === "orca-menu.copy-terminal" || it[1] === "orca-menu.copy-pane-id") {
-        copyText(it[2].id ?? "", cx);
-        closeOverlay(overlayId);
-        return;
-      }
-      // Copy Context (terminal-pane-menu-agent-session-actions.ts:58-65 & terminal-agent-session-fork.ts:139):
-      // Extracts up to 1000 lines scrollback, cleans and bounds transcript to clipboard.
-      if (it[1] === "orca-menu.copy-context" && it[2].terminal) {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        hc(["read", "--lines", "1000", it[2].terminal]).then((r) => {
-          if (!r?.stdout) return;
-          const clean = buildBoundedSessionTranscript(r.stdout);
-          if (clean) copyText(clean, cx);
-        }).catch(() => {});
-        closeOverlay(overlayId);
-        return;
-      }
-      // Hand Off to Another Agent (AgentSessionContinuationDialog.tsx:59)
-      if (it[1] === "orca-menu.handoff") {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        openOverlay({
-          mod: "orca-handoff",
-          kind: "dialog",
-          width: 480,
-          height: 380,
-          props: { action: "handoff", terminal: it[2].terminal, pane: it[2].pane }
-        });
-        closeOverlay(overlayId);
-        return;
-      }
-      // Fork Agent Session (TerminalAgentSessionForkDialog.tsx:25)
-      if (it[1] === "orca-menu.fork") {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        openOverlay({
-          mod: "orca-handoff",
-          kind: "dialog",
-          width: 480,
-          height: 320,
-          props: { action: "fork", terminal: it[2].terminal, pane: it[2].pane }
-        });
-        closeOverlay(overlayId);
-        return;
-      }
-      // Select All: Herdr cannot select, so the screen and scrollback buffer go to the clipboard (TerminalContextMenu.tsx:217).
-      if (it[1] === "orca-menu.select-all" && it[2].terminal) {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        hc(["read", "--lines", "10000", it[2].terminal]).then((r) => {
-          if (r?.code === 0 && r.stdout.trim()) copyText(r.stdout, cx);
-        }).catch(() => {});
-        closeOverlay(overlayId);
-        return;
-      }
-      // Clear Screen / Reset Terminal: `hc` writes to the terminal; Ctrl+L clears the screen,
-      // `reset` restores the terminal modes (TerminalContextMenu.tsx:359-369).
-      if (it[1] === "orca-menu.clear-screen" && it[2].terminal) {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        void hc(["keys", it[2].terminal, "ctrl+l"]);
-        closeOverlay(overlayId);
-        return;
-      }
-      if (it[1] === "orca-menu.reset-terminal" && it[2].terminal) {
-        if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-        void hc(["send", it[2].terminal, "reset"]);
-        closeOverlay(overlayId);
-        return;
-      }
-      closeOverlay(overlayId);
-      return;
-    }
-    if (it[1] === "pane.swap") {
-      if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-      run("pane.swap", { direction: it[2].direction, ...(it[2]?.pane ? { pane: it[2].pane } : {}) });
-      closeOverlay(overlayId);
-      return;
-    }
-    if (it[1] === "pane.zoom") {
-      if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-      run("pane.zoom", it[2]);
-      closeOverlay(overlayId);
-      return;
-    }
-    if (it[1] === "pane.split") {
-      // TerminalTabSplitMenuSection.tsx:37-39: activate inactive tab before splitting
-      if (props()?.tab === "tab" && props()?.target?.id) {
-        run("tab.select", { id: props().target.id });
-      }
-      if (it[2]?.pane) run("pane.focus", { pane: it[2].pane });
-      run("pane.split", it[2]);
-      closeOverlay(overlayId);
-      return;
-    }
-    if (it[1] === "terminal.open" && props()?.tab === "space") {
-      const tg = props()?.target ?? {};
-      const isOpen = spaces().some((s) => s.id === tg.id);
-      if (isOpen) {
-        // Activate target space, then open the terminal tab in it (WorktreeRowOpenInSubMenu.tsx:11-28)
-        run("space.select", { id: tg.id });
-        run("terminal.open", it[2]);
-        run("layout.select", { stack: "main", child: "main-terminals" });
-      } else {
-        // Unopened worktree card: create a space for it and switch to terminals layout
-        // (matching orca-spaces/main.js:1062 & 1153)
-        const targetFolder = it[2]?.folder || tg.folder || tg.top || tg.path;
-        run("space.new", { ...(targetFolder ? { folder: targetFolder } : {}), ...(tg.machine ? { machine: tg.machine } : {}) });
-        run("layout.select", { stack: "main", child: "main-terminals" });
-      }
-      closeOverlay(overlayId);
-      return;
-    }
-    if (it[1] === "worktree") {
-      openOverlay({ mod: "orca-worktree", kind: "dialog", ...(it[2].action === "open" || it[2].action === "switch" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
-      closeOverlay(overlayId);
-    } else if (it[1] === "tab.close") {
-      // Close tab confirmation — terminal-tab-actions.ts:121-131 & running-terminal-close-guard.ts:56-97
-      const owner = spaces().find((s) => (s.tabs ?? []).some((x) => x.id === it[2].id));
-      const tab = (owner?.tabs ?? []).find((x) => x.id === it[2].id);
-      if (tab) {
-        if (tab.settled) {
-          let skipPinned = false;
-          try { skipPinned = localStorage.getItem("orca.confirmClosePinnedTab") === "false"; } catch {}
-          if (!skipPinned) {
-            const tabPanes = panes().filter((p) => p.tab === tab.id);
-            const pane = tabPanes.find((p) => p.program?.agent) ?? tabPanes[0];
-            const program = pane?.program;
-            const name = tab.named ? (tab.name ?? "Terminal") : (pane?.title || program?.name || tab.name || "Terminal");
-            openOverlay({
-              mod: "orca-tabs",
-              kind: "dialog",
-              modal: true,
-              width: 384,
-              height: 200,
-              props: { confirmClose: { kind: "pinned", tabId: tab.id, tabLabel: name } }
-            });
-            closeOverlay(overlayId);
-            return;
-          }
-        }
-        const tabPanes = panes().filter((p) => p.tab === tab.id);
-        const isAgent = tabPanes.some((p) => p.program?.agent || p.status === "working" || p.status === "blocked") ||
-                        tab.status === "working" || tab.status === "blocked";
-        const isRunningCommand = tabPanes.some((p) => p.program && !p.program.shell && !p.program.agent);
-        let skipRunning = false;
-        try { skipRunning = localStorage.getItem("orca.skipCloseTerminalWithRunningProcessConfirm") === "true"; } catch {}
-        if (!skipRunning && (isAgent || isRunningCommand)) {
-          const pane = tabPanes.find((p) => p.program?.agent) ?? tabPanes[0];
-          const program = pane?.program;
-          const name = tab.named ? (tab.name ?? "Terminal") : (pane?.title || program?.name || tab.name || "Terminal");
-          openOverlay({
-            mod: "orca-tabs",
-            kind: "dialog",
-            modal: true,
-            width: 384,
-            height: isAgent ? 240 : 208,
-            props: { confirmClose: { kind: isAgent ? "agent" : "command", tabId: tab.id, tabLabel: name } }
-          });
-          closeOverlay(overlayId);
-          return;
-        }
-      }
-      run("tab.close", it[2]);
-      closeOverlay(overlayId);
-    } else {
-      run(it[1], it[2]);
-      closeOverlay(overlayId);
-    }
+    const [, command, args] = it;
+    const isOrca = command.startsWith(ORCA_PREFIX);
+    const action = (isOrca ? ORCA_ACTIONS : HOST_ACTIONS).get(command);
+    if (action) action(args, { p, cx, command });
+    else if (!isOrca) run(command, args);
+    closeOverlay(p?.overlay);
   }
 
-  render(cx) {
+  onKey(e, cx, count) {
+    if (e.key === "down") this.at = (this.at + 1) % count;
+    else if (e.key === "up") this.at = (this.at + count - 1) % count;
+    else if (e.key === "home") this.at = 0;
+    else if (e.key === "end") this.at = count - 1;
+    // Radix activates with Enter or Space (context-menu.tsx:31-62). Type-ahead and
+    // ChevronRight submenus have no flat-list equivalent here.
+    else if (e.key === "enter" || e.key === "space") this.choose(this.at, cx);
+    else if (e.key === "escape") closeOverlay(props()?.overlay);
+    else return;
+    cx.notify();
+  }
+
+  // One row. A close row turns red only as the current row (see closeRow).
+  row(p, list, i, look) {
+    const { t, zoomed, bad } = look;
+    const it = list[i];
+    const off = Boolean(it[2]?.disabled);
+    const red = !off && isDestructive(p, it);
+    const current = i === this.at && !off;
+    const warn = closeRow(p, it) && current;
+    const inset = INSET_COMMANDS.includes(it[1]);
+    const accent = red || warn;
+    return v_flex()
+      // Separator: mx-2.5 my-[5px] h-px (dropdown-menu.tsx:208).
+      .when(section(p, list, i), (el) => el.child(div().mx(10).my(5).h(1).bg(t.border)))
+      .child(h_flex()
+      .id(`mi-${i}`)
+      // Item: gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 = 24px row
+      // (dropdown-menu.tsx:115); icon 3.5 = 14. The tab menu is Herdr's only menu whose
+      // rows carry a title, a shortcut and long labels ("Move Tab to Split Right"), so it
+      // gets 30px rows; the others keep Orca's 24.
+      .h(p?.tab === "tab" ? 30 : 24)
+      .px(10)
+      .when(inset, (el) => el.pl(32))
+      .gap(8)
+      .rounded(6)
+      .items_center()
+      .justify_between()
+      .line_height("16px")
+      // Orca's rows are whitespace-nowrap (TerminalContextMenu.tsx:265,273); the label
+      // gives way with an ellipsis rather than wrapping inside the fixed popup.
+      .whitespace_nowrap()
+      .text_color(rowColor(accent, off, look))
+      // One current row: pointer hover moves `this.at`, so hover, keyboard and Enter
+      // agree (dropdown-menu.tsx:115 data-[current=true]).
+      .when(current, (el) => el.bg(accent ? `${bad}1a` : t.selected))
+      .on_hover((hovered, cx) => { if (hovered && !off && this.at !== i) { this.at = i; cx.notify(); } })
+      .on_click((_e, cx) => this.choose(i, cx))
+      .when(!inset, (el) => el.child(svg(menuIcon(it, zoomed)).size(14).flex_none()
+        .text_color(accent ? bad : t.muted)))
+      .child(div().flex_1().min_w(0).truncate().child(it[0]))
+      // Shortcut: ml-auto shrink-0 whitespace-nowrap pl-4 text-muted-foreground
+      // (dropdown-menu.tsx:219). The tab menu writes the chord as a person reads it
+      // (⌘W, ⇧⌘D, f2); the other menus keep Herdr's own spelling.
+      .child(div().pl(16).flex_none().whitespace_nowrap().text_color(t.muted)
+        .child(p?.tab === "tab" ? keyHint(shortcut(it[1], it[2])) : shortcut(it[1], it[2]))));
+  }
+
+  render() {
     const t = theme();
     const p = props();
     const list = items(p, this.git);
-    const zoomed = panes().find((x) => x.pane === p?.target?.pane)?.zoomed;
-    const bad = destructive();
+    const look = { t, bad: destructive(), zoomed: panes().find((x) => x.pane === p?.target?.pane)?.zoomed };
     return v_flex()
       .id("menu")
       .track_focus(this.handle)
@@ -826,18 +895,7 @@ export default class Menu extends View {
       .p(4)
       .bg(t.popover)
       .text_size(13)
-      .on_key_down((e, cx) => {
-        if (e.key === "down") this.at = (this.at + 1) % list.length;
-        else if (e.key === "up") this.at = (this.at + list.length - 1) % list.length;
-        else if (e.key === "home") this.at = 0;
-        else if (e.key === "end") this.at = list.length - 1;
-        // Radix activates with Enter or Space (context-menu.tsx:31-62). Type-ahead and
-        // ChevronRight submenus have no flat-list equivalent here.
-        else if (e.key === "enter" || e.key === "space") this.choose(this.at, cx);
-        else if (e.key === "escape") closeOverlay(props()?.overlay);
-        else return;
-        cx.notify();
-      })
+      .on_key_down((e, cx) => this.onKey(e, cx, list.length))
       .children([
         // Orca labels the card section only for a multi-selection; a single highlighted
         // card already names the worktree (WorktreeContextMenuView.tsx:147-152). Herdr has
@@ -846,52 +904,7 @@ export default class Menu extends View {
           ? [div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child("Workspace")]
           : []),
         ...(p?.tab === "tab" ? [contextHeader(p, t)] : []),
-        ...list.map((it, i) => {
-          const off = Boolean(it[2]?.disabled);
-          const red = !off && isDestructive(p, it);
-          const current = i === this.at && !off;
-          // A close row turns red only as the current row (see closeRow).
-          const warn = closeRow(p, it) && current;
-          // Orca's Copy Tab ID and Close Others are `inset`: no icon, 32px left pad
-          // (CopyTabIdMenuItem.tsx:24, SortableTabContextMenu.tsx:208). Herdr's Close to the
-          // Right/Left sit in the same block.
-          const inset = it[1] === "orca-menu.copy-tab-id" || it[1] === "orca-menu.close-others" ||
-            it[1] === "orca-menu.close-right" || it[1] === "orca-menu.close-left";
-          return v_flex()
-            // Separator: mx-2.5 my-[5px] h-px (dropdown-menu.tsx:208).
-            .when(section(p, list, i), (el) => el.child(div().mx(10).my(5).h(1).bg(t.border)))
-            .child(h_flex()
-            .id(`mi-${i}`)
-            // Item: gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 = 24px row
-            // (dropdown-menu.tsx:115); icon 3.5 = 14. The tab menu is Herdr's only menu whose
-            // rows carry a title, a shortcut and long labels ("Move Tab to Split Right"), so it
-            // gets 30px rows; the others keep Orca's 24.
-            .h(p?.tab === "tab" ? 30 : 24)
-            .px(10)
-            .when(inset, (el) => el.pl(32))
-            .gap(8)
-            .rounded(6)
-            .items_center()
-            .justify_between()
-            .line_height("16px")
-            // Orca's rows are whitespace-nowrap (TerminalContextMenu.tsx:265,273); the label
-            // gives way with an ellipsis rather than wrapping inside the fixed popup.
-            .whitespace_nowrap()
-            .text_color(red || warn ? bad : off ? t.muted : t.foreground)
-            // One current row: pointer hover moves `this.at`, so hover, keyboard and Enter
-            // agree (dropdown-menu.tsx:115 data-[current=true]).
-            .when(current, (el) => el.bg(red || warn ? `${bad}1a` : t.selected))
-            .on_hover((hovered, cx) => { if (hovered && !off && this.at !== i) { this.at = i; cx.notify(); } })
-            .on_click((_e, cx) => this.choose(i, cx))
-            .when(!inset, (el) => el.child(svg(menuIcon(it, zoomed)).size(14).flex_none()
-              .text_color(red || warn ? bad : t.muted)))
-            .child(div().flex_1().min_w(0).truncate().child(it[0]))
-            // Shortcut: ml-auto shrink-0 whitespace-nowrap pl-4 text-muted-foreground
-            // (dropdown-menu.tsx:219). The tab menu writes the chord as a person reads it
-            // (⌘W, ⇧⌘D, f2); the other menus keep Herdr's own spelling.
-            .child(div().pl(16).flex_none().whitespace_nowrap().text_color(t.muted)
-              .child(p?.tab === "tab" ? keyHint(shortcut(it[1], it[2])) : shortcut(it[1], it[2]))));
-        }),
+        ...list.map((_it, i) => this.row(p, list, i, look)),
       ]);
   }
 }
