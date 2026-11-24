@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { createHash } from 'node:crypto';
 import { parseWorktreeList, projectWorktreePlan, where, groupSpaceIds, forgetProject } from './worktree-plan.js';
 
 test('deleted worktrees disappear from the sidebar without closing their tabs', () => {
@@ -200,4 +201,29 @@ test('removing a project after its spaces close leaves the sidebar empty of it',
   const plan = projectWorktreePlan({ spaces: [], gitState, loaded: true });
   assert.equal(plan.groups.length, 0);
   assert.equal(plan.visibleRows.length, 0);
+});
+
+// A seeded sweep of spaces, caches and options; the digest was taken from the code before it was split into phases.
+test('the plan for a seeded sweep of spaces, git caches and options is unchanged', () => {
+  const hash = createHash('sha256');
+  let seed = 7; const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  const pick = (a) => a[rnd(a.length)];
+  for (let n = 0; n < 300; n++) {
+    const machines = [null, null, 'far'];
+    const repos = ['/r1/.git', '/r2/.git', '/r3.git'];
+    const spaces = Array.from({ length: rnd(6) }, (_, i) => ({ id: `s${i}`, name: `n${i}`, folder: pick(['/a', '/b', '/wt1', '/wt2', '/c', '/r1', '/r2']), machine: pick(machines), tabs: rnd(2) ? [{ id: `t${i}` }] : [], status: pick(['idle', 'working', 'done', 'blocked']), active: !rnd(3) }));
+    const gitState = {};
+    for (const s of spaces) {
+      if (rnd(4) === 0) continue;
+      const repo = pick(repos), linked = !!rnd(2);
+      const worktrees = rnd(3) === 0 ? undefined : [{ path: pick(['/r1', '/r2', '/a']), branch: 'main' }, { path: s.folder, branch: pick(['f', '', 'g']) }, { path: pick(['/wt1', '/wt2']), branch: pick(['x', '']) }];
+      gitState[where(s)] = rnd(6) === 0 ? null : { repo: JSON.stringify([s.machine, repo]), top: rnd(5) ? s.folder : '/zzz', name: 'nm', linked, branch: pick(['main', 'dev', null]), worktrees };
+    }
+    for (let k = 0; k < rnd(3); k++) gitState[JSON.stringify([pick(machines), pick(['/q1', '/q2', '/a'])])] = pick([null, { repo: JSON.stringify([null, pick(repos)]), top: '/q', name: 'q', linked: false, branch: 'm' }, { repo: JSON.stringify([null, pick(repos)]), top: '/q', name: 'q', linked: true, worktrees: [{ path: '/q' }, { path: '/q2', branch: 'k' }] }]);
+    const options = pick([{}, { groupBy: 'none' }, { sortBy: 'name' }, { hideDefaultBranchWorkspace: true }, { filterRepoIds: ['/r1/.git'] }, { hideDetachedHeadWorkspaces: true, sortBy: 'repo' }]);
+    const args = { spaces, panes: [], gitState, foldedRepos: new Set(), loaded: !!rnd(2), options };
+    hash.update(JSON.stringify(projectWorktreePlan(args), (k, v) => v instanceof Map ? [...v] : v));
+  }
+
+  assert.equal(hash.digest('hex').slice(0, 24), 'd207e4d416b803678e60db1c');
 });

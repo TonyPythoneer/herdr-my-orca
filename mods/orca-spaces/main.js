@@ -5,7 +5,7 @@
 // title and a meta row (branch, then the review badge at its end). Agent state lives in
 // the agents list, not here. Click to switch, right-click for its menu, drag to reorder.
 
-import { View, div, svg, image } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar } from "gpui-base";
 import { spaces, machines, panes, agents, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, props, nextCommand, layout } from "herdr";
 import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar, avatarFile } from "./project.js";
@@ -24,6 +24,9 @@ import { loadReviewCache, saveReviewCache, isReviewFresh, MAX_INFLIGHT_PR_LOOKUP
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
+
+// Retained row views released, created or re-propped per sync, so one frame never does them all at once.
+const MAX_RETAINED_OPERATIONS = 16;
 
 // Unified layout: while the sidebar is stepped narrower (orca-tabs `toggleSidebar`) its content
 // keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
@@ -46,6 +49,149 @@ function sidebarFrame(inner) {
     .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
 }
 
+// The repo's own .git folder names it; a worktree's top differs from it.
+async function readGitIdentity(cwd, on) {
+  const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd, on });
+  const topDir = top.stdout.trim();
+  const common = await exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, on });
+  const commonDir = common.stdout.trim();
+  if (top.code !== 0 || common.code !== 0 || !topDir || !commonDir) throw new Error("Incomplete git identity");
+  const name = commonDir.endsWith("/.git") ? base(commonDir.slice(0, -5)) : base(commonDir).replace(/\.git$/, "");
+  return { topDir, commonDir, name };
+}
+
+// The parent of a fork that has no `upstream` remote, or null. `exec` has its own 30s cap
+// (`gpui-kit.d.ts:22202`), so there is no per-call timeout to pass; off-machine reads are skipped
+// by the caller because `gh` there may not be authenticated.
+async function forkParent(origin, cwd) {
+  const q = await exec("gh", ["repo", "view", `${origin.owner}/${origin.repo}`, "--json", "isFork,parent"], { cwd }).catch(() => null);
+  if (q?.code !== 0) return null;
+  const d = JSON.parse(q.stdout);
+  const owner = d?.parent?.owner?.login;
+  const repo = d?.parent?.name;
+  return d?.isFork && owner && repo ? { owner, repo } : null;
+}
+
+// Orca queries PRs by base repo and origin head (`pr-branch-lookup.ts:41-48`,
+// `github-api-repository.ts:127-133`); repo icons use Orca's owner avatar fallback
+// (`repo-icon.ts:37-54`). Fills `found` as it learns, so a failure part-way keeps what it had.
+async function fillRemoteIdentity(found, cwd, on) {
+  const origin = await exec("git", ["remote", "get-url", "origin"], { cwd, on });
+  const o = origin.code === 0 ? parseRemote(origin.stdout) : null;
+  if (!o) return;
+  found.head = o.owner;
+  const u = await upstreamRemote(cwd, on);
+  found.baseRepo = `${(u ?? o).owner}/${(u ?? o).repo}`;
+  let slug = u && !(u.owner === o.owner && u.repo === o.repo) ? u : null;
+  // No `upstream` remote: ask GitHub whether origin is a fork.
+  const parent = !slug && !on ? await forkParent(o, cwd) : null;
+  if (parent) {
+    slug = { host: o.host, owner: parent.owner, repo: parent.repo };
+    // A fork with no `upstream` remote still files its PRs on the parent.
+    found.baseRepo = `${parent.owner}/${parent.repo}`;
+  }
+  found.owner = avatarOwner(o, slug);
+}
+
+// A renamed fork keeps its own identity; a same-name fork shows the parent's.
+function avatarOwner(origin, slug) {
+  return avatarUrlFor(slug && slug.repo !== origin.repo ? origin : (slug ?? origin));
+}
+
+async function upstreamRemote(cwd, on) {
+  const up = await exec("git", ["remote", "get-url", "upstream"], { cwd, on }).catch(() => null);
+  return up?.code === 0 ? parseRemote(up.stdout) : null;
+}
+
+// What the repo's remotes say: the repo PRs are filed in (upstream when there is one), origin's
+// owner (who the branch must belong to), and the owner's avatar. All null when git cannot say.
+async function readRemoteIdentity(cwd, on) {
+  const found = { baseRepo: null, head: null, owner: null };
+  try { await fillRemoteIdentity(found, cwd, on); } catch { /* a remote git cannot read costs only the avatar and the review: keep what was learned */ }
+  return found;
+}
+
+// Only the branch name is read. `# branch.ab` (ahead/behind) fed the removed gitTail,
+// and Orca's card has no such element; the flag still prints the header we parse.
+function branchOf(status) {
+  let branch = null;
+  for (const line of status.split("\n")) {
+    if (line.startsWith("# branch.head ")) branch = line.slice(14);
+  }
+  return branch;
+}
+
+// Everything one place's git says: identity, remotes, branch and the repo's worktree list.
+async function readGitInfo(status, cwd, on) {
+  const { topDir, commonDir, name } = await readGitIdentity(cwd, on);
+  const { baseRepo, head, owner } = await readRemoteIdentity(cwd, on);
+  const info = { name, top: topDir, branch: branchOf(status), owner, base: baseRepo, head, repo: JSON.stringify([on, commonDir]), linked: commonDir !== `${topDir}/.git` };
+  // Orca's rows are the repo's worktrees (`listRepoWorktrees`), not its open sessions. A
+  // repo is one group whether the open space is the main checkout or a linked worktree —
+  // `git worktree list` answers for both — so read it every time. Without this, a repo
+  // opened only on linked worktrees could never show its main checkout or its siblings.
+  const wt = await exec("git", ["worktree", "list", "--porcelain"], { cwd, on });
+  if (wt.code !== 0) throw new Error("Couldn't list git worktrees");
+  info.worktrees = parseWorktreeList(wt.stdout);
+  return { info, commonDir };
+}
+
+// `readWorkspaceReviewFact` passes the cache's `state` through, while `ReviewIcon` switches on
+// `merged`/`closed`/`draft` (review-state-presentation.ts:28-37). REST reports a merged PR as
+// `state: "closed"` with a `merged_at` stamp, so `state` alone would paint every merged PR as
+// closed and never reach `getStateTone`'s purple (`mapRestPullRequest`,
+// pull-request-lookup-data.ts:115-153): Orca derives it. A draft is reported as `draft`.
+function pullRequestState(pr) {
+  if (pr.merged_at) return "merged";
+  if (pr.draft) return "draft";
+  return String(pr.state ?? "").toLowerCase();
+}
+
+// The review a branch shows, from the REST list: only PRs whose head owner is this repo's
+// origin (`pullRequestMatchesHeadRepository`, pull-request-lookup-data.ts:187-193). When a fork
+// repo is deleted on GitHub, `p.head.repo` is null, so fall back to `p.head.user` or `p.user`
+// (pull-request-lookup-data.ts:147). The list is newest first, so prefer the live one
+// (`preferOpenPullRequest`, pr-branch-lookup.ts:30-32).
+function reviewFromPullRequests(list, head) {
+  const mine = list.filter((p) => {
+    const o = String(p.head?.repo?.owner?.login ?? p.head?.user?.login ?? p.user?.login ?? "").toLowerCase();
+    return o === String(head).toLowerCase();
+  });
+  const first = mine.find((p) => String(p.state ?? "").toLowerCase() === "open") ?? mine[0];
+  return first?.number ? { number: first.number, title: first.title, state: pullRequestState(first) } : null;
+}
+
+// What a row says about its checkout: where, which branch, which host, and whether it is a linked worktree.
+function gitFacts(w, g) {
+  return {
+    top: g?.top ?? w.folder ?? null,
+    branch: g?.branch ?? w.branch ?? null,
+    machine: w.machine ?? null,
+    linked: g ? Boolean(g.linked) : null,
+  };
+}
+
+// An agent working, or a program in front of the shell.
+function isBusy(pane) {
+  return pane.status === "working" || !(pane.program?.shell || pane.program?.agent);
+}
+
+// A new space in the project's folder on its host, then the terminals page.
+function newSpaceIn(w, g) {
+  run("space.new", { folder: g?.top ?? w.folder, machine: w.machine ?? "" });
+  run("layout.select", { stack: "main", child: "main-terminals" });
+}
+
+// The sidebar's own fill: the unified layout paints it on the surface colour.
+function chromeFill(t) {
+  return props()?.unified ? t.surface : t.chrome;
+}
+
+// A review's glyph and tone by state; an unknown state draws the plain pull-request icon, muted.
+// A null prototype so a state named `constructor` finds nothing.
+const PR_ICONS = { __proto__: null, merged: "git-merge", closed: "git-pull-request-closed", draft: "git-pull-request-draft" };
+const PR_TONES = { __proto__: null, merged: "#c084fcb3", open: "#10b981cc", draft: "#acacac80", closed: "#acacac99" };
+
 export default class Spaces extends View {
   init(_props, cx) {
     stopsInit(this, cx, "entry");
@@ -53,7 +199,7 @@ export default class Spaces extends View {
     this.retainedPending = new Map();
     this.ownerCx = cx;
     // pane.go onto this list (mod.json's "focusable"): the keyboard starts at the heading's button.
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       for (;;) {
         const cmd = await nextCommand();
         // A popup over this mod hands focus back when it closes, so the header cluster can stop
@@ -66,31 +212,31 @@ export default class Spaces extends View {
           // space button is the nearest stop; `header()` emits it on every headed row and
           // `repo-header-project-actions.tsx:250` names the create button.
           const first = this.ordered().find((r) => r.head);
-          if (first) enter(this, cx, `space-new-${first.w.id}`);
+          if (first) enter(this, taskCx, `space-new-${first.w.id}`);
         }
         // `project-collapse-all.ts` setAllProjectsCollapsed: collapsing adds every project key;
         // expanding clears all project keys (nested ones included), keeping machine folds.
         // Keys are the same ones `header()` folds on: repo name, or `space:<id>` for a folder.
         else if (cmd === "collapse-all" || cmd === "expand-all") {
           if (cmd === "collapse-all") {
-            for (const k of this.projectKeys(cx)) this.foldedRepos.add(k);
+            for (const k of this.projectKeys(taskCx)) this.foldedRepos.add(k);
           } else {
             this.foldedRepos.clear();
           }
           localStorage.setItem("repos.folded", JSON.stringify([...this.foldedRepos]));
-          this.notify(cx);
+          this.notify(taskCx);
         }
         // The options menu writes "workspace.options.v1" and pings this loop; ordered() re-reads
         // the key on the next render. setShared alone does not wake another mod (AGENTS.md rule 10).
-        else if (cmd === "options-changed") this.notify(cx);
+        else if (cmd === "options-changed") this.notify(taskCx);
         // Workspace options' Refresh (orca-nav): re-read git now, not on the 60s fallback or a
         // filesystem wake. Orca reads a repo's worktrees when a dialog asks; a person who just
         // checked out or added one here has no such trigger.
-        else if (cmd === "refresh") this.refreshAll(cx);
+        else if (cmd === "refresh") this.refreshAll(taskCx);
         // The project menu's "Remove Project from Sidebar" (Orca's Remove Project): the
         // catalog and the rows drawn from it live in this mod, so orca-menu hands over the
         // repo through the shared store and pings this loop.
-        else if (cmd === "forget-project") this.forgetProject(cx);
+        else if (cmd === "forget-project") this.forgetProject(taskCx);
       }
     });
     // where() -> { name, branch, owner, repo, linked }, null: not a repo.
@@ -170,7 +316,7 @@ export default class Spaces extends View {
     let changed = false;
     for (const [key, held] of this.retainedRows) {
       if (!this.retainedPending.has(key)) {
-        if (++operations > 16) return changed;
+        if (++operations > MAX_RETAINED_OPERATIONS) return changed;
         held.entity.release();
         this.retainedRows.delete(key);
         changed = true;
@@ -179,11 +325,11 @@ export default class Spaces extends View {
     for (const [key, data] of this.retainedPending) {
       const held = this.retainedRows.get(key);
       if (!held) {
-        if (++operations > 16) return changed;
+        if (++operations > MAX_RETAINED_OPERATIONS) return changed;
         this.retainedRows.set(key, { signature: data.signature, entity: cx.new(WorkspaceRow, { owner: this, key }) });
         changed = true;
       } else if (held.signature !== data.signature) {
-        if (++operations > 16) return changed;
+        if (++operations > MAX_RETAINED_OPERATIONS) return changed;
         held.entity.set_props({ owner: this, key });
         held.signature = data.signature;
         changed = true;
@@ -208,7 +354,8 @@ export default class Spaces extends View {
     const key = r.w.id;
     const fold = foldKey(r);
     // The plan already projects the sibling catalog into row/head/count changes.
-    const { worktrees, ...git } = r.g ?? {};
+    const git = { ...r.g };
+    delete git.worktrees;
     return JSON.stringify([
       r.w, Boolean(r.g), git, r.also?.map(row => row.w), r.head, r.count, r.unopened, r.pos,
       t, mine, groupBy, this.reviewOf(r.g), avatarFile(r.g?.owner),
@@ -296,30 +443,48 @@ export default class Spaces extends View {
     const at = {};
     for (const s of sp) at[s.id] = where(s, ps);
     const keys = new Set(Object.values(at).filter((k) => readPair(k)[1]));
-    const due = new Set([...keys].filter((k) => !(k in this.git) || (this.git[k] !== null && this.git[k]?.owner === undefined)));
+    const due = new Set([...keys].filter((k) => this.needsFirstLook(k)));
     for (const [id, k] of Object.entries(at)) if (this.at[id] && this.at[id] !== k && keys.has(k)) due.add(k);
     this.at = at;
+    this.addFinishedCommands(due, { sp, ps, at, keys });
+    this.addReturningHosts(due, keys);
+    if (window()?.active) this.addStaleFallbacks(due, keys, now);
+    return due;
+  }
+
+  // Never read, or cached by a version that did not record the repo owner.
+  needsFirstLook(key) {
+    return !(key in this.git) || (this.git[key] !== null && this.git[key]?.owner === undefined);
+  }
+
+  // A pane whose command or agent turn just ended may have checked out, committed or edited.
+  addFinishedCommands(due, { sp, ps, at, keys }) {
     const spaceOf = {};
-    for (const s of sp) for (const t of s.tabs ?? []) spaceOf[t.id] = s;
+    for (const s of sp) for (const tab of s.tabs ?? []) spaceOf[tab.id] = s;
     const busy = {};
     for (const p of ps) {
       if (!p.terminal || !spaceOf[p.tab]) continue;
-      busy[p.pane] = p.status === "working" || !(p.program?.shell || p.program?.agent);
+      busy[p.pane] = isBusy(p);
       if (this.busy[p.pane] && !busy[p.pane]) this.sameRepo(at[spaceOf[p.tab].id], keys).forEach((k) => due.add(k));
     }
     this.busy = busy;
+  }
+
+  // A machine that was away and is ready again.
+  addReturningHosts(due, keys) {
     for (const m of machines()) {
       const ready = m.layout === "ready";
       if (ready && this.ready[m.name] === false) for (const k of keys) if (readPair(k)[0] === m.name) due.add(k);
       this.ready[m.name] = ready;
     }
-    if (window()?.active) {
-      for (const k of keys) {
-        const asks = k in this.git || this.unsure.has(k);
-        if (asks && !this.folded.has(readPair(k)[0]) && now - (this.checked[k] ?? 0) > FALLBACK) due.add(k);
-      }
+  }
+
+  // Repos in view whose last look is older than the fallback interval, on a host that is not folded.
+  addStaleFallbacks(due, keys, now) {
+    for (const k of keys) {
+      const asks = k in this.git || this.unsure.has(k);
+      if (asks && !this.folded.has(readPair(k)[0]) && now - (this.checked[k] ?? 0) > FALLBACK) due.add(k);
     }
-    return due;
   }
 
   // `key` and the other places in its repo (a commit there moves their branch).
@@ -329,9 +494,9 @@ export default class Spaces extends View {
   }
 
   refreshMachines(cx) {
-    cx.spawn(async cx => {
-      try { const r = await hc(["machine", "ls", "--json"]); if (r.code === 0) this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => !m.temporary); } catch {}
-      this.notify(cx);
+    cx.spawn(async taskCx => {
+      try { const r = await hc(["machine", "ls", "--json"]); if (r.code === 0) this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => !m.temporary); } catch { /* keep the last list: the next poll asks again */ }
+      this.notify(taskCx);
     });
   }
 
@@ -349,13 +514,13 @@ export default class Spaces extends View {
     state.error = null;
     localStorage.setItem("machines.reconnecting", JSON.stringify(this.reconnecting));
     this.notify(cx);
-    cx.spawn(async cx => {
+    cx.spawn(async taskCx => {
       try {
         const ask = async args => {
           const r = await hc([...args, "--json"]);
           if (r.code !== 0) {
             let error;
-            try { error = JSON.parse(r.stdout || r.stderr).error?.message; } catch {}
+            try { error = JSON.parse(r.stdout || r.stderr).error?.message; } catch { /* not JSON: the raw output below is the message */ }
             throw new Error(error || r.stderr || r.stdout || "Couldn't connect.");
           }
         };
@@ -379,8 +544,8 @@ export default class Spaces extends View {
         state.busy = false;
       }
       localStorage.setItem("machines.reconnecting", JSON.stringify(this.reconnecting));
-      this.refreshMachines(cx);
-      this.notify(cx);
+      this.refreshMachines(taskCx);
+      this.notify(taskCx);
     });
   }
 
@@ -400,11 +565,11 @@ export default class Spaces extends View {
     for (const k of keys) this.pending.add(k);
     if (this.refreshing) return;
     this.refreshing = true;
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       while (this.pending.size) {
         const batch = [...this.pending];
         this.pending.clear();
-        await Promise.all(batch.map((key) => this.check(key, cx)));
+        await Promise.all(batch.map((key) => this.check(key, taskCx)));
       }
       const used = new Set(Object.values(this.git).filter(Boolean).map((g) => readPair(g.repo)).filter(([on]) => !on).map(([, repo]) => repo));
       for (const repo of this.watching) if (!used.has(repo)) this.watching.delete(repo);
@@ -414,7 +579,7 @@ export default class Spaces extends View {
       // The refresh is the only writer, so one write per completed pass is enough.
       pruneGitCache(this.git, spaces(), this.checked);
       localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
-      this.notify(cx);
+      this.notify(taskCx);
     });
   }
 
@@ -422,16 +587,6 @@ export default class Spaces extends View {
   async check(key, cx) {
     const [on, cwd] = readPair(key);
     const cached = this.git[key];
-    const refreshCatalog = async () => {
-      if (!cached?.linked) return;
-      try {
-        const wt = await exec("git", ["--git-dir", readPair(cached.repo)[1], "worktree", "list", "--porcelain"], { on });
-        if (wt.code === 0) {
-          const worktrees = parseWorktreeList(wt.stdout);
-          for (const entry of Object.values(this.git)) if (entry?.repo === cached.repo) entry.worktrees = worktrees;
-        }
-      } catch {}
-    };
     this.checked[key] = Date.now();
     this.unsure.delete(key);
     try {
@@ -439,93 +594,52 @@ export default class Spaces extends View {
       // Writes nothing under .git (index lock, fsmonitor cookie): watch() would wake on it.
       const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch"], { cwd, on });
       if (r.code !== 0) {
-        await refreshCatalog();
+        await this.refreshCatalog(cached, on);
         // Only git's own "no" is remembered as no repo; anything else is asked again.
         if (/not a git repository/i.test(r.stderr)) this.git[key] = null;
         else { this.git[key] ??= null; this.unsure.add(key); }
         return;
       }
-      // The repo's own .git folder names it; a worktree's top differs from it.
-      const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd, on });
-      const topDir = top.stdout.trim();
-      const common = await exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, on });
-      const repo = common.stdout.trim();
-      if (top.code !== 0 || common.code !== 0 || !topDir || !repo) throw new Error("Incomplete git identity");
-      const name = repo.endsWith("/.git") ? base(repo.slice(0, -5)) : base(repo).replace(/\.git$/, "");
-      // Orca queries PRs by base repo and origin head (`pr-branch-lookup.ts:41-48`,
-      // `github-api-repository.ts:127-133`); repo icons use Orca's owner avatar fallback
-      // (`repo-icon.ts:37-54`).
-      let baseRepo = null; // the repo PRs are filed in: upstream when there is one
-      let head = null; // origin's owner: who the branch must belong to
-      let owner = null;
-      try {
-        const origin = await exec("git", ["remote", "get-url", "origin"], { cwd, on });
-        const o = origin.code === 0 ? parseRemote(origin.stdout) : null;
-        if (o) {
-          head = o.owner;
-          const up = await exec("git", ["remote", "get-url", "upstream"], { cwd, on }).catch(() => null);
-          const u = up?.code === 0 ? parseRemote(up.stdout) : null;
-          baseRepo = `${(u ?? o).owner}/${(u ?? o).repo}`;
-          let slug = u && !(u.owner === o.owner && u.repo === o.repo) ? u : null;
-          // No `upstream` remote: ask GitHub whether origin is a fork. `exec` has its own 30s
-          // cap (`gpui-kit.d.ts:22202`), so there is no per-call timeout to pass; off-machine
-          // reads are skipped because `gh` there may not be authenticated.
-          if (!slug && !on) {
-            const q = await exec("gh", ["repo", "view", `${o.owner}/${o.repo}`, "--json", "isFork,parent"], { cwd }).catch(() => null);
-            if (q?.code === 0) {
-              const d = JSON.parse(q.stdout);
-              const po = d?.parent?.owner?.login;
-              const pr = d?.parent?.name;
-              if (d?.isFork && po && pr) {
-                slug = { host: o.host, owner: po, repo: pr };
-                // A fork with no `upstream` remote still files its PRs on the parent.
-                baseRepo = `${po}/${pr}`;
-              }
-            }
-          }
-          // A renamed fork keeps its own identity; a same-name fork shows the parent's.
-          owner = avatarUrlFor(slug && slug.repo !== o.repo ? o : (slug ?? o));
-        }
-      } catch {}
-      const info = { name, top: topDir, branch: null, owner, base: baseRepo, head, repo: JSON.stringify([on, repo]), linked: repo !== `${topDir}/.git` };
-      // Only the branch name is read. `# branch.ab` (ahead/behind) fed the removed gitTail,
-      // and Orca's card has no such element; the flag still prints the header we parse.
-      for (const line of r.stdout.split("\n")) {
-        if (line.startsWith("# branch.head ")) info.branch = line.slice(14);
-      }
-      // Orca's rows are the repo's worktrees (`listRepoWorktrees`), not its open sessions. A
-      // repo is one group whether the open space is the main checkout or a linked worktree —
-      // `git worktree list` answers for both — so read it every time. Without this, a repo
-      // opened only on linked worktrees could never show its main checkout or its siblings.
-      const wt = await exec("git", ["worktree", "list", "--porcelain"], { cwd, on });
-      if (wt.code !== 0) throw new Error("Couldn't list git worktrees");
-      info.worktrees = parseWorktreeList(wt.stdout);
-      for (const cached of Object.values(this.git)) {
-        if (cached?.repo === info.repo) cached.worktrees = info.worktrees;
+      const { info, commonDir } = await readGitInfo(r.stdout, cwd, on);
+      for (const entry of Object.values(this.git)) {
+        if (entry?.repo === info.repo) entry.worktrees = info.worktrees;
       }
       this.git[key] = info;
       // The review is NOT part of the worktree row. Orca's `buildWorkspaceReviewFacts` looks
       // each worktree's own branch up in a persisted PR cache; the row never carries a PR to
       // be inherited by other worktrees. Ask for this exact branch, and only on this machine.
-      if (!on && info.branch) this.lookupPRByBranch(`${repo}::${info.branch}`, info.base, info.head, info.branch, cwd, cx);
-      if (!on) this.watch(repo, cx);
-    } catch (err) {
-      await refreshCatalog();
+      if (!on && info.branch) this.lookupPRByBranch(`${commonDir}::${info.branch}`, info, cwd, cx);
+      if (!on) this.watch(commonDir, cx);
+    } catch {
+      await this.refreshCatalog(cached, on);
       // Couldn't ask (the machine is away): keep what it showed, look again later.
       this.git[key] ??= null;
       this.unsure.add(key);
     }
   }
 
+  // A project's worktree list is carried by every cached place of the repo; when a place cannot be
+  // read, its repo's own git directory can still say which worktrees exist.
+  async refreshCatalog(cached, on) {
+    if (!cached?.linked) return;
+    try {
+      const wt = await exec("git", ["--git-dir", readPair(cached.repo)[1], "worktree", "list", "--porcelain"], { on });
+      if (wt.code === 0) {
+        const worktrees = parseWorktreeList(wt.stdout);
+        for (const entry of Object.values(this.git)) if (entry?.repo === cached.repo) entry.worktrees = worktrees;
+      }
+    } catch { /* the catalog is a refresh of what the row already shows: keep it as it was */ }
+  }
+
   watch(repo, cx) {
     if (this.watching.has(repo)) return;
     this.watching.add(repo);
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try {
         while (this.watching.has(repo)) {
           await watchFolder(repo);
           const mine = JSON.stringify([null, repo]);
-          if (this.watching.has(repo)) this.refreshGit(Object.keys(this.git).filter((k) => this.git[k]?.repo === mine), cx);
+          if (this.watching.has(repo)) this.refreshGit(Object.keys(this.git).filter((k) => this.git[k]?.repo === mine), taskCx);
         }
       } catch { this.watching.delete(repo); }
     });
@@ -554,51 +668,30 @@ export default class Spaces extends View {
   // (pr-branch-lookup.ts) is Orca's refresh path; this is its `getRestPRForBranch` branch —
   // REST first, because REST honors `head=<owner>:<branch>` and `gh pr list --head
   // owner:branch` silently returns nothing.
-  lookupPRByBranch(key, base, head, branch, cwd, cx) {
+  lookupPRByBranch(key, { base: baseRepo, head, branch }, cwd, cx) {
     const entry = this.reviewCache()[key];
     // Orca's TTL check (`hosted-review-branch-cache.ts:93-100` isFresh) prevents hammering GitHub
     // while allowing expired entries (1 min for found review, 15 min for negative cache) to refresh.
     if (this.prAsking.has(key) || isReviewFresh(entry)) return;
     if (this.prAsking.size >= MAX_INFLIGHT_PR_LOOKUPS) return;
     // No remote or no branch, no question: `head` is who the branch must belong to.
-    if (!base || !head || !branch) { this.setPr(key, null); return; }
+    if (!baseRepo || !head || !branch) { this.setPr(key, null); return; }
     this.prAsking.add(key);
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try {
         // Orca's exact query (`getRestPRForBranch`, pr-branch-lookup.ts:41-48): the base repo,
         // a head filter qualified with the owner, `state=all`, and a page of ten.
-        const [owner, repo] = base.split("/");
+        const [owner, repo] = baseRepo.split("/");
         const q = `repos/${owner}/${repo}/pulls?head=${encodeURIComponent(`${head}:${branch}`)}`
           + `&state=all&per_page=${BRANCH_PR_LOOKUP_PAGE_SIZE}`;
         const r = await exec("gh", ["api", q], { cwd });
         const list = r.code === 0 ? JSON.parse(r.stdout || "[]") : [];
-        // `pullRequestMatchesHeadRepository` (pull-request-lookup-data.ts:187-193): the head owner
-        // must be this repo's origin. When a fork repo is deleted on GitHub, `p.head.repo` is null,
-        // so fall back to `p.head.user` or `p.user` (pull-request-lookup-data.ts:147).
-        const mine = list.filter((p) => {
-          const o = String(p.head?.repo?.owner?.login ?? p.head?.user?.login ?? p.user?.login ?? "").toLowerCase();
-          return o === String(head).toLowerCase();
-        });
-        // `preferOpenPullRequest` (pr-branch-lookup.ts:30-32): newest first, so prefer the live one.
-        const first = mine.find((p) => String(p.state ?? "").toLowerCase() === "open") ?? mine[0];
-        // `mapRestPullRequest` (pull-request-lookup-data.ts:115-153) is the one mapping that matters here:
-        // REST reports a merged PR as `state: "closed"` with a `merged_at` stamp, so `state` alone would
-        // paint every merged PR as closed and never reach `getStateTone`'s purple. Orca derives it.
-        // `readWorkspaceReviewFact` passes the cache's `state` through, while `ReviewIcon`
-        // switches on `merged`/`closed`/`draft` (review-state-presentation.ts:28-37) — so a
-        // draft has to be named too; REST reports it as `draft`.
-        this.setPr(key, first?.number
-          ? {
-            number: first.number,
-            title: first.title,
-            state: first.merged_at ? "merged" : first.draft ? "draft" : String(first.state ?? "").toLowerCase(),
-          }
-          : null);
+        this.setPr(key, reviewFromPullRequests(list, head));
       } catch {
         this.setPr(key, null);
       } finally {
         this.prAsking.delete(key);
-        this.notify(cx);
+        this.notify(taskCx);
       }
     });
   }
@@ -612,17 +705,19 @@ export default class Spaces extends View {
     // A popup is as tall as its items; height is only the most.
     const s = spaces().find((x) => x.id === w.id);
     const path = s ? place(s, panes()) : (g?.top ?? w.folder ?? null);
-    // `WorktreeContextMenu` wraps the worktree, not a tab (`worktree-card-surface.tsx:139-146`),
-    // and reads `tabsByWorktree` only while it is open
-    // (`use-worktree-context-menu-model.tsx:101-102`); its worktree rows need no open space.
-    // So a row that has no space still hands over the worktree's own facts.
-    const target = {
+    // WorktreeContextMenuView.tsx:147 — `min-w-52` (208).
+    openOverlay({ mod: "orca-menu", kind: "popup", width: 208, height: 320, props: { tab: "space", target: this.menuTarget(w, g, path) } });
+  }
+
+  // `WorktreeContextMenu` wraps the worktree, not a tab (`worktree-card-surface.tsx:139-146`),
+  // and reads `tabsByWorktree` only while it is open
+  // (`use-worktree-context-menu-model.tsx:101-102`); its worktree rows need no open space.
+  // So a row that has no space still hands over the worktree's own facts.
+  menuTarget(w, g, path) {
+    return {
       id: w.id,
       path,
-      top: g?.top ?? w.folder ?? null,
-      branch: g?.branch ?? w.branch ?? null,
-      machine: w.machine ?? null,
-      linked: g ? Boolean(g.linked) : null,
+      ...gitFacts(w, g),
       folder: w.folder ?? g?.top ?? path,
       unread: this.unread.has(w.id),
       named: Boolean(w.named),
@@ -631,8 +726,6 @@ export default class Spaces extends View {
       // cache entry, and the menu's "Remove Project from Sidebar" needs the repo to name it.
       repo: g?.repo ?? null,
     };
-    // WorktreeContextMenuView.tsx:147 — `min-w-52` (208).
-    openOverlay({ mod: "orca-menu", kind: "popup", width: 208, height: 320, props: { tab: "space", target } });
   }
 
   // Orca's rows are worktrees, keyed by host+path (host-qualified-identity.ts), not by open
@@ -691,7 +784,7 @@ export default class Spaces extends View {
       if (this.prAsking.has(key)) continue;
       const entry = this.reviewCache()[key];
       if (isReviewFresh(entry)) continue;
-      this.lookupPRByBranch(key, r.g.base, r.g.head, r.g.branch, r.g.top, cx);
+      this.lookupPRByBranch(key, r.g, r.g.top, cx);
     }
   }
 
@@ -779,25 +872,31 @@ export default class Spaces extends View {
     });
   }
 
+  // What is known of a host: its reconnect attempt, its machine record, and whether it is up or was rebuilt.
+  machineStatus(m) {
+    const repair = this.reconnecting[m];
+    const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
+    return { repair, machine, connected: !m || machine?.state === "connected", rebuilt: this.rebuilt(machine) || !!repair };
+  }
+
   machineHead(item, t) {
     const m = item.machine;
     const count = item.count;
-    const repair = this.reconnecting[m];
-    const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
-    const connected = !m || machine?.state === "connected";
-    const rebuilt = this.rebuilt(machine) || !!repair;
+    const slug = m ?? "local";
+    const { repair, machine, connected, rebuilt } = this.machineStatus(m);
     const folded = this.folded.has(m);
+    const stateWords = (machine?.state ?? "asleep").replace(/_/g, " ");
     // Drawn as the agents list's group headers, each 8px below what's above it, the heading included: right under it,
     // its + and chevron crowded the heading's buttons, a column of icons unevenly spaced.
     // Its + and chevron stand under the heading's two buttons, in slots built as those are (26px, 2px apart, 10px from the edge), so any zoom rounds them alike.
-    const head = h_flex().id(`machine-${m ?? "local"}`).pt(8).h(30).flex_none().pl(8).pr(2).gap(4).items_center()
+    const head = h_flex().id(`machine-${slug}`).pt(8).h(30).flex_none().pl(8).pr(2).gap(4).items_center()
       // `ProjectHeaderHostLabel.tsx:25`: `text-muted-foreground` (full #acacac, not `t.dim`).
       .text_size(12).font_medium().text_color(t.muted)
       .role("button").accessibility_label(`${folded ? "Expand" : "Collapse"} ${m ?? "This computer"}`)
       .on_hover((on, cx) => {
         // By the row's id: this computer's m is null, which a cleared field would equal.
-        if (on) this.overMachine = `machine-${m ?? "local"}`;
-        else if (this.overMachine === `machine-${m ?? "local"}`) this.overMachine = null;
+        if (on) this.overMachine = `machine-${slug}`;
+        else if (this.overMachine === `machine-${slug}`) this.overMachine = null;
         this.notify(cx);
       })
       .on_click((_e, cx) => {
@@ -810,37 +909,48 @@ export default class Spaces extends View {
       // The dot describes the machine, so it follows its name, however short.
       .child(h_flex().flex_1().min_w(0).gap(6).items_center()
         .child(div().min_w(0).truncate().child(m ?? "This computer"))
-        .child(tipMark(this, t, `machine-state-${m ?? "local"}`, connected ? "Connected" : (machine?.state ?? "asleep").replace(/_/g, " ").replace(/^./, c => c.toUpperCase()), div().size(6).rounded_full().flex_none().bg(connected ? t.ansi2 : t.dim))))
+        .child(tipMark(this, t, { id: `machine-state-${slug}`, label: connected ? "Connected" : stateWords.replace(/^./, c => c.toUpperCase()), mark: div().size(6).rounded_full().flex_none().bg(connected ? t.ansi2 : t.dim) })))
       // `HostSectionHeader.tsx:11-35,119`: the count badge is always drawn beside the label
       // (its `count` is the host's workspace rows, folded groups included).
       .child(div().flex_none().h(16).px(6).flex().items_center().justify_center().rounded_full().border_1().border_color(t.border).bg(t.hover).text_size(9).line_height("9px").text_color(t.muted).child(String(count)))
-      .when(!connected && !rebuilt, el => el.child(div().flex_none().child((machine?.state ?? "asleep").replace(/_/g, " "))))
-      .when(rebuilt, el => el.child(h_flex().flex_none().gap(3).items_center()
-        .child(div().max_w(140).truncate().child(repair?.error || "rebuilt ·"))
-        .child(tip(this.hot, t, `machine-connect-${m}`, `Connect ${m}`, stop(this, t, `machine-connect-${m}`, div().id(`machine-connect-${m}`).text_color(repair?.error ? t.blocked : t.muted)
-          .hover(s => s.text_color(t.foreground)).on_hover(this.glow(`machine-connect-${m}`))
-          .role("button").accessibility_label(`Connect ${m}`)
-          .on_click((_e, cx) => { cx.stop_propagation(); this.reconnect(machine, cx); })
-          .child(repair?.busy ? "Connecting…" : "Connect"), 4)))))
+      .when(!connected && !rebuilt, el => el.child(div().flex_none().child(stateWords)))
+      .when(rebuilt, el => el.child(this.machineConnect(m, machine, repair, t)))
       .child(h_flex().flex_none().gap(2).items_center()
-        .when(connected, el => el.child(tip(this.hot, t, `machine-add-${m ?? "local"}`, "New space here", stop(this, t, `machine-add-${m ?? "local"}`, div().id(`machine-add-${m ?? "local"}`).w(26).h(20).flex_none().flex().items_center().justify_center().rounded(4)
-          .text_color(this.hot === `machine-add-${m ?? "local"}` ? t.foreground : t.dim).on_hover(this.glow(`machine-add-${m ?? "local"}`))
-          .role("button").accessibility_label("New space here")
-          .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); }).child(svg("mods/orca-spaces/plus.svg").size(12)), 4),
-          // The key makes a space on the current space's machine: it names this + only on that one.
-          { action: (spaces().find(s => s.active)?.machine ?? null) === m ? "space.new" : null })))
+        .when(connected, el => el.child(this.machineAdd(m, t)))
         // An indicator, not a button: the whole row folds, so it lights with the row and has no label of its own.
         // `HostSectionHeader.tsx:121-125`: the chevron is `can-hover:opacity-0` until the
         // header is hovered (`group-hover/host-header:opacity-100`), keeping its slot; and
         // `SectionHeader.tsx:190-192` draws a collapse affordance only when there is something
         // to collapse (`row.count > 0`).
-        .when(count > 0, el => el.child(div().id(`machine-fold-${m ?? "local"}`).w(26).flex_none().flex().items_center().justify_center()
-          .opacity(this.overMachine === `machine-${m ?? "local"}` ? 1 : 0)
-          .child(svg(`mods/orca-spaces/chevron-${folded ? "right" : "down"}.svg`).size(12).flex_none()))))
+        .when(count > 0, el => el.child(div().id(`machine-fold-${slug}`).w(26).flex_none().flex().items_center().justify_center()
+          .opacity(this.overMachine === `machine-${slug}` ? 1 : 0)
+          .child(svg(`mods/orca-spaces/chevron-${folded ? "right" : "down"}.svg`).size(12).flex_none()))));
     // `host-section-rows.ts:236-246`: a host header exists only for a host with rows, and a
     // host with no rows draws no section — and no placeholder beneath it.
-    const heading = stop(this, t, `machine-${m ?? "local"}`, head, 8);
-    return heading;
+    return stop(this, t, `machine-${slug}`, head, { radius: 8 });
+  }
+
+  // The "Connect" control of a host that was rebuilt or is being reconnected.
+  machineConnect(m, machine, repair, t) {
+    const id = `machine-connect-${m}`;
+    return h_flex().flex_none().gap(3).items_center()
+      .child(div().max_w(140).truncate().child(repair?.error || "rebuilt ·"))
+      .child(tip({ hot: this.hot, t, id, label: `Connect ${m}`, trigger: stop(this, t, id, div().id(id).text_color(repair?.error ? t.blocked : t.muted)
+        .hover(s => s.text_color(t.foreground)).on_hover(this.glow(id))
+        .role("button").accessibility_label(`Connect ${m}`)
+        .on_click((_e, cx) => { cx.stop_propagation(); this.reconnect(machine, cx); })
+        .child(repair?.busy ? "Connecting…" : "Connect"), { radius: 4 }) }));
+  }
+
+  // The + that makes a space on this host.
+  machineAdd(m, t) {
+    const id = `machine-add-${m ?? "local"}`;
+    return tip({ hot: this.hot, t, id, label: "New space here", trigger: stop(this, t, id, div().id(id).w(26).h(20).flex_none().flex().items_center().justify_center().rounded(4)
+      .text_color(this.hot === id ? t.foreground : t.dim).on_hover(this.glow(id))
+      .role("button").accessibility_label("New space here")
+      .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); }).child(svg("mods/orca-spaces/plus.svg").size(12)), { radius: 4 }),
+      // The key makes a space on the current space's machine: it names this + only on that one.
+      action: (spaces().find(s => s.active)?.machine ?? null) === m ? "space.new" : null });
   }
 
   statusHead(label, count, t) {
@@ -856,7 +966,7 @@ export default class Spaces extends View {
   // emerald-500/80, closed muted-foreground/60, draft muted-foreground/50. `size-3` is the
   // MetaIconBadge glyph size.
   prBadge(pr, t, id) {
-    const icon = pr.state === "merged" ? "git-merge" : pr.state === "closed" ? "git-pull-request-closed" : pr.state === "draft" ? "git-pull-request-draft" : "git-pull-request";
+    const icon = PR_ICONS[pr.state] ?? "git-pull-request";
     // `getStateTone` (worktree-review-presentation.tsx:58-72), dark-mode values:
     //   merged  text-purple-400/70           -> #c084fcb3
     //   open    text-emerald-500/80          -> #10b981cc
@@ -865,14 +975,14 @@ export default class Spaces extends View {
     //   (none)  text-muted-foreground opacity-70 -> #acacacb3
     // `text-muted-foreground` is `--orca-security-muted-foreground` = #acacac in dark
     // (main.css:328 -> :519), so every muted tone below is that hex at an alpha.
-    const tone = pr.state === "merged" ? "#c084fcb3" : pr.state === "open" ? "#10b981cc" : pr.state === "draft" ? "#acacac80" : pr.state === "closed" ? "#acacac99" : "#acacacb3";
+    const tone = PR_TONES[pr.state] ?? "#acacacb3";
     // `MetaIconBadge` (WorktreeCardMetadataControls.tsx:33) is `inline-flex size-3.5
     // shrink-0 items-center justify-center text-muted-foreground/70 [&>svg]:size-3.5` — a 14px
     // box whose glyph is also 14px, 12 was too small. `text-muted-foreground/70` is its default
     // colour; `getStateTone` overrides it per state.
     return div().flex_none().flex().items_center().justify_center().pr(6)
-      .child(tip(this.hot, t, `pr-${id}`, `PR #${pr.number}`, stop(this, t, `pr-${id}`, div().id(`pr-${id}`)
-        .child(svg(`mods/orca-spaces/${icon}.svg`).size(14).flex_none().text_color(tone)))));
+      .child(tip({ hot: this.hot, t, id: `pr-${id}`, label: `PR #${pr.number}`, trigger: stop(this, t, `pr-${id}`, div().id(`pr-${id}`)
+        .child(svg(`mods/orca-spaces/${icon}.svg`).size(14).flex_none().text_color(tone))) }));
   }
 
   // `gitTail` used to draw `↑N`/`↓N` at the end of the title row. That was ours, not
@@ -885,6 +995,11 @@ export default class Spaces extends View {
   // from the row plan (`getRenderedProjectCollapseKeys`, project-collapse-all.ts:7-13).
   projectKeys(_cx) {
     return this.plan?.projectKeys ?? [];
+  }
+
+  // The group menu, for the right-click, the ellipsis button and the keyboard alike.
+  openGroupMenu(w, g, groupSpaces) {
+    openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces, repo: g?.repo ?? null } } });
   }
 
   // Orca's project header (SectionHeader.tsx): h-7, gap-1.5, pr-2, a 16px icon slot, a 13px
@@ -901,7 +1016,7 @@ export default class Spaces extends View {
       .h(28).flex_none().w_full().pl(getProjectGroupHeaderPaddingLeft(0)).pr(8).gap(6).items_center().mt(4)
       .role("button").accessibility_label(g?.name ?? w.name)
       // SectionHeader.tsx:355-414 & repo-header-project-actions.tsx:113: right click opens group actions menu
-      .on_mouse_down("right", () => openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces, repo: g?.repo ?? null } } }))
+      .on_mouse_down("right", () => this.openGroupMenu(w, g, groupSpaces))
       .on_click((_e, cx) => this.toggleRepo(key, cx))
       .on_hover((on, cx) => {
         if (on) this.hoveredRepo = key;
@@ -912,54 +1027,58 @@ export default class Spaces extends View {
       // `repo-icon.tsx:145-186`).
       .child(repoMark(16, g?.owner ?? null))
       .child(div().min_w(0).flex_1().truncate().text_size(13).font_semibold().line_height("16px").text_color(t.foreground).child(g?.name ?? w.name))
-      // Orca's hover cluster (`worktree-list/rows/ProjectHeaderActions.tsx:5-15`, used at
-      // `rows/SectionHeader.tsx:355-399`): an ABSOLUTE overlay — `can-hover:absolute right-1
-      // top-1/2 -translate-y-1/2`, `bg-worktree-sidebar pl-1` — that only fades
-      // (`can-hover:opacity-0`). It stays mounted for `has-[:focus-visible]` and
-      // `has-[button[aria-expanded=true]]`, so here it is always mounted and faded by opacity:
-      // the buttons join the Tab order (`stop` per control), the title is never re-truncated,
-      // and the sidebar-coloured bg masks the title behind it. The row is 28px and the slots
-      // 20px, so top-4 is `top-1/2 -translate-y-1/2` for this row.
-      .child(h_flex().absolute().right(4).top(4).flex_none().items_center().gap(2).rounded(6).bg(props()?.unified ? t.surface : t.chrome).pl(4)
-        .opacity(this.hoveredRepo === key || this.menuKey === key ||
-          within(this, [id, `space-fold-${w.id}`, `space-more-${w.id}`, `space-new-${w.id}`]) ? 1 : 0)
-        // ORDER, from SectionHeader.tsx:355-414 — the collapse chevron comes FIRST in
-        // `ProjectHeaderActions`, then `RepoHeaderProjectActionsMenu` (the ellipsis, size-3.5,
-        // repo-header-project-actions.tsx:113), then `RepoHeaderCreateWorkspaceButton`
-        // (the plus, size-3, :250). Left to right: chevron, ellipsis, plus.
-        // `SectionHeader.tsx:190-192`: the chevron is omitted entirely when the group has no
-        // rows (`row.count > 0`); the menus/plus are not gated on it.
-        // SectionHeader.tsx:358: size-5 rounded-md text-muted-foreground,
-        // hover:bg-accent/70 and hover:text-foreground — a 70% accent wash, not a 70% white one.
-        .when(count > 0, el => el.child(stop(this, t, `space-fold-${w.id}`,
-          div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
-            .role("button").accessibility_label(folded ? "Expand group" : "Collapse group")
-            .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
-            .on_click((_e, cx) => { cx.stop_propagation(); this.toggleRepo(key, cx); })
-            .child(svg(`mods/orca-spaces/chevron-${folded ? "right" : "down"}.svg`).size(14).flex_none()),
-          6, { enter: () => this.toggleRepo(key, null) })))
-        .child(stop(this, t, `space-more-${w.id}`,
-          div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
-            .role("button").accessibility_label("Group menu")
-            .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
-            .on_click((_e, cx) => {
-              cx.stop_propagation();
-              this.menuKey = key;
-              // RepoHeaderProjectActionsMenu's DropdownMenuContent has no width class, so Orca's
-              // dropdown-menu.tsx:80 `min-w-[11rem]` (176) applies.
-              openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces, repo: g?.repo ?? null } } });
-              this.notify(cx);
-            })
-            .child(svg("mods/orca-spaces/ellipsis.svg").size(14).flex_none()),
-          6, { enter: () => { this.menuKey = key; openOverlay({ mod: "orca-menu", kind: "popup", width: 176, height: 248, props: { tab: "group", target: { id: w.id, path: g?.top ?? w.folder, machine: w.machine ?? null, spaces: groupSpaces, repo: g?.repo ?? null } } }); } }))
-        .child(stop(this, t, `space-new-${w.id}`,
-          div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
-            .role("button").accessibility_label("New space")
-            .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
-            .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { folder: g?.top ?? w.folder, machine: w.machine ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); })
-            .child(svg("mods/orca-spaces/plus.svg").size(12).flex_none()),
-          6, { enter: () => { run("space.new", { folder: g?.top ?? w.folder, machine: w.machine ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); } }))), 6,
-      { enter: () => this.toggleRepo(key) });
+      .child(this.headerActions(w, g, { id, key, folded, count, groupSpaces }, t)),
+      { radius: 6, enter: () => this.toggleRepo(key) });
+  }
+
+  // Orca's hover cluster (`worktree-list/rows/ProjectHeaderActions.tsx:5-15`, used at
+  // `rows/SectionHeader.tsx:355-399`): an ABSOLUTE overlay — `can-hover:absolute right-1
+  // top-1/2 -translate-y-1/2`, `bg-worktree-sidebar pl-1` — that only fades
+  // (`can-hover:opacity-0`). It stays mounted for `has-[:focus-visible]` and
+  // `has-[button[aria-expanded=true]]`, so here it is always mounted and faded by opacity:
+  // the buttons join the Tab order (`stop` per control), the title is never re-truncated,
+  // and the sidebar-coloured bg masks the title behind it. The row is 28px and the slots
+  // 20px, so top-4 is `top-1/2 -translate-y-1/2` for this row.
+  headerActions(w, g, { id, key, folded, count, groupSpaces }, t) {
+    return h_flex().absolute().right(4).top(4).flex_none().items_center().gap(2).rounded(6).bg(chromeFill(t)).pl(4)
+      .opacity(this.hoveredRepo === key || this.menuKey === key ||
+        within(this, [id, `space-fold-${w.id}`, `space-more-${w.id}`, `space-new-${w.id}`]) ? 1 : 0)
+      // ORDER, from SectionHeader.tsx:355-414 — the collapse chevron comes FIRST in
+      // `ProjectHeaderActions`, then `RepoHeaderProjectActionsMenu` (the ellipsis, size-3.5,
+      // repo-header-project-actions.tsx:113), then `RepoHeaderCreateWorkspaceButton`
+      // (the plus, size-3, :250). Left to right: chevron, ellipsis, plus.
+      // `SectionHeader.tsx:190-192`: the chevron is omitted entirely when the group has no
+      // rows (`row.count > 0`); the menus/plus are not gated on it.
+      // SectionHeader.tsx:358: size-5 rounded-md text-muted-foreground,
+      // hover:bg-accent/70 and hover:text-foreground — a 70% accent wash, not a 70% white one.
+      .when(count > 0, el => el.child(stop(this, t, `space-fold-${w.id}`,
+        div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
+          .role("button").accessibility_label(folded ? "Expand group" : "Collapse group")
+          .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
+          .on_click((_e, cx) => { cx.stop_propagation(); this.toggleRepo(key, cx); })
+          .child(svg(`mods/orca-spaces/chevron-${folded ? "right" : "down"}.svg`).size(14).flex_none()),
+        { radius: 6, enter: () => this.toggleRepo(key, null) })))
+      .child(stop(this, t, `space-more-${w.id}`,
+        div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
+          .role("button").accessibility_label("Group menu")
+          .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
+          .on_click((_e, cx) => {
+            cx.stop_propagation();
+            this.menuKey = key;
+            // RepoHeaderProjectActionsMenu's DropdownMenuContent has no width class, so Orca's
+            // dropdown-menu.tsx:80 `min-w-[11rem]` (176) applies.
+            this.openGroupMenu(w, g, groupSpaces);
+            this.notify(cx);
+          })
+          .child(svg("mods/orca-spaces/ellipsis.svg").size(14).flex_none()),
+        { radius: 6, enter: () => { this.menuKey = key; this.openGroupMenu(w, g, groupSpaces); } }))
+      .child(stop(this, t, `space-new-${w.id}`,
+        div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
+          .role("button").accessibility_label("New space")
+          .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
+          .on_click((_e, cx) => { cx.stop_propagation(); newSpaceIn(w, g); })
+          .child(svg("mods/orca-spaces/plus.svg").size(12).flex_none()),
+        { radius: 6, enter: () => { newSpaceIn(w, g); } }));
   }
 
   // Orca's worktree card (worktree-card-surface.tsx): ml-1, py-2 (36px single line), rounded-lg,
@@ -973,6 +1092,74 @@ export default class Spaces extends View {
     const folded = this.foldedRepos.has(key);
     if (folded) return r.head ? [this.header(r, t, ps)] : [];
     return r.head ? [this.header(r, t, ps), this.card(r, t, ps, mine)] : [this.card(r, t, ps, mine)];
+  }
+
+  // Publishes what orca-nav's collapse-all button needs.
+  publishProjectState(cx) {
+    // ProjectsCollapseAllButton's `allCollapsed` prop: Orca computes it from the same set the
+    // header folds on (`useAppStore` allCollapsed), so publish the identical predicate here and
+    // let orca-nav pick the glyph and the toggle direction. `setShared` does not notify
+    // (AGENTS.md rule 10), which is fine: orca-nav re-reads it when orca-spaces re-renders.
+    const keys = this.projectKeys(cx);
+    const allCollapsed = keys.length > 0 && keys.every((k) => this.foldedRepos.has(k));
+    if (allCollapsed !== Boolean(shared("projects.allCollapsed"))) setShared("projects.allCollapsed", allCollapsed);
+    // `WorktreeList.tsx:290` mounts the collapse-all button only when
+    // `projectsCollapseTarget && projectCollapseKeys.length > 0` — with no projects there is
+    // nothing to collapse, so Orca renders no button at all. Publish the count so orca-nav can
+    // make the same call; the header cannot see the row plan itself.
+    if (keys.length !== shared("projects.count")) setShared("projects.count", keys.length);
+  }
+
+  // A saved project no open space covers: folder glyph and basename, a "missing" mark when the
+  // folder is gone, and a remove button.
+  savedProjectRow(folder, t) {
+    const basename = folder.split("/").pop() || folder;
+    const missing = this.missingFolders.has(folder);
+    // Orca project row geometry (SectionHeader.tsx:355-399; folder-row.tsx): 24px row,
+    // folder glyph + 13px name, muted hover. This is the saved-project entry.
+    return div()
+      .id(`saved-${folder}`)
+      .h(24)
+      .w_full()
+      .flex()
+      .items_center()
+      .gap(6)
+      .px(8)
+      .rounded(4)
+      .text_color(missing ? t.dim : t.muted)
+      .hover(s => s.bg(t.hover).text_color(missing ? t.dim : t.foreground))
+      .cursor_pointer()
+      .role("button")
+      .accessibility_label(missing ? `Saved project ${basename} (folder missing)` : `Open saved project ${basename}`)
+      .on_click((_e, clickCx) => {
+        clickCx.spawn(async () => {
+          run("space.new", { folder }); run("layout.select", { stack: "main", child: "main-terminals" });
+        });
+      })
+      .child(svg("mods/orca-spaces/folder.svg").size(14).flex_none())
+      .child(div().flex_1().truncate().text_size(13).child(basename))
+      .when(missing, el => el.child(div().flex_none().text_size(11).text_color(t.dim).child("missing")))
+      .child(div()
+        .id(`saved-remove-${folder}`)
+        .size(20)
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(4)
+        .text_color(t.dim)
+        .hover(s => s.bg("#404040b3").text_color(t.foreground))
+        .cursor_pointer()
+        .role("button")
+        .accessibility_label(`Remove saved project ${basename}`)
+        .on_click((_e, clickCx) => {
+          clickCx.stop_propagation();
+          const existing = stored("projects.saved.v1", []);
+          const filtered = existing.filter(f => f !== folder);
+          localStorage.setItem("projects.saved.v1", JSON.stringify(filtered));
+          this.notify(clickCx);
+        })
+        .child(svg("mods/orca-spaces/trash.svg").size(10)));
   }
 
   render(cx) { return sidebarFrame(this.renderBody(cx)); }
@@ -996,19 +1183,7 @@ export default class Spaces extends View {
     // The shipped mods (the Terminals picker) still color spaces from "space.colors": the same color, from the name.
     const colors = Object.fromEntries(sp.filter(p => p.name !== "~").map(p => [p.id, tint(p.name, false)]));
     if (JSON.stringify(colors) !== JSON.stringify(shared("space.colors") ?? {})) setShared("space.colors", colors);
-    // ProjectsCollapseAllButton's `allCollapsed` prop: Orca computes it from the same set the
-    // header folds on (`useAppStore` allCollapsed), so publish the identical predicate here and
-    // let orca-nav pick the glyph and the toggle direction. `setShared` does not notify
-    // (AGENTS.md rule 10), which is fine: orca-nav re-reads it when orca-spaces re-renders.
-    const keys = this.projectKeys(cx);
-    const allCollapsed = keys.length > 0 && keys.every((k) => this.foldedRepos.has(k));
-    if (allCollapsed !== Boolean(shared("projects.allCollapsed"))) setShared("projects.allCollapsed", allCollapsed);
-    // `WorktreeList.tsx:290` mounts the collapse-all button only when
-    // `projectsCollapseTarget && projectCollapseKeys.length > 0` — with no projects there is
-    // nothing to collapse, so Orca renders no button at all. Publish the count so orca-nav can
-    // make the same call; the header cannot see the row plan itself.
-    if (keys.length !== shared("projects.count")) setShared("projects.count", keys.length);
-    const asks = props()?.newMenu && machines().length > 1;
+    this.publishProjectState(cx);
     // One fetch per repo per session; `ensureAvatar` writes the file and notifies once, so the
     // next render draws the avatar instead of the Folder.
     for (const g of Object.values(this.git)) if (g?.owner) ensureAvatar(g.owner, cx);
@@ -1019,58 +1194,9 @@ export default class Spaces extends View {
     const saved = stored("projects.saved.v1", []);
     const savedRows = saved
       .filter(folder => !sp.some(s => s.folder && s.folder === folder || s.folder.startsWith(folder + "/")))
-      .map(folder => {
-        const basename = folder.split("/").pop() || folder;
-        const missing = this.missingFolders.has(folder);
-        // Orca project row geometry (SectionHeader.tsx:355-399; folder-row.tsx): 24px row,
-        // folder glyph + 13px name, muted hover. This is the saved-project entry.
-        return div()
-          .id(`saved-${folder}`)
-          .h(24)
-          .w_full()
-          .flex()
-          .items_center()
-          .gap(6)
-          .px(8)
-          .rounded(4)
-          .text_color(missing ? t.dim : t.muted)
-          .hover(s => s.bg(t.hover).text_color(missing ? t.dim : t.foreground))
-          .cursor_pointer()
-          .role("button")
-          .accessibility_label(missing ? `Saved project ${basename} (folder missing)` : `Open saved project ${basename}`)
-          
-          .on_click((_e, cx) => {
-            cx.spawn(async () => {
-              run("space.new", { folder }); run("layout.select", { stack: "main", child: "main-terminals" });
-            });
-          })
-          .child(svg("mods/orca-spaces/folder.svg").size(14).flex_none())
-          .child(div().flex_1().truncate().text_size(13).child(basename))
-          .when(missing, el => el.child(div().flex_none().text_size(11).text_color(t.dim).child("missing")))
-          .child(div()
-            .id(`saved-remove-${folder}`)
-            .size(20)
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(4)
-            .text_color(t.dim)
-            .hover(s => s.bg("#404040b3").text_color(t.foreground))
-            .cursor_pointer()
-            .role("button")
-            .accessibility_label(`Remove saved project ${basename}`)
-            .on_click((_e, cx) => {
-              cx.stop_propagation();
-              const existing = stored("projects.saved.v1", []);
-              const filtered = existing.filter(f => f !== folder);
-              localStorage.setItem("projects.saved.v1", JSON.stringify(filtered));
-              this.notify(cx);
-            })
-            .child(svg("mods/orca-spaces/trash.svg").size(10)));
-      });
+      .map(folder => this.savedProjectRow(folder, t));
 
-    return focusRoot(this, v_flex().size_full().min_h(0).bg(props()?.unified ? t.surface : t.chrome).text_size(13)
+    return focusRoot(this, v_flex().size_full().min_h(0).bg(chromeFill(t)).text_size(13)
       // Orca's sidebar bar is an 8px webkit scrollbar with `padding-right: 4px`
       // (`main.css:767-781`), transparent until the sidebar is hovered (`:781-800`). A webkit
       // bar takes layout width, so no row sits under it. Herdr's placed bar fills the box it is
@@ -1079,13 +1205,13 @@ export default class Spaces extends View {
       // inset on the content, keeps rows clear of the thumb.
       .child(div().w_full().flex_1().min_h(0).relative()
         .child(v_flex().id("space-list").absolute().inset_0().overflow_y_scroll()
-          .on_mouse_up("left", (_e, cx) => { this.pressed = this.over = null; this.notify(cx); })
+          .on_mouse_up("left", (_e, upCx) => { this.pressed = this.over = null; this.notify(upCx); })
           // Herdr reports no release outside the sidebar, so leaving ends a drag, as in the inbox.
-          .on_hover((on, cx) => {
-            if (this.listHover !== on) { this.listHover = on; this.notify(cx); }
+          .on_hover((on, hoverCx) => {
+            if (this.listHover !== on) { this.listHover = on; this.notify(hoverCx); }
             if (on || this.pressed === null) return;
             this.pressed = this.over = null;
-            this.notify(cx);
+            this.notify(hoverCx);
           })
           .child(v_flex().id("space-content").w_full().flex_none().pr(12).pb(8)
             // StartupWorktreeRefreshStatus.tsx:22-29 status row with mx-3 mb-2 gap-2 text-xs text-muted-foreground.
@@ -1113,8 +1239,8 @@ export default class Spaces extends View {
 }
 
 class WorkspaceRow extends View {
-  init(props) { this.update(props); }
-  update(props) { this.owner = props.owner; this.key = props.key; }
+  init(rowProps) { this.update(rowProps); }
+  update(rowProps) { this.owner = rowProps.owner; this.key = rowProps.key; }
   render() {
     const data = this.owner.retainedPending.get(this.key);
     return data ? v_flex().w_full().flex_none().children(this.owner.rowElements(data)) : div();
