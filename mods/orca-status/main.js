@@ -291,7 +291,9 @@ export default class OrcaStatus extends View {
   async agentCwds(agentPanes) {
     const cwds = {};
     for (const pane of agentPanes) {
-      cwds[pane.terminal] = null;
+      // panes() exposes the live terminal folder; only query the core when it is unknown.
+      cwds[pane.terminal] = typeof pane.cwd === "string" && pane.cwd ? pane.cwd : null;
+      if (cwds[pane.terminal]) continue;
       try {
         const r = await hc(["get", pane.terminal, "--json"]);
         if (r.code === 0) cwds[pane.terminal] = JSON.parse(r.stdout)?.foreground?.cwd ?? null;

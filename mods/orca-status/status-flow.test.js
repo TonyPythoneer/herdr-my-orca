@@ -209,3 +209,13 @@ test("an invalid usage reset time does not render NaN", () => {
   assert.match(bar, /42%/);
   assert.doesNotMatch(bar, /NaN/);
 });
+
+test("agent CWD uses the native pane value and queries core only for missing values", async () => {
+  const previous = globalThis.__hc;
+  // The module hook captures hc at import time; the existing fixture answers /wt.
+  try {
+    const view = new Status();
+    const result = await view.agentCwds([{ terminal: "native", cwd: "/native" }, { terminal: "fallback", cwd: null }]);
+    assert.deepEqual(result, { native: "/native", fallback: "/wt" });
+  } finally { globalThis.__hc = previous; }
+});
