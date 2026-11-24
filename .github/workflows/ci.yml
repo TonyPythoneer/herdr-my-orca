@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      native_check:
+        description: Run Herdr's native mod checker on macOS (downloads current upstream release)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Tests and config validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check Python and shell availability
+        run: |
+          python3 --version
+          bash --version | head -n 1
+      - name: Validate configuration and mod manifests
+        run: node scripts/check-config.mjs
+      - name: Check JavaScript syntax
+        run: |
+          git ls-files -z -- '*.js' '*.mjs' | xargs -0 -r -n 1 node --check
+      - name: Check Python and shell syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          for name in subprocess.check_output(['git', 'ls-files', '-z', '--', '*.py']).decode().split('\0'):
+              if name:
+                  compile(Path(name).read_bytes(), name, 'exec')
+          PY
+          git ls-files -z -- '*.sh' | xargs -0 -r -n 1 bash -n
+      - name: Check synchronized mod helpers
+        run: node scripts/sync-shared.mjs --check
+      - name: Run all existing tests
+        run: node --test mods scripts
+      - name: Ensure tests did not modify tracked files
+        run: git diff --exit-code
+
+  package:
+    name: Package validated config
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package tracked installation files
+        run: |
+          git archive --format=zip --output=herdr-my-orca.zip HEAD layouts mods themes keys.json programs.json settings.json
+          sha256sum herdr-my-orca.zip > herdr-my-orca.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herdr-my-orca-${{ github.sha }}
+          path: |
+            herdr-my-orca.zip
+            herdr-my-orca.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  native:
+    name: Herdr native mod check (manual)
+    if: github.event_name == 'workflow_dispatch' && inputs.native_check
+    needs: checks
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install upstream Herdr app
+        run: |
+          test "$(uname -m)" = arm64
+          curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
+          sh "$RUNNER_TEMP/herdr-install.sh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate all mods in an isolated Herdr app home
+        shell: bash
+        run: |
+          export HERDR_APP_HOME="$RUNNER_TEMP/herdr-ci-home"
+          mkdir -p "$HERDR_APP_HOME"
+          cp -R layouts mods themes keys.json programs.json settings.json "$HERDR_APP_HOME/"
+          failed=0
+          for manifest in "$HERDR_APP_HOME"/mods/*/mod.json; do
+            mod="${manifest%/mod.json}"
+            echo "::group::${mod##*/}"
+            if ! herdr-app check "$mod"; then
+              echo "::error::Native check failed for ${mod##*/}"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$failed"
