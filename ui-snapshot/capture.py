@@ -263,7 +263,7 @@ def main():
                         raise PermissionError(ax_error)
                     run([ax,str(proc.pid),action,str(x),str(y),str(viewport[0]),str(viewport[1]),*extra],timeout=10)
                 def park():
-                    mouse(min(150,viewport[0]-20),min(530,viewport[1]-50),"--move")
+                    mouse(min(300,viewport[0]-20),5,"--move")
                     time.sleep(1.0)
                 def dismiss_toast():
                     # The upstream version notification close control is at this
@@ -287,7 +287,7 @@ def main():
                     raise RuntimeError("Native viewport did not resize: "+str(viewport))
                 def visible_click(label, region=None, scroll=False, right=False, occurrence=None):
                     # Search the current rendered window; scroll only inside the intended pane.
-                    for attempt in range(4 if scroll else 1):
+                    for attempt in range(4):
                         rows=words()
                         p=select_visible(rows,label,region,occurrence)
                         if p:
@@ -299,6 +299,8 @@ def main():
                             x=round(viewport[0]*((region[0]+region[2])/2 if region else .5))
                             y=round(viewport[1]*((region[1]+region[3])/2 if region else .65))
                             mouse(x,y,"--scroll",extra=("-420",))
+                            time.sleep(.5)
+                        else:
                             time.sleep(.5)
                     raise RuntimeError("Visible control not found: "+label)
                 def wait_visible(required=(), absent=(), region=None, timeout=12):
@@ -363,10 +365,10 @@ def main():
                     if case.get("group"):
                         # Wait for the real local Git group and primary checkout before toggling.
                         command("orca-spaces.expand-all")
-                        wait_visible(["sample-project","Snapshot project"],region=(0,0,.28,1))
+                        wait_visible(["sample-project","primary"],region=(0,0,.28,1))
                         if case["group"]=="collapse":
                             command("orca-spaces.collapse-all")
-                            wait_visible(["sample-project"],["Snapshot project"],region=(0,0,.28,1))
+                            wait_visible(["sample-project"],["primary"],region=(0,0,.28,1))
                     if case.get("files") == "contents":
                         command("orca-panel-head.search")
                     elif case.get("files") == "names":
@@ -456,6 +458,8 @@ def main():
                     print("UI_STEP "+json.dumps(row),flush=True)
                     try:
                         setup(case)
+                        if case.get("beforeText"):
+                            wait_visible(case["beforeText"],region=case.get("evidenceRegion"))
                         shot(row,"before")
                         row["viewport"]=list(viewport)
                         before_state=status()
@@ -553,7 +557,7 @@ def main():
                     except Exception as e:
                         row["result"]="blocked" if isinstance(e,PermissionError) else "failed"
                         row["error"]=str(e)
-                        if row.get("images") and row["mode"] != "not-attempted":
+                        if row["result"] == "failed":
                             try:
                                 if status().get("layout") in ("orca","orca-unified"):
                                     shot(row,"diagnostic")

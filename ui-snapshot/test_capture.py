@@ -89,6 +89,19 @@ class VisibleEvidenceTests(unittest.TestCase):
         self.assertTrue(any(c.get("fileAssert",{}).get("file")=="tasks.json" for c in CASES))
         self.assertTrue(any(c.get("fileAssert",{}).get("file")=="agent-manager.json" for c in CASES))
 
+    def test_project_group_uses_actual_primary_checkout_marker(self):
+        grouped=[c for c in CASES if c.get("group")]
+        for c in grouped:
+            if c.get("group")=="collapse":
+                self.assertIn("primary",c["afterText"])
+            elif c.get("absentText"):
+                self.assertIn("primary",c["absentText"])
+                self.assertIn("primary",c["beforeText"])
+        file_case=next(c for c in CASES if c["title"]=="Explorer: open file")
+        self.assertTrue(file_case["control"]["visible"])
+        self.assertTrue(file_case["fresh"])
+        self.assertIn("Snapshot sample",file_case["afterText"])
+
     def test_duplicate_labels_require_explicit_position_and_distinct_rows(self):
         from capture import select_visible
         rows=[{"text":"Create workspace","confidence":.95,"x":.5,"y":.40},
