@@ -150,7 +150,7 @@ jobs:
       - name: Install isolated herdr-app test stand-in
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
-          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
+          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status-bar.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
           chmod +x "$RUNNER_TEMP/bin/herdr-app"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Run assigned test suite

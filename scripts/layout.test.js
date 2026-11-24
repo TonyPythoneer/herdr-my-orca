@@ -51,7 +51,7 @@ test("orca is the single unified-header layout", () => {
   const tabs = [];
   walk(orca, node => {
     if (node?.id === "left-sidebar") sidebars.push({ min: node.min, background: node.background });
-    if (node?.content?.mod === "orca-tabs") tabs.push(node.content.props ?? {});
+    if (node?.content?.mod === "orca-header") tabs.push(node.content.props ?? {});
   });
   assert.ok(sidebars.every(s => s.min === 0 && s.background === "surface"), "sidebar collapses to 0 over surface");
   assert.deepEqual(tabs, [{ motion: "native", pinSidebarTerminal: true }]);

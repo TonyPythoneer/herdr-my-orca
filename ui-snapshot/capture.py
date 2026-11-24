@@ -364,13 +364,13 @@ def main():
                     select("panel-body","files")
                     if case.get("group"):
                         # Wait for the real local Git group and primary checkout before toggling.
-                        command("orca-spaces.expand-all")
+                        command("orca-sidebar-projects.expand-all")
                         wait_visible(["sample-project","primary"],region=(0,0,.28,1))
                         if case["group"]=="collapse":
-                            command("orca-spaces.collapse-all")
+                            command("orca-sidebar-projects.collapse-all")
                             wait_visible(["sample-project"],["primary"],region=(0,0,.28,1))
                     if case.get("files") == "contents":
-                        command("orca-panel-head.search")
+                        command("orca-right-sidebar-header.search")
                     elif case.get("files") == "names":
                         mouse(765,86)
                         mouse(939,47)

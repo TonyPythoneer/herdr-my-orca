@@ -36,7 +36,7 @@ test("page timer, editor and stale writes keep their notification and retry beha
   globalThis.__herdrFiles = new Map();
   await view.apply(cx, config => config, { saved: true });
   assert.equal(view.saved, true);
-  assert.deepEqual(commands, ["orca-chrome.tasks-scan"]);
+  assert.deepEqual(commands, ["orca-status-footer.tasks-scan"]);
   view.openEditor(cx);
   assert.equal(view.editing, true);
 });
@@ -81,7 +81,7 @@ test("toggle, delete and New task rewrite the file and publish the new config", 
   page.view.toggle(page.cx, sample("a"));
   await settle();
   assert.deepEqual(JSON.parse(page.files.get("/home/tasks.json")).tasks.map(t => [t.id, t.enabled]), [["a", false], ["b", true]]);
-  assert.deepEqual(page.commands, ["orca-chrome.tasks-scan"]);
+  assert.deepEqual(page.commands, ["orca-status-footer.tasks-scan"]);
   assert.equal(page.published["tasks.error"], "");
   assert.equal(page.view.saved, false);
   page.view.remove(page.cx, sample("a"));
@@ -125,7 +125,7 @@ test("Run now files a request for the runner; the JSON editor validates, saves a
   const page = pageFixture([sample("a")]);
   page.view.runNow(page.cx, sample("a"));
   assert.equal(page.published["tasks.request"].id, "a");
-  assert.deepEqual(page.commands, ["orca-chrome.tasks-scan"]);
+  assert.deepEqual(page.commands, ["orca-status-footer.tasks-scan"]);
   page.view.openEditor(page.cx);
   assert.equal(page.view.editing, true);
   const edited = value => { page.view.editor = { value: () => value }; return page.view.saveEditor(page.cx); };

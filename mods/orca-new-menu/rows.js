@@ -40,7 +40,7 @@ export function emptyAgentState(officialCount, freebuff) {
 }
 
 /**
- * Merge the Agent Manager's recently refreshed local inventory (installed flags and effective
+ * Merge the Agent Settings's recently refreshed local inventory (installed flags and effective
  * runs) into Herdr's catalog. The catalog keeps identity, icons and order.
  */
 export function mergeInventory(known, inventory) {

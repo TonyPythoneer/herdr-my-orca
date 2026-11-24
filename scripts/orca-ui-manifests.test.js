@@ -48,19 +48,19 @@ test("registry problems: a missing, duplicate, extra entry and a dead next link 
   const [entry] = features;
   assert.match(registryProblems([], discovered, ROOT)[0], /not registered/);
   assert.deepEqual(registryProblems(features.filter(e => e.area !== "shared"), discovered, ROOT), [`${SHARED_MANIFEST}: not registered in app.mjs`]);
-  assert.deepEqual(registryProblems([...features, entry], discovered, ROOT), ["orca-ui/features/panel/head/manifest.json: registered 2 times"]);
+  assert.deepEqual(registryProblems([...features, entry], discovered, ROOT), ["orca-ui/features/right-sidebar/header/manifest.json: registered 2 times"]);
   assert.deepEqual(registryProblems([...features, { ...entry, manifest: { feature: "ghost" } }], discovered, ROOT), ["ghost: registered but not on disk"]);
   assert.match(registryProblems([{ ...entry, next: ["nope.js"] }, ...features.slice(1)], discovered, ROOT)[0], /does not exist/);
 });
 
 test("the real repo loads and every managed destination is under its mod", () => {
   const { table, features: loaded, shared } = loadManifests();
-  assert.deepEqual([...loaded.keys()], ["orca-ui/features/panel/head/manifest.json"]);
+  assert.deepEqual([...loaded.keys()], ["orca-ui/features/right-sidebar/header/manifest.json"]);
   assert.equal(shared.files.length, 10);
   assert.equal(table.size, 38);
   const feature = [...table].filter(([, row]) => row.kind === "feature").map(([dest]) => dest);
   assert.equal(feature.length, 11);
-  for (const dest of feature) assert.match(dest, /^mods\/orca-panel-head\/[^/]+$/);
+  for (const dest of feature) assert.match(dest, /^mods\/orca-right-sidebar-header\/[^/]+$/);
   assert.equal([...table.values()].filter(r => r.kind === "shared").length, 27);
 });
 
@@ -70,15 +70,15 @@ test("the table maps each destination to its source, mode, tests and slots", t =
   const { table, features: loaded } = load(root);
   assert.deepEqual([...loaded.keys()], [MANIFEST]);
   assert.deepEqual([...table.keys()].sort(), [
-    "mods/orca-changes/clip.js", "mods/orca-files/clip.js", "mods/orca-files/icons/a.svg", "mods/orca-files/main.js", "mods/orca-files/mod.json",
-    "mods/orca-files/tool.sh", "mods/orca-files/view.js", "mods/orca-handoff/clip.js", "mods/orca-handoff/transcript.js",
-    "mods/orca-menu/clip.js", "mods/orca-menu/transcript.js"]);
+    "mods/orca-changes/clip.js", "mods/orca-context-menu/clip.js", "mods/orca-context-menu/transcript.js", "mods/orca-files/clip.js",
+    "mods/orca-files/icons/a.svg", "mods/orca-files/main.js", "mods/orca-files/mod.json", "mods/orca-files/tool.sh", "mods/orca-files/view.js",
+    "mods/orca-handoff/clip.js", "mods/orca-handoff/transcript.js"]);
   assert.deepEqual(table.get("mods/orca-files/icons/a.svg"), { kind: "feature", id: "files/main", source: `${FEATURE}/icons/a.svg`,
     mode: 0o644, consumers: ["orca-files"], tests: [`${FEATURE}/view.test.js`, `${FEATURE}/fixture/data.json`], layoutSlots: { orca: ["list"] } });
   assert.equal(table.get("mods/orca-files/tool.sh").mode, 0o755);
   // A shared row carries the consumer feature's tests and slots; a consumer without one gets none.
   assert.deepEqual(table.get("mods/orca-files/clip.js"), { kind: "shared", id: "clip.js", source: "orca-ui/shared/clip.js", mode: 0o644,
-    consumers: ["orca-changes", "orca-files", "orca-handoff", "orca-menu"], tests: [`${FEATURE}/view.test.js`, `${FEATURE}/fixture/data.json`], layoutSlots: { orca: ["list"] } });
+    consumers: ["orca-changes", "orca-files", "orca-handoff", "orca-context-menu"], tests: [`${FEATURE}/view.test.js`, `${FEATURE}/fixture/data.json`], layoutSlots: { orca: ["list"] } });
   assert.deepEqual(table.get("mods/orca-handoff/clip.js").tests, []);
   assert.deepEqual(table.get("mods/orca-handoff/clip.js").layoutSlots, {});
 });

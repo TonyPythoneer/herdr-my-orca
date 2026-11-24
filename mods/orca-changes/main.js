@@ -698,7 +698,8 @@ export default class Changes extends View {
     // Orca renders the commit surface above the list (panel/panel-content.tsx:130): wrapper
     // px-3 pb-2 (commit-area.tsx:216), textarea min-h-14 rounded-md border-input bg-background
     // px-2 py-1.5 text-xs (commit-message-composer.tsx:46), actions on an mt-1 row (:32-80).
-    return v_flex().flex_none().px(12).pb(8)
+    // Orca has no top inset here; pt(12) keeps the box off the header border (same as section headers).
+    return v_flex().flex_none().px(12).pt(12).pb(8)
       .child(div().id("commit-message").min_h(56).rounded(6).border_1()
         .border_color(this.typing ? t.accent : t.input).bg(t.canvas).px(8).py(6).cursor_text()
         .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation())

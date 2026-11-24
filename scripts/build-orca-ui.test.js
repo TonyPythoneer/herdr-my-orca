@@ -10,7 +10,7 @@ const script = fileURLToPath(new URL("./build-orca-ui.mjs", import.meta.url));
 const run = (...args) => spawnSync(process.execPath, [script, ...args], { encoding: "utf8" });
 const files = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).map(e => join(e.parentPath, e.name).slice(dir.length + 1)).sort();
 const FEATURE_FILES = ["main.js", "mod.json", "view.js", "icons/a.svg", "tool.sh"].map(f => `mods/orca-files/${f}`).sort();
-const SHARED_FILES = ["orca-changes/clip.js", "orca-files/clip.js", "orca-handoff/clip.js", "orca-menu/clip.js", "orca-handoff/transcript.js", "orca-menu/transcript.js"].map(f => `mods/${f}`);
+const SHARED_FILES = ["orca-changes/clip.js", "orca-files/clip.js", "orca-handoff/clip.js", "orca-context-menu/clip.js", "orca-handoff/transcript.js", "orca-context-menu/transcript.js"].map(f => `mods/${f}`);
 const ALL_FILES = [...FEATURE_FILES, ...SHARED_FILES].sort();
 const header = name => `// Generated from orca-ui/shared/${name} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;
 
@@ -27,9 +27,9 @@ test("an empty directory receives exactly the managed batch, twice identically",
     assert.equal(statSync(join(a, f)).mode & 0o777, statSync(source).mode & 0o777, f);
   }
   // A shared copy is the source, a closing LF if it lacks one, then the generated line.
-  assert.equal(readFileSync(join(a, "mods/orca-menu/clip.js"), "utf8"), 'export const n = "clip.js";\n' + header("clip.js"));
-  assert.equal(readFileSync(join(a, "mods/orca-menu/transcript.js"), "utf8"), 'export const n = "transcript.js"\n' + header("transcript.js"));
-  assert.equal(statSync(join(a, "mods/orca-menu/clip.js")).mode & 0o777, 0o644);
+  assert.equal(readFileSync(join(a, "mods/orca-context-menu/clip.js"), "utf8"), 'export const n = "clip.js";\n' + header("clip.js"));
+  assert.equal(readFileSync(join(a, "mods/orca-context-menu/transcript.js"), "utf8"), 'export const n = "transcript.js"\n' + header("transcript.js"));
+  assert.equal(statSync(join(a, "mods/orca-context-menu/clip.js")).mode & 0o777, 0o644);
   assert.equal(run("--root", root, "--check", "--out", a).status, 0);
 });
 
@@ -43,7 +43,7 @@ test("the real repo builds its 38 files, 27 of them shared copies, and matches",
 test("the real repo builds its 11 panel-head files and matches", t => {
   const out = temp(t);
   assert.equal(run("--out", out).status, 0);
-  assert.equal(files(out).filter(f => f.startsWith("mods/orca-panel-head/")).length, 11);
+  assert.equal(files(out).filter(f => f.startsWith("mods/orca-right-sidebar-header/")).length, 11);
   for (const f of files(out)) {
     assert.ok(readFileSync(join(out, f)).equals(readFileSync(join(fileURLToPath(new URL("..", import.meta.url)), f))), f);
     assert.equal(statSync(join(out, f)).mode & 0o777, statSync(join(fileURLToPath(new URL("..", import.meta.url)), f)).mode & 0o777, f);
@@ -86,16 +86,16 @@ test("a stale, hand-edited or missing shared copy fails check; a shared-only mod
   const root = fixture(t);
   const out = temp(t);
   run("--root", root, "--out", out);
-  write(out, "mods/orca-menu/main.js", "// the mod's own file, not managed");
+  write(out, "mods/orca-context-menu/main.js", "// the mod's own file, not managed");
   assert.equal(run("--root", root, "--check", "--out", out).status, 0);
   write(root, "orca-ui/shared/clip.js", "export const n = 2;\n");
   let r = run("--root", root, "--check", "--out", out);
   assert.equal(r.status, 1);
   assert.equal(r.stdout.match(/clip\.js: content differs/g).length, 4);
-  writeFileSync(join(out, "mods/orca-menu/transcript.js"), "x");
+  writeFileSync(join(out, "mods/orca-context-menu/transcript.js"), "x");
   rmSync(join(out, "mods/orca-handoff/transcript.js"));
   r = run("--root", root, "--check", "--out", out);
-  assert.match(r.stdout, /orca-menu\/transcript\.js: content differs/);
+  assert.match(r.stdout, /orca-context-menu\/transcript\.js: content differs/);
   assert.match(r.stdout, /orca-handoff\/transcript\.js: missing/);
 });
 
@@ -104,7 +104,7 @@ test("check allows handwritten, shared copies, Herdr reserved files and .DS_Stor
   const out = temp(t);
   run("--root", root, "--out", out);
   for (const f of ["extra.js", "gpui-kit.d.ts", "jsconfig.json", ".DS_Store", "icons/.DS_Store"]) write(out, `mods/orca-files/${f}`, "x");
-  write(out, "mods/orca-panel-gap/anything.js", "unrelated");
+  write(out, "mods/orca-right-sidebar-placeholders/anything.js", "unrelated");
   const r = run("--root", root, "--check", "--out", out);
   assert.equal(r.status, 0, r.stdout);
   assert.match(r.stdout, /11 managed file\(s\) match/);
@@ -249,7 +249,7 @@ test("a shared source that is not UTF-8 is copied byte for byte", t => {
   const out = temp(t);
   writeFileSync(join(root, "orca-ui/shared/clip.js"), Buffer.from([0x61, 0xff, 0xfe, 0x0a]));
   assert.equal(run("--root", root, "--out", out).status, 0);
-  const copy = readFileSync(join(out, "mods/orca-menu/clip.js"));
+  const copy = readFileSync(join(out, "mods/orca-context-menu/clip.js"));
   assert.ok(copy.subarray(0, 4).equals(Buffer.from([0x61, 0xff, 0xfe, 0x0a])));
   assert.equal(run("--root", root, "--check", "--out", out).status, 0);
 });
@@ -259,7 +259,7 @@ test("check reports a generated shared copy that no manifest lists", t => {
   const out = temp(t);
   run("--root", root, "--out", out);
   write(out, "mods/orca-filez/clip.js", 'x\n// Generated from orca-ui/shared/clip.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n');
-  write(out, "mods/orca-menu/own.js", "// the mod's own file\n");
+  write(out, "mods/orca-context-menu/own.js", "// the mod's own file\n");
   const r = run("--root", root, "--check", "--out", out);
   assert.equal(r.status, 1);
   assert.match(r.stdout, /^mods\/orca-filez\/clip\.js: generated shared copy that no manifest lists$/m);
@@ -303,8 +303,8 @@ test("check survives odd .js entries and reports an orphan in a feature mod once
   const root = fixture(t);
   const out = temp(t);
   run("--root", root, "--out", out);
-  mkdirSync(join(out, "mods/orca-menu/lib.js"));
-  symlinkSync(join(out, "nowhere"), join(out, "mods/orca-menu/dangling.js"));
+  mkdirSync(join(out, "mods/orca-context-menu/lib.js"));
+  symlinkSync(join(out, "nowhere"), join(out, "mods/orca-context-menu/dangling.js"));
   write(out, "mods/orca-files/old.js", "x\n// Generated from orca-ui/shared/clip.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n");
   const r = run("--root", root, "--check", "--out", out);
   assert.equal(r.status, 1);

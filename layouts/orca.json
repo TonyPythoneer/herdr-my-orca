@@ -21,7 +21,7 @@
   },
   "preview": "layouts/orca.svg",
   "theme": "orca-dark",
-  "terminal_menu": "orca-menu",
+  "terminal_menu": "orca-context-menu",
   "children": [
     {
       "id": "body",
@@ -30,7 +30,7 @@
         {
           "id": "float-workspace",
           "content": {
-            "mod": "orca-float"
+            "mod": "orca-float-workspace"
           },
           "edge": "bottom",
           "align": "end"
@@ -50,7 +50,7 @@
               },
               "window_drag": true,
               "content": {
-                "mod": "orca-tabs",
+                "mod": "orca-header",
                 "props": {
                   "motion": "native",
                   "pinSidebarTerminal": true
@@ -81,20 +81,20 @@
                           "id": "nav-top",
                           "type": "block",
                           "content": {
-                            "mod": "orca-nav"
+                            "mod": "orca-sidebar-top"
                           },
                           "size": {
                             "px": 86
                           }
                         },
                         {
-                          "id": "spaces",
+                          "id": "projects",
                           "type": "block",
                           "size": {
                             "weight": 1
                           },
                           "content": {
-                            "mod": "orca-spaces"
+                            "mod": "orca-sidebar-projects"
                           }
                         }
                       ]
@@ -123,7 +123,7 @@
                               "lone": false,
                               "header": {
                                 "content": {
-                                  "mod": "orca-pane"
+                                  "mod": "orca-pane-header"
                                 },
                                 "height": 32,
                                 "position": "top"
@@ -142,14 +142,14 @@
                           "id": "main-agents",
                           "type": "block",
                           "content": {
-                            "mod": "orca-agent-manager"
+                            "mod": "orca-agent-settings"
                           }
                         },
                         {
                           "id": "main-providers",
                           "type": "block",
                           "content": {
-                            "mod": "orca-agent-manager",
+                            "mod": "orca-agent-settings",
                             "props": {
                               "page": "providers"
                             }
@@ -186,7 +186,7 @@
                 "px": 31
               },
               "content": {
-                "mod": "orca-panel-head"
+                "mod": "orca-right-sidebar-header"
               },
               "window_drag": true
             },
@@ -203,17 +203,17 @@
                   }
                 },
                 {
-                  "id": "vault",
+                  "id": "agent-sessions",
                   "type": "block",
                   "content": {
-                    "mod": "orca-agents"
+                    "mod": "orca-right-sidebar-agents"
                   }
                 },
                 {
                   "id": "workspaces",
                   "type": "block",
                   "content": {
-                    "mod": "orca-panel-gap",
+                    "mod": "orca-right-sidebar-placeholders",
                     "props": {
                       "tab": "workspaces"
                     }
@@ -223,7 +223,7 @@
                   "id": "pr-checks",
                   "type": "block",
                   "content": {
-                    "mod": "orca-panel-gap",
+                    "mod": "orca-right-sidebar-placeholders",
                     "props": {
                       "tab": "pr-checks"
                     }
@@ -240,7 +240,7 @@
                   "id": "checks",
                   "type": "block",
                   "content": {
-                    "mod": "orca-panel-gap",
+                    "mod": "orca-right-sidebar-placeholders",
                     "props": {
                       "tab": "checks"
                     }
@@ -250,7 +250,7 @@
                   "id": "ports",
                   "type": "block",
                   "content": {
-                    "mod": "orca-panel-gap",
+                    "mod": "orca-right-sidebar-placeholders",
                     "props": {
                       "tab": "ports"
                     }
@@ -286,7 +286,7 @@
             "px": 144
           },
           "content": {
-            "mod": "orca-chrome"
+            "mod": "orca-status-footer"
           }
         },
         {
@@ -296,7 +296,7 @@
             "weight": 1
           },
           "content": {
-            "mod": "orca-status"
+            "mod": "orca-status-bar"
           }
         },
         {
@@ -306,7 +306,7 @@
             "px": 46
           },
           "content": {
-            "mod": "orca-ports"
+            "mod": "orca-status-ports"
           }
         }
       ]

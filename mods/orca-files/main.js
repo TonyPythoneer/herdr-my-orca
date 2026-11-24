@@ -504,7 +504,7 @@ export default class Files extends View {
     return this.root ? this.root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "" : "";
   }
 
-  // Edits write straight to disk (like agent-config): 800 ms after the last keystroke, and on leaving the file.
+  // Edits write straight to disk (like orca-agent-flyout): 800 ms after the last keystroke, and on leaving the file.
   // `expected` is the text last read or written, so a file changed on disk meanwhile is refused, not overwritten.
   edited(doc, cx) {
     if (this.doc !== doc) return;
@@ -734,7 +734,7 @@ export default class Files extends View {
   // (src/renderer/src/components/right-sidebar/file-explorer/panel/file-explorer-row-context-menu.tsx:220-225,298-302)
   command(c, cx) {
     if (c.startsWith("remove-")) return this.remove(c.slice(7), cx);
-    // Revealed by ⌘⇧F (orca-panel-head.search): the panel is already shown and on the
+    // Revealed by ⌘⇧F (orca-right-sidebar-header.search): the panel is already shown and on the
     // Explorer tab by the time this runs. Orca's showRightSidebarSearch opens the Contents
     // view with its query field focused (right-sidebar-state.ts:87-110).
     if (c === "search") {

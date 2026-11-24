@@ -23,14 +23,14 @@ def build(destination, revision=None):
     destination.mkdir(parents=True, exist_ok=False)
     if revision:
         files = subprocess.check_output(
-            ['git', 'ls-tree', '-r', '--name-only', revision, 'mods/orca-spaces'], cwd=ROOT, text=True
+            ['git', 'ls-tree', '-r', '--name-only', revision, 'mods/orca-sidebar-projects'], cwd=ROOT, text=True
         ).splitlines()
         for file in files:
-            target = destination / Path(file).relative_to('mods/orca-spaces')
+            target = destination / Path(file).relative_to('mods/orca-sidebar-projects')
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(subprocess.check_output(['git', 'show', f'{revision}:{file}'], cwd=ROOT))
     else:
-        shutil.copytree(ROOT / 'mods/orca-spaces', destination, dirs_exist_ok=True)
+        shutil.copytree(ROOT / 'mods/orca-sidebar-projects', destination, dirs_exist_ok=True)
     metrics = 'perf-metrics.js'
     (destination / metrics).write_text('export const metrics = { created: 0 };\n')
     # Count explicit factories in ALL imported local helpers, not just main.js.

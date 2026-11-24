@@ -3,16 +3,17 @@
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
-- **Ports**: the bottom bar's plug button (`orca-ports/`) counts the listening ports the open
+- **Names**: [docs/naming.md](docs/naming.md) maps what you see on screen to mod names, layout node ids and commands.
+- **Ports**: the bottom bar's plug button (`orca-status-ports/`) counts the listening ports the open
   spaces own, and opens Orca's Ports popover above it: a `Ports` header with the two counts, one
   section per space that owns a listener (its name, a folder button that goes there, the count),
   the rows with the port, the process and the address, and the collapsed **External ports**
   list. Attribution is Orca's: `lsof` reports each listener's pid, a second `lsof` reports that
   process's folder, and a folder inside a space's checkout (or its panes' live folders) makes it
   that space's port; everything else is external. Rows reveal open-in-browser, copy and, for a
-  port one of the spaces owns, Stop. The bar scans every 30 seconds; `herdr-app do orca-ports.open`
+  port one of the spaces owns, Stop. The bar scans every 30 seconds; `herdr-app do orca-status-ports.open`
   opens the popover from a key.
-- **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status/`). Claude and
+- **Usage**: the bottom bar shows Claude, Codex and opencode usage (`orca-status-bar/`). Claude and
   Codex read what the CLIs already write on this computer; Claude's quota comes live from
   Claude Code's own `rate_limits` statusline feed, with Anthropic's usage API only as the idle
   fallback (its token is read from the macOS Keychain and never written anywhere). Cached in
@@ -22,11 +23,11 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   tab moves into that worktree's space, so the sidebar lists it under the branch, and the agent
   keeps running (`terminal.park` → `terminal.keep`, no restart). A space left without tabs gets
   one, a named tab keeps its name, and the window only follows when the moved tab was on screen.
-  The watcher is `orca-status/wt-follow.js` in the always-mounted bottom bar: it reads each agent's
+  The watcher is `orca-status-bar/wt-follow.js` in the always-mounted bottom bar: it reads each agent's
   own process folder (`hc get` → `foreground.cwd`) and polls every 3 s.
-- **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `agent-config` (model and effort chooser, cached per CLI version), `orca-tabs` and `orca-panel-gap` changes.
+- **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `orca-agent-flyout` (model and effort chooser, cached per CLI version), `orca-header` and `orca-right-sidebar-placeholders` changes.
 - **Refresh branches**: the Projects header's Workspace options popup starts with it. It asks
-  `orca-spaces` (`orca-spaces.refresh`) to re-read every project it knows — open or closed —
+  `orca-sidebar-projects` (`orca-sidebar-projects.refresh`) to re-read every project it knows — open or closed —
   instead of waiting for the 60-second fallback or a filesystem wake: each project's branch and
   its `git worktree list`, so a checkout or worktree changed elsewhere shows up. Rows are still
   worktrees, as in Orca, so a branch with no checkout (say `main` while the main checkout sits on
@@ -38,7 +39,7 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   changes stop the switch with the reason shown (Git is re-checked on every attempt). The card's
   branch follows the switch, so returning the main checkout to `main` after a merge needs no
   terminal.
-- **Agent Manager**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
+- **Agent Settings**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
   5.5 rows. It lists the Agent CLIs Herdr detects,
   turns availability on/off for installed CLIs, and edits each CLI's executable and launch
   arguments. Commands are written to `programs.json`; the on/off choice lives in
@@ -68,7 +69,7 @@ Same core as Orca desktop (MIT, Lovecast Inc.), read from its public source:
 - **Claude, live.** Claude Code hands its `statusLine` command a JSON payload on every turn;
   that payload includes the 5-hour and weekly `rate_limits` the Messages API returned, so it
   costs no extra request and no usage-endpoint budget. Orca's script forwards it to a local
-  server. Herdr has none, so `orca-status/claude-statusline.sh` writes the same windows to
+  server. Herdr has none, so `orca-status-bar/claude-statusline.sh` writes the same windows to
   `~/.cache/herdr-usage/claude-statusline.json` and then runs the status line you already had.
   Every Claude session shares that one file, and each reports from its own last response, so the
   wrapper merges per window — newer `resets_at` wins, and inside one window the larger
@@ -93,7 +94,7 @@ To enable the live Claude feed, point `statusLine` in `~/.claude/settings.json` 
 {
   "statusLine": {
     "type": "command",
-    "command": "sh ~/.config/herdr-app/mods/orca-status/claude-statusline.sh"
+    "command": "sh ~/.config/herdr-app/mods/orca-status-bar/claude-statusline.sh"
   }
 }
 ```
@@ -103,7 +104,7 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 
 ## How the repo is organized
 
-- The repo holds only our own mods (`orca-*` and `agent-config`). Herdr ships its own mods and layouts (`confirm`,
+- The repo holds only our own mods (`orca-*` and `orca-agent-flyout`). Herdr ships its own mods and layouts (`confirm`,
   `picker`, `main`, `terminals`, …); they stay in the live config and are not tracked here.
 - Orca UI starts at [orca-ui/app.mjs](orca-ui/app.mjs): a reading map. `features` lists each
   generated feature, the screen it draws and the files to follow next; `inPlace` lists every other
@@ -128,8 +129,8 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   (and a test) fails on drift. Edit only the file in `orca-ui/shared/`, never a copy. Asset paths
   such as `mods/<other>/x.svg` may cross folders.
 - Big mods are split into pure logic files, each with its own test (for example
-  `orca-agent-manager/{util,parts,views}.js`, `orca-spaces/{storage,cards}.js`,
-  `orca-tabs/{drop-zone,tab-title}.js`). `scripts/gpui-stub-loader.mjs` stubs `gpui-kit`,
+  `orca-agent-settings/{util,parts,views}.js`, `orca-sidebar-projects/{storage,cards}.js`,
+  `orca-header/{drop-zone,tab-title}.js`). `scripts/gpui-stub-loader.mjs` stubs `gpui-kit`,
   `gpui-base` and `herdr`, so `render.test.js` renders the real `main.js` and compares it with
   `render.snap.json` (delete the snapshot to re-record after an intended view change).
 - Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
@@ -171,7 +172,7 @@ These are runtime state or files Herdr writes itself, so they are not in this re
 ## Things to check before using
 
 - `programs.json` starts Claude and Codex with full-permission flags (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`). Remove them if you want the agents to ask first.
-- The `orca` layout expects the `orca-*` mods in this repo. A mod that no layout lists may still be opened by another mod (`openOverlay({ mod: "orca-menu" })`, `run("mod.open", ...)`): grep for its name before deleting it.
+- The `orca` layout expects the `orca-*` mods in this repo. A mod that no layout lists may still be opened by another mod (`openOverlay({ mod: "orca-context-menu" })`, `run("mod.open", ...)`): grep for its name before deleting it.
 
 ### Retired Skillshare panel
 

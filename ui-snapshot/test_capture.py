@@ -43,7 +43,7 @@ class ModInventoryTests(unittest.TestCase):
         self.assertGreaterEqual(len(CASES),20)
         self.assertEqual(len({c["title"] for c in CASES}),len(CASES))
         for c in CASES:
-            self.assertTrue(c["mods"] and all(m.startswith("orca-") or m=="agent-config" for m in c["mods"]))
+            self.assertTrue(c["mods"] and all(m.startswith("orca-") or m=="orca-agent-flyout" for m in c["mods"]))
             self.assertTrue(c["control"]["label"])
             if "xy" in c["control"]:
                 x,y=c["control"]["xy"]

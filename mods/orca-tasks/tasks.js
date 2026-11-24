@@ -1,7 +1,7 @@
 // Task management: the schedule and reset-time logic both mods share, and the one-shot runner.
 //
 // Pure except `runTask`, which takes the host's `exec` as an argument so `node --test` runs it.
-// `scripts/build-orca-ui.mjs` copies this file into orca-tasks (the page) and orca-chrome (the
+// `scripts/build-orca-ui.mjs` copies this file into orca-tasks (the page) and orca-status-footer (the
 // runner, which must live in an always-shown block).
 //
 // Times: every instant here is epoch milliseconds. `tasks.json` stores the last run; the next
@@ -34,7 +34,7 @@ const NOT_RUN_CODE = -1;
 // `HH:MM`, 24-hour: the one shape a daily trigger's time may take.
 const DAILY_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-/** The two seeded tasks. `codexModel` comes from the Codex catalog (see runner.js). */
+/** The two seeded tasks. `codexModel` comes from the Codex catalog (see scheduler.js). */
 export function defaultTasks(options = {}) {
   const codexModel = typeof options.codexModel === "string" && options.codexModel ? options.codexModel : "gpt-5.6-luna";
   return {
@@ -294,7 +294,7 @@ function noteOf(result, code) {
   return tail(preferred) || tail(fallback);
 }
 
-// The reset instants already on this computer, in one `sh` run. The same files orca-status
+// The reset instants already on this computer, in one `sh` run. The same files orca-status-bar
 // reads for the quota bar: Claude's live statusLine feed and its OAuth snapshot, and the
 // newest Codex rollout that reports rate limits. A limited Codex writes `primary: null` in a
 // newer rollout, hence the `"primary":{` filter (exactly local-usage.js's rule).

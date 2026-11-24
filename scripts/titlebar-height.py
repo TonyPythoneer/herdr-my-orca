@@ -3,7 +3,7 @@
 
 Herdr layouts have no variables, so edit TITLEBAR_HEIGHT and run this script: it writes the
 nodes each layout builds its titlebar row from in the repo layout. `orca` has tabs (the one header
-over the sidebar and the work column) and panel-head (right panel header). `orca-tabs` reads the
+over the sidebar and the work column) and panel-head (right panel header). `orca-header` reads the
 `tabs` node for its drop geometry, so nothing else holds the number.
 
 Usage: scripts/titlebar-height.py [--check] [--root DIR] [--write-live]

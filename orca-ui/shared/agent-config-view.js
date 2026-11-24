@@ -88,11 +88,11 @@ function normalizeJson(text, fallback) {
 }
 
 function providerGlyph(record, t) {
-  if (!record) return svg("mods/agent-config/circle.svg").size(13).text_color(t.muted);
+  if (!record) return svg("mods/orca-agent-flyout/circle.svg").size(13).text_color(t.muted);
   const appDir = `${appHome()}/`;
   const path = String(record.iconPath ?? "");
   if (path.startsWith(appDir)) return image(path.slice(appDir.length)).w(20).h(20).rounded(4);
-  return svg("mods/agent-config/hard-drive.svg").size(14).text_color(t.muted);
+  return svg("mods/orca-agent-flyout/hard-drive.svg").size(14).text_color(t.muted);
 }
 
 function providerTooltip(remote, providerCount) {
@@ -631,7 +631,7 @@ class AgentConfigCore {
     const space = launchSpace(p);
     if (this.settingsContext && (!space || space.machine)) { this.failLaunch(null, cx); return; }
     if (!space?.machine && await this.disabledInManager(p)) {
-      this.failLaunch(`${p.name ?? p.key} is disabled in Agent Manager.`, cx);
+      this.failLaunch(`${p.name ?? p.key} is disabled in Agent Settings.`, cx);
       return;
     }
 
@@ -659,7 +659,7 @@ class AgentConfigCore {
       run("layout.select", { stack: "main", child: "main-terminals" });
       cx?.notify();
     } else {
-      setShared("agent-config", null);
+      setShared("orca-agent-flyout", null);
       closeOverlay(p.overlay);
       closeOverlay(p.menu);
     }
@@ -708,7 +708,7 @@ class AgentConfigCore {
             this.toggleHidden(m.id);
             cx.notify();
           })
-          .child(svg(hidden ? "mods/agent-config/eye-off.svg" : "mods/agent-config/eye.svg").size(14).text_color(t.muted)),
+          .child(svg(hidden ? "mods/orca-agent-flyout/eye-off.svg" : "mods/orca-agent-flyout/eye.svg").size(14).text_color(t.muted)),
       );
   }
 
@@ -888,7 +888,7 @@ class AgentConfigCore {
         // The way to a new provider: the Model providers page, with this menu and flyout closed.
         this.listRow("provider-add", t)
           .on_click(() => this.openProviders())
-          .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/agent-config/plus.svg").size(13).text_color(t.muted)))
+          .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/orca-agent-flyout/plus.svg").size(13).text_color(t.muted)))
           .child(div().flex_1().min_w(0).truncate().child("Add More")),
       ));
   }
@@ -896,7 +896,7 @@ class AgentConfigCore {
   openProviders() {
     const p = this.context();
     run("layout.select", { stack: "main", child: "main-providers" });
-    setShared("agent-config", null);
+    setShared("orca-agent-flyout", null);
     if (!this.settingsContext) { closeOverlay(p.overlay); closeOverlay(p.menu); }
   }
 
@@ -1109,7 +1109,7 @@ class AgentConfigCore {
       .tooltip("Save")
       .accessibility_label("Save")
       .on_click((_e, cx) => this.saveEditor(id, cx))
-      .child(svg("mods/agent-config/save.svg").size(14));
+      .child(svg("mods/orca-agent-flyout/save.svg").size(14));
     const head = h_flex()
       .mx(6)
       .mt(2)
@@ -1171,8 +1171,8 @@ class AgentConfigCore {
   openAgentSettings() {
     const p = this.context();
     setShared("agent-manager.open-agent", { key: this.key });
-    run("orca-tabs.agent-settings");
-    setShared("agent-config", null);
+    run("orca-header.agent-settings");
+    setShared("orca-agent-flyout", null);
     closeOverlay(p.overlay);
     closeOverlay(p.menu);
   }
@@ -1200,7 +1200,7 @@ class AgentConfigCore {
           .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => this.resetPreset(cx))
           .child(div().text_size(10).text_color(t.muted).child("Reset defaults"))
-          .child(svg("mods/agent-config/rotate-ccw.svg").size(14).text_color(t.muted)),
+          .child(svg("mods/orca-agent-flyout/rotate-ccw.svg").size(14).text_color(t.muted)),
       ))
       .when(this.showSettingsShortcut(), el => el.child(div().id("agent-full-settings").size(26).flex().items_center().justify_center()
         .role("button").accessibility_label("Open " + this.spec.label + " settings")
@@ -1294,7 +1294,7 @@ class AgentConfigCore {
     const t = theme();
     const sections = sectionsOf(this.spec);
     return v_flex()
-      .id("agent-config")
+      .id("orca-agent-flyout")
       // Fills the popup; its width is set where orca-new-menu opens it.
       .w_full()
       .p(6)
@@ -1325,7 +1325,7 @@ class AgentConfigCore {
           .bg(t.accent)
           .text_color(t.background)
           .on_click((_e, cx) => this.launch(cx))
-          .child(svg("mods/agent-config/square-terminal.svg").size(16).flex_none())
+          .child(svg("mods/orca-agent-flyout/square-terminal.svg").size(16).flex_none())
           .child(div().flex_1().child("Launch terminal"))
           .child(div().flex_none().text_size(13).child("↵")),
       );

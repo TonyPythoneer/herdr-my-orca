@@ -10,7 +10,7 @@ const COVERAGE = `ℹ start of coverage report
 ℹ  orca-files        |        |          |         |
 ℹ   main.js          |  80.00 |    70.00 |   60.00 | 1-3
 ℹ   util.js          | 100.00 |   100.00 |  100.00 |
-ℹ  orca-tabs         |        |          |         |
+ℹ  orca-header         |        |          |         |
 ℹ   main.js          |  50.00 |    40.00 |   30.00 | 9
 ℹ scripts            |        |          |         |
 ℹ  build.mjs         |  90.00 |    80.00 |   70.00 |
@@ -20,7 +20,7 @@ const COVERAGE = `ℹ start of coverage report
 
 test("the coverage table becomes one row per file with its directory path", () => {
   const rows = parseCoverage(COVERAGE);
-  assert.deepEqual(rows.map(r => r.file), ["mods/orca-files/main.js", "mods/orca-files/util.js", "mods/orca-tabs/main.js", "scripts/build.mjs"]);
+  assert.deepEqual(rows.map(r => r.file), ["mods/orca-files/main.js", "mods/orca-files/util.js", "mods/orca-header/main.js", "scripts/build.mjs"]);
   assert.deepEqual(rows[0], { file: "mods/orca-files/main.js", line: 80, branch: 70, funcs: 60 });
   const byMod = coverageByMod(rows);
   assert.deepEqual(byMod["mods/orca-files"], { files: 2, line: 90, branch: 85, funcs: 80 });
@@ -82,7 +82,7 @@ test("the markdown starts with the marker the PR comment looks for and shows del
 });
 
 test("tracked test discovery covers mods, scripts and nested managed features", () => {
-  assert.deepEqual(trackedTestFiles(["mods/a/a.test.js", "scripts/a.test.mjs", "orca-ui/features/panel/head/a.test.cjs", "mods/a/main.js", "artifacts/x.test.js", ""].join("\0")), ["mods/a/a.test.js", "scripts/a.test.mjs", "orca-ui/features/panel/head/a.test.cjs"]);
+  assert.deepEqual(trackedTestFiles(["mods/a/a.test.js", "scripts/a.test.mjs", "orca-ui/features/right-sidebar/header/a.test.cjs", "mods/a/main.js", "artifacts/x.test.js", ""].join("\0")), ["mods/a/a.test.js", "scripts/a.test.mjs", "orca-ui/features/right-sidebar/header/a.test.cjs"]);
 });
 
 test("quality rejects incomplete test execution and missing lint output", () => {

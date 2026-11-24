@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register(new URL("./gpui-stub-loader.mjs", import.meta.url));
-const { default: Flyout } = await import("../mods/agent-config/main.js");
+const { default: Flyout } = await import("../mods/orca-agent-flyout/main.js");
 const { SPECS } = await import("../orca-ui/shared/agent-flyout.js");
 
 test("OpenCode waits for its variant before opening the tab", async () => {

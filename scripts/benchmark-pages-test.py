@@ -28,7 +28,7 @@ class BenchmarkTests(unittest.TestCase):
     def test_distinct_provider_origin(self):
         self.assertEqual(bench.origin_page({"stack":"main","page":"main-providers"}), "main-agents")
         self.assertEqual(bench.origin_page({"stack":"main","page":"main-agents"}), "main-terminals")
-        self.assertEqual(bench.origin_page({"stack":"panel-body","page":"vault"}), "files")
+        self.assertEqual(bench.origin_page({"stack":"panel-body","page":"agent-sessions"}), "files")
 
     def test_percentiles_and_failures(self):
         self.assertEqual(bench.quantile([9, 1, 5, 3], .95), 9)
@@ -139,14 +139,14 @@ export default class Demo extends View {
             mods = Path(tmp) / "mods"
             shutil.copytree(bench.ROOT / "mods", mods)
             coverage = self.diag["install"](mods)
-            self.assertTrue(any(x["module"] == "orca-spaces/main.js" and "render" in x["operations"] for x in coverage))
-            self.assertTrue(any(x["module"] == "orca-agent-manager/main.js" and "knownAgents" in x["operations"] for x in coverage))
+            self.assertTrue(any(x["module"] == "orca-sidebar-projects/main.js" and "render" in x["operations"] for x in coverage))
+            self.assertTrue(any(x["module"] == "orca-agent-settings/main.js" and "knownAgents" in x["operations"] for x in coverage))
             for item in coverage:
                 target = mods / item["module"]
                 r = subprocess.run(["node", "--input-type=module", "--check"],
                                    input=target.read_text(), capture_output=True, text=True)
                 self.assertEqual(r.returncode, 0, item["module"] + ": " + r.stderr)
-            self.assertNotIn("HERDR_PAGE_DIAG ", (bench.ROOT / "mods/orca-spaces/main.js").read_text())
+            self.assertNotIn("HERDR_PAGE_DIAG ", (bench.ROOT / "mods/orca-sidebar-projects/main.js").read_text())
 
     def test_scope_and_overlapping_spans(self):
         event = lambda module, start, end: {"module":module,"op":"exec","family":"git","start_ms":start,"end_ms":end,"duration_ms":end-start,"outcome":"ok"}

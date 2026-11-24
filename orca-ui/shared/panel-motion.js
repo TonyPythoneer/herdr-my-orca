@@ -1,5 +1,5 @@
-// Right sidebar, mirrored from the left sidebar's `sidebarFrame` (orca-nav / orca-spaces /
-// orca-chrome): while `orca-tabs.togglePanelNative` steps the panel narrower, the panel's content
+// Right sidebar, mirrored from the left sidebar's `sidebarFrame` (orca-sidebar-top / orca-sidebar-projects /
+// orca-status-footer): while `orca-header.togglePanelNative` steps the panel narrower, the panel's content
 // keeps the OPEN width and only slides out and fades, so nothing reflows or truncates on the way.
 // The panel is anchored to its right edge, so the inner frame is too and the content leaves
 // through the window's right edge; the 28px shift and the clamp((k-.15)/.85) fade are the left

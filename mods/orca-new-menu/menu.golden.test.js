@@ -55,7 +55,7 @@ function recorder(handlers) {
 const NOW = Date.now();
 const agent = (key, more = {}) => ({ key, name: key[0].toUpperCase() + key.slice(1), installed: true, run: [key], icon: `/i/${key}.svg`, ...more });
 const ALL = ["claude", "codex", "gemini", "grok", "omp", "antigravity", "kimi", "pi", "opencode", "notofficial"].map(k => agent(k, k === "kimi" ? { tint: true } : {}));
-const KEYS_LIST = [{ section: "global", action: "orca-tabs.new-tab", keys: "ctrl-shift-t" }];
+const KEYS_LIST = [{ section: "global", action: "orca-header.new-tab", keys: "ctrl-shift-t" }];
 const space = (more = {}) => ({ id: "s1", active: true, folder: "/repo", machine: null, ...more });
 const OMP = JSON.stringify({ models: [{ selector: "p/a", name: "A" }, { provider: "q", id: "b" }, { id: "default" }, null, { name: "x" }] });
 const AGY = "fetching\nslug-a\tLabel A\nslug-b\t \n\nslug-c\tLabel C\n";
@@ -283,7 +283,7 @@ test("every host records as before", async () => {
   assert.deepEqual(now, JSON.parse(readFileSync(GOLDEN, "utf8")));
 });
 
-test("the flyout opens through the agent-config popup and swaps for another agent", async () => {
+test("the flyout opens through the orca-agent-flyout popup and swaps for another agent", async () => {
   const log = [];
   const w = await opened(HOSTS["local, fresh inventory, freebuff on"], log);
   const claude = w.menu.agents.find(a => a.key === "claude");
@@ -294,7 +294,7 @@ test("the flyout opens through the agent-config popup and swaps for another agen
   w.menu.hoverConfig(codex, false, false);
   w.menu.closeFlyout();
   assert.deepEqual(plain(log.filter(e => ["closeOverlay", "setShared"].includes(e[0]))), [
-    ["setShared", "agent-config", { id: "pop1", key: "claude" }], ["closeOverlay", "pop1"],
-    ["setShared", "agent-config", { id: "pop2", key: "codex" }], ["closeOverlay", "pop2"], ["setShared", "agent-config", null],
+    ["setShared", "orca-agent-flyout", { id: "pop1", key: "claude" }], ["closeOverlay", "pop1"],
+    ["setShared", "orca-agent-flyout", { id: "pop2", key: "codex" }], ["closeOverlay", "pop2"], ["setShared", "orca-agent-flyout", null],
   ]);
 });
