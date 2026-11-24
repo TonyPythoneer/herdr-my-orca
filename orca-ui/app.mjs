@@ -302,6 +302,11 @@ export const inPlace = [
       "orca-float.open",
       "orca-float.attention"
     ],
+    "tests": [
+      "mods/orca-float/golden.test.js",
+      "mods/orca-float/panel.flow.test.js",
+      "mods/orca-float/workspace.flow.test.js"
+    ],
     "next": [
       "mods/orca-new-menu/main.js"
     ]
@@ -332,6 +337,11 @@ export const inPlace = [
     "opens": [
       "space.new",
       "overlay:orca-new-menu"
+    ],
+    "tests": [
+      "mods/orca-landing/buttons.flow.test.js",
+      "mods/orca-landing/golden.test.js",
+      "mods/orca-landing/shortcuts.test.js"
     ],
     "next": [
       "mods/orca-new-menu/main.js"
@@ -458,7 +468,9 @@ export const inPlace = [
       "orca-tabs.action"
     ],
     "tests": [
-      "mods/orca-pane/crew.test.js"
+      "mods/orca-pane/crew.test.js",
+      "mods/orca-pane/golden.test.js",
+      "mods/orca-pane/interactions.flow.test.js"
     ],
     "next": [
       "mods/orca-menu/main.js"
@@ -626,6 +638,8 @@ export const inPlace = [
     "tests": [
       "mods/orca-tabs/close-plan.test.js",
       "mods/orca-tabs/drop-zone.test.js",
+      "mods/orca-tabs/golden.test.js",
+      "mods/orca-tabs/interactions.flow.test.js",
       "mods/orca-tabs/new-tab.test.js",
       "mods/orca-tabs/sidebar-motion.test.js",
       "mods/orca-tabs/sidebar-native.test.js",

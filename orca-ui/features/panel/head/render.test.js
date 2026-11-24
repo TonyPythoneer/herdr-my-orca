@@ -4,10 +4,20 @@
 // location rules and the command bridge are driven through the herdr globals.
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
-import { register } from "node:module";
+import { register, registerHooks } from "node:module";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 register(new URL("../../../../scripts/gpui-stub-loader.mjs", import.meta.url));
+// The shared stub does not know panes, focused or nextCommand; this test feeds them through globals.
+registerHooks({ resolve(name, context, next) {
+  const result = next(name, context);
+  if (name !== "herdr") return result;
+  const source = `export * from ${JSON.stringify(result.url)};
+    export const panes = () => globalThis.__herdrPanes?.();
+    export const focused = () => globalThis.__herdrFocused?.();
+    export const nextCommand = () => globalThis.__herdrNextCommand?.();`;
+  return { url: "data:text/javascript," + encodeURIComponent(source), shortCircuit: true };
+} });
 const { default: PanelHead } = await import("./main.js");
 
 const GOLDEN = new URL("./render.golden.json", import.meta.url);

@@ -1,11 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { register } from "node:module";
+import { register, registerHooks } from "node:module";
 import { loadDiff } from "./diff-data.js";
 
 register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
-// The stub forwards nextCommand() to this global, so a test can feed the command loop.
-globalThis.__herdrNextCommand = () => globalThis.command();
+// The shared stub's nextCommand() returns at once; this test feeds the command loop from globalThis.command.
+registerHooks({ resolve(name, context, next) {
+  const result = next(name, context);
+  if (name !== "herdr") return result;
+  const source = `export * from ${JSON.stringify(result.url)}; export const nextCommand = () => globalThis.command();`;
+  return { url: "data:text/javascript," + encodeURIComponent(source), shortCircuit: true };
+} });
 const { default: Diff } = await import("./main.js");
 
 test("show changes the target, the timer reloads it and a failed load shows its message", async () => {
