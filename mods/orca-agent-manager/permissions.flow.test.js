@@ -240,3 +240,23 @@ test("one permission pick runs no agent detection and reads each file once", asy
   assert.equal(refreshes, 0);
   assert.equal(reads, 2); // programs.json and agent-manager.json, once each, to write against the latest
 });
+
+test("render inventory derivation parses once; permission summary reuses rows", () => {
+  const {owner} = harness({programs: JSON.stringify({programs:{claude:{run:["claude"]},codex:{run:["codex","--dangerously-bypass-approvals-and-sandbox"]}}})});
+  const original = JSON.parse;
+  let parses = 0;
+  JSON.parse = (...args) => { parses++; return original(...args); };
+  let rows, summary;
+  try {
+    rows = owner.allRows().all;
+    const originalAllRows = owner.allRows;
+    owner.allRows = () => { throw new Error("unnecessary second inventory derivation"); };
+    try { summary = owner.currentPermissions(rows); }
+    finally { owner.allRows = originalAllRows; }
+    assert.equal(parses,1);
+  } finally { JSON.parse = original; }
+  assert.deepEqual(summary, owner.currentPermissions());
+  assert.equal(summary.overrides.codex,"full-access");
+  owner.applyPrograms(JSON.stringify({programs:{codex:{run:["codex"]}}}));
+  assert.equal(owner.currentPermissions().overrides.codex,undefined);
+});

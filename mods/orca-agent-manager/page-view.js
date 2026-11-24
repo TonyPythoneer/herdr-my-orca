@@ -19,7 +19,8 @@ const spinner = (t, size) => div().flex_none().text_size(size).text_color(t.mute
 
 /** The all-agents permission: one choice, plus the agents that keep their own. */
 export function permissionsCardView(owner, rows, t) {
-  const permissions = owner.currentPermissions();
+  // The page already derived this inventory; avoid rebuilding it for this card.
+  const permissions = owner.currentPermissions(rows);
   const managed = rows.filter((row) => row.supports);
   const summary = permissionSummary(managed, permissions);
   return v_flex()

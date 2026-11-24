@@ -22,6 +22,7 @@ import {
   checkCommands,
   commandCheckScript,
   commandPathScript,
+  createRunOverrideReader,
   defaultRun,
   draftRun,
   formatArgv,
@@ -234,12 +235,12 @@ export default class AgentManager extends View {
     return true;
   }
 
-  rowInfo(agent) {
+  rowInfo(agent, readOverride = (key) => readRunOverride(this.programsText, key)) {
     // knownAgents()' run is already effective. The file is read again so an external edit shows
     // without waiting for Herdr's install-check cache, and so the override is distinguishable
     // from the built-in command.
     const loaded = this.programsText !== undefined;
-    const parsed = loaded ? readRunOverride(this.programsText, agent.key) : { run: null };
+    const parsed = loaded ? readOverride(agent.key) : { run: null };
     const override = parsed.error ? null : parsed.run;
     const builtin = defaultRun(agent.key);
     // KnownAgents' `run` is the effective command, but it is cached for up to a minute, so after
@@ -265,13 +266,14 @@ export default class AgentManager extends View {
     // FreeBuff is an unofficial integration, not part of the official Settings catalog. Its
     // configured row, if any, stays in programs.json and is used by the Start menu.
     const seen = new Set();
+    const readOverride = this.programsText === undefined ? undefined : createRunOverrideReader(this.programsText);
     const base = (this.agents ?? [])
       .filter((agent) => {
         if (!isBuiltinAgent(agent.key) || seen.has(agent.key)) return false;
         seen.add(agent.key);
         return true;
       })
-      .map((agent) => ({ ...agent, ...this.rowInfo(agent) }));
+      .map((agent) => ({ ...agent, ...this.rowInfo(agent, readOverride) }));
     const split = splitInventory(base, this.disabled);
     const all = [...split.installed, ...split.available];
     // A command that disagrees with the stored default is that agent's own permission. A broken
@@ -289,9 +291,9 @@ export default class AgentManager extends View {
   }
 
   /** The stored default plus the overrides the commands actually show. */
-  currentPermissions() {
+  currentPermissions(rows) {
     if (this.programsError) return { default: this.permissions.default, overrides: this.permissions.overrides };
-    return { default: this.permissions.default, overrides: reconcilePermissions(this.allRows().all, this.permissions) };
+    return { default: this.permissions.default, overrides: reconcilePermissions(rows ?? this.allRows().all, this.permissions) };
   }
 
   refresh(cx) {

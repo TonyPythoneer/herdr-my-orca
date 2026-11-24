@@ -10,6 +10,7 @@ import {
   checkArgs,
   commandCheckScript,
   commandPathScript,
+  createRunOverrideReader,
   listViewportHeight,
   parseCommandPath,
   defaultRun,
@@ -258,4 +259,29 @@ test("the fresh check script passes commands as arguments, never as code", () =>
 test("fresh check output ignores login-shell noise and demands every answer", () => {
   assert.deepEqual(parseCommandCheck("Welcome!\nHERDRAM:1\nnoise\nHERDRAM:0\n", 2), [true, false]);
   assert.throws(() => parseCommandCheck("HERDRAM:1\n", 2), /answered 1 of 2/);
+});
+
+test("inventory snapshot parses once and preserves single-read validation", () => {
+  const inputs = [
+    null, "", "{ nope", '{"programs":[]}',
+    JSON.stringify({programs: {claude: {run:["claude","--x"]}, codex:{run:"bad"}, pi:42, other:{name:"X"}}})
+  ];
+  for (const input of inputs) {
+    const read = createRunOverrideReader(input);
+    for (const key of ["claude","codex","pi","other","missing"]) {
+      assert.deepEqual(read(key), readRunOverride(input,key));
+    }
+  }
+  const input = JSON.stringify({programs:{claude:{run:["claude","--x"]},codex:{run:["codex"]}}});
+  const original = JSON.parse;
+  let parses = 0;
+  JSON.parse = (...args) => { parses++; return original(...args); };
+  try {
+    const read = createRunOverrideReader(input);
+    const first = read("claude");
+    first.run.push("--changed");
+    assert.deepEqual(read("claude").run,["claude","--x"]);
+    assert.deepEqual(read("codex").run,["codex"]);
+    assert.equal(parses,1);
+  } finally { JSON.parse = original; }
 });
