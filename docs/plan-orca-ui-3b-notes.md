@@ -1,5 +1,7 @@
 # Orca UI 3b 規格筆記
 
+> 封存：B／C 檢查點的結果是停止搬家，3b 未啟動（見 [B／C 結果](../artifacts/orca-ui-checkpoint/20261124-bc/RESULT.md)）。僅在日後重新評估搬家時使用。
+
 供第一次接手的 AI 在 B／C 檢查點通過後撰寫 3b 及後續批次規格，前置條件與步驟 1 見 [現行計畫](plan-orca-ui-package.md)。
 
 ## 3b 與後續的批次規格清單
