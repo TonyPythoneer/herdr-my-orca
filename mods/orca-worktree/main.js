@@ -98,8 +98,9 @@ export default class Worktree extends View {
       // done, so the keyboard must move there now — a focus call made while
       // loading lands on nothing and the dialog stays keyboard-dead.
       this.handle.focus();
-      if (props().action !== "remove") cx.timer.after(INPUT_FOCUS_DELAY_MS, () => this.input.focus());
-      if (props().branch) await this.work(cx);
+      const p = props() ?? {};
+      if (p.action !== "remove") cx.timer.after(INPUT_FOCUS_DELAY_MS, () => this.input.focus());
+      if (p.branch) await this.work(cx);
     } catch (error) { this.repo = null; this.error = String(error); cx.notify(); }
   }
 

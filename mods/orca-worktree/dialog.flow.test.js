@@ -53,3 +53,17 @@ test("switch and create render their detail and footer for each repository state
   view.repo = undefined;
   assert.match(render(), /…/);
 });
+
+test("loading without overlay props preserves the resolved repository", async () => {
+  const view = new Worktree();
+  view.initialIdentity = { folder: "/repo" };
+  view.userHome = "/home";
+  view.loadRepo = async () => { view.repo = { name: "repo" }; };
+  view.handle = { focus() {} };
+  view.input = { focus() {} };
+  globalThis.__herdrProps = () => undefined;
+  let scheduled = 0;
+  await view.load({ notify() {}, timer: { after() { scheduled++; } } });
+  assert.equal(view.repo.name, "repo");
+  assert.equal(scheduled, 1);
+});
