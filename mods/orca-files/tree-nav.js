@@ -49,7 +49,9 @@ export function resolveTreeKey(key, current, rows) {
 
 // Nearest earlier row that is shallower: the folder this row sits in.
 export function parentIndex(rows, index) {
-  const depth = rows[index]?.depth ?? 0;
+  const row = rows[index];
+  if (!row) return null;
+  const depth = row.depth ?? 0;
   for (let i = index - 1; i >= 0; i--) if (rows[i].depth < depth) return i;
   return null;
 }
