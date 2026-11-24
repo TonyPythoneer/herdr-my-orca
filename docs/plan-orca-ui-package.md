@@ -1,6 +1,6 @@
 # Orca UI 單一原始碼套件實作計畫
 
-截至 2026-11-24，第一批已在 `2d38b99`、`9b9e22a` 提交。`orca-panel-head` 已遷入 [orca-ui/features/panel/head/](../orca-ui/features/panel/head/)，builder 可生成 12 個檔案，`where-error` 可反查現有 feature 和共用副本。下一步依序做步驟 2a、2b、3a。3a 驗收後執行 B／C 檢查點，再依結果決定是否啟動 3b。
+截至 2026-11-24，第一批與步驟 2a、2b、3a 已完成並提交（`2d38b99`、`9b9e22a`、`784eac2`、`f41b70c`、`9ea56ee`）。B／C 檢查點已執行，兩組都 3/3 答對、工具數中位數同為 26，依規則停止搬家：保留 panel-head、共用 JS builder、`app.mjs` 地圖與 `where-error`，其餘 mod 原地維護並列在 `app.mjs` 的 `inPlace`。3b 未啟動，[3b 規格筆記](plan-orca-ui-3b-notes.md) 只作封存。結果見 [B／C 結果](../artifacts/orca-ui-checkpoint/20261124-bc/RESULT.md) 與 [完成驗收](../artifacts/orca-ui-checkpoint/20261124-bc/completion/RESULT.md)。以下規格保留為實作依據。
 
 第一條分隔線以前是現行計畫。分隔線起保留歷史。處置依據見 [實作準備度報告](../egm/implementation_readiness_report.md)、[Codex 顧問建議](../egm/codex_advice.md)、[Intermediate Zoom Out](../egm/intermediate_zoom_out_report.md)、[本輪決議](../egm/critic_report.md)、[Codex 第二輪審查](../egm/codex_review_round2.md)、[前輪處置](../egm/stage5-6_resolution.md)、[Zoom Out](../egm/zoom_out_report.md) 與 [Comprehension](../egm/comprehension_report.md)。本輪計畫提交包含 `egm/` 與 [3b 規格筆記](plan-orca-ui-3b-notes.md)。
 

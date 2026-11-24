@@ -188,12 +188,13 @@ test("every mod is a feature or has one in-place map entry, and the entry matche
   const keys = json("keys.json");
   for (const e of inPlace) {
     assert.deepEqual([...(e.layouts ?? [])].sort(), [...(mounts[e.mod] ?? [])].sort(), `${e.mod}: layouts`);
-    for (const k of e.keys ?? []) {
-      const i = k.lastIndexOf(":");
-      assert.ok(Object.hasOwn(keys[k.slice(0, i)] ?? {}, k.slice(i + 1)), `${e.mod}: key ${k}`);
-    }
+    // Keys come from keys.json itself: a binding names this mod when its command is `<mod>.<command>`
+    // or `mod.open:<mod>`, so re-pointing a key without updating the map fails here.
+    const bound = Object.entries(keys).flatMap(([section, bindings]) =>
+      Object.entries(bindings).filter(([, command]) => command.startsWith(`${e.mod}.`) || command === `mod.open:${e.mod}`).map(([key]) => `${section}:${key}`));
+    assert.deepEqual([...(e.keys ?? [])].sort(), bound.sort(), `${e.mod}: keys`);
     for (const f of [...(e.tests ?? []), ...(e.next ?? [])]) assert.ok(existsSync(join(ROOT, f)), `${e.mod}: ${f}`);
-    const onDisk = readdirSync(join(ROOT, "mods", e.mod)).filter(f => /\.test\.m?js$/.test(f)).map(f => `mods/${e.mod}/${f}`).sort();
+    const onDisk = readdirSync(join(ROOT, "mods", e.mod), { recursive: true }).filter(f => /\.test\.m?js$/.test(f)).map(f => `mods/${e.mod}/${f}`).sort();
     assert.deepEqual([...(e.tests ?? [])].sort(), onDisk, `${e.mod}: tests`);
   }
 });
