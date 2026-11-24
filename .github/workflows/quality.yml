@@ -1,0 +1,52 @@
+# The full test suite, lint, coverage and drift check run here, so agents and the local machine
+# only run the tests of the mod they changed. Results: a PR comment (updated in place) and a
+# report.json / report.md artifact meant to be read by an AI as well as a person.
+name: quality
+on:
+  pull_request:
+  push:
+    branches: [main, "plan/**", "refactor/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  metrics:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: "24" }
+      - name: herdr-app stand-in (the tests only need `do orca-status.refresh`)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
+          chmod +x "$RUNNER_TEMP/bin/herdr-app"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: metrics (tests, coverage, lint, drift)
+        run: |
+          export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
+          node scripts/metrics.mjs --out metrics-out | tee metrics-out.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-report
+          path: metrics-out/
+      - name: PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const body = fs.existsSync("metrics-out/report.md") ? fs.readFileSync("metrics-out/report.md", "utf8") : "<!-- orca-metrics -->\nNo report was produced; see the workflow log.";
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const mine = comments.find(c => c.body.includes("<!-- orca-metrics -->"));
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
