@@ -100,8 +100,8 @@ const isObjectLike = (value) => Boolean(value) && typeof value === "object";
 const isArgvOfStrings = (argv) => Array.isArray(argv) && argv.length > 0 && argv.every((arg) => typeof arg === "string");
 
 function resetTriggerProblem(trigger, where) {
-  if (!PROVIDER_LABEL[trigger.provider]) return `${where} needs trigger.provider "claude" or "codex".`;
-  if (!WINDOW_MINUTES[trigger.window]) return `${where} needs trigger.window "h5" or "wk".`;
+  if (!Object.hasOwn(PROVIDER_LABEL, trigger.provider)) return `${where} needs trigger.provider "claude" or "codex".`;
+  if (!Object.hasOwn(WINDOW_MINUTES, trigger.window)) return `${where} needs trigger.window "h5" or "wk".`;
   return null;
 }
 
@@ -126,15 +126,15 @@ export function serializeTasks(config) {
 }
 
 export function windowMinutes(window) {
-  return WINDOW_MINUTES[window] ?? WINDOW_MINUTES.h5;
+  return Object.hasOwn(WINDOW_MINUTES, window) ? WINDOW_MINUTES[window] : WINDOW_MINUTES.h5;
 }
 
 export function windowLabel(window) {
-  return WINDOW_LABEL[window] ?? String(window ?? "");
+  return Object.hasOwn(WINDOW_LABEL, window) ? WINDOW_LABEL[window] : String(window ?? "");
 }
 
 export function providerLabel(provider) {
-  return PROVIDER_LABEL[provider] ?? String(provider ?? "");
+  return Object.hasOwn(PROVIDER_LABEL, provider) ? PROVIDER_LABEL[provider] : String(provider ?? "");
 }
 
 /**
