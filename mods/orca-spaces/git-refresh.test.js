@@ -863,3 +863,71 @@ test('native folder watch cancellation does not affect a replacement', async () 
   await tasks[1](cx);
   assert.equal(view.watching.size, 0);
 });
+
+
+test('forgetting a project cancels its watcher and invalidates queued and in-flight checks', async () => {
+  const dir = '/removed/.git', repo = JSON.stringify([null, dir]);
+  const key = where({ folder: '/removed' });
+  let finishStatus, cancelled = 0;
+  const promise = new Promise(() => {});
+  promise.cancel = () => { cancelled++; };
+  const { view, cx } = live({
+    shared: { 'orca-spaces.forget': { repo } },
+    exec: () => new Promise(resolve => { finishStatus = resolve; }),
+    host: { watchFolder: () => promise },
+  });
+  view.notify = () => {};
+  view.git = { [key]: { repo } };
+  view.watch(dir, cx);
+  view.pending.add(key);
+  const check = view.check(key, cx);
+  view.forgetProject(cx);
+  assert.equal(cancelled, 1);
+  assert.equal(view.watching.size, 0);
+  assert.equal(view.pending.has(key), false);
+  finishStatus({ code: 0, stdout: '# branch.head main', stderr: '' });
+  await check;
+  assert.equal(key in view.git, false);
+  assert.equal(view.watching.size, 0);
+});
+
+test('forgetting a cached sibling retains the watcher for an open project', () => {
+  const dir = '/r/.git', repo = JSON.stringify([null, dir]);
+  const space = { id: 'live', folder: '/r', tabs: [] };
+  const open = where(space), closed = where({ folder: '/other' });
+  let cancelled = 0;
+  const promise = new Promise(() => {});
+  promise.cancel = () => { cancelled++; };
+  const { view, cx } = live({ spaces: [space], shared: { 'orca-spaces.forget': { repo } }, host: { watchFolder: () => promise } });
+  view.notify = () => {};
+  view.git = { [open]: { repo }, [closed]: { repo } };
+  view.watch(dir, cx);
+  view.forgetProject(cx);
+  assert.equal(closed in view.git, false);
+  assert.equal(open in view.git, true);
+  assert.equal(view.watching.get(dir), promise);
+  assert.equal(cancelled, 0);
+  view.close();
+  assert.equal(cancelled, 1);
+});
+
+test('closing a view cancels every native watch and blocks future refreshes and watches', () => {
+  let cancelled = 0, opened = 0;
+  const { view, cx } = live({ host: { watchFolder: () => {
+    opened++;
+    const promise = new Promise(() => {});
+    promise.cancel = () => { cancelled++; };
+    return promise;
+  } } });
+  view.watch('/a', cx);
+  view.watch('/b', cx);
+  view.pending.add('queued');
+  view.close();
+  view.close();
+  view.watch('/c', cx);
+  view.refreshGit(['after-close'], cx);
+  assert.equal(opened, 2);
+  assert.equal(cancelled, 2);
+  assert.equal(view.watching.size, 0);
+  assert.equal(view.pending.size, 0);
+});
