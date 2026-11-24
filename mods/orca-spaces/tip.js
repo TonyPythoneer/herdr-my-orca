@@ -25,7 +25,7 @@ function keyOf(action) {
 }
 
 // Above, as T3's. `below` for what has no room up there: a HoverCard doesn't flip as T3's does, it is pushed back over its trigger and closes.
-export function tip(hot, t, id, label, trigger, { action, hint, below, delay = 150 } = {}) {
+export function tip({ hot, t, id, label, trigger, action, hint, below, delay = 150 }) {
   const key = action ? keyOf(action) : "";
   return HoverCard.new(`tip-${id}`).anchor(below ? "top_center" : "bottom_center").open_delay(delay).close_delay(0).trigger(trigger)
     // Only while lit: a dialog opened from the button hides the pointer's leaving, and the card would stay up over it.
@@ -35,12 +35,12 @@ export function tip(hot, t, id, label, trigger, { action, hint, below, delay = 1
 }
 
 // A mark with no words of its own (a status, a machine) says what it is on hover too, lit only to show its label.
-export function tipMark(view, t, id, label, mark, options) {
+export function tipMark(view, t, { id, label, mark, ...options }) {
   if (!label) return mark;
   const lit = div().id(id).flex_none().on_hover((on, cx) => {
     if (on) view.hot = id;
     else if (view.hot === id) view.hot = null;
     cx.notify();
   }).child(mark);
-  return tip(view.hot, t, id, label, lit, options);
+  return tip({ hot: view.hot, t, id, label, trigger: lit, ...options });
 }

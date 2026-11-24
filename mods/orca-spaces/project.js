@@ -86,7 +86,7 @@ export function ensureAvatar(url, cx) {
   // `cx` here is the render's own handle, and the download outlives it: notifying through it
   // throws "cx is no longer valid: it was captured during an earlier call and used later".
   // Spawn so the notify belongs to a live callback, which is what that error asks for.
-  cx.spawn(async (cx) => {
+  cx.spawn(async (taskCx) => {
     try {
       const dir = `${appHome()}/avatars`;
       await exec("mkdir", ["-p", dir]);
@@ -100,8 +100,8 @@ export function ensureAvatar(url, cx) {
         else await exec("rm", ["-f", tmp]);
       }
       avatarWritten.add(url);
-      cx.notify();
-    } catch {}
+      taskCx.notify();
+    } catch { /* no avatar: the row keeps its Folder glyph and the next session tries again */ }
   });
 }
 

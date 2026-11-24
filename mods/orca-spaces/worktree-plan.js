@@ -249,6 +249,132 @@ export function applyWorkspaceOptions(rows, o = {}) {
   return out;
 }
 
+// An older cache entry has no worktree list; a non-linked one is its own main checkout.
+function mainCheckout(key, g) {
+  return g.worktrees?.[0] ?? (g.linked ? null : { path: readPair(key)[1], branch: g.branch });
+}
+
+function unopenedMainRows(gitState, open) {
+  // Orca's projects are repos, not sessions (`listRepoWorktrees`): a group exists because the
+  // repo is known, and its rows are `git worktree list` — main first
+  // (`orderMainWorktreeFirst`, section-order.ts:4-16). What is open must not decide this: all
+  // of a repo's spaces can be linked worktrees, and the main checkout still has a card.
+  const anchored = new Set();
+  const mainRows = [];
+  for (const key of Object.keys(gitState)) {
+    const g = gitState[key];
+    if (!g || anchored.has(g.repo)) continue;
+    anchored.add(g.repo);
+    const main = mainCheckout(key, g);
+    if (!main?.path) continue;
+    const [on] = readPair(key);
+    const mainKey = JSON.stringify([on ?? null, main.path]);
+    if (open.has(mainKey)) continue;
+    mainRows.push({
+      w: {
+        id: `repo:${mainKey}`,
+        name: g.name,
+        named: false,
+        tabs: [],
+        active: false,
+        status: null,
+        machine: on ?? null,
+        folder: main.path,
+      },
+      i: -1,
+      g: { ...g, top: main.path, linked: false, branch: main.branch ?? g.branch },
+      ok: true,
+      unopened: true,
+    });
+  }
+  return mainRows;
+}
+
+function mergeWorktreeRows(rows) {
+  // A repo worktree is one card: `linked` worktrees and second same-checkout spaces fold
+  // into the first space on that top-level folder. Folder spaces merge only with themselves.
+  // (host-qualified-identity.ts: getWorktreeHostIdentity)
+  const seen = new Map();
+  const list = [];
+  for (const r of rows) {
+    const key = r.g ? JSON.stringify([r.w.machine ?? null, r.g.top]) : `space:${r.w.id}`;
+    if (seen.has(key)) {
+      seen.get(key).also.push(r);
+      continue;
+    }
+    const row = { ...r, key, also: [] };
+    seen.set(key, row);
+    list.push(row);
+  }
+  return list;
+}
+
+function projectSections(list) {
+  // Group rows into sections: git repos group by repo; folder workspaces stand alone.
+  // Port of Orca's `buildProjectSections` (project-section-grouping.ts:58-78,216-231).
+  const repoGroups = new Map();
+
+  for (const r of list) {
+    const key = r.g ? r.g.repo : `space:${r.w.id}`;
+    if (!repoGroups.has(key)) {
+      repoGroups.set(key, []);
+    }
+    repoGroups.get(key).push(r);
+  }
+  return repoGroups.values();
+}
+
+function orderedRepoRows(items) {
+  // Git repo group:
+  // Partition items so main worktree checkout is first, exactly as Orca's
+  // `orderMainWorktreeFirst` (section-order.ts:3-16, sidebar-row-plan.ts:183-186).
+  const mainG = items.find((it) => it.g && !it.g.linked)?.g ?? items[0].g;
+  const mainWorktrees = items.filter((it) => it.g && !it.g.linked);
+  const linkedWorktrees = items.filter((it) => it.g && it.g.linked);
+  const ordered = [...mainWorktrees, ...linkedWorktrees];
+
+  // Append unopened worktrees known to git that are not already opened as spaces.
+  // Port of Orca's `listRepoWorktrees` (sidebar-row-plan.ts:180-189, section-order.ts:3-16).
+  const openedTops = new Set(ordered.map((it) => it.g.top));
+  for (const wt of (mainG.worktrees ?? []).slice(1)) {
+    if (openedTops.has(wt.path)) continue;
+    openedTops.add(wt.path);
+    const w = {
+      id: `wt:${mainG.repo}:${wt.path}`,
+      name: wt.branch || wt.path.split("/").pop(),
+      named: false,
+      tabs: [],
+      active: false,
+      status: null,
+      machine: items[0].w?.machine ?? null,
+      folder: wt.path,
+    };
+    // No `...r.g`: a sibling worktree shares the repo but not the review. Orca reads each
+    // worktree's own branch, so carrying the main worktree's PR onto this row was the bug.
+    // Detached HEAD worktrees have no branch name; they must not fall back to `mainG.branch`.
+    const g = { ...mainG, top: wt.path, branch: wt.branch || "", linked: true, pr: undefined };
+    ordered.push({ w, i: -1, g, key: `wt:${wt.path}`, also: [], unopened: true });
+  }
+  return ordered;
+}
+
+function visibleGroups(visibleRows) {
+  // Grouped structure by project key (repo or space:<id>)
+  const groupMap = new Map();
+  const groups = [];
+  for (const r of visibleRows) {
+    const k = foldKey(r);
+    let g = groupMap.get(k);
+    if (!g) {
+      g = { key: k, repo: r.g?.repo ?? null, rows: [] };
+      groupMap.set(k, g);
+      groups.push(g);
+    }
+    g.rows.push(r);
+  }
+  return groups;
+}
+
 /**
  * Projects the worktree plan from active spaces, terminal panes, and cached git state.
  * Pure data transformation: no UI components, timers, or side effects.
@@ -284,125 +410,15 @@ export function projectWorktreePlan({
   const rows = sp.map((w, i) => ({ w, i, g: gitState[getWhere(w)] ?? null, ok: isDiscoverable(w) }))
     .filter(({ g }) => !g?.linked || !g.worktrees || g.worktrees.some(wt => wt.path === g.top));
 
-  // Orca's projects are repos, not sessions (`listRepoWorktrees`): a group exists because the
-  // repo is known, and its rows are `git worktree list` — main first
-  // (`orderMainWorktreeFirst`, section-order.ts:4-16). What is open must not decide this: all
-  // of a repo's spaces can be linked worktrees, and the main checkout still has a card.
-  const open = new Set(sp.map((w) => getWhere(w)));
-  const anchored = new Set();
-  const mainRows = [];
-  for (const key of Object.keys(gitState)) {
-    const g = gitState[key];
-    if (!g || anchored.has(g.repo)) continue;
-    anchored.add(g.repo);
-    // An older cache entry has no worktree list; a non-linked one is its own main checkout.
-    const main = g.worktrees?.[0] ?? (g.linked ? null : { path: readPair(key)[1], branch: g.branch });
-    if (!main?.path) continue;
-    const [on] = readPair(key);
-    const mainKey = JSON.stringify([on ?? null, main.path]);
-    if (open.has(mainKey)) continue;
-    mainRows.push({
-      w: {
-        id: `repo:${mainKey}`,
-        name: g.name,
-        named: false,
-        tabs: [],
-        active: false,
-        status: null,
-        machine: on ?? null,
-        folder: main.path,
-      },
-      i: -1,
-      g: { ...g, top: main.path, linked: false, branch: main.branch ?? g.branch },
-      ok: true,
-      unopened: true,
-    });
-  }
-  // Main first inside its group (`[...main, ...rest]`), before the spaces opened on it.
-  rows.unshift(...mainRows);
-
-  // A repo worktree is one card: `linked` worktrees and second same-checkout spaces fold
-  // into the first space on that top-level folder. Folder spaces merge only with themselves.
-  // (host-qualified-identity.ts: getWorktreeHostIdentity)
-  const seen = new Map();
-  const list = [];
-  for (const r of rows) {
-    const key = r.g ? JSON.stringify([r.w.machine ?? null, r.g.top]) : `space:${r.w.id}`;
-    if (seen.has(key)) {
-      seen.get(key).also.push(r);
-      continue;
-    }
-    const row = { ...r, key, also: [] };
-    seen.set(key, row);
-    list.push(row);
-  }
-
-  // Group rows into sections: git repos group by repo; folder workspaces stand alone.
-  // Port of Orca's `buildProjectSections` (project-section-grouping.ts:58-78,216-231).
-  const repoGroups = new Map();
-  const repoOrder = [];
-
-  for (const r of list) {
-    const key = r.g ? r.g.repo : `space:${r.w.id}`;
-    if (!repoGroups.has(key)) {
-      repoGroups.set(key, []);
-      repoOrder.push(key);
-    }
-    repoGroups.get(key).push(r);
-  }
-
+  const open = new Set(sp.map(getWhere));
+  // The main checkout precedes any linked spaces in its group.
+  rows.unshift(...unopenedMainRows(gitState, open));
+  const list = mergeWorktreeRows(rows);
   const out = [];
-
-  for (const key of repoOrder) {
-    const items = repoGroups.get(key);
-    // Standalone folder workspace (no git repo)
-    if (!items[0].g) {
-      for (let idx = 0; idx < items.length; idx++) {
-        out.push({ ...items[idx], head: idx === 0, kids: items.length - 1, count: items.length - 1 });
-      }
-      continue;
-    }
-
-    // Git repo group:
-    // Partition items so main worktree checkout is first, exactly as Orca's
-    // `orderMainWorktreeFirst` (section-order.ts:3-16, sidebar-row-plan.ts:183-186).
-    const mainG = items.find((it) => it.g && !it.g.linked)?.g ?? items[0].g;
-    const mainWorktrees = items.filter((it) => it.g && !it.g.linked);
-    const linkedWorktrees = items.filter((it) => it.g && it.g.linked);
-    const ordered = [...mainWorktrees, ...linkedWorktrees];
-
-    // Append unopened worktrees known to git that are not already opened as spaces.
-    // Port of Orca's `listRepoWorktrees` (sidebar-row-plan.ts:180-189, section-order.ts:3-16).
-    const openedTops = new Set(ordered.map((it) => it.g.top));
-    for (const wt of (mainG.worktrees ?? []).slice(1)) {
-      if (openedTops.has(wt.path)) continue;
-      openedTops.add(wt.path);
-      const w = {
-        id: `wt:${mainG.repo}:${wt.path}`,
-        name: wt.branch || wt.path.split("/").pop(),
-        named: false,
-        tabs: [],
-        active: false,
-        status: null,
-        machine: items[0].w?.machine ?? null,
-        folder: wt.path,
-      };
-      // No `...r.g`: a sibling worktree shares the repo but not the review. Orca reads each
-      // worktree's own branch, so carrying the main worktree's PR onto this row was the bug.
-      // Detached HEAD worktrees have no branch name; they must not fall back to `mainG.branch`.
-      const g = { ...mainG, top: wt.path, branch: wt.branch || "", linked: true, pr: undefined };
-      ordered.push({ w, i: -1, g, key: `wt:${wt.path}`, also: [], unopened: true });
-    }
-
-    // Emit all items for this repo group: exactly the first item is marked head: true.
-    for (let idx = 0; idx < ordered.length; idx++) {
-      out.push({
-        ...ordered[idx],
-        head: idx === 0,
-        kids: ordered.length - 1,
-        count: ordered.length - 1,
-      });
-    }
+  for (const items of projectSections(list)) {
+    const ordered = items[0].g ? orderedRepoRows(items) : items;
+    const count = ordered.length - 1;
+    ordered.forEach((row, index) => out.push({ ...row, head: index === 0, kids: count, count }));
   }
 
   // Nothing here mutates or dispatches: the order below IS the answer, recomputed each pass.
@@ -419,22 +435,8 @@ export function projectWorktreePlan({
   // from the row plan (`getRenderedProjectCollapseKeys`, project-collapse-all.ts:7-13: all rendered headers).
   const projectKeys = [...new Set(visibleRows.filter((r) => r.head).map(foldKey))];
 
-  // Grouped structure by project key (repo or space:<id>)
-  const groupMap = new Map();
-  const groups = [];
-  for (const r of visibleRows) {
-    const k = foldKey(r);
-    let g = groupMap.get(k);
-    if (!g) {
-      g = { key: k, repo: r.g?.repo ?? null, rows: [] };
-      groupMap.set(k, g);
-      groups.push(g);
-    }
-    g.rows.push(r);
-  }
-
   return {
-    groups,
+    groups: visibleGroups(visibleRows),
     list,
     visibleRows,
     projectKeys,

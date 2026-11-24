@@ -1,0 +1,5620 @@
+{
+ "check-no-remote": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": null,
+   "base": null,
+   "head": null,
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    null,
+    null,
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-origin": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/me.png?size=64",
+   "base": "me/proj",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "me/proj",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view me/proj --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-upstream": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/up.png?size=64",
+   "base": "up/proj",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "up/proj",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-upstream-same": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/me.png?size=64",
+   "base": "me/proj",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "me/proj",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view me/proj --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-upstream-broken": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/par.png?size=64",
+   "base": "par/proj",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "par/proj",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view me/proj --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-fork": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/me.png?size=64",
+   "base": "par/other",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "par/other",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view me/proj --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-fork-incomplete": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/me.png?size=64",
+   "base": "me/proj",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "me/proj",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view me/proj --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-gh-garbage": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": null,
+   "base": "me/proj",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "me/proj",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view me/proj --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-gh-throws": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/me.png?size=64",
+   "base": "me/proj",
+   "head": "me",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "me/proj",
+    "me",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view me/proj --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-origin-unparsed": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https:///srv.png?size=64",
+   "base": "srv/repo",
+   "head": "srv",
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    "srv/repo",
+    "srv",
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    null
+   ],
+   [
+    "gh",
+    "repo view srv/repo --json isFork,parent",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-origin-throws": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": null,
+   "base": null,
+   "head": null,
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    null,
+    null,
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-machine": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": "https://github.com/me.png?size=64",
+   "base": "me/proj",
+   "head": "me",
+   "repo": "[\"far\",\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    "far"
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    "far"
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    "far"
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    "far"
+   ],
+   [
+    "git",
+    "remote get-url upstream",
+    "far"
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    "far"
+   ]
+  ]
+ },
+ "check-bare-repo-name": {
+  "git": {
+   "name": "proj",
+   "top": "/repo",
+   "branch": "feat/x",
+   "owner": null,
+   "base": null,
+   "head": null,
+   "repo": "[null,\"/srv/proj.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/srv/proj.git::feat/x",
+    null,
+    null,
+    "feat/x",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/srv/proj.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-linked": {
+  "git": {
+   "name": "repo",
+   "top": "/wt",
+   "branch": "feat/x",
+   "owner": null,
+   "base": null,
+   "head": null,
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::feat/x",
+    null,
+    null,
+    "feat/x",
+    "/wt",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-detached": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": "(detached)",
+   "owner": null,
+   "base": null,
+   "head": null,
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [
+   [
+    "/repo/.git::(detached)",
+    null,
+    null,
+    "(detached)",
+    "/repo",
+    {}
+   ]
+  ],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-no-branch-line": {
+  "git": {
+   "name": "repo",
+   "top": "/repo",
+   "branch": null,
+   "owner": null,
+   "base": null,
+   "head": null,
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": false,
+   "worktrees": [
+    {
+     "path": "/repo",
+     "branch": "main"
+    },
+    {
+     "path": "/wt",
+     "branch": "feat/x"
+    }
+   ]
+  },
+  "unsure": [],
+  "lookups": [],
+  "watches": [
+   "/repo/.git"
+  ],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-not-a-repo": {
+  "git": null,
+  "unsure": [],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ]
+  ]
+ },
+ "check-not-a-repo-cached": {
+  "git": null,
+  "other": {
+   "repo": "[null,\"/repo/.git\"]"
+  },
+  "unsure": [],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-away": {
+  "git": null,
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ]
+  ]
+ },
+ "check-away-cached": {
+  "git": {
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "old"
+    }
+   ],
+   "branch": "b",
+   "top": "/repo"
+  },
+  "other": {
+   "repo": "[null,\"/repo/.git\"]"
+  },
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-away-catalog": {
+  "git": {
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "old"
+    }
+   ],
+   "branch": "b",
+   "top": "/repo"
+  },
+  "other": {
+   "repo": "[null,\"/repo/.git\"]"
+  },
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-away-catalog-throws": {
+  "git": {
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "old"
+    }
+   ],
+   "branch": "b",
+   "top": "/repo"
+  },
+  "other": {
+   "repo": "[null,\"/repo/.git\"]"
+  },
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-top-empty": {
+  "git": {
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "old"
+    }
+   ],
+   "branch": "b",
+   "top": "/repo"
+  },
+  "other": {
+   "repo": "[null,\"/repo/.git\"]"
+  },
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-top-failed": {
+  "git": {
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "old"
+    }
+   ],
+   "branch": "b",
+   "top": "/repo"
+  },
+  "other": {
+   "repo": "[null,\"/repo/.git\"]"
+  },
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "check-throws": {
+  "git": null,
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ]
+  ]
+ },
+ "check-catalog-failed": {
+  "git": {
+   "repo": "[null,\"/repo/.git\"]",
+   "linked": true,
+   "worktrees": [
+    {
+     "path": "old"
+    }
+   ],
+   "branch": "b",
+   "top": "/repo"
+  },
+  "other": {
+   "repo": "[null,\"/repo/.git\"]"
+  },
+  "unsure": [
+   "[null,\"/repo\"]"
+  ],
+  "lookups": [],
+  "watches": [],
+  "calls": [
+   [
+    "git",
+    "--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --show-toplevel",
+    null
+   ],
+   [
+    "git",
+    "rev-parse --path-format=absolute --git-common-dir",
+    null
+   ],
+   [
+    "git",
+    "remote get-url origin",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ],
+   [
+    "git",
+    "worktree list --porcelain",
+    null
+   ]
+  ]
+ },
+ "pr-open": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 7,
+     "title": "T",
+     "state": "open"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-prefers-open": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 7,
+     "title": "T",
+     "state": "open"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-first-when-none-open": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 9,
+     "title": "T",
+     "state": "closed"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-merged": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 7,
+     "title": "T",
+     "state": "merged"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-draft": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 7,
+     "title": "T",
+     "state": "draft"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-other-owner": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-deleted-fork": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 7,
+     "title": "T",
+     "state": "open"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-author-fallback": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 7,
+     "title": "T",
+     "state": "open"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-state-missing": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 7,
+     "title": "T",
+     "state": ""
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-numberless": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-empty-body": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-gh-failed": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-garbage": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-throws": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": [
+   [
+    "gh",
+    [
+     "api",
+     "repos/me/proj/pulls?head=Me%3Afeat%2Fx&state=all&per_page=10"
+    ],
+    {
+     "cwd": "/cwd"
+    }
+   ],
+   [
+    "notified"
+   ]
+  ]
+ },
+ "pr-fresh": {
+  "cache": {
+   "k": {
+    "data": {
+     "number": 1,
+     "title": "x"
+    },
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": []
+ },
+ "pr-inflight": {
+  "cache": {},
+  "asking": [
+   "k"
+  ],
+  "calls": []
+ },
+ "pr-limit": {
+  "cache": {},
+  "asking": [
+   "x",
+   "y"
+  ],
+  "calls": []
+ },
+ "pr-no-base": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": []
+ },
+ "pr-no-head": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": []
+ },
+ "pr-no-branch": {
+  "cache": {
+   "k": {
+    "data": null,
+    "timed": "number"
+   }
+  },
+  "asking": [],
+  "calls": []
+ },
+ "loop": {
+  "trace": [
+   "notify",
+   "notify",
+   "notify",
+   "notify",
+   "refreshAll",
+   "forgetProject"
+  ],
+  "folded": [],
+  "stored": "[]",
+  "entered": [
+   "focus"
+  ],
+  "menuKey": null
+ },
+ "small-commands": {
+  "calls": [
+   [
+    "overlay",
+    {
+     "mod": "orca-menu",
+     "kind": "popup",
+     "width": 208,
+     "height": 320,
+     "props": {
+      "tab": "space",
+      "target": {
+       "id": "w1",
+       "path": "/w",
+       "top": "/top",
+       "branch": "b",
+       "machine": null,
+       "linked": true,
+       "folder": "/w",
+       "unread": false,
+       "named": true,
+       "name": "N",
+       "repo": "r"
+      }
+     }
+    }
+   ],
+   [
+    "overlay",
+    {
+     "mod": "orca-menu",
+     "kind": "popup",
+     "width": 208,
+     "height": 320,
+     "props": {
+      "tab": "space",
+      "target": {
+       "id": "nospace",
+       "path": "/f",
+       "top": "/f",
+       "branch": null,
+       "machine": "m",
+       "linked": null,
+       "folder": "/f",
+       "unread": false,
+       "named": false,
+       "name": null,
+       "repo": null
+      }
+     }
+    }
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ]
+  ],
+  "stored": {
+   "projects.saved.v1": "[\"/gone\",\"/here\"]",
+   "agents.expanded": "[\"b\"]",
+   "spaces.unread.v1": "[\"v\"]",
+   "repos.folded": "[\"r2\"]",
+   "git.cache.v2": "{\"keep\":null}"
+  },
+  "shared": {
+   "orca-spaces.forget": {
+    "repo": "r"
+   }
+  },
+  "execs": [
+   [
+    "test",
+    "-d",
+    "/gone"
+   ],
+   [
+    "test",
+    "-d",
+    "/here"
+   ]
+  ],
+  "hcCalls": [
+   [
+    "machine",
+    "ls",
+    "--json"
+   ],
+   [
+    "machine",
+    "ls",
+    "--json"
+   ]
+  ],
+  "machines": [
+   {
+    "name": "m",
+    "temporary": false
+   }
+  ],
+  "hotAfterOn": "g",
+  "hot": null,
+  "missing": [
+   "/gone"
+  ],
+  "git": {
+   "keep": null
+  },
+  "checked": {
+   "keep": 2
+  },
+  "keys": [],
+  "rebuilt": [
+   true,
+   false,
+   false
+  ]
+ },
+ "reconnect": {
+  "hcCalls": [
+   [
+    "machine",
+    "rm",
+    "m",
+    "--json"
+   ],
+   [
+    "machine",
+    "add",
+    "--via",
+    "host",
+    "--name",
+    "m",
+    "--session",
+    "s",
+    "--temp",
+    "--json"
+   ],
+   [
+    "machine",
+    "ls",
+    "--json"
+   ],
+   [
+    "machine",
+    "rm",
+    "m",
+    "--json"
+   ],
+   [
+    "machine",
+    "add",
+    "--via",
+    "host",
+    "--name",
+    "m",
+    "--session",
+    "s",
+    "--temp",
+    "--json"
+   ],
+   [
+    "machine",
+    "ls",
+    "--json"
+   ],
+   [
+    "machine",
+    "rm",
+    "m",
+    "--json"
+   ],
+   [
+    "machine",
+    "ls",
+    "--json"
+   ],
+   [
+    "machine",
+    "rm",
+    "n",
+    "--json"
+   ],
+   [
+    "machine",
+    "add",
+    "plain",
+    "--name",
+    "n",
+    "--json"
+   ]
+  ],
+  "calls": [
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ]
+  ],
+  "stored": {
+   "machines.reconnecting": "{\"m\":{\"machine\":{\"name\":\"m\",\"target\":\"host\",\"via\":\"ssh\",\"session\":\"s\",\"temporary\":true},\"removed\":false,\"busy\":false,\"error\":\"boom\"}}",
+   "machines.folded": "[]"
+  },
+  "state": {
+   "m": {
+    "machine": {
+     "name": "m",
+     "target": "host",
+     "via": "ssh",
+     "session": "s",
+     "temporary": true
+    },
+    "removed": false,
+    "busy": false,
+    "error": "boom"
+   },
+   "busy": {
+    "busy": true
+   }
+  },
+  "folded": []
+ },
+ "card-release-plain": [
+  [
+   "notify"
+  ]
+ ],
+ "card-release-select": [
+  [
+   "space.select",
+   {
+    "id": "c1"
+   }
+  ],
+  [
+   "layout.select",
+   {
+    "stack": "main",
+    "child": "main-terminals"
+   }
+  ],
+  [
+   "notify"
+  ]
+ ],
+ "card-release-move": [
+  [
+   "space.move",
+   {
+    "id": "c2",
+    "index": 2
+   }
+  ],
+  [
+   "notify"
+  ]
+ ],
+ "card-release-rename": [
+  [
+   [
+    "space.rename",
+    {
+     "id": "c1"
+    }
+   ],
+   [
+    "notify"
+   ]
+  ],
+  null
+ ],
+ "card-move-same-host": [
+  [
+   [
+    "notify"
+   ]
+  ],
+  "c1"
+ ],
+ "card-move-other-host": [
+  [
+   [
+    "notify"
+   ]
+  ],
+  null
+ ],
+ "card-move-idle": [],
+ "card-menu": [
+  [
+   "overlay",
+   {
+    "mod": "orca-menu",
+    "kind": "popup",
+    "width": 208,
+    "height": 320,
+    "props": {
+     "tab": "space",
+     "target": {
+      "id": "c1",
+      "path": "/c",
+      "top": "/c",
+      "branch": "b",
+      "machine": null,
+      "linked": false,
+      "folder": "/c",
+      "unread": false,
+      "named": false,
+      "name": "card",
+      "repo": null
+     }
+    }
+   }
+  ]
+ ],
+ "card-unopened": [
+  [
+   [
+    "space.new",
+    {
+     "folder": "/c",
+     "machine": ""
+    }
+   ],
+   [
+    "layout.select",
+    {
+     "stack": "main",
+     "child": "main-terminals"
+    }
+   ],
+   [
+    "notify"
+   ]
+  ],
+  null
+ ],
+ "card-bell": [
+  [
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "stop"
+   ]
+  ],
+  null
+ ],
+ "card-pill": [
+  [
+   "stop"
+  ],
+  [
+   "notify"
+  ],
+  [
+   "stop"
+  ],
+  [
+   "stop"
+  ]
+ ],
+ "card-agent-rows": [
+  1,
+  [
+   [
+    "stop"
+   ],
+   [
+    "agent.focus",
+    {
+     "terminal": "p1"
+    }
+   ],
+   [
+    "stop"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "stop"
+   ]
+  ]
+ ],
+ "card-keyboard": [
+  [
+   "stop"
+  ],
+  [
+   "space.select",
+   {
+    "id": "c1"
+   }
+  ],
+  [
+   "layout.select",
+   {
+    "stack": "main",
+    "child": "main-terminals"
+   }
+  ],
+  [
+   "notify"
+  ]
+ ],
+ "header-head": [
+  [
+   [
+    "overlay",
+    {
+     "mod": "orca-menu",
+     "kind": "popup",
+     "width": 176,
+     "height": 248,
+     "props": {
+      "tab": "group",
+      "target": {
+       "id": "h1",
+       "path": "/repo",
+       "machine": null,
+       "spaces": [
+        "h1"
+       ],
+       "repo": "[null,\"/repo/.git\"]"
+      }
+     }
+    }
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ]
+  ],
+  [
+   "[null,\"/repo/.git\"]"
+  ],
+  null
+ ],
+ "header-buttons": [
+  [
+   [
+    "stop"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "overlay",
+    {
+     "mod": "orca-menu",
+     "kind": "popup",
+     "width": 176,
+     "height": 248,
+     "props": {
+      "tab": "group",
+      "target": {
+       "id": "h1",
+       "path": "/repo",
+       "machine": null,
+       "spaces": [
+        "h1"
+       ],
+       "repo": "[null,\"/repo/.git\"]"
+      }
+     }
+    }
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "space.new",
+    {
+     "folder": "/repo",
+     "machine": ""
+    }
+   ],
+   [
+    "layout.select",
+    {
+     "stack": "main",
+     "child": "main-terminals"
+    }
+   ]
+  ],
+  "[null,\"/repo/.git\"]",
+  []
+ ],
+ "header-keys": [
+  [
+   [
+    "stop"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "overlay",
+    {
+     "mod": "orca-menu",
+     "kind": "popup",
+     "width": 176,
+     "height": 248,
+     "props": {
+      "tab": "group",
+      "target": {
+       "id": "h1",
+       "path": "/repo",
+       "machine": null,
+       "spaces": [
+        "h1"
+       ],
+       "repo": "[null,\"/repo/.git\"]"
+      }
+     }
+    }
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "space.new",
+    {
+     "folder": "/repo",
+     "machine": ""
+    }
+   ],
+   [
+    "layout.select",
+    {
+     "stack": "main",
+     "child": "main-terminals"
+    }
+   ],
+   [
+    "notify"
+   ]
+  ],
+  [],
+  "[null,\"/repo/.git\"]"
+ ],
+ "machine-head": [
+  [
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "stop"
+   ],
+   [
+    "notify"
+   ]
+  ],
+  [
+   "far"
+  ],
+  null
+ ],
+ "machine-add": [
+  [
+   "stop"
+  ],
+  [
+   "notify"
+  ],
+  [
+   "stop"
+  ]
+ ],
+ "list-and-saved": [
+  [
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "notify"
+   ],
+   [
+    "space.new",
+    {
+     "folder": "/saved/a"
+    }
+   ],
+   [
+    "layout.select",
+    {
+     "stack": "main",
+     "child": "main-terminals"
+    }
+   ],
+   [
+    "stop"
+   ],
+   [
+    "notify"
+   ]
+  ],
+  true,
+  [
+   null,
+   null
+  ],
+  "[\"/saved/b\"]"
+ ],
+ "focus-stop": {
+  "acted": [
+   "act",
+   "act"
+  ],
+  "handles": [
+   "stop",
+   "stop"
+  ],
+  "notified": 2,
+  "node": [
+   "track_focus",
+   "tab_index",
+   "on_key_down"
+  ],
+  "ringed": [
+   [
+    "track_focus",
+    [
+     {
+      "focused": true
+     }
+    ]
+   ],
+   [
+    "tab_index",
+    [
+     0
+    ]
+   ],
+   [
+    "relative",
+    []
+   ],
+   [
+    "child",
+    [
+     {
+      "n": "div",
+      "a": [],
+      "c": [
+       [
+        "absolute",
+        []
+       ],
+       [
+        "inset_0",
+        []
+       ],
+       [
+        "rounded",
+        [
+         6
+        ]
+       ],
+       [
+        "border",
+        [
+         2
+        ]
+       ],
+       [
+        "border_color",
+        [
+         "#accent"
+        ]
+       ]
+      ]
+     }
+    ]
+   ]
+  ],
+  "same": true
+ },
+ "focus-root": {
+  "before": [
+   false,
+   0
+  ],
+  "none": [
+   false,
+   0
+  ],
+  "landed": {
+   "keyboard": true,
+   "last": "a",
+   "pool": 16,
+   "timers": 1,
+   "notified": 1
+  },
+  "afterPress": false
+ },
+ "focus-enter": {
+  "first": [
+   true,
+   [
+    "first"
+   ],
+   [
+    "focus"
+   ]
+  ],
+  "log": [
+   [
+    true,
+    false,
+    3
+   ],
+   [
+    true,
+    false,
+    3
+   ],
+   [
+    false,
+    true,
+    4
+   ]
+  ],
+  "held": [
+   "first",
+   true
+  ]
+ },
+ "menu-jump": [
+  0,
+  4,
+  -1,
+  -1,
+  -1,
+  -1,
+  -1,
+  1,
+  2,
+  3,
+  1,
+  1,
+  -1,
+  -1,
+  -1,
+  -1
+ ],
+ "tip": {
+  "out": {
+   "mac-{\"action\":\"a\"}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label (⇧⌘O)"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "mac-{\"action\":\"a\"}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "mac-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mt",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label (⇧⌘O)"
+              ]
+             ]
+            ]
+           }
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "text_color",
+              [
+               "#muted"
+              ]
+             ],
+             [
+              "child",
+              [
+               "More"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "mac-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "mac-{}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "mac-{}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "linux-{\"action\":\"a\"}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label (Ctrl+Shift+K Alt+Fn+X)"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "linux-{\"action\":\"a\"}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "linux-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mt",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label (Ctrl+Shift+K Alt+Fn+X)"
+              ]
+             ]
+            ]
+           }
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "text_color",
+              [
+               "#muted"
+              ]
+             ],
+             [
+              "child",
+              [
+               "More"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "linux-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "linux-{}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "linux-{}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "dash-{\"action\":\"a\"}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label (⌃-)"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "dash-{\"action\":\"a\"}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "dash-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mt",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label (⌃-)"
+              ]
+             ]
+            ]
+           }
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "text_color",
+              [
+               "#muted"
+              ]
+             ],
+             [
+              "child",
+              [
+               "More"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "dash-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "dash-{}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "dash-{}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "blank-{\"action\":\"a\"}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "blank-{\"action\":\"a\"}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "blank-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mt",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "text_color",
+              [
+               "#muted"
+              ]
+             ],
+             [
+              "child",
+              [
+               "More"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "blank-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "blank-{}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "blank-{}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "none-{\"action\":\"a\"}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "none-{\"action\":\"a\"}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "none-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mt",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "text_color",
+              [
+               "#muted"
+              ]
+             ],
+             [
+              "child",
+              [
+               "More"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "none-{\"action\":\"a\",\"hint\":\"More\",\"below\":true,\"delay\":0}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "top_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   },
+   "none-{}-x": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "v_flex",
+        "a": [],
+        "c": [
+         [
+          "mb",
+          [
+           4
+          ]
+         ],
+         [
+          "px",
+          [
+           8
+          ]
+         ],
+         [
+          "py",
+          [
+           4
+          ]
+         ],
+         [
+          "rounded",
+          [
+           6
+          ]
+         ],
+         [
+          "border",
+          [
+           1
+          ]
+         ],
+         [
+          "border_color",
+          [
+           "#border"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#chrome"
+          ]
+         ],
+         [
+          "shadow_md",
+          []
+         ],
+         [
+          "text_size",
+          [
+           12
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#foreground"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "div",
+            "a": [],
+            "c": [
+             [
+              "child",
+              [
+               "Label"
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ]
+   },
+   "none-{}-other": {
+    "n": "HoverCard.new",
+    "a": [
+     "tip-x"
+    ],
+    "c": [
+     [
+      "anchor",
+      [
+       "bottom_center"
+      ]
+     ],
+     [
+      "open_delay",
+      [
+       150
+      ]
+     ],
+     [
+      "close_delay",
+      [
+       0
+      ]
+     ],
+     [
+      "trigger",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": [
+         [
+          "id",
+          [
+           "t"
+          ]
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "content",
+      [
+       {
+        "n": "div",
+        "a": [],
+        "c": []
+       }
+      ]
+     ]
+    ]
+   }
+  },
+  "same": true,
+  "hovered": false,
+  "calls": [
+   "m",
+   null,
+   "other"
+  ]
+ },
+ "tick": {
+  "trace": [
+   [
+    "refreshGit",
+    [
+     "[null,\"/a\"]"
+    ]
+   ]
+  ],
+  "calls": [
+   [
+    "notifies",
+    2
+   ]
+  ],
+  "loaded": true,
+  "seen": {
+   "spaces": "a:idle",
+   "agents": "p1:idle"
+  },
+  "cxNotified": 1
+ },
+ "settle": {
+  "asked": [
+   [
+    "/r/.git::b-1",
+    "o/r",
+    "o",
+    "b-1"
+   ],
+   [
+    "/r/.git::b-5",
+    "o/r",
+    "o",
+    "b-5"
+   ]
+  ],
+  "asking": [
+   "/r/.git::b-1",
+   "/r/.git::b-5"
+  ]
+ },
+ "watch": {
+  "refreshed": [
+   [
+    "a"
+   ],
+   [
+    "a"
+   ]
+  ],
+  "watching": [],
+  "wakes": 3
+ }
+}
