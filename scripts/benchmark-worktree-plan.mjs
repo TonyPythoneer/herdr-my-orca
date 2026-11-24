@@ -34,15 +34,18 @@ function measure(run, before, verify, count, workload) {
   const expected = run(candidate);
   verify(expected);
   if (before) assert.deepEqual(run(before), expected);
-  for (let i = 0; i < 20; i++) {
+  // Batch sub-millisecond workloads symmetrically to reduce clock and scheduler noise.
+  const iterations = count <= 20 ? 64 : count <= 200 ? 8 : 1;
+  for (let i = 0; i < Math.max(100, iterations * 10); i++) {
     if (before) run(before);
     run(candidate);
   }
   const afterTimes = [], beforeTimes = [];
   const timed = (implementation, samples) => {
     const start = performance.now();
-    const output = run(implementation);
-    samples.push(performance.now() - start);
+    let output;
+    for (let i = 0; i < iterations; i++) output = run(implementation);
+    samples.push((performance.now() - start) / iterations);
     verify(output);
   };
   for (let i = 0; i < 60; i++) {
@@ -53,7 +56,7 @@ function measure(run, before, verify, count, workload) {
   const after = stats(afterTimes);
   const baseline = before ? stats(beforeTimes) : null;
   const reduction = (key) => baseline && baseline[key] > 0 ? (1 - after[key] / baseline[key]) * 100 : null;
-  return { workload, workspaces: count, samples: afterTimes.length, ...after, baseline,
+  return { workload, workspaces: count, samples: afterTimes.length, iterations_per_sample: iterations, ...after, baseline,
     p50_ms_reduction_pct: reduction("p50_ms"), p95_ms_reduction_pct: reduction("p95_ms"), correctness: "pass" };
 }
 

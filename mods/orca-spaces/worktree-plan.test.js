@@ -257,3 +257,9 @@ test('large project action preserves first occurrence order and excludes synthet
   })) };
   assert.deepEqual(groupSpaceIds(group, ids), ids);
 });
+
+test('group action promotes deduplication without losing order across the threshold', () => {
+  const ids = Array.from({ length: 40 }, (_, i) => 'w' + i);
+  const group = { rows: [{ w: { id: ids[0] }, also: [...ids, ids[0], ids[31], ids[32], 'stale'].map(id => ({ w: { id } })) }] };
+  assert.deepEqual(groupSpaceIds(group, ids), ids);
+});

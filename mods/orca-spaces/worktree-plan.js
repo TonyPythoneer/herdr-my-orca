@@ -53,13 +53,22 @@ export const where = (s, ps) => JSON.stringify([s?.machine ?? null, place(s, ps)
  */
 export function groupSpaceIds(group, live) {
   const known = new Set(live ?? []);
-  const ids = new Set();
-  for (const r of group?.rows ?? []) {
-    for (const w of [r.w, ...(r.also ?? []).map((a) => a.w)]) {
-      if (w?.id && known.has(w.id)) ids.add(w.id);
-    }
+  const ids = [];
+  // Small groups avoid allocating a second Set; promote once the linear search is bounded.
+  let seen = null;
+  function add(w) {
+    const id = w?.id;
+    if (!id || !known.has(id)) return;
+    if (seen ? seen.has(id) : ids.includes(id)) return;
+    ids.push(id);
+    if (seen) seen.add(id);
+    else if (ids.length === 32) seen = new Set(ids);
   }
-  return [...ids];
+  for (const r of group?.rows ?? []) {
+    add(r.w);
+    for (const a of r.also ?? []) add(a.w);
+  }
+  return ids;
 }
 
 /**
