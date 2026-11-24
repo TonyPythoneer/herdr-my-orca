@@ -34,6 +34,12 @@ jobs:
           set -o pipefail
           export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
           node scripts/metrics.mjs --out metrics-out | tee metrics-out.log
+      - name: Print machine-readable report for baseline review
+        if: always()
+        run: |
+          if test -f metrics-out/report.json; then
+            node -e 'console.log("QUALITY_JSON " + JSON.stringify(require("./metrics-out/report.json")))'
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
