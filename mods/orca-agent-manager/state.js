@@ -195,31 +195,37 @@ export function writeRunOverrides(text, entries) {
   const root = parsed.root;
   if (root.programs === undefined) root.programs = {};
   // Validate every entry before touching the tree, so one bad command cannot leave a half write.
-  for (const [key, run] of entries) {
-    const existing = root.programs[key];
-    if (existing !== undefined && (existing === null || typeof existing !== "object" || Array.isArray(existing))) {
-      return { error: `programs.json's \`${key}\` entry must be an object; nothing was changed.` };
-    }
-    if (run !== null && (!Array.isArray(run) || run.length === 0 || run.some((part) => typeof part !== "string"))) {
-      return { error: "A command needs an executable and string arguments." };
-    }
-  }
+  const problem = entries.map(([key, run]) => runEntryProblem(root.programs[key], key, run)).find(Boolean);
+  if (problem) return { error: problem };
   let changed = false;
-  for (const [key, run] of entries) {
-    const existing = root.programs[key];
-    if (run === null) {
-      if (existing === undefined) continue;
-      const entry = { ...existing };
-      delete entry.run;
-      if (Object.keys(entry).length === 0) delete root.programs[key];
-      else root.programs[key] = entry;
-      changed = true;
-    } else {
-      root.programs[key] = { ...(existing ?? {}), run: [...run] };
-      changed = true;
-    }
-  }
+  for (const [key, run] of entries) changed = applyRunEntry(root.programs, key, run) || changed;
   return { text: `${JSON.stringify(root, null, 2)}\n`, changed };
+}
+
+/** Why this `run` cannot be written over `existing`, or null when it can. */
+function runEntryProblem(existing, key, run) {
+  if (existing !== undefined && (existing === null || typeof existing !== "object" || Array.isArray(existing))) {
+    return `programs.json's \`${key}\` entry must be an object; nothing was changed.`;
+  }
+  if (run !== null && (!Array.isArray(run) || run.length === 0 || run.some((part) => typeof part !== "string"))) {
+    return "A command needs an executable and string arguments.";
+  }
+  return null;
+}
+
+/** Sets or drops one entry's `run` in `programs`; true when the tree changed. */
+function applyRunEntry(programs, key, run) {
+  const existing = programs[key];
+  if (run !== null) {
+    programs[key] = { ...(existing ?? {}), run: [...run] };
+    return true;
+  }
+  if (existing === undefined) return false;
+  const entry = { ...existing };
+  delete entry.run;
+  if (Object.keys(entry).length === 0) delete programs[key];
+  else programs[key] = entry;
+  return true;
 }
 
 /** Writes one agent's `run`; see `writeRunOverrides`. */
@@ -254,13 +260,19 @@ export function parseManagerConfig(text) {
   return { disabled: new Set(root.disabled ?? []), permissions };
 }
 
+// Plain code-unit order, so the file reads the same on every machine.
+function compareKeys(left, right) {
+  if (left < right) return -1;
+  return left > right ? 1 : 0;
+}
+
 export function serializeManagerConfig(disabled, permissions = { default: "own", overrides: {} }) {
   const keys = [...disabled].filter((key) => typeof key === "string").sort();
   const root = { version: 1, disabled: keys };
   const overrides = Object.fromEntries(
     Object.entries(permissions.overrides ?? {})
       .filter(([, choice]) => typeof choice === "string")
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+      .sort(([left], [right]) => compareKeys(left, right)),
   );
   // An install that never set a permission keeps the file it already had.
   if (permissions.default !== "own" || Object.keys(overrides).length > 0) {
