@@ -62,15 +62,15 @@ function validateLayout(path, manifests) {
 }
 
 parseJson();
-const manifests = validateManifests();
+const modNames = validateManifests();
 validateObjects();
 const layouts = matching(/^layouts\/[^/]+\.json$/);
 if (!layouts.length) errors.push("No layouts found");
-for (const path of layouts) validateLayout(path, manifests);
+for (const path of layouts) validateLayout(path, modNames);
 
 if (errors.length) {
   for (const error of errors) console.error(error);
   process.exitCode = 1;
 } else {
-  console.log("Validated " + parsed.size + " JSON files, " + manifests.size + " mod manifests and " + layouts.length + " layouts.");
+  console.log("Validated " + parsed.size + " JSON files, " + modNames.size + " mod manifests and " + layouts.length + " layouts.");
 }

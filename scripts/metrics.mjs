@@ -176,12 +176,7 @@ function collectTests() {
   return { tests, rows };
 }
 
-function collect({ skipTests }) {
-  let tests = { tests: 0, pass: 0, fail: 0, skipped: 0, durationMs: 0 };
-  let rows = [];
-  if (!skipTests) ({ tests, rows } = collectTests());
-  const overallRow = rows.length ? { line: 0, branch: 0, funcs: 0 } : { line: 0, branch: 0, funcs: 0 };
-  for (const k of ["line", "branch", "funcs"]) overallRow[k] = rows.length ? Math.round((rows.reduce((s, r) => s + r[k], 0) / rows.length) * 100) / 100 : 0;
+function collectLint() {
   const eslint = process.env.ESLINT_BIN ? [process.env.ESLINT_BIN] : ["npx", "--yes", "eslint@9"];
   const lintRun = run(eslint[0], [...eslint.slice(1), "-c", "eslint.config.mjs", "--format", "json", "mods", "scripts", "orca-ui"]);
   let lint;
@@ -189,6 +184,16 @@ function collect({ skipTests }) {
     if (lintRun.status !== 0 && lintRun.status !== 1) throw new Error("eslint execution failed");
     lint = summarizeLint(JSON.parse(lintRun.stdout));
   } catch { lint = { total: -1, byRule: {}, byArea: {}, worstComplexity: [], error: (lintRun.stderr || "eslint produced no JSON").slice(0, 300) }; }
+  return lint;
+}
+
+function collect({ skipTests }) {
+  let tests = { tests: 0, pass: 0, fail: 0, skipped: 0, durationMs: 0 };
+  let rows = [];
+  if (!skipTests) ({ tests, rows } = collectTests());
+  const overallRow = rows.length ? { line: 0, branch: 0, funcs: 0 } : { line: 0, branch: 0, funcs: 0 };
+  for (const k of ["line", "branch", "funcs"]) overallRow[k] = rows.length ? Math.round((rows.reduce((s, r) => s + r[k], 0) / rows.length) * 100) / 100 : 0;
+  const lint = collectLint();
   const drift = run(process.execPath, ["scripts/build-orca-ui.mjs", "--check", "--out", "."]);
   const commit = run("git", ["rev-parse", "--short", "HEAD"]).stdout.trim() || "unknown";
   return {
