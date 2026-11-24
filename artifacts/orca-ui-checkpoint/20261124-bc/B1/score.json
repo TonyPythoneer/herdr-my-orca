@@ -1,0 +1,35 @@
+{
+ "run": "B1",
+ "run_txt": "rc=0 seconds=138",
+ "tool_calls": 25,
+ "suite": {
+  "tests": "505",
+  "pass": "505",
+  "fail": "0"
+ },
+ "check_rc": 0,
+ "accept": {
+  "pass": "9",
+  "fail": "0"
+ },
+ "correct": true,
+ "direct_managed_edits": [],
+ "bash_write_candidates": [],
+ "outside_refs": [],
+ "changed": [
+  "M mods/orca-agents/panel-motion.js",
+  " M mods/orca-changes/panel-motion.js",
+  " M mods/orca-files/main.js",
+  " M mods/orca-files/panel-motion.js",
+  " M mods/orca-panel-gap/panel-motion.js",
+  " M mods/orca-panel-gap/panel-motion.test.js",
+  " M mods/orca-panel-head/panel-views.js",
+  " M mods/skillshare/panel-motion.js",
+  " M orca-ui/features/panel/head/panel-views.js",
+  " M orca-ui/features/panel/head/panel-views.test.js",
+  " M orca-ui/shared/panel-motion.js",
+  "?? mods/orca-files/focus-search.test.js"
+ ],
+ "cost": 0.028458310000000007,
+ "turns": 26
+}

@@ -1,0 +1,37 @@
+{
+ "run": "C2",
+ "run_txt": "rc=0 seconds=131",
+ "tool_calls": 26,
+ "suite": {
+  "tests": "505",
+  "pass": "505",
+  "fail": "0"
+ },
+ "check_rc": 0,
+ "accept": {
+  "pass": "9",
+  "fail": "0"
+ },
+ "correct": true,
+ "direct_managed_edits": [],
+ "bash_write_candidates": [
+  "grep -n \"search\\|Search\\|nextCommand\\|focus\" mods/orca-files/main.js | head -80; echo ---; grep -rn \"panelFrame\\|panel-motion\" mods orca-ui --exclude-dir=node_modules | grep -v \"^mods/orca-files/panel"
+ ],
+ "outside_refs": [],
+ "changed": [
+  "M mods/orca-agents/panel-motion.js",
+  " M mods/orca-changes/panel-motion.js",
+  " M mods/orca-files/main.js",
+  " M mods/orca-files/panel-motion.js",
+  " M mods/orca-panel-gap/panel-motion.js",
+  " M mods/orca-panel-gap/panel-motion.test.js",
+  " M mods/orca-panel-head/panel-views.js",
+  " M mods/orca-panel-head/panel-views.test.js",
+  " M mods/skillshare/panel-motion.js",
+  " M orca-ui/app.mjs",
+  " M orca-ui/shared/panel-motion.js",
+  "?? mods/orca-files/reveal-search.test.js"
+ ],
+ "cost": 0.027159680000000002,
+ "turns": 27
+}
