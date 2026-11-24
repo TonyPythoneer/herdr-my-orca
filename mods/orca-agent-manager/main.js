@@ -12,7 +12,7 @@
 // `command -v` probe in state.js, run in the same login shell Herdr uses. If it fails, the
 // cached Herdr answer stays and the page says so instead of marking every agent missing.
 import { View, div } from "gpui-kit";
-import { v_flex, h_flex, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
+import { Button, v_flex, h_flex, InputState, TextareaState, ScrollHandle, Scrollbar } from "gpui-base";
 import { appHome, checking, exec, knownAgents, props, readTextFile, run, setShared, terminals, theme, writeTextFile } from "herdr";
 import {
   LIST_ROW_HEIGHT,
@@ -1425,8 +1425,8 @@ export default class AgentManager extends View {
   // ---- drawing --------------------------------------------------------------
 
   button(id, label, t, onClick, options = {}) {
-    return h_flex()
-      .id(id)
+    return Button.new(id)
+      .disabled(Boolean(options.disabled))
       .h(options.height ?? 28)
       .px(options.px ?? 10)
       .gap(6)

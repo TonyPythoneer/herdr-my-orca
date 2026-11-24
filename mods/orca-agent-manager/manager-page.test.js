@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
+import { legacyButtonTree } from "./capture-handlers.loader.mjs";
 
 process.env.TZ = "UTC";
 register(new URL("./capture-handlers.loader.mjs", import.meta.url));
@@ -18,7 +19,7 @@ const digest = (out) => Object.fromEntries(Object.entries(out).map(([name, tree]
 function check(file, out, dumpName) {
   if (process.env.GOLDEN_DUMP) writeFileSync(`${process.env.GOLDEN_DUMP}/${dumpName}.json`, JSON.stringify(out, null, 1));
   if (!existsSync(file)) writeFileSync(file, `${JSON.stringify(digest(out), null, 1)}\n`);
-  assert.deepEqual(digest(out), JSON.parse(readFileSync(file, "utf8")));
+  assert.deepEqual(digest(legacyButtonTree(out)), JSON.parse(readFileSync(file, "utf8")));
 }
 const PROGRAMS = "/home/programs.json";
 const MANAGER = "/home/agent-manager.json";
@@ -359,4 +360,21 @@ test("provider cards: reveal the key, take a preset, open, add and cancel", asyn
   buttons.get("am-cancel-new")({}, spy);
   assert.equal(page.adding, null);
   assert.deepEqual(execs, [["rm", "-f", "/home/provider-icons/icon-z.png"]]);
+});
+
+test("agent-manager actions use native accessible buttons and disabled controls cannot activate", (t) => {
+  const { page } = harness(t);
+  const theme = globalThis.__herdrTheme();
+  const clicks = [];
+  globalThis.__herdrHandlers = [];
+  const active = page.button("active", "Save", theme, (...args) => clicks.push(args)).__node;
+  const disabled = page.button("disabled", "Save", theme, () => assert.fail("disabled clicked"), { disabled: true }).__node;
+  assert.equal(active.n, "Button.new");
+  assert.equal(disabled.n, "Button.new");
+  assert.deepEqual(active.c[0], ["disabled", [false]]);
+  assert.deepEqual(disabled.c[0], ["disabled", [true]]);
+  assert.ok(!disabled.c.some(([key]) => key === "on_click"));
+  const cx = spyCx();
+  press(handler("on_click", "active"), {}, cx);
+  assert.deepEqual(clicks, [[{}, cx]]);
 });
