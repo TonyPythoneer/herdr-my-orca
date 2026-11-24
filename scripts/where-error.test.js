@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { openSync, rmSync } from "node:fs";
+import { openSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -140,4 +140,13 @@ test("an in-place mod with an app.mjs entry gets its tests, layouts and next in 
   assert.match(hit.note, /^edit this file in place; mod "orca-panel-gap" is in app\.mjs; tests mods\/orca-panel-gap\/panel-motion\.test\.js; layouts orca#workspaces,/);
   const [chrome] = locate("at r (/p/mods/orca-chrome/runner.js:9)", table, features, undefined, inPlace);
   assert.match(chrome.note, /next mods\/orca-chrome\/runner\.js, mods\/orca-tasks\/main\.js$/);
+});
+
+test("an in-place file that is a symlink out of its mod is reported as unknown, not as an edit target", t => {
+  const { root, run } = cli(t);
+  write(root, "outside.js", "x");
+  symlinkSync(join(root, "outside.js"), join(root, "mods/orca-panel-gap/link.js"));
+  const r = run("mods/orca-panel-gap/link.js:1");
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /unknown path/);
 });

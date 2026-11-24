@@ -6,7 +6,7 @@
 // Usage: node scripts/where-error.mjs '<error text>'   or   herdr-app check mods/x | node scripts/where-error.mjs
 // Exit 0 when a frame was found (even an unknown one), 1 when none was, 2 when the manifests or the
 // input cannot be read.
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
@@ -14,7 +14,8 @@ import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
 // `<anything>/mods/<mod>/<file>[?v=N]:<line>[:<col>]`, the frame shape Herdr prints.
 const FRAME = /(?:[^\s?:()]*\/)?mods\/([^/\s?:()]+)\/([^\s?:()]+)(?:\?v=\d+)?:(\d+)(?::([1-9]\d*))?/g;
 const list = items => (items.length ? items.join(", ") : "-");
-const isFile = path => existsSync(path) && statSync(path).isFile();
+// lstat, so a symlink out of the mod is not offered as an in-place edit target.
+const isPlainFile = path => { try { return lstatSync(path).isFile(); } catch { return false; } };
 
 // `entries` is app.mjs's `features` and `inPlace` its map of mods edited in place; both only add hints.
 export function locate(text, table, entries = [], root = ROOT, inPlace = []) {
@@ -40,7 +41,7 @@ export function locate(text, table, entries = [], root = ROOT, inPlace = []) {
         ? `feature "${row.id}"${detail}${next}`
         : `shared helper, copied into ${list(row.consumers)}${owned ? detail : ""}${next}`;
       out.push({ frame, edit: at(row.source), kind: row.kind, note });
-    } else if (isFile(join(root, "mods", mod, "mod.json")) && isFile(join(root, "mods", mod, file))) {
+    } else if (isPlainFile(join(root, "mods", mod, "mod.json")) && isPlainFile(join(root, "mods", mod, file))) {
       const mapped = inPlace.find(e => e.mod === mod);
       const note = mapped
         ? `edit this file in place; mod "${mod}" is in app.mjs; tests ${list(mapped.tests ?? [])}; layouts ${list(mapped.layouts ?? [])}${mapped.next?.length ? `; next ${list(mapped.next)}` : ""}`

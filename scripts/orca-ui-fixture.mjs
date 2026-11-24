@@ -45,7 +45,7 @@ export function fixture(t) {
     { source: "orca-ui/shared/transcript.js", outputs: ["mods/orca-handoff/transcript.js", "mods/orca-menu/transcript.js"] },
   ] }, null, 2));
   write(root, "mods/orca-files/extra.js", "// handwritten\n");
-  write(root, "mods/orca-panel-gap/mod.json", "{}\n");
+  for (const mod of ["orca-files", "orca-changes", "orca-handoff", "orca-menu", "orca-panel-gap"]) write(root, `mods/${mod}/mod.json`, "{}\n");
   write(root, "mods/orca-panel-gap/main.js", "export default 2;\n");
   return root;
 }

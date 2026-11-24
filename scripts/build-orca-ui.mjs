@@ -8,7 +8,7 @@
 //   --check compares bytes and file modes against <dir> without writing, and also reports files in
 //   a feature's mod folder that nothing declares. Exit 0 clean, 1 drift or an output I/O failure,
 //   2 a usage or manifest error. --root reads another repo's sources and is meant for tests.
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, parse, resolve, sep } from "node:path";
 import { ROOT, ManifestError, allowedExtras, loadManifests, walkFiles } from "./orca-ui-manifests.mjs";
 
@@ -99,6 +99,16 @@ function main() {
         if (!managed.has(dest) && !extras.has(dest)) problems.push(`${dest}: not declared by any manifest`);
       }
     }
+    // A copy with the generated line that no manifest lists is an orphan: a typo'd or retired target.
+    const mods = join(out, "mods");
+    for (const mod of existsSync(mods) ? readdirSync(mods) : []) {
+      const dir = join(mods, mod);
+      if (!lstatSync(dir).isDirectory()) continue;
+      for (const name of readdirSync(dir).filter(n => n.endsWith(".js"))) {
+        const dest = `mods/${mod}/${name}`;
+        if (!managed.has(dest) && /^\/\/ Generated from orca-ui\/shared\//m.test(readFileSync(join(dir, name), "utf8"))) problems.push(`${dest}: generated shared copy that no manifest lists`);
+      }
+    }
     const lines = [...problems, ...pending.map(p => `${p.dest}: ${p.why}`)];
     for (const line of lines) console.log(line);
     console.log(lines.length ? `${lines.length} managed file(s) drifted` : `${rows.length} managed file(s) match`);
@@ -119,8 +129,14 @@ function main() {
   try {
     for (const p of pending) {
       mkdirSync(dirname(p.to), { recursive: true });
-      if (p.why !== "mode differs") writeFileSync(p.to, p.want);
-      chmodSync(p.to, p.mode);
+      // Write beside the target and rename: an interrupted build leaves no truncated file, and a
+      // hard link to a file outside the tree is replaced instead of rewritten.
+      const tmp = `${p.to}.orca-build-tmp`;
+      try {
+        writeFileSync(tmp, p.want);
+        chmodSync(tmp, p.mode);
+        renameSync(tmp, p.to);
+      } catch (error) { rmSync(tmp, { force: true }); throw error; }
     }
   } catch (error) {
     console.error(`${error.path ?? out}: ${error.message}`);

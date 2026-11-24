@@ -47,8 +47,10 @@ function discover(root) {
 const strings = value => Array.isArray(value) && value.every(v => typeof v === "string");
 
 function readJson(root, rel, fail) {
-  try { return JSON.parse(readFileSync(join(root, rel), "utf8")); }
-  catch (error) { return fail(`cannot read ${rel}: ${error.message}`); }
+  try {
+    if (!realpathSync(join(root, rel)).startsWith(realpathSync(root) + sep)) throw new Error("resolves outside the repo");
+    return JSON.parse(readFileSync(join(root, rel), "utf8"));
+  } catch (error) { return fail(`cannot read ${rel}: ${error.message}`); }
 }
 
 function walkObjects(node, visit) {
@@ -140,6 +142,7 @@ function parseShared(root) {
     for (const out of item.outputs) {
       if (!new RegExp(`^mods/[A-Za-z0-9][\\w.-]*/${name.replace(/\./g, "\\.")}$`).test(out)) fail(`output "${out}" must be mods/<mod>/${name}`);
       if (outputs.has(out)) fail(`output ${out} is declared twice`);
+      if (!existsSync(join(root, "mods", out.split("/")[1], "mod.json"))) fail(`output ${out}: mods/${out.split("/")[1]} has no mod.json, check the mod name`);
       outputs.add(out);
     }
   }

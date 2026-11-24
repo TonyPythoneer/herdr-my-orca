@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -252,4 +252,34 @@ test("a shared source that is not UTF-8 is copied byte for byte", t => {
   const copy = readFileSync(join(out, "mods/orca-menu/clip.js"));
   assert.ok(copy.subarray(0, 4).equals(Buffer.from([0x61, 0xff, 0xfe, 0x0a])));
   assert.equal(run("--root", root, "--check", "--out", out).status, 0);
+});
+
+test("check reports a generated shared copy that no manifest lists", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  run("--root", root, "--out", out);
+  write(out, "mods/orca-filez/clip.js", 'x\n// Generated from orca-ui/shared/clip.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n');
+  write(out, "mods/orca-menu/own.js", "// the mod's own file\n");
+  const r = run("--root", root, "--check", "--out", out);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /^mods\/orca-filez\/clip\.js: generated shared copy that no manifest lists$/m);
+  assert.doesNotMatch(r.stdout, /own\.js/);
+});
+
+test("an update replaces the file instead of rewriting it, so a hard link outside the tree keeps its bytes", t => {
+  const root = fixture(t);
+  const out = temp(t);
+  const elsewhere = temp(t);
+  run("--root", root, "--out", out);
+  const copy = join(out, "mods/orca-files/view.js");
+  linkSync(copy, join(elsewhere, "linked.js"));
+  const past = new Date(Date.now() - 100_000);
+  utimesSync(join(root, FEATURE, "view.js"), past, past);
+  write(root, `${FEATURE}/view.js`, "export const view = 3;\n");
+  utimesSync(join(root, FEATURE, "view.js"), past, past);
+  utimesSync(copy, past, past);
+  assert.equal(run("--root", root, "--out", out).status, 0);
+  assert.equal(readFileSync(copy, "utf8"), "export const view = 3;\n");
+  assert.equal(readFileSync(join(elsewhere, "linked.js"), "utf8"), "export const view = 1;\n");
+  assert.deepEqual(files(join(out, "mods/orca-files")).filter(f => f.endsWith("tmp")), []);
 });
