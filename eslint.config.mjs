@@ -8,7 +8,7 @@ const generated = shared.files.flatMap(f => f.outputs);
 
 export default [{
   files: ["**/*.js", "**/*.mjs"],
-  ignores: ["**/*.test.js", "**/*.test.mjs", "artifacts/**", "egm/**", "mods/orca-panel-head/**", ...generated],
+  ignores: ["**/*.test.js", "**/*.test.mjs", "artifacts/**", "egm/**", "mods/orca-right-sidebar-header/**", ...generated],
   languageOptions: { ecmaVersion: "latest", sourceType: "module" },
   rules: {
     complexity: ["warn", 12],

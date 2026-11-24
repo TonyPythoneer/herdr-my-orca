@@ -3,9 +3,9 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'mods/orca-spaces/main.js'
+      - 'mods/orca-sidebar-projects/main.js'
       - 'mods/orca-files/main.js'
-      - 'mods/orca-status/main.js'
+      - 'mods/orca-status-bar/main.js'
       - 'scripts/benchmark-resources.py'
       - '.github/workflows/performance-retention.yml'
   workflow_dispatch:
@@ -42,7 +42,7 @@ jobs:
           pages = set()
           if not base:
               pages.add(os.environ.get("MANUAL") or "main-terminals")
-          if any(p in files for p in ("mods/orca-spaces/main.js","mods/orca-status/main.js","scripts/benchmark-resources.py",".github/workflows/performance-retention.yml")):
+          if any(p in files for p in ("mods/orca-sidebar-projects/main.js","mods/orca-status-bar/main.js","scripts/benchmark-resources.py",".github/workflows/performance-retention.yml")):
               pages.add("main-terminals")
           if "mods/orca-files/main.js" in files:
               pages.add("files")

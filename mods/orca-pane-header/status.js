@@ -1,0 +1,68 @@
+// Derived from Herdr App's defaults/mods/agents/main.js (Apache-2.0, Copyright Herdr App authors).
+// Modified for herdr-orca; see LICENSE and NOTICE.
+// Portions ported from Orca (MIT, Copyright (c) 2026 Lovecast Inc.); see NOTICE.
+// Orca's StatusIndicator and AgentStateDot, copied from mods/orca-sidebar-projects/status.js because a mod
+// draws alone and needs its own asset paths (AGENTS.md rule 9).
+import { div, svg, image } from "gpui-kit";
+
+// Orca's tokens (`main.css:254-258`): --agent-question orange-600, --agent-working yellow-500,
+// done emerald-500, idle neutral-500 at 40%.
+export const STATUS_COLORS = {
+  blocked: "#ea580c",
+  working: "#eab308",
+  done: "#10b981",
+  idle: "#73737366",
+};
+
+const box = (size) => div().size(size).flex_none().flex().items_center().justify_center();
+const dot = (size, inner, color) => box(size).child(div().size(inner).rounded_full().flex_none().bg(color));
+
+// `StatusIndicator.tsx`: a 12px box holding an 8px mark. `blocked` is Orca's permission glyph;
+// `working` is the 8px ring (`AgentWorkingSpinner.tsx:38-41`), never a filled dot; `done` and
+// `idle` are 8px dots, idle at 40% alpha.
+export function statusMark(status, size = 12, colors = STATUS_COLORS) {
+  const c = colors ?? STATUS_COLORS;
+  if (status === "blocked") {
+    return box(size).child(svg("mods/orca-pane-header/message-circle-question.svg").size(size).flex_none().text_color(c.blocked));
+  }
+  if (status === "working") {
+    return box(size).child(svg("mods/orca-pane-header/agent-working-spinner.svg").size(8).flex_none().text_color(c.working).spin(1000));
+  }
+  return dot(size, 8, status === "done" ? c.done : c.idle);
+}
+
+// Orca's catalog marks (`agent-catalog.tsx:50-122`); same table as `orca-sidebar-projects`, `orca-header` and
+// `orca-float-workspace`. `svg()` is a one-color mask, so marks that bring their own fills are images.
+const OWN_FILLS = new Set(["omp", "droid", "kilo"]);
+const AGENT_MARKS = {
+  codex: "mono",
+  omp: "mods/orca-pane-header/agent-icons/omp.svg",
+  gemini: "mods/orca-pane-header/agent-icons/gemini.png",
+  cursor: "mods/orca-pane-header/agent-icons/cursor.png",
+  grok: "mods/orca-pane-header/agent-icons/grok.png",
+  qoder: "mods/orca-pane-header/agent-icons/qoder.png",
+  hermes: "mods/orca-pane-header/agent-icons/hermes.png",
+  "dsh-tui": "mods/orca-pane-header/agent-icons/dsh.png",
+  droid: "mods/orca-pane-header/agent-icons/droid.svg",
+  kilo: "mods/orca-pane-header/agent-icons/kilo.svg",
+  aider: "mods/orca-pane-header/agent-icons/aider.svg",
+};
+
+const maskMark = (path, size, theme) => svg(path).size(size).flex_none().text_color(theme.muted);
+const imageMark = (path, size) => image(path).w(size).h(size).flex_none();
+
+// The mark Orca's catalog gives `app`; `mono` is the program table's own one-color icon.
+function catalogMark(app, icon, size, theme) {
+  const catalog = AGENT_MARKS[app];
+  if (catalog === "mono") return icon ? maskMark(icon, size, theme) : null;
+  return OWN_FILLS.has(app) || !catalog.endsWith(".svg") ? imageMark(catalog, size) : maskMark(catalog, size, theme);
+}
+
+// `terminals()` names the agent's app in `report.app`, not `app`.
+export function agentMark(term, size = 13, theme) {
+  const app = term?.report?.app;
+  const icon = term?.program?.icon;
+  if (AGENT_MARKS[app]) return catalogMark(app, icon, size, theme);
+  if (!icon) return null;
+  return term.program.tint ? maskMark(icon, size, theme) : imageMark(icon, size);
+}

@@ -3,7 +3,7 @@ import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
-import * as candidate from "../mods/orca-spaces/worktree-plan.js";
+import * as candidate from "../mods/orca-sidebar-projects/worktree-plan.js";
 
 function fixture(count) {
   const spaces = [], gitState = {};
@@ -87,7 +87,7 @@ function baseRef() {
 async function baselineModule(sha) {
   if (!sha || sha === "0".repeat(40)) return null;
   assert.match(sha, /^[0-9a-f]{40}$/);
-  const path = sha + ":mods/orca-spaces/worktree-plan.js";
+  const path = sha + ":mods/orca-sidebar-projects/worktree-plan.js";
   let source;
   try {
     source = execFileSync("git", ["show", path], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });

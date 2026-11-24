@@ -42,7 +42,7 @@ test('titlebar check repairs the repo layout and leaves live alone unless asked'
 });
 
 test('tab padding only covers traffic lights that overlap the tab strip', () => {
-  const source = readFileSync('mods/orca-tabs/main.js', 'utf8');
+  const source = readFileSync('mods/orca-header/main.js', 'utf8');
   const expression = source.match(/\? (Math\.max\(0, \(lights\[0\] \+ 64\).*?)\n\s*: 0;/)?.[1];
   assert.ok(expression);
   const padding = new Function('lights', 'settings', `return ${expression}`);

@@ -86,7 +86,7 @@ for (const [name, [mutate, message]] of Object.entries(SHARED_CASES)) {
 test("shared shape: a source name may use dots, dashes and underscores", t => {
   const root = fixture(t);
   write(root, "orca-ui/shared/a_b-c.d.js", "x\n");
-  write(root, "mods/orca-menu/mod.json", "{}\n");
-  edit(root, SHARED_MANIFEST, m => { m.files.push({ source: "orca-ui/shared/a_b-c.d.js", outputs: ["mods/orca-menu/a_b-c.d.js"] }); });
-  assert.ok(loadManifests({ root }).table.has("mods/orca-menu/a_b-c.d.js"));
+  write(root, "mods/orca-context-menu/mod.json", "{}\n");
+  edit(root, SHARED_MANIFEST, m => { m.files.push({ source: "orca-ui/shared/a_b-c.d.js", outputs: ["mods/orca-context-menu/a_b-c.d.js"] }); });
+  assert.ok(loadManifests({ root }).table.has("mods/orca-context-menu/a_b-c.d.js"));
 });

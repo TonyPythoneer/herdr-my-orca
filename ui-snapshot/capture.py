@@ -271,9 +271,9 @@ def main():
                     command("layout.show", id="panel")
                     select("panel-body","files")
                     if case.get("group"):
-                        command("orca-spaces."+case["group"]+"-all")
+                        command("orca-sidebar-projects."+case["group"]+"-all")
                     if case.get("files") == "contents":
-                        command("orca-panel-head.search")
+                        command("orca-right-sidebar-header.search")
                     elif case.get("files") == "names":
                         mouse(765,86)
                         mouse(939,47)

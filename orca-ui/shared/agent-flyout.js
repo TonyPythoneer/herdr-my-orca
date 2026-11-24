@@ -1,10 +1,10 @@
 // What the agent setup flyout is made of, as data: one SPEC per agent (its options, the CLI argument
 // each one becomes, the sections they sit in) and the few pure functions that read a spec. The
-// flyout (agent-config) draws any spec with one renderer per option type, and the new-menu asks
+// flyout (orca-agent-flyout) draws any spec with one renderer per option type, and the new-menu asks
 // `hasFlyout` which rows get a chevron, so adding an agent is a spec here plus a parser if its model
 // list has a new shape. Nothing in a spec is code: it survives JSON.stringify.
 //
-// Option types (each drawn once, in agent-config):
+// Option types (each drawn once, in orca-agent-flyout):
 //   model     the model select and its list; `groups` adds a SHOW filter, models can be hidden
 //   effort    the select that follows the model, from the chosen model's own `efforts`
 //   select    a select over `choices` (or a hooked list, `source`)
@@ -81,7 +81,7 @@ export const SPECS = {
     // Claude has no model list command. Its stream-json `initialize` control request answers with
     // the live models (`value` is what --model takes, `supportedEffortLevels` what --effort takes).
     models: {
-      shell: `printf '%s\\n' '{"type":"control_request","request_id":"agent-config","request":{"subtype":"initialize"}}' | claude -p --input-format stream-json --output-format stream-json --verbose`,
+      shell: `printf '%s\\n' '{"type":"control_request","request_id":"orca-agent-flyout","request":{"subtype":"initialize"}}' | claude -p --input-format stream-json --output-format stream-json --verbose`,
       parser: "claudeInitialize",
     },
     options: {

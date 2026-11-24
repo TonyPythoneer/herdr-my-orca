@@ -12,26 +12,26 @@ const table = loadManifests().table;
 
 // Frames copied from real `herdr-app check` output (herdr-app 0.1.17).
 const RENDER = `ORCA_PROBE_R
-    at panelFrame (/tmp/x/mods/orca-panel-gap/panel-motion.js?v=1:22:13)
-    at render (/tmp/x/mods/orca-panel-gap/main.js?v=1:40:37)`;
+    at panelFrame (/tmp/x/mods/orca-right-sidebar-placeholders/panel-motion.js?v=1:22:13)
+    at render (/tmp/x/mods/orca-right-sidebar-placeholders/main.js?v=1:40:37)`;
 
 test("a shared helper copy points at the same line in orca-ui/shared/, an unmigrated mod stays in place", () => {
   const [helper, entry] = locate(RENDER, table);
   assert.equal(helper.edit, "orca-ui/shared/panel-motion.js:22:13");
   assert.equal(helper.kind, "shared");
-  assert.match(helper.note, /orca-agents/);
-  assert.equal(helper.note, "shared helper, copied into orca-files, orca-changes, orca-agents, orca-panel-gap");
-  assert.equal(entry.edit, "mods/orca-panel-gap/main.js:40:37");
+  assert.match(helper.note, /orca-right-sidebar-agents/);
+  assert.equal(helper.note, "shared helper, copied into orca-files, orca-changes, orca-right-sidebar-agents, orca-right-sidebar-placeholders");
+  assert.equal(entry.edit, "mods/orca-right-sidebar-placeholders/main.js:40:37");
   assert.equal(entry.kind, "in-place");
   assert.match(entry.note, /not in app\.mjs/);
 });
 
 test("a migrated feature points at its orca-ui source and its app.mjs entry", async () => {
   const { features } = await import("../orca-ui/app.mjs");
-  const [hit] = locate("at <anonymous> (/Users/u/.config/herdr-app/mods/orca-panel-head/panel-views.js?v=1:12:3)", table, { features });
-  assert.equal(hit.edit, "orca-ui/features/panel/head/panel-views.js:12:3");
+  const [hit] = locate("at <anonymous> (/Users/u/.config/herdr-app/mods/orca-right-sidebar-header/panel-views.js?v=1:12:3)", table, { features });
+  assert.equal(hit.edit, "orca-ui/features/right-sidebar/header/panel-views.js:12:3");
   assert.equal(hit.kind, "feature");
-  assert.match(hit.note, /feature "panel\/head"/);
+  assert.match(hit.note, /feature "right-sidebar\/header"/);
   assert.match(hit.note, /panel-views\.test\.js/);
   assert.match(hit.note, /layouts orca#panel-head;/);
   assert.match(hit.note, /next mods\/orca-files\/main\.js$/);
@@ -51,8 +51,8 @@ function cli(t, { app = false } = {}) {
   const script = withScripts(root);
   if (app) {
     write(root, "orca-ui/app.mjs", `import m from "./features/files/main/manifest.json" with { type: "json" };
-export const features = [{ manifest: m, area: "files", description: "d", next: ["mods/orca-panel-gap/main.js"] },
-  { manifest: {}, area: "shared", description: "s", next: ["mods/orca-panel-gap/mod.json"] }];`);
+export const features = [{ manifest: m, area: "files", description: "d", next: ["mods/orca-right-sidebar-placeholders/main.js"] },
+  { manifest: {}, area: "shared", description: "s", next: ["mods/orca-right-sidebar-placeholders/mod.json"] }];`);
   }
   return { root, run: (...args) => spawnSync(process.execPath, [script, ...args], { encoding: "utf8" }) };
 }
@@ -62,9 +62,9 @@ const MIXED = [
   "at b (/abs/mods/orca-files/icons/a.svg:2)",
   "at c (/abs/mods/orca-files/clip.js?v=1:9:2)",
   "at d (/abs/mods/orca-handoff/transcript.js:4)",
-  "at e (/abs/mods/orca-panel-gap/main.js:11:3)",
+  "at e (/abs/mods/orca-right-sidebar-placeholders/main.js:11:3)",
   "at f (/abs/mods/nowhere/main.js:1:1)",
-  "at g (/abs/mods/orca-panel-gap/gone.js:1)",
+  "at g (/abs/mods/orca-right-sidebar-placeholders/gone.js:1)",
   "at h (/abs/mods/orca-files/view.js?v=3:7:5)",
   "at i (/abs/mods/orca-files/view.js:0:4)",
   "at j (/abs/mods/orca-files/../../etc/passwd:5)",
@@ -75,14 +75,14 @@ test("CLI prints the four two-line shapes, with next, in input order, via argv a
   const slots = "layouts orca#list";
   const tests = `tests ${FEATURE}/view.test.js, ${FEATURE}/fixture/data.json`;
   const expected = [
-    `${FEATURE}/view.js:7:5`, `  from mods/orca-files/view.js:7:5; feature "files/main"; ${tests}; ${slots}; next mods/orca-panel-gap/main.js`,
-    `${FEATURE}/icons/a.svg:2`, `  from mods/orca-files/icons/a.svg:2; feature "files/main"; ${tests}; ${slots}; next mods/orca-panel-gap/main.js`,
-    "orca-ui/shared/clip.js:9:2", `  from mods/orca-files/clip.js:9:2; shared helper, copied into orca-changes, orca-files, orca-handoff, orca-menu; ${tests}; ${slots}; next mods/orca-panel-gap/mod.json`,
-    "orca-ui/shared/transcript.js:4", "  from mods/orca-handoff/transcript.js:4; shared helper, copied into orca-handoff, orca-menu; next mods/orca-panel-gap/mod.json",
-    "mods/orca-panel-gap/main.js:11:3", "  from mods/orca-panel-gap/main.js:11:3; not in app.mjs yet: edit this file in place",
+    `${FEATURE}/view.js:7:5`, `  from mods/orca-files/view.js:7:5; feature "files/main"; ${tests}; ${slots}; next mods/orca-right-sidebar-placeholders/main.js`,
+    `${FEATURE}/icons/a.svg:2`, `  from mods/orca-files/icons/a.svg:2; feature "files/main"; ${tests}; ${slots}; next mods/orca-right-sidebar-placeholders/main.js`,
+    "orca-ui/shared/clip.js:9:2", `  from mods/orca-files/clip.js:9:2; shared helper, copied into orca-changes, orca-files, orca-handoff, orca-context-menu; ${tests}; ${slots}; next mods/orca-right-sidebar-placeholders/mod.json`,
+    "orca-ui/shared/transcript.js:4", "  from mods/orca-handoff/transcript.js:4; shared helper, copied into orca-handoff, orca-context-menu; next mods/orca-right-sidebar-placeholders/mod.json",
+    "mods/orca-right-sidebar-placeholders/main.js:11:3", "  from mods/orca-right-sidebar-placeholders/main.js:11:3; not in app.mjs yet: edit this file in place",
     "mods/nowhere/main.js:1:1", "  from mods/nowhere/main.js:1:1; unknown path: no such mod in this repo",
-    "mods/orca-panel-gap/gone.js:1", "  from mods/orca-panel-gap/gone.js:1; unknown path: no such mod in this repo",
-    `${FEATURE}/view.js:7:5`, `  from mods/orca-files/view.js:7:5; feature "files/main"; ${tests}; ${slots}; next mods/orca-panel-gap/main.js`,
+    "mods/orca-right-sidebar-placeholders/gone.js:1", "  from mods/orca-right-sidebar-placeholders/gone.js:1; unknown path: no such mod in this repo",
+    `${FEATURE}/view.js:7:5`, `  from mods/orca-files/view.js:7:5; feature "files/main"; ${tests}; ${slots}; next mods/orca-right-sidebar-placeholders/main.js`,
     "mods/orca-files/../../etc/passwd:5", "  from mods/orca-files/../../etc/passwd:5; unknown path: no such mod in this repo",
   ].join("\n") + "\n";
   const viaArgv = run(MIXED);
@@ -126,27 +126,27 @@ test("CLI exit codes and stderr: no frame, broken manifests, unreadable input", 
 });
 
 test("the last mods/ in a path is the frame, so a prefix containing mods/ still resolves", () => {
-  const [hit] = locate("at x (/data/mods/u/.config/herdr-app/mods/orca-panel-head/main.js?v=1:3:1)", table);
-  assert.equal(hit.edit, "orca-ui/features/panel/head/main.js:3:1");
-  assert.equal(hit.frame, "mods/orca-panel-head/main.js:3:1");
-  assert.equal(locate("mods/orca-panel-head/main.js:1 /p/mods/orca-panel-gap/main.js:2", table).length, 2);
+  const [hit] = locate("at x (/data/mods/u/.config/herdr-app/mods/orca-right-sidebar-header/main.js?v=1:3:1)", table);
+  assert.equal(hit.edit, "orca-ui/features/right-sidebar/header/main.js:3:1");
+  assert.equal(hit.frame, "mods/orca-right-sidebar-header/main.js:3:1");
+  assert.equal(locate("mods/orca-right-sidebar-header/main.js:1 /p/mods/orca-right-sidebar-placeholders/main.js:2", table).length, 2);
 });
 
 test("an in-place mod with an app.mjs entry gets its tests, layouts and next in the hint", async () => {
   const { features, inPlace } = await import("../orca-ui/app.mjs");
-  const [hit] = locate("at r (/p/mods/orca-panel-gap/main.js:40:37)", table, { features, inPlace });
+  const [hit] = locate("at r (/p/mods/orca-right-sidebar-placeholders/main.js:40:37)", table, { features, inPlace });
   assert.equal(hit.kind, "in-place");
-  assert.equal(hit.edit, "mods/orca-panel-gap/main.js:40:37");
-  assert.match(hit.note, /^edit this file in place; mod "orca-panel-gap" is in app\.mjs; tests mods\/orca-panel-gap\/panel-motion\.test\.js; layouts orca#workspaces,/);
-  const [chrome] = locate("at r (/p/mods/orca-chrome/runner.js:9)", table, { features, inPlace });
-  assert.match(chrome.note, /next mods\/orca-chrome\/runner\.js, mods\/orca-tasks\/main\.js$/);
+  assert.equal(hit.edit, "mods/orca-right-sidebar-placeholders/main.js:40:37");
+  assert.match(hit.note, /^edit this file in place; mod "orca-right-sidebar-placeholders" is in app\.mjs; tests mods\/orca-right-sidebar-placeholders\/panel-motion\.test\.js; layouts orca#workspaces,/);
+  const [chrome] = locate("at r (/p/mods/orca-status-footer/scheduler.js:9)", table, { features, inPlace });
+  assert.match(chrome.note, /next mods\/orca-status-footer\/scheduler\.js, mods\/orca-tasks\/main\.js$/);
 });
 
 test("an in-place file that is a symlink out of its mod is reported as unknown, not as an edit target", t => {
   const { root, run } = cli(t);
   write(root, "outside.js", "x");
-  symlinkSync(join(root, "outside.js"), join(root, "mods/orca-panel-gap/link.js"));
-  const r = run("mods/orca-panel-gap/link.js:1");
+  symlinkSync(join(root, "outside.js"), join(root, "mods/orca-right-sidebar-placeholders/link.js"));
+  const r = run("mods/orca-right-sidebar-placeholders/link.js:1");
   assert.equal(r.status, 0);
   assert.match(r.stdout, /unknown path/);
 });
@@ -154,6 +154,6 @@ test("an in-place file that is a symlink out of its mod is reported as unknown, 
 test("a symlinked folder inside a mod is not an in-place edit target", t => {
   const { root, run } = cli(t);
   write(root, "elsewhere/x.js", "x");
-  symlinkSync(join(root, "elsewhere"), join(root, "mods/orca-panel-gap/lib"));
-  assert.match(run("mods/orca-panel-gap/lib/x.js:1").stdout, /unknown path/);
+  symlinkSync(join(root, "elsewhere"), join(root, "mods/orca-right-sidebar-placeholders/lib"));
+  assert.match(run("mods/orca-right-sidebar-placeholders/lib/x.js:1").stdout, /unknown path/);
 });

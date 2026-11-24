@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
-import { planRenderRows, agentsByRow, foldKey } from '../mods/orca-spaces/worktree-plan.js';
-import { stored, workspaceOptions } from '../mods/orca-spaces/storage.js';
+import { planRenderRows, agentsByRow, foldKey } from '../mods/orca-sidebar-projects/worktree-plan.js';
+import { stored, workspaceOptions } from '../mods/orca-sidebar-projects/storage.js';
 
 test('performance fixture does not drive focus or add unconditional polling notifications', t => {
   const root = mkdtempSync(join(tmpdir(), 'orca-virtual-test-'));

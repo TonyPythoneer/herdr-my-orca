@@ -15,19 +15,19 @@
       "funcs": 92.02
     },
     "byMod": {
-      "mods/agent-config": {
+      "mods/orca-agent-flyout": {
         "files": 4,
         "line": 99.12,
         "branch": 90.37,
         "funcs": 94.73
       },
-      "mods/orca-agent-manager": {
+      "mods/orca-agent-settings": {
         "files": 14,
         "line": 98.1,
         "branch": 87.01,
         "funcs": 93.41
       },
-      "mods/orca-agents": {
+      "mods/orca-right-sidebar-agents": {
         "files": 2,
         "line": 84.99,
         "branch": 52.9,
@@ -39,7 +39,7 @@
         "branch": 92.98,
         "funcs": 76.83
       },
-      "mods/orca-chrome": {
+      "mods/orca-status-footer": {
         "files": 3,
         "line": 92.42,
         "branch": 76.32,
@@ -63,7 +63,7 @@
         "branch": 90.52,
         "funcs": 93.4
       },
-      "mods/orca-float": {
+      "mods/orca-float-workspace": {
         "files": 1,
         "line": 100,
         "branch": 100,
@@ -81,13 +81,13 @@
         "branch": 95.24,
         "funcs": 100
       },
-      "mods/orca-menu": {
+      "mods/orca-context-menu": {
         "files": 3,
         "line": 99.49,
         "branch": 97.73,
         "funcs": 99.25
       },
-      "mods/orca-nav": {
+      "mods/orca-sidebar-top": {
         "files": 1,
         "line": 99.58,
         "branch": 94.78,
@@ -99,19 +99,19 @@
         "branch": 93.29,
         "funcs": 76.83
       },
-      "mods/orca-pane": {
+      "mods/orca-pane-header": {
         "files": 3,
         "line": 100,
         "branch": 96.39,
         "funcs": 99.16
       },
-      "mods/orca-panel-gap": {
+      "mods/orca-right-sidebar-placeholders": {
         "files": 1,
         "line": 97.37,
         "branch": 78.57,
         "funcs": 100
       },
-      "mods/orca-spaces": {
+      "mods/orca-sidebar-projects": {
         "files": 12,
         "line": 96.07,
         "branch": 84.47,
@@ -123,13 +123,13 @@
         "branch": 96.47,
         "funcs": 94.2
       },
-      "mods/orca-status": {
+      "mods/orca-status-bar": {
         "files": 4,
         "line": 98.3,
         "branch": 87.95,
         "funcs": 94.45
       },
-      "mods/orca-tabs": {
+      "mods/orca-header": {
         "files": 14,
         "line": 100,
         "branch": 91.9,

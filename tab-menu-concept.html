@@ -343,7 +343,7 @@ td:last-child{color:#83838d}
     <div>
       <div class="eyebrow">Herdr × Orca · tab context menu</div>
       <h1>右鍵選單，重新呼吸。</h1>
-      <p>同一個分頁選單，三種密度。命令與順序取自 <code>mods/orca-menu</code>，背景是目前的 orca 視窗。</p>
+      <p>同一個分頁選單，三種密度。命令與順序取自 <code>mods/orca-context-menu</code>，背景是目前的 orca 視窗。</p>
     </div>
     <div class="intro-right">
       <span class="live"><i></i>可操作預覽</span>
@@ -404,7 +404,7 @@ td:last-child{color:#83838d}
             <div><span class="p">➜</span> <span class="b">herdr-my-orca</span> <span class="v">git:(fix/wt-header-ux-improvement)</span></div>
             <div class="dim">&nbsp;&nbsp;opencode --model opencode/deepseek-v4</div>
             <div class="gap"></div>
-            <div><span class="purple">●</span> Reading <span class="u">mods/orca-menu/main.js</span></div>
+            <div><span class="purple">●</span> Reading <span class="u">mods/orca-context-menu/main.js</span></div>
             <div class="dim">&nbsp;&nbsp;tab context menu · 12 rows · 208px</div>
             <div class="gap"></div>
             <div class="agentline">
@@ -431,9 +431,9 @@ td:last-child{color:#83838d}
           <div class="rtitle">Explorer <span>↻</span></div>
           <div class="rfile"><span class="f">▱</span><span>layouts</span></div>
           <div class="rfile"><span class="f">▱</span><span>mods</span></div>
-          <div class="rfile indent"><span class="f">▱</span><span>orca-menu</span></div>
+          <div class="rfile indent"><span class="f">▱</span><span>orca-context-menu</span></div>
           <div class="rfile indent sel"><span class="f">JS</span><span>main.js</span><span class="m">M</span></div>
-          <div class="rfile indent"><span class="f">▱</span><span>orca-tabs</span></div>
+          <div class="rfile indent"><span class="f">▱</span><span>orca-header</span></div>
           <div class="rfile indent"><span class="f">JS</span><span>main.js</span><span class="m">M</span></div>
           <div class="rfile"><span class="f">▱</span><span>docs</span></div>
           <div class="rfile indent"><span class="f">MD</span><span>plan-unified-header.md</span><span class="m">M</span></div>
@@ -477,8 +477,8 @@ td:last-child{color:#83838d}
       <table>
         <thead><tr><th>設計</th><th>判定</th><th>怎麼做 / 限制</th></tr></thead>
         <tbody>
-          <tr><td>列高、字級、icon、快捷鍵 chip</td><td><span class="pill ok">可</span></td><td>全部在 <code>orca-menu</code> 的 render 內；現有 <code>shortcut()</code> 已能讀 keys，再加一個 <code>cmd-</code> → <code>⌘</code> 的 formatter。</td></tr>
-          <tr><td>208 → 272px</td><td><span class="pill ok">可</span></td><td>改 <code>orca-tabs</code> 右鍵那一個 <code>openOverlay width</code>；其他選單不動。</td></tr>
+          <tr><td>列高、字級、icon、快捷鍵 chip</td><td><span class="pill ok">可</span></td><td>全部在 <code>orca-context-menu</code> 的 render 內；現有 <code>shortcut()</code> 已能讀 keys，再加一個 <code>cmd-</code> → <code>⌘</code> 的 formatter。</td></tr>
+          <tr><td>208 → 272px</td><td><span class="pill ok">可</span></td><td>改 <code>orca-header</code> 右鍵那一個 <code>openOverlay width</code>；其他選單不動。</td></tr>
           <tr><td>分頁／工作區 context header</td><td><span class="pill ok">可</span></td><td><code>target.id</code> 已在 <code>spaces()</code> 找得到分頁與 workspace 名稱。</td></tr>
           <tr><td>顏色盤移到 header（B）</td><td><span class="pill mid">中</span></td><td>技術上可，但會偏離 Orca 的順序；A 把顏色留在原位，只在 header 顯示目前色。</td></tr>
           <tr><td>外框 14px 圓角＋柔和陰影</td><td><span class="pill mid">可，需測</span></td><td><code>frame:"none"</code> 讓 mod 自繪；<code>shadow_lg</code> 存在，但要確認 popup 尺寸與截圖一致。</td></tr>
@@ -501,7 +501,7 @@ td:last-child{color:#83838d}
     <div class="card">
       <h2>成本與風險</h2>
       <div class="cost">
-        <div class="costrow"><b>A</b><span>orca-menu/main.js（列高、寬度、header、hover、footer）＋ orca-tabs 一個 width。半天內可看到，check + shot 就能驗收。</span></div>
+        <div class="costrow"><b>A</b><span>orca-context-menu/main.js（列高、寬度、header、hover、footer）＋ orca-header 一個 width。半天內可看到，check + shot 就能驗收。</span></div>
         <div class="costrow"><b>B</b><span>多一個 submenu popup、hover intent、Esc／外部點擊狀態；1–2 天，而且玻璃仍然做不到。</span></div>
         <div class="costrow"><b>注意</b><span>選單會從約 400px 長到約 500px。13 吋螢幕還放得下；B 的 36px 列高＋header 逼近 600px，先不做。</span></div>
       </div>
@@ -510,7 +510,7 @@ td:last-child{color:#83838d}
 
   <footer class="foot">
     <span>這不是 Herdr 的實際截圖：字型、圓角、陰影與 popup 位置在 app 內會略有差異。驗收以 <code>herdr-app shot</code> 為準。</span>
-    <span>內容對應 <code>mods/orca-menu/main.js</code> 的 tab case。</span>
+    <span>內容對應 <code>mods/orca-context-menu/main.js</code> 的 tab case。</span>
   </footer>
 </div>
 
@@ -550,18 +550,18 @@ td:last-child{color:#83838d}
       footer: false,
       palette: "bottom",
       rows: [
-        R("Move Tab to Split Right", "i-arrow-right", 'orca-menu.move-tab-split {direction:"right"}'),
-        R("Move Tab to Split Left", "i-arrow-left", 'orca-menu.move-tab-split {direction:"left"}'),
-        R("Move Tab to Split Down", "i-arrow-down", 'orca-menu.move-tab-split {direction:"down"}'),
-        R("Move Tab to Split Up", "i-arrow-up", 'orca-menu.move-tab-split {direction:"up"}'),
+        R("Move Tab to Split Right", "i-arrow-right", 'orca-context-menu.move-tab-split {direction:"right"}'),
+        R("Move Tab to Split Left", "i-arrow-left", 'orca-context-menu.move-tab-split {direction:"left"}'),
+        R("Move Tab to Split Down", "i-arrow-down", 'orca-context-menu.move-tab-split {direction:"down"}'),
+        R("Move Tab to Split Up", "i-arrow-up", 'orca-context-menu.move-tab-split {direction:"up"}'),
         R("Split terminal right", "i-panel-right", 'pane.split {direction:"right"}', { key: "⌘D" }),
         R("Split terminal down", "i-panel-bottom", 'pane.split {direction:"down"}', { key: "⇧⌘D" }),
         SEP(),
         R("Pin Tab", "i-pin", "tab.settle", { pin: true }),
-        R("Copy Tab ID", null, "orca-menu.copy-tab-id", { inset: true }),
+        R("Copy Tab ID", null, "orca-context-menu.copy-tab-id", { inset: true }),
         SEP(),
         R("Close", "i-x", "tab.close", { key: "⌘W" }),
-        R("Close Others", null, "orca-menu.close-others", { inset: true }),
+        R("Close Others", null, "orca-context-menu.close-others", { inset: true }),
         SEP(),
         R("Change Title", "i-pencil", "tab.rename", { key: "f2" }),
         PAL("Tab Color")
@@ -574,18 +574,18 @@ td:last-child{color:#83838d}
       footer: true,
       palette: "bottom",
       rows: [
-        R("Move Tab to Split Right", "i-arrow-right", 'orca-menu.move-tab-split {direction:"right"}'),
-        R("Move Tab to Split Left", "i-arrow-left", 'orca-menu.move-tab-split {direction:"left"}'),
-        R("Move Tab to Split Down", "i-arrow-down", 'orca-menu.move-tab-split {direction:"down"}'),
-        R("Move Tab to Split Up", "i-arrow-up", 'orca-menu.move-tab-split {direction:"up"}'),
+        R("Move Tab to Split Right", "i-arrow-right", 'orca-context-menu.move-tab-split {direction:"right"}'),
+        R("Move Tab to Split Left", "i-arrow-left", 'orca-context-menu.move-tab-split {direction:"left"}'),
+        R("Move Tab to Split Down", "i-arrow-down", 'orca-context-menu.move-tab-split {direction:"down"}'),
+        R("Move Tab to Split Up", "i-arrow-up", 'orca-context-menu.move-tab-split {direction:"up"}'),
         R("Split terminal right", "i-panel-right", 'pane.split {direction:"right"}', { key: "⌘D" }),
         R("Split terminal down", "i-panel-bottom", 'pane.split {direction:"down"}', { key: "⇧⌘D" }),
         SEP(),
         R("Pin Tab", "i-pin", "tab.settle", { pin: true }),
-        R("Copy Tab ID", "i-copy", "orca-menu.copy-tab-id"),
+        R("Copy Tab ID", "i-copy", "orca-context-menu.copy-tab-id"),
         SEP(),
         R("Close", "i-x", "tab.close", { key: "⌘W", danger: true }),
-        R("Close Others", "i-x", "orca-menu.close-others", { danger: true }),
+        R("Close Others", "i-x", "orca-context-menu.close-others", { danger: true }),
         SEP(),
         R("Change Title", "i-pencil", "tab.rename", { key: "f2" }),
         PAL("Tab Color")
@@ -605,11 +605,11 @@ td:last-child{color:#83838d}
         SEC("Tab"),
         R("Pin tab", "i-pin", "tab.settle", { pin: true }),
         R("Change title", "i-pencil", "tab.rename", { key: "f2" }),
-        R("Copy tab ID", "i-copy", "orca-menu.copy-tab-id"),
+        R("Copy tab ID", "i-copy", "orca-context-menu.copy-tab-id"),
         SEP(),
         SEC("Close"),
         R("Close", "i-x", "tab.close", { key: "⌘W", danger: true }),
-        R("Close others", "i-x", "orca-menu.close-others", { danger: true })
+        R("Close others", "i-x", "orca-context-menu.close-others", { danger: true })
       ]
     }
   };
@@ -618,10 +618,10 @@ td:last-child{color:#83838d}
     move: {
       title: "Move tab to split",
       rows: [
-        R("Right", "i-arrow-right", 'orca-menu.move-tab-split {direction:"right"}'),
-        R("Left", "i-arrow-left", 'orca-menu.move-tab-split {direction:"left"}'),
-        R("Down", "i-arrow-down", 'orca-menu.move-tab-split {direction:"down"}'),
-        R("Up", "i-arrow-up", 'orca-menu.move-tab-split {direction:"up"}')
+        R("Right", "i-arrow-right", 'orca-context-menu.move-tab-split {direction:"right"}'),
+        R("Left", "i-arrow-left", 'orca-context-menu.move-tab-split {direction:"left"}'),
+        R("Down", "i-arrow-down", 'orca-context-menu.move-tab-split {direction:"down"}'),
+        R("Up", "i-arrow-up", 'orca-context-menu.move-tab-split {direction:"up"}')
       ]
     },
     split: {

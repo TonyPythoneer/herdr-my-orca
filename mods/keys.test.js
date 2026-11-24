@@ -25,10 +25,10 @@ test("pane focus uses the Orca chords", () => {
 test("right-sidebar view shortcuts reveal through the panel bridge", () => {
   const keys = JSON.parse(readFileSync(new URL("../keys.json", import.meta.url), "utf8"));
   const orca = keys["layout:orca"];
-  assert.equal(orca["cmd-shift-e"], "orca-panel-head.files");
-  assert.equal(orca["cmd-shift-f"], "orca-panel-head.search");
-  assert.equal(orca["cmd-shift-g"], "orca-panel-head.changes");
-  assert.equal(orca["cmd-shift-i"], "orca-panel-head.ports");
+  assert.equal(orca["cmd-shift-e"], "orca-right-sidebar-header.files");
+  assert.equal(orca["cmd-shift-f"], "orca-right-sidebar-header.search");
+  assert.equal(orca["cmd-shift-g"], "orca-right-sidebar-header.changes");
+  assert.equal(orca["cmd-shift-i"], "orca-right-sidebar-header.ports");
 });
 
 test("no chord is bound twice inside one scope", () => {

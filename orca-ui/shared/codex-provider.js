@@ -1,6 +1,6 @@
 // The oMLX model provider for Codex: the one place that decides what a host is, what a `/models`
-// answer means, and how a provider launch is spelled. Used by orca-agent-manager (setup and test)
-// and agent-config (the Codex flyout and the launch).
+// answer means, and how a provider launch is spelled. Used by orca-agent-settings (setup and test)
+// and orca-agent-flyout (the Codex flyout and the launch).
 //
 // Pure: no herdr or gpui imports, so `node --test` runs it directly. Edit this file, then
 // `node scripts/build-orca-ui.mjs --out .` writes the copies the two mods import.

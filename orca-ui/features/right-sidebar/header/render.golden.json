@@ -1,0 +1,2641 @@
+{
+ "locations": {
+  "noSpaceNoFocus": null,
+  "paneCwd": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj/src",
+    "on": null
+   }
+  },
+  "focusCwdOnly": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj/lib",
+    "on": null
+   }
+  },
+  "outsideProject": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": null
+   }
+  },
+  "siblingPrefix": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": null
+   }
+  },
+  "sameAsProject": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": null
+   }
+  },
+  "projectOnly": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": null
+   }
+  },
+  "liveOnly": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/live",
+    "on": null
+   }
+  },
+  "spaceMachine": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": "box"
+   }
+  },
+  "hostTerminal": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": "hostA"
+   }
+  },
+  "hostTerminalNoSlash": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": null
+   }
+  },
+  "hostTerminalNone": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/proj",
+    "on": null
+   }
+  },
+  "inactiveSpaceIgnored": {
+   "cmd": "git",
+   "tail": [
+    "rev-parse",
+    "--show-toplevel"
+   ],
+   "options": {
+    "cwd": "/live",
+    "on": null
+   }
+  }
+ },
+ "tools": {
+  "byState": {
+   "repo": [
+    "files",
+    "agent-sessions",
+    "changes",
+    "checks"
+   ],
+   "folder": [
+    "files",
+    "agent-sessions",
+    "workspaces",
+    "pr-checks"
+   ],
+   "sshRepo": [
+    "files",
+    "agent-sessions",
+    "changes",
+    "checks",
+    "ports"
+   ],
+   "hostTerminal": [
+    "files",
+    "agent-sessions",
+    "changes",
+    "checks",
+    "ports"
+   ]
+  }
+ },
+ "render": {
+  "folderFilesActive": {
+   "n": "h_flex",
+   "a": [],
+   "c": [
+    [
+     "w_full",
+     []
+    ],
+    [
+     "h_full",
+     []
+    ],
+    [
+     "items_center",
+     []
+    ],
+    [
+     "pl",
+     [
+      8
+     ]
+    ],
+    [
+     "pr",
+     [
+      4
+     ]
+    ],
+    [
+     "border_b",
+     [
+      1
+     ]
+    ],
+    [
+     "border_color",
+     [
+      "#border"
+     ]
+    ],
+    [
+     "children",
+     [
+      [
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-files"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           true
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#112233"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#1122331a"
+          ]
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Explorer"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Explorer"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/files.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-agent-sessions"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Agents"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Agents"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/agent-session-history.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-workspaces"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Attached worktrees"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Attached worktrees"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/workflow.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-pr-checks"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "PR Checks"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "PR Checks"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/list-checks.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-ports"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Ports"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Ports"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/plug.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ],
+    [
+     "child",
+     [
+      {
+       "n": "div",
+       "a": [],
+       "c": [
+        [
+         "flex_1",
+         []
+        ]
+       ]
+      }
+     ]
+    ],
+    [
+     "child",
+     [
+      {
+       "n": "Button.new",
+       "a": [
+        "panel-toggle"
+       ],
+       "c": [
+        [
+         "mr",
+         [
+          3
+         ]
+        ],
+        [
+         "w",
+         [
+          32
+         ]
+        ],
+        [
+         "h",
+         [
+          24
+         ]
+        ],
+        [
+         "flex_none",
+         []
+        ],
+        [
+         "flex",
+         []
+        ],
+        [
+         "items_center",
+         []
+        ],
+        [
+         "justify_center",
+         []
+        ],
+        [
+         "rounded",
+         [
+          8
+         ]
+        ],
+        [
+         "text_color",
+         [
+          "#muted"
+         ]
+        ],
+        [
+         "hover",
+         {
+          "n": "hover",
+          "a": [],
+          "c": [
+           [
+            "bg",
+            [
+             "#1122331a"
+            ]
+           ],
+           [
+            "text_color",
+            [
+             "#112233"
+            ]
+           ]
+          ]
+         }
+        ],
+        [
+         "role",
+         [
+          "button"
+         ]
+        ],
+        [
+         "accessibility_label",
+         [
+          "Collapse right sidebar"
+         ]
+        ],
+        [
+         "tooltip",
+         [
+          "Collapse right sidebar"
+         ]
+        ],
+        [
+         "on_mouse_down",
+         [
+          "left",
+          "fn"
+         ]
+        ],
+        [
+         "on_click",
+         [
+          "fn"
+         ]
+        ],
+        [
+         "child",
+         [
+          {
+           "n": "svg",
+           "a": [
+            "mods/orca-right-sidebar-header/panel-right-close.svg"
+           ],
+           "c": [
+            [
+             "size",
+             [
+              16
+             ]
+            ]
+           ]
+          }
+         ]
+        ]
+       ]
+      }
+     ]
+    ]
+   ]
+  },
+  "folderWorkspacesActive": {
+   "n": "h_flex",
+   "a": [],
+   "c": [
+    [
+     "w_full",
+     []
+    ],
+    [
+     "h_full",
+     []
+    ],
+    [
+     "items_center",
+     []
+    ],
+    [
+     "pl",
+     [
+      8
+     ]
+    ],
+    [
+     "pr",
+     [
+      4
+     ]
+    ],
+    [
+     "border_b",
+     [
+      1
+     ]
+    ],
+    [
+     "border_color",
+     [
+      "#border"
+     ]
+    ],
+    [
+     "children",
+     [
+      [
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-files"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Explorer"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Explorer"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/files.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-agent-sessions"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Agents"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Agents"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/agent-session-history.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-workspaces"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           true
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#112233"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#1122331a"
+          ]
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Attached worktrees"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Attached worktrees"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/workflow.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-pr-checks"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "PR Checks"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "PR Checks"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/list-checks.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-ports"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Ports"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Ports"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/plug.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ],
+    [
+     "child",
+     [
+      {
+       "n": "div",
+       "a": [],
+       "c": [
+        [
+         "flex_1",
+         []
+        ]
+       ]
+      }
+     ]
+    ],
+    [
+     "child",
+     [
+      {
+       "n": "Button.new",
+       "a": [
+        "panel-toggle"
+       ],
+       "c": [
+        [
+         "mr",
+         [
+          3
+         ]
+        ],
+        [
+         "w",
+         [
+          32
+         ]
+        ],
+        [
+         "h",
+         [
+          24
+         ]
+        ],
+        [
+         "flex_none",
+         []
+        ],
+        [
+         "flex",
+         []
+        ],
+        [
+         "items_center",
+         []
+        ],
+        [
+         "justify_center",
+         []
+        ],
+        [
+         "rounded",
+         [
+          8
+         ]
+        ],
+        [
+         "text_color",
+         [
+          "#muted"
+         ]
+        ],
+        [
+         "hover",
+         {
+          "n": "hover",
+          "a": [],
+          "c": [
+           [
+            "bg",
+            [
+             "#1122331a"
+            ]
+           ],
+           [
+            "text_color",
+            [
+             "#112233"
+            ]
+           ]
+          ]
+         }
+        ],
+        [
+         "role",
+         [
+          "button"
+         ]
+        ],
+        [
+         "accessibility_label",
+         [
+          "Collapse right sidebar"
+         ]
+        ],
+        [
+         "tooltip",
+         [
+          "Collapse right sidebar"
+         ]
+        ],
+        [
+         "on_mouse_down",
+         [
+          "left",
+          "fn"
+         ]
+        ],
+        [
+         "on_click",
+         [
+          "fn"
+         ]
+        ],
+        [
+         "child",
+         [
+          {
+           "n": "svg",
+           "a": [
+            "mods/orca-right-sidebar-header/panel-right-close.svg"
+           ],
+           "c": [
+            [
+             "size",
+             [
+              16
+             ]
+            ]
+           ]
+          }
+         ]
+        ]
+       ]
+      }
+     ]
+    ]
+   ]
+  },
+  "repoChangesActive": {
+   "n": "h_flex",
+   "a": [],
+   "c": [
+    [
+     "w_full",
+     []
+    ],
+    [
+     "h_full",
+     []
+    ],
+    [
+     "items_center",
+     []
+    ],
+    [
+     "pl",
+     [
+      8
+     ]
+    ],
+    [
+     "pr",
+     [
+      4
+     ]
+    ],
+    [
+     "border_b",
+     [
+      1
+     ]
+    ],
+    [
+     "border_color",
+     [
+      "#border"
+     ]
+    ],
+    [
+     "children",
+     [
+      [
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-files"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Explorer"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Explorer"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/files.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-agent-sessions"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Agents"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Agents"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/agent-session-history.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-changes"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           true
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#112233"
+          ]
+         ],
+         [
+          "bg",
+          [
+           "#1122331a"
+          ]
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Source Control"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Source Control"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/git-branch.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-checks"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Checks"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Checks"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/list-checks.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       },
+       {
+        "n": "Button.new",
+        "a": [
+         "panel-ports"
+        ],
+        "c": [
+         [
+          "selected",
+          [
+           false
+          ]
+         ],
+         [
+          "w",
+          [
+           32
+          ]
+         ],
+         [
+          "h",
+          [
+           24
+          ]
+         ],
+         [
+          "flex_none",
+          []
+         ],
+         [
+          "flex",
+          []
+         ],
+         [
+          "items_center",
+          []
+         ],
+         [
+          "justify_center",
+          []
+         ],
+         [
+          "relative",
+          []
+         ],
+         [
+          "rounded",
+          [
+           8
+          ]
+         ],
+         [
+          "text_color",
+          [
+           "#acacac99"
+          ]
+         ],
+         [
+          "hover",
+          {
+           "n": "hover",
+           "a": [],
+           "c": [
+            [
+             "bg",
+             [
+              "#1122330f"
+             ]
+            ],
+            [
+             "text_color",
+             [
+              "#muted"
+             ]
+            ]
+           ]
+          }
+         ],
+         [
+          "role",
+          [
+           "button"
+          ]
+         ],
+         [
+          "accessibility_label",
+          [
+           "Ports"
+          ]
+         ],
+         [
+          "tooltip",
+          [
+           "Ports"
+          ]
+         ],
+         [
+          "on_mouse_down",
+          [
+           "left",
+           "fn"
+          ]
+         ],
+         [
+          "on_click",
+          [
+           "fn"
+          ]
+         ],
+         [
+          "child",
+          [
+           {
+            "n": "svg",
+            "a": [
+             "mods/orca-right-sidebar-header/plug.svg"
+            ],
+            "c": [
+             [
+              "size",
+              [
+               16
+              ]
+             ]
+            ]
+           }
+          ]
+         ]
+        ]
+       }
+      ]
+     ]
+    ],
+    [
+     "child",
+     [
+      {
+       "n": "div",
+       "a": [],
+       "c": [
+        [
+         "flex_1",
+         []
+        ]
+       ]
+      }
+     ]
+    ],
+    [
+     "child",
+     [
+      {
+       "n": "Button.new",
+       "a": [
+        "panel-toggle"
+       ],
+       "c": [
+        [
+         "mr",
+         [
+          3
+         ]
+        ],
+        [
+         "w",
+         [
+          32
+         ]
+        ],
+        [
+         "h",
+         [
+          24
+         ]
+        ],
+        [
+         "flex_none",
+         []
+        ],
+        [
+         "flex",
+         []
+        ],
+        [
+         "items_center",
+         []
+        ],
+        [
+         "justify_center",
+         []
+        ],
+        [
+         "rounded",
+         [
+          8
+         ]
+        ],
+        [
+         "text_color",
+         [
+          "#muted"
+         ]
+        ],
+        [
+         "hover",
+         {
+          "n": "hover",
+          "a": [],
+          "c": [
+           [
+            "bg",
+            [
+             "#1122331a"
+            ]
+           ],
+           [
+            "text_color",
+            [
+             "#112233"
+            ]
+           ]
+          ]
+         }
+        ],
+        [
+         "role",
+         [
+          "button"
+         ]
+        ],
+        [
+         "accessibility_label",
+         [
+          "Collapse right sidebar"
+         ]
+        ],
+        [
+         "tooltip",
+         [
+          "Collapse right sidebar"
+         ]
+        ],
+        [
+         "on_mouse_down",
+         [
+          "left",
+          "fn"
+         ]
+        ],
+        [
+         "on_click",
+         [
+          "fn"
+         ]
+        ],
+        [
+         "child",
+         [
+          {
+           "n": "svg",
+           "a": [
+            "mods/orca-right-sidebar-header/panel-right-close.svg"
+           ],
+           "c": [
+            [
+             "size",
+             [
+              16
+             ]
+            ]
+           ]
+          }
+         ]
+        ]
+       ]
+      }
+     ]
+    ]
+   ]
+  }
+ }
+}

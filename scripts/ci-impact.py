@@ -13,19 +13,19 @@ ROOT = Path(__file__).resolve().parent.parent
 TEST = re.compile(r"\.test\.[cm]?js$")
 # Cross-mod contracts that use commands/shared state rather than imports.
 CONTRACTS = {
-    "orca-spaces": {"orca-menu", "orca-worktree", "orca-status"},
-    "orca-menu": {"orca-spaces", "orca-pane"},
-    "orca-status": {"orca-spaces", "orca-worktree"},
-    "orca-worktree": {"orca-spaces", "orca-status"},
-    "agent-config": {"orca-agent-manager", "orca-new-menu"},
-    "orca-agent-manager": {"agent-config", "orca-new-menu"},
-    "orca-new-menu": {"agent-config", "orca-agent-manager"},
-    "orca-tabs": {"orca-nav", "orca-pane", "orca-panel-head"},
-    "orca-panel-head": {"orca-files", "orca-changes", "orca-agents", "orca-panel-gap"},
-    "orca-chrome": {"orca-tabs", "orca-tasks"},
+    "orca-sidebar-projects": {"orca-context-menu", "orca-worktree", "orca-status-bar"},
+    "orca-context-menu": {"orca-sidebar-projects", "orca-pane-header"},
+    "orca-status-bar": {"orca-sidebar-projects", "orca-worktree"},
+    "orca-worktree": {"orca-sidebar-projects", "orca-status-bar"},
+    "orca-agent-flyout": {"orca-agent-settings", "orca-new-menu"},
+    "orca-agent-settings": {"orca-agent-flyout", "orca-new-menu"},
+    "orca-new-menu": {"orca-agent-flyout", "orca-agent-settings"},
+    "orca-header": {"orca-sidebar-top", "orca-pane-header", "orca-right-sidebar-header"},
+    "orca-right-sidebar-header": {"orca-files", "orca-changes", "orca-right-sidebar-agents", "orca-right-sidebar-placeholders"},
+    "orca-status-footer": {"orca-header", "orca-tasks"},
 }
-CHROME = {"orca-chrome", "orca-tabs", "orca-nav", "orca-pane", "orca-float", "orca-landing"}
-PANEL = {"orca-panel-head", "orca-panel-gap"}
+CHROME = {"orca-status-footer", "orca-header", "orca-sidebar-top", "orca-pane-header", "orca-float-workspace", "orca-landing"}
+PANEL = {"orca-right-sidebar-header", "orca-right-sidebar-placeholders"}
 
 
 def git(root, *args):
@@ -134,17 +134,17 @@ def select(root, files, changed, force=False):
             direct.update(shared[path])
             config = True
             reasons[path] = "generated shared source consumers"
-        elif path.startswith("orca-ui/features/panel/head/"):
-            direct.add("orca-panel-head")
-            selected.update(p for p in tests if p.startswith("orca-ui/features/panel/head/"))
+        elif path.startswith("orca-ui/features/right-sidebar/header/"):
+            direct.add("orca-right-sidebar-header")
+            selected.update(p for p in tests if p.startswith("orca-ui/features/right-sidebar/header/"))
             config = True
             reasons[path] = "panel head feature"
         elif module(path) in mods:
             direct.add(module(path))
             config = True
-            if path == "mods/orca-spaces/main.js":
+            if path == "mods/orca-sidebar-projects/main.js":
                 git_bench = True
-            if path == "mods/orca-spaces/worktree-plan.js":
+            if path == "mods/orca-sidebar-projects/worktree-plan.js":
                 projection_bench = True
             reasons[path] = "mod implementation or fixture"
         elif path == "layouts/orca.json":

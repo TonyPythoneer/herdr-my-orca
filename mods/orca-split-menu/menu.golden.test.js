@@ -1,6 +1,6 @@
 // Characterization test for main.js: for several pane layouts it records the rows, the render
 // tree, what every key does and what choosing every row asks of the host, and compares them with
-// menu.golden.json. Loads the real main.js in a vm, like orca-menu's close-row.test.js. Delete the
+// menu.golden.json. Loads the real main.js in a vm, like orca-context-menu's close-row.test.js. Delete the
 // json to re-record after an intended change.
 import test from "node:test";
 import assert from "node:assert/strict";

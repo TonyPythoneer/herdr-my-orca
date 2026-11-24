@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 // Orca's tab-bar `+` menu: a 288px dropdown (tab-bar-surface.tsx:224-240) with an omnibox
 // (TabBarCreateEntry.tsx:317-350) and static create rows (tab-bar-static-create-menu.tsx).
-// Opened by orca-tabs, orca-landing and orca-nav.
+// Opened by orca-header, orca-landing and orca-sidebar-top.
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { checking, theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared, appHome, readTextFile, exec } from "herdr";
@@ -16,10 +16,10 @@ import { detectFreebuff } from "./freebuff.js";
 const agentsByMachine = new Map();
 const agentsFailedByMachine = new Map();
 const INVENTORY_KEY = "agent-manager.inventory";
-// Agents the person turned off in the Agent Manager (`agent-manager.json`). Orca's equivalent is
+// Agents the person turned off in the Agent Settings (`agent-manager.json`). Orca's equivalent is
 // `disabledTuiAgents`; `isTuiAgentEnabled` keeps a disabled agent installed but out of pickers
 // (`agent-launch/catalog/tui-agent-selection.ts`). A failed read fails open: a broken file never
-// hides every agent. The Agent Manager page writes this file.
+// hides every agent. The Agent Settings page writes this file.
 let disabledAgents = new Set();
 const MANAGER_FILE = `${appHome()}/agent-manager.json`;
 
@@ -57,12 +57,12 @@ function rememberModels(key, models) {
   } catch { /* storage is unavailable or full: the list is asked for again next time */ }
 }
 
-// Visible row counts follow the 288x512 popup and its 32px rows (orca-tabs/main.js:343).
+// Visible row counts follow the 288x512 popup and its 32px rows (orca-header/main.js:343).
 // Menu padding (4) plus a small gap, so the flyout clears the menu's outer edge.
 const FLYOUT_GAP = 6;
 const FIT = { list: 13, models: 11 };
 const CHEVRON_W = 32;
-// agent-config's content width, a guessed height (it sets none) and the window margin the flyout keeps.
+// orca-agent-flyout's content width, a guessed height (it sets none) and the window margin the flyout keeps.
 const FLYOUT_W = 300;
 const FLYOUT_H = 440;
 const WINDOW_MARGIN = 8;
@@ -104,7 +104,7 @@ function shortcut(name) {
 }
 
 // The probe's own answer wins; the manager's inventory fills in until it has run. A FreeBuff the
-// person turned off in the Agent Manager is not offered.
+// person turned off in the Agent Settings is not offered.
 function resolveFreebuff(detected, inventory, disabled) {
   const found = detected === undefined && typeof inventory?.freebuff === "boolean" ? inventory.freebuff : detected;
   return found === true && disabled.has("freebuff") ? false : found;
@@ -235,7 +235,7 @@ export default class NewMenu extends View {
     return [
       // tab-bar-static-create-menu.tsx:213-225 — New Terminal (TerminalSquare).
       // Pinned to the space's work directory: `tab.new` alone follows the focused shell's cwd.
-      { label: "New Terminal", icon: "square-terminal", hint: shortcut("orca-tabs.new-tab"),
+      { label: "New Terminal", icon: "square-terminal", hint: shortcut("orca-header.new-tab"),
         run: () => run("tab.new", space ? { space: space.id, ...(space.folder ? { folder: space.folder } : {}) } : {}) },
       // Unsupported: omnibox (TabBarCreateEntry.tsx:317-350), browser and Markdown rows
       // (tab-bar-static-create-menu.tsx:227,239,283), plugins, and emulator (:266).
@@ -452,18 +452,18 @@ export default class NewMenu extends View {
   }
 
   // Hovering a row's chevron opens that agent's setup flyout beside the pointer (Orca's AgentLaunchSetupSubmenu).
-  // The flyout is its own popup: shared "agent-config" holds its id. It is sticky, so leaving the
+  // The flyout is its own popup: shared "orca-agent-flyout" holds its id. It is sticky, so leaving the
   // chevron does not close it; only another agent's chevron swaps its content.
   hoverConfig(agent, hovered, launchNow) {
     if (!hovered) return;
-    const open = shared("agent-config");
+    const open = shared("orca-agent-flyout");
     if (open?.key === agent.key && !launchNow) return;
     if (open) closeOverlay(open.id);
     const id = openOverlay({
-      mod: "agent-config",
+      mod: "orca-agent-flyout",
       kind: "popup",
-      // A popup without a width is wider than the flyout; 300 is agent-config's content width.
-      // Height is left to the content, as the other width-only popups (orca-menu, orca-files) do.
+      // A popup without a width is wider than the flyout; 300 is orca-agent-flyout's content width.
+      // Height is left to the content, as the other width-only popups (orca-context-menu, orca-files) do.
       width: FLYOUT_W,
       at: this.flyoutAt(agent),
       props: {
@@ -475,16 +475,16 @@ export default class NewMenu extends View {
         launchNow,
       },
     });
-    setShared("agent-config", { id, key: agent.key });
+    setShared("orca-agent-flyout", { id, key: agent.key });
   }
 
   // A popup dismissed by the app (Esc, a click outside) leaves its id in shared state behind, and
   // the flyout can outlive the menu. Close both so the next menu starts clean.
   closeFlyout() {
-    const open = shared("agent-config");
+    const open = shared("orca-agent-flyout");
     if (!open) return;
     if (open.id) closeOverlay(open.id);
-    setShared("agent-config", null);
+    setShared("orca-agent-flyout", null);
   }
 
   closeMenu() {
@@ -502,7 +502,7 @@ export default class NewMenu extends View {
   }
 
   // Flip to the menu's left when the right side overflows the window (Orca does the same); y stays inside it.
-  // shortcut: 440 is a guessed flyout height (agent-config sets none); pass `height` to openOverlay if it is wrong.
+  // shortcut: 440 is a guessed flyout height (orca-agent-flyout sets none); pass `height` to openOverlay if it is wrong.
   flyoutAt(agent) {
     const r = this.rowEdge;
     if (r?.key !== agent.key) return "pointer";

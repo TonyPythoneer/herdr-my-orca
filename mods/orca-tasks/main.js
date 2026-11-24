@@ -1,5 +1,5 @@
 // Task management: the page behind the footer's clock icon. Schedules live in
-// `~/.config/herdr-app/tasks.json`; the runner that fires them is in orca-chrome (its footer
+// `~/.config/herdr-app/tasks.json`; the runner that fires them is in orca-status-footer (its footer
 // copy is always in the layout, this page's copy is not), and it publishes the reset times,
 // the last run of each task and the next due time through `shared`.
 //
@@ -147,7 +147,7 @@ export default class Tasks extends View {
       setShared("tasks.config", next);
       setShared("tasks.error", "");
       this.saved = Boolean(options.saved);
-      run("orca-chrome.tasks-scan");
+      run("orca-status-footer.tasks-scan");
       return true;
     } catch {
       return false;
@@ -194,7 +194,7 @@ export default class Tasks extends View {
 
   runNow(cx, task) {
     setShared("tasks.request", { id: task.id, at: Date.now() });
-    run("orca-chrome.tasks-scan");
+    run("orca-status-footer.tasks-scan");
     cx.notify();
   }
 
@@ -234,7 +234,7 @@ export default class Tasks extends View {
       setShared("tasks.error", "");
       this.error = "";
       this.saved = true;
-      run("orca-chrome.tasks-scan");
+      run("orca-status-footer.tasks-scan");
     } catch {
       this.error = "tasks.json changed while saving; cancel and reopen the editor.";
     }

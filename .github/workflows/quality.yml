@@ -28,10 +28,10 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: "24" }
-      - name: herdr-app stand-in (the tests only need `do orca-status.refresh`)
+      - name: herdr-app stand-in (the tests only need `do orca-status-bar.refresh`)
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
-          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
+          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status-bar.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
           chmod +x "$RUNNER_TEMP/bin/herdr-app"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: metrics (tests, coverage, lint, drift)

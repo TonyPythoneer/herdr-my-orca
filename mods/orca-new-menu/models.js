@@ -69,7 +69,7 @@ async function agyModels() {
 }
 
 export const MODELS = {
-  // Every agent with a flyout spec (agent-flyout.js, drawn by agent-config) gets the row's chevron;
+  // Every agent with a flyout spec (agent-flyout.js, drawn by orca-agent-flyout) gets the row's chevron;
   // its model list and options live in the spec, not here.
   ...Object.fromEntries(Object.keys(SPECS).map((key) => [key, { flyout: true }])),
   gemini: {

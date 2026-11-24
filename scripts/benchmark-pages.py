@@ -34,7 +34,7 @@ def origin_page(row):
     # Sparse Providers needs a visually distinct origin, not a blank terminal.
     if row["stack"] == "main":
         return "main-agents" if row["page"] in ("main-terminals", "main-providers") else "main-terminals"
-    return "vault" if row["page"] == "files" else "files"
+    return "agent-sessions" if row["page"] == "files" else "files"
 
 
 def stable_reference(driver, row, roi, settle, tolerance):

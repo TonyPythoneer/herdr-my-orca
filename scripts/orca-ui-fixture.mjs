@@ -41,12 +41,12 @@ export function fixture(t) {
   write(root, "orca-ui/shared/clip.js", 'export const n = "clip.js";\n');
   write(root, "orca-ui/shared/transcript.js", 'export const n = "transcript.js"'); // no trailing LF
   write(root, "orca-ui/shared/manifest.json", JSON.stringify({ files: [
-    { source: "orca-ui/shared/clip.js", outputs: ["mods/orca-changes/clip.js", "mods/orca-files/clip.js", "mods/orca-handoff/clip.js", "mods/orca-menu/clip.js"] },
-    { source: "orca-ui/shared/transcript.js", outputs: ["mods/orca-handoff/transcript.js", "mods/orca-menu/transcript.js"] },
+    { source: "orca-ui/shared/clip.js", outputs: ["mods/orca-changes/clip.js", "mods/orca-files/clip.js", "mods/orca-handoff/clip.js", "mods/orca-context-menu/clip.js"] },
+    { source: "orca-ui/shared/transcript.js", outputs: ["mods/orca-handoff/transcript.js", "mods/orca-context-menu/transcript.js"] },
   ] }, null, 2));
   write(root, "mods/orca-files/extra.js", "// handwritten\n");
-  for (const mod of ["orca-files", "orca-changes", "orca-handoff", "orca-menu", "orca-panel-gap"]) write(root, `mods/${mod}/mod.json`, "{}\n");
-  write(root, "mods/orca-panel-gap/main.js", "export default 2;\n");
+  for (const mod of ["orca-files", "orca-changes", "orca-handoff", "orca-context-menu", "orca-right-sidebar-placeholders"]) write(root, `mods/${mod}/mod.json`, "{}\n");
+  write(root, "mods/orca-right-sidebar-placeholders/main.js", "export default 2;\n");
   return root;
 }
 
