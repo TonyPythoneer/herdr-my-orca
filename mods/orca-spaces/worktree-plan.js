@@ -53,14 +53,13 @@ export const where = (s, ps) => JSON.stringify([s?.machine ?? null, place(s, ps)
  */
 export function groupSpaceIds(group, live) {
   const known = new Set(live ?? []);
-  const ids = [];
+  const ids = new Set();
   for (const r of group?.rows ?? []) {
     for (const w of [r.w, ...(r.also ?? []).map((a) => a.w)]) {
-      if (!w?.id || !known.has(w.id) || ids.includes(w.id)) continue;
-      ids.push(w.id);
+      if (w?.id && known.has(w.id)) ids.add(w.id);
     }
   }
-  return ids;
+  return [...ids];
 }
 
 /**
@@ -405,15 +404,20 @@ export function projectWorktreePlan({
   // Orca draws rows only after discovery completes.
   // startup-worktree-refresh.ts:78-82 sets startupWorktreeRefreshCompleted in a finally block,
   // and EmptyState.tsx:14 gates "No workspaces found" on that flag.
-  const isDiscoverable = (w) => loaded || getWhere(w) in gitState;
+  const open = new Set();
+  const rows = [];
+  for (let i = 0; i < sp.length; i++) {
+    if (!(i in sp)) continue;
+    const w = sp[i];
+    const key = getWhere(w);
+    open.add(key);
+    const g = gitState[key] ?? null;
+    if (g?.linked && g.worktrees && !g.worktrees.some(wt => wt.path === g.top)) continue;
+    rows.push({ w, i, g, ok: loaded || key in gitState });
+  }
 
-  const rows = sp.map((w, i) => ({ w, i, g: gitState[getWhere(w)] ?? null, ok: isDiscoverable(w) }))
-    .filter(({ g }) => !g?.linked || !g.worktrees || g.worktrees.some(wt => wt.path === g.top));
-
-  const open = new Set(sp.map(getWhere));
   // The main checkout precedes any linked spaces in its group.
-  rows.unshift(...unopenedMainRows(gitState, open));
-  const list = mergeWorktreeRows(rows);
+  const list = mergeWorktreeRows(unopenedMainRows(gitState, open).concat(rows));
   const out = [];
   for (const items of projectSections(list)) {
     const ordered = items[0].g ? orderedRepoRows(items) : items;

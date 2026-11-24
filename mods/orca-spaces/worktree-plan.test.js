@@ -227,3 +227,33 @@ test('the plan for a seeded sweep of spaces, git caches and options is unchanged
 
   assert.equal(hash.digest('hex').slice(0, 24), 'd207e4d416b803678e60db1c');
 });
+
+test('projection resolves each workspace identity once, including undiscovered and pruned spaces', () => {
+  const spaces = [
+    { id: 'main', folder: '/repo', tabs: [] },
+    { id: 'unknown', folder: '/unknown', tabs: [] },
+    { id: 'deleted', folder: '/gone', tabs: [] },
+  ];
+  const repo = JSON.stringify([null, '/repo/.git']);
+  const worktrees = [{ path: '/repo', branch: 'main' }];
+  const gitState = {
+    [where(spaces[0])]: { repo, top: '/repo', name: 'repo', branch: 'main', linked: false, worktrees },
+    [where(spaces[2])]: { repo, top: '/gone', name: 'repo', branch: 'gone', linked: true, worktrees },
+  };
+  for (const loaded of [false, true]) {
+    const calls = [];
+    const input = { spaces, gitState, loaded };
+    const plan = projectWorktreePlan({ ...input, whereFn: w => { calls.push(w.id); return where(w); } });
+    assert.deepEqual(calls, ['main', 'unknown', 'deleted']);
+    assert.deepEqual(plan, projectWorktreePlan(input));
+    assert.deepEqual(plan.visibleRows.map(r => r.w.id), loaded ? ['main', 'unknown'] : ['main']);
+  }
+});
+
+test('large project action preserves first occurrence order and excludes synthetic or stale IDs', () => {
+  const ids = Array.from({ length: 1000 }, (_, i) => 'w' + i);
+  const group = { rows: ids.map((id, i) => ({
+    w: { id }, also: [{ w: { id } }, { w: { id: 'stale-' + i } }],
+  })) };
+  assert.deepEqual(groupSpaceIds(group, ids), ids);
+});
