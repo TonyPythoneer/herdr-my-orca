@@ -1,3 +1,5 @@
+> **Update (2026-11-24):** The original handoff below is historical. See [refactor closeout](refactor-closeout.md) for the current decisions, verified CI evidence, upstream API audit and the two steps that require the owner's running desktop. The original TODO list is kept here as the acceptance contract, not as current status.
+
 # Refactor handoff: state and TODO
 
 Written 2026-11-24 for the next executor (GPT 6.2, high effort). Everything below is on branch
