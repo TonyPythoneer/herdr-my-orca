@@ -18,6 +18,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCHEMA_VERSION = 1;
 // A gate fails when the number moves the wrong way by more than its slack.
 const GATES = { coverageDropPoints: 1, lintIncrease: 0, failedTests: 0 };
+const MOD_COVERAGE_WARN_POINTS = 5;
 
 // ---- parsing (pure, tested) ----
 
@@ -70,26 +71,32 @@ export function coverageByMod(rows) {
   return Object.fromEntries(Object.entries(groups).map(([k, list]) => [k, { files: list.length, line: mean(list, "line"), branch: mean(list, "branch"), funcs: mean(list, "funcs") }]));
 }
 
+// What got worse than the baseline: hard failures and softer warnings.
+function againstBaseline(current, baseline) {
+  const failures = [];
+  const warnings = [];
+  const lintDelta = current.lint.total - baseline.lint.total;
+  if (lintDelta > GATES.lintIncrease) failures.push(`lint findings rose by ${lintDelta} (${baseline.lint.total} -> ${current.lint.total})`);
+  const dropped = baseline.coverage.overall.line - current.coverage.overall.line;
+  if (dropped > GATES.coverageDropPoints) failures.push(`line coverage fell ${dropped.toFixed(2)} points`);
+  for (const [mod, now] of Object.entries(current.coverage.byMod)) {
+    const was = baseline.coverage.byMod[mod];
+    if (was && was.line - now.line > MOD_COVERAGE_WARN_POINTS) warnings.push(`${mod}: line coverage ${was.line} -> ${now.line}`);
+  }
+  for (const [area, n] of Object.entries(current.lint.byArea)) {
+    if (n > (baseline.lint.byArea[area] ?? 0)) warnings.push(`${area}: lint ${baseline.lint.byArea[area] ?? 0} -> ${n}`);
+  }
+  return { failures, warnings };
+}
+
 // Compare numbers with a baseline and list what moved the wrong way.
 export function judge(current, baseline) {
   const failures = [];
-  const warnings = [];
   if (current.tests.fail > GATES.failedTests) failures.push(`${current.tests.fail} test(s) fail`);
   if (current.drift.exitCode !== 0) failures.push("build-orca-ui --check reports drift");
-  if (baseline) {
-    const lintDelta = current.lint.total - baseline.lint.total;
-    if (lintDelta > GATES.lintIncrease) failures.push(`lint findings rose by ${lintDelta} (${baseline.lint.total} -> ${current.lint.total})`);
-    const dropped = baseline.coverage.overall.line - current.coverage.overall.line;
-    if (dropped > GATES.coverageDropPoints) failures.push(`line coverage fell ${dropped.toFixed(2)} points`);
-    for (const [mod, now] of Object.entries(current.coverage.byMod)) {
-      const was = baseline.coverage.byMod[mod];
-      if (was && was.line - now.line > 5) warnings.push(`${mod}: line coverage ${was.line} -> ${now.line}`);
-    }
-    for (const [area, n] of Object.entries(current.lint.byArea)) {
-      if (n > (baseline.lint.byArea[area] ?? 0)) warnings.push(`${area}: lint ${baseline.lint.byArea[area] ?? 0} -> ${n}`);
-    }
-  }
-  return { ok: failures.length === 0, failures, warnings };
+  const compared = baseline ? againstBaseline(current, baseline) : { failures: [], warnings: [] };
+  failures.push(...compared.failures);
+  return { ok: failures.length === 0, failures, warnings: compared.warnings };
 }
 
 // What the next iteration of the improvement loop should look at, worst first.
@@ -171,7 +178,7 @@ function collect({ skipTests }) {
   };
 }
 
-function main(argv) {
+function parseArgs(argv) {
   const opts = { out: null, baseline: join(ROOT, "metrics", "baseline.json"), update: false, skipTests: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -182,6 +189,18 @@ function main(argv) {
     else { console.error(`unknown argument ${a}`); process.exit(2); }
   }
   if (!opts.out) { console.error("--out is required"); process.exit(2); }
+  return opts;
+}
+
+// The baseline keeps the numbers only, not the verdict, the advice or the clock.
+function stableCopy(report) {
+  const copy = { ...report };
+  for (const key of ["verdict", "nextActions", "generatedAt"]) delete copy[key];
+  return copy;
+}
+
+function main(argv) {
+  const opts = parseArgs(argv);
   const report = collect(opts);
   const baseline = existsSync(opts.baseline) ? JSON.parse(readFileSync(opts.baseline, "utf8")) : null;
   report.nextActions = nextActions(report);
@@ -192,8 +211,7 @@ function main(argv) {
   writeFileSync(join(opts.out, "report.md"), toMarkdown(report, verdict, baseline));
   if (opts.update) {
     mkdirSync(dirname(opts.baseline), { recursive: true });
-    const { verdict: _v, nextActions: _n, generatedAt: _g, ...stable } = report;
-    writeFileSync(opts.baseline, JSON.stringify(stable, null, 2) + "\n");
+    writeFileSync(opts.baseline, JSON.stringify(stableCopy(report), null, 2) + "\n");
   }
   console.log(readFileSync(join(opts.out, "report.md"), "utf8"));
   process.exit(verdict.ok ? 0 : 1);
