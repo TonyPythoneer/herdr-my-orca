@@ -2,7 +2,7 @@
 // Modified for herdr-orca; see LICENSE and NOTICE.
 import { View, div, svg } from "gpui-kit";
 import { Button, h_flex } from "gpui-base";
-import { theme, run, layout, panes, spaces, focused, exec, nextCommand, props } from "herdr";
+import { theme, run, layout, panes, spaces, focused, exec, nextCommand } from "herdr";
 import { visibleTools, fallbackChild } from "./panel-gating.js";
 import { viewCommands } from "./panel-views.js";
 

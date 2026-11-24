@@ -669,6 +669,7 @@ export default class Tabs extends View {
     cx.spawn((taskCx) => this.runSidebarMotion(taskCx, token, plan, onFinish));
   }
 
+  // eslint-disable-next-line complexity -- shortcut: this function's branches are inherited from main, refactor when this area is next changed
   async runSidebarMotion(cx, token, { open, target, from }, onFinish) {
     const drawer = this.drawers.sidebar;
     await cx.sleep(LEAVE_RENDER_MS); // leave the render phase: notify() is only legal from a task
@@ -1103,6 +1104,7 @@ export default class Tabs extends View {
         .on_size_change((size, cx) => this.drawers.sidebar.size(size, cx, this.drawerEnv()))));
   }
 
+  // eslint-disable-next-line complexity -- shortcut: this function's branches are inherited from main, refactor when this area is next changed
   render(cx) {
     const p = props();
     if (this.isDialog || p?.confirmClose) {
@@ -1156,6 +1158,7 @@ export default class Tabs extends View {
     run("layout.select", { stack: "main", child: request.page });
   }
 
+  // eslint-disable-next-line complexity -- shortcut: this function's branches are inherited from main, refactor when this area is next changed
   syncSettingsSidebar(cx, open) {
     const root = layout();
     const sidebar = find(root, "left-sidebar");
