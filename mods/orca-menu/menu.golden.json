@@ -10,7 +10,7 @@
   "render": "1e4c99e51d2eb8e6a6284aa7c19c199adc182708",
   "keys": "97362009c45f55fa143c3a058e3936c6706e520a",
   "hover": "624be8654bcfc8a64ceec1ca6bac37a5c34ce0d1",
-  "choose": "277482a6bcdc04ce8ee409c1dac11ce1dacb17eb",
+  "choose": "243b7cfc8b6935b8f6f9b821e5965074b23eab83",
   "click": "23309c69cc6b89d25a06dac357ca6f96d72b6b9a"
  },
  "pane, shell in the same tab": {
@@ -24,7 +24,7 @@
   "render": "abe11fbf986ebf574effa138620c3353d14a5c43",
   "keys": "b3e3ccbab55cf72078cdb0c49ddad271b960fe75",
   "hover": "624be8654bcfc8a64ceec1ca6bac37a5c34ce0d1",
-  "choose": "9882d2dbf9d09a922330658dcfcba98b1c1dae97",
+  "choose": "53e70bdf4fbab1bf1513a3582874738b572a4d3c",
   "click": "cf38573ff2c8b36e0c9d1ae1ca78d385e398c31d"
  },
  "pane, alone in a pinned tab": {
@@ -38,7 +38,7 @@
   "render": "76a79b6053c991f51323383ac9dfb50f8343fefe",
   "keys": "78a63b41b61e8e3df34d73da2da40aaaa4d28e8b",
   "hover": "624be8654bcfc8a64ceec1ca6bac37a5c34ce0d1",
-  "choose": "61d45ee40b40e99857b20af07d294cab314afb3b",
+  "choose": "e18159d5a45d8f98333b24b68373b48262f9687d",
   "click": "d9bcc683646d7f843c8de95433658498c0d1c1ef"
  },
  "pane, alone in an unpinned tab": {
@@ -52,7 +52,7 @@
   "render": "c5aab83d19e080a946e017949b968cc507392156",
   "keys": "ce822a41fe009b0d4bfe91646dc74cdf7da5942f",
   "hover": "624be8654bcfc8a64ceec1ca6bac37a5c34ce0d1",
-  "choose": "bf65a32fc0f101f0d07f160f7aa934b55649cd64",
+  "choose": "7a96f98aff27d6bed18abf4865579d4f383dad8d",
   "click": "8e744198ff7e1d6e427e3c26cfc63932e3f374ce"
  },
  "pane, no terminal and no known pane": {
@@ -66,7 +66,7 @@
   "render": "36ddf84d0041d5b2abc1bbe689e61f5b2df0fea3",
   "keys": "f910a7efa9fb33cdcd2a745dedfd0db86942572e",
   "hover": "624be8654bcfc8a64ceec1ca6bac37a5c34ce0d1",
-  "choose": "f62a2c972ee5f0bb25f160e3f8fae7d509a77437",
+  "choose": "1259f066edcab7170b7692ec1fc5af70905d9d13",
   "click": "1057c631972aa6f07021677499baee6e4e94c44d"
  },
  "pane, unknown ids": {
@@ -80,7 +80,7 @@
   "render": "36ddf84d0041d5b2abc1bbe689e61f5b2df0fea3",
   "keys": "d935adf8213e650aa99b1f67ff5df18d2ba1a994",
   "hover": "624be8654bcfc8a64ceec1ca6bac37a5c34ce0d1",
-  "choose": "bda87a7e01385bf6da7960e7f03d4cf2c097fee5",
+  "choose": "c21149b683a990a6f756f4de0dd8be47bd7647d3",
   "click": "0a1b8b35edef1537b0830c53874e2135ed1d61ac"
  },
  "tab with panes, pinned, split": {

@@ -2,56 +2,56 @@
  "two panes, target given": {
   "rows": "cbfa3646d9ea08b6033bf198883d27bbe8edc083",
   "render": "dbf893a5357f5a7b60e5ab0cd9db8bc94e8edea8",
-  "keys": "d0f9c5ba0d0b62f3032315bf4a894cd878de56fb",
-  "choose": "d3589bedd0cdfef63f274a54dcf1e5a56ae86ffb",
+  "keys": "6035d99899e1d5de1a7654f107de34389f16b63c",
+  "choose": "ce55eca5b7df41d2c6b08e497401843c5ea72330",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
   "click": "ab1b60c31da4f50c5c32641c94983b41c6ce53ea"
  },
  "two panes, zoomed focus": {
   "rows": "d50693ac575bdd885ce1d1265698660536597653",
   "render": "39864cf4105b979ab66c8312516fd83139db774d",
-  "keys": "ed7b9ce269a654ba6d3b8863e21a506f3b243738",
-  "choose": "91b23e930061be6af24f0e713462639168182e42",
+  "keys": "f0db1e7fea3377f8a7a3da85167fc8e4b9de2eb9",
+  "choose": "6f9b25612ebf85bd37f06f73e34658a2bf90b6ad",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
   "click": "3df5831ffef42d00d872a1e02ecd42f6aaebacd3"
  },
  "one pane": {
   "rows": "0995c227f2f255198e6af061d00340339d0d6170",
   "render": "4bbb90cd4b764ed5da3805e85052f77597da62bd",
-  "keys": "b4806e8355b6f6d076e1173c88f8ead92e0a5f0b",
-  "choose": "88ada432ecee481e084d8c58f71af5674c823c0a",
+  "keys": "9706c9dda8316ffd9ecd10aec24050cfea171183",
+  "choose": "ba1171940004642a69eb59fc975e27a63038f28f",
   "hover": "e83537b1a1f15130ccb6fa15bc7aa858e96d14bb",
   "click": "3df5831ffef42d00d872a1e02ecd42f6aaebacd3"
  },
  "unknown target falls back to focus": {
   "rows": "cbfa3646d9ea08b6033bf198883d27bbe8edc083",
   "render": "f67f614c3a8734d7f829962a5bc9bc790132886b",
-  "keys": "d0f9c5ba0d0b62f3032315bf4a894cd878de56fb",
-  "choose": "d3589bedd0cdfef63f274a54dcf1e5a56ae86ffb",
+  "keys": "6035d99899e1d5de1a7654f107de34389f16b63c",
+  "choose": "ce55eca5b7df41d2c6b08e497401843c5ea72330",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
   "click": "ab1b60c31da4f50c5c32641c94983b41c6ce53ea"
  },
  "no focus, no target": {
   "rows": "cbfa3646d9ea08b6033bf198883d27bbe8edc083",
   "render": "dbf893a5357f5a7b60e5ab0cd9db8bc94e8edea8",
-  "keys": "0aa874e907e8bea7a78dcf99d687b7f56a9d2a5a",
-  "choose": "c7cbe8e1056c11b5f3d4ace802b49273c0122dd1",
+  "keys": "f235f1efcb1edbfc86dd58198aebccfec2281321",
+  "choose": "4f9124b5551db1457557358145a9d09fcc313638",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
   "click": "0a2009076e9e7e2a8acac591939fd50fce300077"
  },
  "no panes": {
   "rows": "0995c227f2f255198e6af061d00340339d0d6170",
   "render": "4bbb90cd4b764ed5da3805e85052f77597da62bd",
-  "keys": "e0fb004b3c0631dd5b886e051b86dad3d4546f17",
-  "choose": "c661e3e2f8e5e2330baebd22693560472463f0ad",
+  "keys": "7868ce3e19b2fe05178263627ba997de9a80dbe0",
+  "choose": "35437f475f110a839c26e6c87d303ed9b3d94b85",
   "hover": "e83537b1a1f15130ccb6fa15bc7aa858e96d14bb",
   "click": "da9f753fe771d58a60275551abd08a63c7421306"
  },
  "panes unavailable": {
   "rows": "0995c227f2f255198e6af061d00340339d0d6170",
   "render": "4bbb90cd4b764ed5da3805e85052f77597da62bd",
-  "keys": "8c65e29edffb26bd7ea6a772aabd6d71e62d940b",
-  "choose": "97603d4e26eb98d7b36fa76ea855a06146f2aa9e",
+  "keys": "99975820acf5c9369b63df0a5559ff759fa8352b",
+  "choose": "3b21301b4fd5372b839a3946eff551dbd01d87bd",
   "hover": "e83537b1a1f15130ccb6fa15bc7aa858e96d14bb",
   "click": "da9f753fe771d58a60275551abd08a63c7421306"
  }
