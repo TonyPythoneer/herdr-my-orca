@@ -15,16 +15,6 @@ function find(node, id) {
   return null;
 }
 
-// Orca walks page history with the titlebar arrows (`TitlebarLeftControls.tsx:106-145`,
-// `worktree-nav-history`: back/forward, disabled at either end). Here the history is the `main`
-// stack's page selections, kept module-level so it survives re-renders.
-const HISTORY = { pages: ["main-terminals"], at: 0 };
-function pushHistory(page) {
-  if (HISTORY.pages[HISTORY.at] === page) return;
-  HISTORY.pages = [...HISTORY.pages.slice(0, HISTORY.at + 1), page];
-  HISTORY.at = HISTORY.pages.length - 1;
-}
-
 // Orca keeps the Workspace options in PersistedUIState (`persisted-ui-state-types.ts:39-89`):
 // groupBy, sortBy, projectOrderBy, filterRepoIds, visibleWorkspaceHostIds, the hide* filters and
 // worktreeCardProperties. Herdr mods have no shared store, so the menu writes this versioned
@@ -49,7 +39,7 @@ const OPTIONS_DEFAULTS = {
 
 function readOptions() {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? "null"); } catch { saved = null; }
+  try { saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? "null"); } catch { saved = null; } // a hand-edited or truncated value falls back to the defaults
   return saved && typeof saved === "object" && !Array.isArray(saved)
     ? { ...OPTIONS_DEFAULTS, ...saved }
     : { ...OPTIONS_DEFAULTS };
@@ -102,7 +92,7 @@ function projectChoices() {
     for (const g of Object.values(cache)) if (g?.repo) seen.set(g.repo, g.name ?? g.repo);
     return [...seen].map(([id, label]) => ({ id, label }));
   } catch {
-    return [];
+    return []; // an unreadable cache means no known projects, so the Projects page just hides
   }
 }
 
@@ -133,7 +123,6 @@ function labelOf(choices, value) {
 // Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
 // Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
 function sidebarFrame(inner) {
-  const find = (n, id) => { if (n?.id === id) return n; for (const c of n?.children ?? []) { const r = find(c, id); if (r) return r; } return null; };
   if (!props()?.unified) return inner;
   const open = shared("sidebar.openPx");
   const px = find(layout(), "sidebar")?.size?.px;
@@ -147,6 +136,127 @@ function sidebarFrame(inner) {
   return div().size_full().overflow_hidden().relative()
     .child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner))
     .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
+}
+
+// SidebarNav.tsx:90-118 — container gap-0.5 px-2; Search is a button, not an input: full width,
+// gap 8, rounded 6, bg foreground/5, px 8, py-1.5, text 13 medium foreground/60, icon 16 at /30.
+// py-1.5 (6+6) + 13px text at preflight's inherited line-height 1.5 (19.5) = Orca's 31.5px row.
+// :92 opens `worktree-palette`; Herdr's counterpart is the picker mod, not the command palette.
+function searchButton() {
+  return h_flex().id("nav-search").w_full().h(31.5).px(8).gap(8).items_center().rounded(6)
+    .bg("#f0f0f00d").text_size(13).font_medium().text_color("#f0f0f099").cursor_pointer()
+    .role("button").accessibility_label("Search worktrees")
+    .hover(s => s.bg("#f0f0f014"))
+    .on_click(() => run("mod.open", { name: "picker" }))
+    .child(svg("mods/orca-nav/search.svg").size(16).flex_none().text_color("#f0f0f04d"))
+    .child(div().flex_1().child("Search"));
+}
+
+function collapseAllButton(t, allCollapsed) {
+  return div().id("proj-collapse-all").size(24).flex_none().flex().items_center().justify_center().rounded(6)
+    .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
+    .role("button").accessibility_label(allCollapsed ? "Expand all projects" : "Collapse all projects")
+    .on_click(() => run(allCollapsed ? "orca-spaces.expand-all" : "orca-spaces.collapse-all"))
+    // ProjectsCollapseAllButton.tsx:51 renders a bare `<Icon />`, so the icon-xs
+    // `[&_svg:not([class*='size-'])]:size-3` rule (button.tsx:59) applies: 12px.
+    .child(svg(allCollapsed ? "mods/orca-nav/chevrons-up-down.svg" : "mods/orca-nav/chevrons-down-up.svg").size(12));
+}
+
+// SidebarWorkspaceOptionsMenu.tsx:43-68 — a ghost icon-xs button (24x24) holding
+// SlidersHorizontal `size-3.5` with the explicit `strokeWidth={2.25}` (:66), plus the
+// corner filter badge. `sidebar-header-actions.tsx:92` places it before AddProject.
+// Herdr has no Radix DropdownMenu, so the menu is this mod's own popup overlay, opened
+// with the same openOverlay({kind:"popup"}) call orca-menu and new-menu use; the props
+// select optionsView in render(). Choices persist in "workspace.options.v1" and
+// orca-spaces reads that key in ordered().
+function optionsButton(t) {
+  // `OptionsFilterCountBadge` (options-filter-count-badge.tsx): a corner badge on the trigger,
+  // 12px tall, 9px text, primary fill; 9+ past nine.
+  const filters = activeFilterCount(readOptions());
+  return div().id("proj-options").relative().size(24).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.muted)
+    .hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
+    .role("button").tooltip(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"})` : "Workspace options")
+    .accessibility_label(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"} active)` : "Workspace options")
+    .on_click(() => openOverlay({ mod: "orca-nav", kind: "popup", width: 288, height: 560, props: { navMenu: "workspace-options" } }))
+    .child(svg("mods/orca-nav/sliders-horizontal.svg").size(14).flex_none())
+    .when(filters > 0, el => el.child(div().absolute().top(-2).right(-2).h(12).min_w(12).px(2).rounded_full().bg(t.accent).flex().items_center().justify_center()
+      .text_size(9).line_height("9px").text_color(t.accent_foreground).child(filters > 9 ? "9+" : String(filters))));
+}
+
+// Appends the picked folder to the persisted project list (once) and opens a space on it.
+function addProject(folder) {
+  if (!folder) return;
+  const existing = JSON.parse(localStorage.getItem("projects.saved.v1") || "[]");
+  if (!existing.includes(folder)) {
+    existing.push(folder);
+    localStorage.setItem("projects.saved.v1", JSON.stringify(existing));
+  }
+  run("space.new", { folder });
+}
+
+// AddProjectButton (:27-31) — FolderPlus `size-3.5` at the explicit `strokeWidth={2.25}`.
+function addProjectButton(t) {
+  return div().id("proj-add-repo").size(24).flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
+    .role("button").accessibility_label("Add project")
+    // herdr.d.ts:39 — the folder picker is async: `Promise<string | null>`.
+    // Taking the promise as a value stored "[object Promise]" as the folder.
+    .on_click(() => { void pickFolder().then(addProject); })
+    .child(svg("mods/orca-nav/folder-plus.svg").size(14));
+}
+
+// NewWorkspaceButton (:60-64) — Plus `size-3.5`, same 2.25 stroke. Orca's header
+// actions are `size="icon-xs"` buttons, which are 24x24, so this is not wider than
+// the options slot.
+function newWorkspaceButton(t) {
+  return div().id("proj-new").size(24).flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
+    .role("button").accessibility_label("New workspace")
+    // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
+    .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }))
+    .child(svg("mods/orca-nav/plus.svg").size(14));
+}
+
+// Activating one of these rows writes one option patch and redraws. A `null` patch is the one
+// row that must not write: Orca disables the last checked host so the sidebar cannot show none.
+function hostPatch(row, o) {
+  const all = hostChoices().map((h) => h.id);
+  const current = o.visibleWorkspaceHostIds === null ? all : o.visibleWorkspaceHostIds;
+  const next = current.includes(row.host) ? current.filter((id) => id !== row.host) : [...current, row.host];
+  if (next.length === 0) return null;
+  return { visibleWorkspaceHostIds: next.length === all.length ? null : next };
+}
+
+const OPTION_PATCH = {
+  __proto__: null,
+  toggle: (row, o) => ({ [row.key]: !o[row.key] }),
+  radio: (row) => ({ [row.key]: row.value }),
+  groupby: (row) => ({ groupBy: row.value }),
+  hostAll: () => ({ visibleWorkspaceHostIds: null }),
+  host: hostPatch,
+  projectClear: () => ({ filterRepoIds: [] }),
+  project: (row, o) => ({
+    filterRepoIds: o.filterRepoIds.includes(row.project)
+      ? o.filterRepoIds.filter((id) => id !== row.project)
+      : [...o.filterRepoIds, row.project],
+  }),
+};
+
+// Rows that need no state: rules and headings, in dropdown-menu.tsx's geometry.
+function staticRow(row, t) {
+  if (row.kind === "separator") return div().mx(10).my(5).h(1).bg(t.border);
+  if (row.kind === "label") return div().px(10).pt(5).text_size(14).text_color(t.foreground).child(row.text);
+  if (row.kind === "heading") return div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child(row.text);
+  return null;
+}
+
+const CHECK_KINDS = new Set(["radio", "host", "hostAll", "project", "toggle"]);
+function checkMark(row) {
+  if (!row.checked) return "";
+  return row.kind === "radio" ? "●" : "✓";
+}
+
+const VALUE_TEXT = { __proto__: null, page: (row) => `${row.value} ›`, action: (row) => row.value, gap: () => "Unavailable" };
+function valueText(row) {
+  return row.kind in VALUE_TEXT ? VALUE_TEXT[row.kind](row) : "";
 }
 
 export default class Nav extends View {
@@ -166,120 +276,54 @@ export default class Nav extends View {
   renderBody(cx) {
     if (props()?.navMenu === "workspace-options") return this.optionsView(cx);
     const t = theme();
-    // orca-spaces owns the fold set, so it publishes whether every project is closed;
-    // ProjectsCollapseAllButton takes `allCollapsed` as a prop.
+    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(props()?.unified ? t.surface : t.chrome)
+      .child(searchButton())
+      .child(this.projectsHeader(t));
+  }
+
+  // Projects header — SidebarHeader.tsx:60-63: `group/sidebar-header mt-2 flex h-8 min-w-0
+  // shrink-0 items-center justify-between gap-1.5 px-2`; title `pl-2 pr-0.5 text-xs
+  // font-semibold text-muted-foreground/80`; actions group `flex shrink-0 items-center gap-1`.
+  // Icons are plain Lucide at their default stroke-width 2 — there is no global override in
+  // Orca's CSS (main.css:3090 is a feature-wall decoration, not icons).
+  projectsHeader(t) {
+    return h_flex().w_full().h(32).mt(8).gap(6).items_center().justify_between()
+      // `SidebarHeader.tsx:61` is `group/sidebar-header`; the collapse-all wrapper is
+      // `can-hover:w-0 can-hover:opacity-0`, becoming `w-6 opacity-100` on that hover or on
+      // `focus-within` (ProjectsCollapseAllButton.tsx:35-38). Herdr has no descendant selector,
+      // so the row's `.on_hover` is the gate and the button mounts only then. Dropped:
+      // `focus-within`, since the button is not mounted while hidden.
+      .on_hover((on, eventCx) => {
+        // Hover is only ever cleared by a pointer transition. A window that goes
+        // inactive (pointer on another window, no move events delivered here) keeps
+        // the last value, so the button stays mounted after the pointer left.
+        // `window().active` reports that state; clearing here is where the stale
+        // value originates, not a guard applied downstream.
+        const live = on && window().active;
+        if (live !== this.headerHover) { this.headerHover = live; eventCx.notify(); }
+      })
+      .child(this.projectsTitle(t))
+      // ORDER, from SidebarHeader.tsx:76-100 — `SidebarHeaderActions` runs
+      // options -> AddProject -> NewWorkspace.
+      // SidebarHeader.tsx:101 — the bell swaps the sidebar body to agents; orca-agents is a right-sidebar panel, so there is no second body.
+      .child(h_flex().flex_none().items_center().gap(4)
+        .child(optionsButton(t))
+        .child(addProjectButton(t))
+        .child(newWorkspaceButton(t)));
+  }
+
+  projectsTitle(t) {
+    // `allCollapsed` arrives over `setShared` from orca-spaces, which owns the fold state.
     const allCollapsed = Boolean(shared("projects.allCollapsed"));
     // `WorktreeList.tsx:290` — the collapse-all button is mounted only when there is at least
     // one collapsible project (`projectCollapseKeys.length > 0`). orca-spaces publishes that
     // count because the header has no view of the row plan. Zero projects means no button,
     // not a disabled one.
     const projectCount = Number(shared("projects.count") ?? 0);
-    // `OptionsFilterCountBadge` (options-filter-count-badge.tsx): a corner badge on the trigger,
-    // 12px tall, 9px text, primary fill; 9+ past nine.
-    const filters = activeFilterCount(readOptions());
-    // SidebarNav.tsx:90-118 — container gap-0.5 px-2; Search is a button, not an input: full width,
-    // gap 8, rounded 6, bg foreground/5, px 8, py-1.5, text 13 medium foreground/60, icon 16 at /30.
-    // py-1.5 (6+6) + 13px text at preflight's inherited line-height 1.5 (19.5) = Orca's 31.5px row.
-    // :92 opens `worktree-palette`; Herdr's counterpart is the picker mod, not the command palette.
-    const search = h_flex().id("nav-search").w_full().h(31.5).px(8).gap(8).items_center().rounded(6)
-      .bg("#f0f0f00d").text_size(13).font_medium().text_color("#f0f0f099").cursor_pointer()
-      .role("button").accessibility_label("Search worktrees")
-      .hover(s => s.bg("#f0f0f014"))
-      .on_click(() => run("mod.open", { name: "picker" }))
-      .child(svg("mods/orca-nav/search.svg").size(16).flex_none().text_color("#f0f0f04d"))
-      .child(div().flex_1().child("Search"));
-    // SidebarNav.tsx:120/179/213 — Tasks, Automations, Orca Mobile: the same row shape
-    // (`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium
-    // tracking-tight`), icon `size-4` at 30% while the page is not shown, active row on the
-    // accent pair. Each opens a page in the middle column (`layout.select`, `commands.rs:81`).
-    const main = find(layout(), "main");
-    const shown = main?.active ?? "main-terminals";
-    const pageRow = (id, icon, label, page) => h_flex().id(id).w_full().h(31.5).px(8).gap(8).items_center().rounded(6)
-      .text_size(13).font_medium().cursor_pointer().role("button").accessibility_label(label).tooltip(label)
-      .when(shown === page, el => el.bg(t.accent).text_color(t.accent_foreground))
-      .when(shown !== page, el => el.text_color("#f0f0f099").hover(s => s.bg("#f0f0f014").text_color(t.foreground)))
-      .on_click(() => { pushHistory(page); run("layout.select", { stack: "main", child: page }); })
-      .child(svg(`mods/orca-nav/${icon}.svg`).size(16).flex_none().text_color(shown === page ? t.accent_foreground : "#f0f0f04d"))
-      .child(div().flex_1().truncate().child(label));
-    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(props()?.unified ? t.surface : t.chrome)
-      .child(search)
-      // Projects header — SidebarHeader.tsx:60-63: `group/sidebar-header mt-2 flex h-8 min-w-0
-      // shrink-0 items-center justify-between gap-1.5 px-2`; title `pl-2 pr-0.5 text-xs
-      // font-semibold text-muted-foreground/80`; actions group `flex shrink-0 items-center gap-1`.
-      // Icons are plain Lucide at their default stroke-width 2 — there is no global override in
-      // Orca's CSS (main.css:3090 is a feature-wall decoration, not icons).
-      .child(h_flex().w_full().h(32).mt(8).gap(6).items_center().justify_between()
-        // `SidebarHeader.tsx:61` is `group/sidebar-header`; the collapse-all wrapper is
-        // `can-hover:w-0 can-hover:opacity-0`, becoming `w-6 opacity-100` on that hover or on
-        // `focus-within` (ProjectsCollapseAllButton.tsx:35-38). Herdr has no descendant selector,
-        // so the row's `.on_hover` is the gate and the button mounts only then. Dropped:
-        // `focus-within`, since the button is not mounted while hidden.
-        .on_hover((on, cx) => {
-          // Hover is only ever cleared by a pointer transition. A window that goes
-          // inactive (pointer on another window, no move events delivered here) keeps
-          // the last value, so the button stays mounted after the pointer left.
-          // `window().active` reports that state; clearing here is where the stale
-          // value originates, not a guard applied downstream.
-          const live = on && window().active;
-          if (live !== this.headerHover) { this.headerHover = live; cx.notify(); }
-        })
-        .child(h_flex().min_w(0).items_center()
-          // `text-muted-foreground/80`: main.css:365 #acacac at 80% = #8a8a8a.
-          .child(div().pl(8).pr(2).text_size(12).font_semibold().text_color("#8a8a8a").child("Projects"))
-          // `allCollapsed` arrives over `setShared` from orca-spaces, which owns the fold state.
-          .when(projectCount > 0 && this.headerHover, el => el.child(div().id("proj-collapse-all").size(24).flex_none().flex().items_center().justify_center().rounded(6)
-            .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-            .role("button").accessibility_label(allCollapsed ? "Expand all projects" : "Collapse all projects")
-            .on_click(() => run(allCollapsed ? "orca-spaces.expand-all" : "orca-spaces.collapse-all"))
-            // ProjectsCollapseAllButton.tsx:51 renders a bare `<Icon />`, so the icon-xs
-            // `[&_svg:not([class*='size-'])]:size-3` rule (button.tsx:59) applies: 12px.
-            .child(svg(allCollapsed ? "mods/orca-nav/chevrons-up-down.svg" : "mods/orca-nav/chevrons-down-up.svg").size(12)))))
-        // ORDER, from SidebarHeader.tsx:76-100 — `SidebarHeaderActions` runs
-        // options -> AddProject -> NewWorkspace.
-        // SidebarHeader.tsx:101 — the bell swaps the sidebar body to agents; orca-agents is a right-sidebar panel, so there is no second body.
-        // SidebarWorkspaceOptionsMenu.tsx:43-68 — a ghost icon-xs button (24x24) holding
-        // SlidersHorizontal `size-3.5` with the explicit `strokeWidth={2.25}` (:66), plus the
-        // corner filter badge. `sidebar-header-actions.tsx:92` places it before AddProject.
-        // Herdr has no Radix DropdownMenu, so the menu is this mod's own popup overlay, opened
-        // with the same openOverlay({kind:"popup"}) call orca-menu and new-menu use; the props
-        // select optionsView in render(). Choices persist in "workspace.options.v1" and
-        // orca-spaces reads that key in ordered().
-        // AddProjectButton (:27-31) — FolderPlus `size-3.5` at the explicit `strokeWidth={2.25}`.
-        .child(h_flex().flex_none().items_center().gap(4)
-          .child(div().id("proj-options").relative().size(24).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.muted)
-            .hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-            .role("button").tooltip(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"})` : "Workspace options")
-            .accessibility_label(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"} active)` : "Workspace options")
-            .on_click(() => openOverlay({ mod: "orca-nav", kind: "popup", width: 288, height: 560, props: { navMenu: "workspace-options" } }))
-            .child(svg("mods/orca-nav/sliders-horizontal.svg").size(14).flex_none())
-            .when(filters > 0, el => el.child(div().absolute().top(-2).right(-2).h(12).min_w(12).px(2).rounded_full().bg(t.accent).flex().items_center().justify_center()
-              .text_size(9).line_height("9px").text_color(t.accent_foreground).child(filters > 9 ? "9+" : String(filters)))))
-          .child(div().id("proj-add-repo").size(24).flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-            .role("button").accessibility_label("Add project")
-            .on_click(() => {
-              // herdr.d.ts:39 — the folder picker is async: `Promise<string | null>`.
-              // Taking the promise as a value stored "[object Promise]" as the folder.
-              void pickFolder().then((folder) => {
-                if (!folder) return;
-                // Append to persisted project list
-                const existing = JSON.parse(localStorage.getItem("projects.saved.v1") || "[]");
-                // Avoid duplicates
-                if (!existing.includes(folder)) {
-                  existing.push(folder);
-                  localStorage.setItem("projects.saved.v1", JSON.stringify(existing));
-                }
-                run("space.new", { folder });
-              });
-            })
-            .child(svg("mods/orca-nav/folder-plus.svg").size(14)))
-          // NewWorkspaceButton (:60-64) — Plus `size-3.5`, same 2.25 stroke. Orca's header
-          // actions are `size="icon-xs"` buttons, which are 24x24, so this is not wider than
-          // the options slot.
-          .child(div().id("proj-new").size(24).flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-            .role("button").accessibility_label("New workspace")
-            // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-            .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }))
-            .child(svg("mods/orca-nav/plus.svg").size(14)))));;
+    return h_flex().min_w(0).items_center()
+      // `text-muted-foreground/80`: main.css:365 #acacac at 80% = #8a8a8a.
+      .child(div().pl(8).pr(2).text_size(12).font_semibold().text_color("#8a8a8a").child("Projects"))
+      .when(projectCount > 0 && this.headerHover, el => el.child(collapseAllButton(t, allCollapsed)));
   }
 
   // ---- Workspace options overlay (SidebarWorkspaceOptionsMenu.tsx + workspace-options-menu-items.tsx) ----
@@ -293,7 +337,7 @@ export default class Nav extends View {
     const nav = rows.filter((r) => r.kind !== "separator" && r.kind !== "label" && r.kind !== "heading" && r.kind !== "gap" && r.kind !== "groupby");
     if (!nav.includes(rows[this.at])) this.at = rows.indexOf(nav[0] ?? rows[0]);
     return v_flex().id("workspace-options").track_focus(this.handle).w_full().min_h(0).p(4).bg(t.popover).text_size(13)
-      .on_key_down((e, cx) => {
+      .on_key_down((e, eventCx) => {
         // Radix menu keyboard: up/down move the current row, Home/End jump, Enter/Space activate
         // (dropdown-menu.tsx:115 data-[current=true]; context-menu.tsx:31-62).
         if (e.key === "down" || e.key === "up") {
@@ -302,12 +346,12 @@ export default class Nav extends View {
           this.at = rows.indexOf(nav[next]);
         } else if (e.key === "home") this.at = rows.indexOf(nav[0]);
         else if (e.key === "end") this.at = rows.indexOf(nav[nav.length - 1]);
-        else if (e.key === "enter" || e.key === "space") { const row = rows[this.at]; if (row) this.act(row, cx); }
+        else if (e.key === "enter" || e.key === "space") { const row = rows[this.at]; if (row) this.act(row, eventCx); }
         else if (e.key === "escape") closeOverlay(props()?.overlay);
         else return;
-        cx.notify();
+        eventCx.notify();
       })
-      .children(rows.map((row, i) => this.menuRow(row, i, t, cx)));
+      .children(rows.map((row, i) => this.menuRow(row, i, t)));
   }
 
   rootRows() {
@@ -378,45 +422,29 @@ export default class Nav extends View {
   }
 
   act(row, cx) {
-    const o = readOptions();
-    if (row.kind === "gap") return;
     if (row.kind === "action") {
       run(`orca-spaces.${row.command}`);
       closeOverlay(props()?.overlay);
       return;
     }
-    if (row.kind === "back") { this.page = null; this.at = -1; cx.notify(); return; }
-    if (row.kind === "page") { this.page = row.page; this.at = -1; cx.notify(); return; }
-    if (row.kind === "toggle") { writeOptions({ [row.key]: !o[row.key] }); cx.notify(); return; }
-    if (row.kind === "radio") { writeOptions({ [row.key]: row.value }); cx.notify(); return; }
-    if (row.kind === "groupby") { writeOptions({ groupBy: row.value }); cx.notify(); return; }
-    if (row.kind === "hostAll") { writeOptions({ visibleWorkspaceHostIds: null }); cx.notify(); return; }
-    if (row.kind === "host") {
-      const all = hostChoices().map((h) => h.id);
-      const current = o.visibleWorkspaceHostIds === null ? all : o.visibleWorkspaceHostIds;
-      const next = current.includes(row.host) ? current.filter((id) => id !== row.host) : [...current, row.host];
-      // Orca disables the last checked host row so the sidebar cannot show none.
-      if (next.length === 0) return;
-      writeOptions({ visibleWorkspaceHostIds: next.length === all.length ? null : next });
+    if (row.kind === "back" || row.kind === "page") {
+      this.page = row.kind === "back" ? null : row.page;
+      this.at = -1;
       cx.notify();
       return;
     }
-    if (row.kind === "projectClear") { writeOptions({ filterRepoIds: [] }); cx.notify(); return; }
-    if (row.kind === "project") {
-      const next = o.filterRepoIds.includes(row.project)
-        ? o.filterRepoIds.filter((id) => id !== row.project)
-        : [...o.filterRepoIds, row.project];
-      writeOptions({ filterRepoIds: next });
-      cx.notify();
-    }
+    const patch = OPTION_PATCH[row.kind]?.(row, readOptions());
+    if (!patch) return;
+    writeOptions(patch);
+    cx.notify();
   }
 
-  menuRow(row, i, t, cx) {
-    // `cx` is only for the inline group-by control, which writes and must redraw its own selection.
-    if (row.kind === "separator") return div().mx(10).my(5).h(1).bg(t.border);
-    if (row.kind === "label") return div().px(10).pt(5).text_size(14).text_color(t.foreground).child(row.text);
-    if (row.kind === "heading") return div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child(row.text);
+  menuRow(row, i, t) {
     if (row.kind === "groupby") return this.groupToggle(readOptions(), t);
+    return staticRow(row, t) ?? this.optionRow(row, i, t);
+  }
+
+  optionRow(row, i, t) {
     const current = this.at === i;
     const disabled = row.kind === "gap" || Boolean(row.disabled);
     // Row shape: `rounded-md px-2.5 py-1 text-[13px] leading-4` = 24px; disabled is
@@ -426,14 +454,12 @@ export default class Nav extends View {
       .when(disabled, (el) => el.opacity(0.4).tooltip(row.note))
       .when(current && !disabled, (el) => el.bg(t.selected))
       .when(!disabled, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover))
-        .on_hover((on, cx) => { if (on && this.at !== i) { this.at = i; cx.notify(); } })
-        .on_click((_e, cx) => this.act(row, cx)))
-      .when(row.kind === "radio" || row.kind === "host" || row.kind === "hostAll" || row.kind === "project" || row.kind === "toggle",
-        (el) => el.child(div().w(14).flex_none().text_size(12).child(row.kind === "radio" ? (row.checked ? "●" : "") : (row.checked ? "✓" : ""))))
+        .on_hover((on, hoverCx) => { if (on && this.at !== i) { this.at = i; hoverCx.notify(); } })
+        .on_click((_e, clickCx) => this.act(row, clickCx)))
+      .when(CHECK_KINDS.has(row.kind), (el) => el.child(div().w(14).flex_none().text_size(12).child(checkMark(row))))
       .child(div().flex_1().min_w(0).truncate().child(row.label))
       // Right value: `ml-auto text-[11px] font-medium text-muted-foreground` (:93-147).
-      .child(div().flex_none().max_w(150).truncate().text_size(11).font_medium().text_color(t.muted)
-        .child(row.kind === "page" ? `${row.value} ›` : row.kind === "action" ? row.value : row.kind === "gap" ? "Unavailable" : row.kind === "projectClear" ? "" : ""));
+      .child(div().flex_none().max_w(150).truncate().text_size(11).font_medium().text_color(t.muted).child(valueText(row)));
   }
 
   // SidebarGroupByToggle.tsx: `h-6 w-full`, each item `h-6 grow basis-0 px-1 text-[10px]`,
@@ -444,7 +470,7 @@ export default class Nav extends View {
         .flex_1().h(24).flex().items_center().justify_center().px(4).text_size(10).cursor_pointer()
         .when(o.groupBy === value, (el) => el.bg("#f0f0f01a").font_semibold().text_color(t.foreground))
         .when(o.groupBy !== value, (el) => el.text_color(t.muted).hover((s) => s.text_color(t.foreground)))
-        .on_click((_e, cx) => { writeOptions({ groupBy: value }); cx.notify(); })
+        .on_click((_e, clickCx) => { writeOptions({ groupBy: value }); clickCx.notify(); })
         .child(label)));
   }
 }

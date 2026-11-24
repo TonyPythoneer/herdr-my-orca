@@ -43,16 +43,16 @@ function watch(view, cx) {
   const s = view.fs;
   if (s.watch) return;
   let lost = 0, seen = onStop(view);
-  s.watch = cx.timer.every(TICK, (cx) => {
+  s.watch = cx.timer.every(TICK, (tickCx) => {
     const id = onStop(view);
-    if (id !== seen) { seen = id; notify(view, cx); }
+    if (id !== seen) { seen = id; notify(view, tickCx); }
     if (id || s.hold?.()) { lost = 0; s.last = id ?? s.last; return; }
     if (++lost < LOST_TICKS) return;
     s.watch.cancel();
     s.watch = null;
     s.keyboard = false;
     if (shared(MODE) === s.me) setShared(MODE, null);
-    notify(view, cx);
+    notify(view, tickCx);
   });
 }
 
@@ -94,7 +94,7 @@ export function focusRoot(view, el) {
 // Makes `el` a tab stop with T3's ring (focus-visible:ring-2 ring-inset ring-ring: its ring is the primary, here `accent`), drawn
 // over it so nothing moves. As T3's rows, every stop is in the Tab order: no roving. Call it last: the ring goes over the children.
 // Enter and Space click what has on_click; `enter` is for a row that goes by its mouse-up. `handle`: a stop that has its own.
-export function stop(view, t, id, el, radius = 6, { enter: act, handle } = {}) {
+export function stop(view, t, id, el, { radius = 6, enter: act, handle } = {}) {
   const s = view.fs;
   if (!s.modal && !shared(MODE)) return el;
   if (handle) s.handles.set(id, handle);
@@ -112,16 +112,30 @@ export function stop(view, t, id, el, radius = 6, { enter: act, handle } = {}) {
     .when(s.keyboard && h.is_focused(), (e) => e.relative().child(div().absolute().inset_0().rounded(radius).border(2).border_color(t.accent)));
 }
 
+// Typing a row's first letters counts as one word while the keys come this close together.
+const TYPE_AHEAD_MS = 750;
+
+// A printable key with no command modifier held.
+function isTypeable(e) {
+  return Boolean(e.key_char?.trim()) && !e.modifiers?.control && !e.modifiers?.platform && !e.modifiers?.alt;
+}
+
+// The letters typed so far, restarting once the keys are too far apart.
+function typedWord(view, char) {
+  const now = Date.now();
+  view.typed = now - (view.typedAt ?? -Infinity) < TYPE_AHEAD_MS ? view.typed + char.toLowerCase() : char.toLowerCase();
+  view.typedAt = now;
+  return view.typed;
+}
+
 // T3's Base UI menus: Home, End, and typing a row's first letters (750ms apart at most); the same letter again steps through
 // the rows it starts. The row to move to, or -1 for any other key.
 export function menuJump(view, e, labels, at) {
   if (e.key === "home") return 0;
   if (e.key === "end") return labels.length - 1;
-  if (!e.key_char?.trim() || e.modifiers?.control || e.modifiers?.platform || e.modifiers?.alt) return -1;
-  const now = Date.now();
-  view.typed = now - (view.typedAt ?? -Infinity) < 750 ? view.typed + e.key_char.toLowerCase() : e.key_char.toLowerCase();
-  view.typedAt = now;
-  const same = [...view.typed].every((c) => c === view.typed[0]), word = same ? view.typed[0] : view.typed;
+  if (!isTypeable(e)) return -1;
+  const typed = typedWord(view, e.key_char);
+  const same = [...typed].every((c) => c === typed[0]), word = same ? typed[0] : typed;
   for (let i = 0; i < labels.length; i++) {
     const k = (Math.max(at + (same ? 1 : 0), 0) + i) % labels.length;
     if (labels[k].toLowerCase().startsWith(word)) return k;
