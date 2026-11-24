@@ -27,25 +27,41 @@ async function graphql(gh, args) {
   return data.data;
 }
 
-export async function prepareCreatePr(git, gh) {
+const BRANCH_PREFIX = 'refs/heads/';
+
+// The current local branch, its commit and the one upstream remote/branch it tracks.
+async function readUpstream(git) {
   const ref = (await checked(git, ['symbolic-ref', '--quiet', 'HEAD'], 'Cannot read current branch')).trim();
-  if (!ref.startsWith('refs/heads/')) throw new Error('A local branch is required.');
-  const branch = ref.slice('refs/heads/'.length);
+  if (!ref.startsWith(BRANCH_PREFIX)) throw new Error('A local branch is required.');
+  const branch = ref.slice(BRANCH_PREFIX.length);
   const oid = (await checked(git, ['rev-parse', '--verify', 'HEAD^{commit}'], 'Cannot read HEAD')).trim();
   const remote = onlyValue(await checked(git, ['config', '--null', '--get-all', `branch.${branch}.remote`], 'Missing upstream remote'), 'upstream remote');
   const merge = onlyValue(await checked(git, ['config', '--null', '--get-all', `branch.${branch}.merge`], 'Missing upstream branch'), 'upstream branch');
-  if (remote === '.' || remote.startsWith('-') || !merge.startsWith('refs/heads/')) throw new Error('A GitHub upstream branch is required.');
+  if (remote === '.' || remote.startsWith('-') || !merge.startsWith(BRANCH_PREFIX)) throw new Error('A GitHub upstream branch is required.');
+  return { branch, oid, remote, merge };
+}
+
+// GitHub says the repository is missing, archived, a fork, or not the one the remote URL names.
+const notUsableRepository = (r, owner, repo) =>
+  !r?.id || r.isArchived || r.isFork || r.nameWithOwner?.toLowerCase() !== `${owner}/${repo}`.toLowerCase();
+
+// GitHub has no default branch, or its copy of the branch is not the commit that is checked out.
+const notPushedBranch = (r, head, base, oid) =>
+  !base || !r.defaultBranchRef.target?.oid || r.ref?.prefix !== BRANCH_PREFIX || r.ref?.name !== head || r.ref?.target?.oid !== oid;
+
+export async function prepareCreatePr(git, gh) {
+  const { branch, oid, remote, merge } = await readUpstream(git);
   const urls = (await checked(git, ['remote', 'get-url', '--all', remote], 'Cannot read upstream URL')).trim().split('\n');
   if (urls.length !== 1) throw new Error('Multiple upstream URLs are not supported.');
   const { owner, repo } = githubRemote(urls[0]);
   const data = await graphql(gh, ['-f', `query=${QUERY}`, '-f', `owner=${owner}`, '-f', `repo=${repo}`, '-f', `head=${merge}`]);
-  const r = data?.repository, head = merge.slice('refs/heads/'.length), base = r?.defaultBranchRef?.name;
-  if (!r?.id || r.isArchived || r.isFork || r.nameWithOwner?.toLowerCase() !== `${owner}/${repo}`.toLowerCase() || !base || !r.defaultBranchRef.target?.oid || r.ref?.prefix !== 'refs/heads/' || r.ref?.name !== head || r.ref?.target?.oid !== oid) throw new Error('Push the current commit to its GitHub upstream before creating a PR.');
+  const r = data?.repository, head = merge.slice(BRANCH_PREFIX.length), base = r?.defaultBranchRef?.name;
+  if (notUsableRepository(r, owner, repo) || notPushedBranch(r, head, base, oid)) throw new Error('Push the current commit to its GitHub upstream before creating a PR.');
   if (head === base) throw new Error('The current branch is the default branch.');
   return { branch, oid, remote, merge, url: urls[0], repoId: r.id, name: r.nameWithOwner, head, base, baseOid: r.defaultBranchRef.target.oid };
 }
 
-export async function createPr(snapshot, git, gh, current, title, body, draft) {
+export async function createPr({ snapshot, git, gh, current, title, body, draft }) {
   if (!current()) throw new Error('Workspace changed; PR creation cancelled.');
   const now = await prepareCreatePr(git, gh);
   if (!current() || JSON.stringify(now) !== JSON.stringify(snapshot)) throw new Error('Branch, repository or default branch changed; open the dialog again.');

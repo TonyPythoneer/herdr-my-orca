@@ -11,9 +11,13 @@ export const tilde = (path, userHome) => {
 export const slug = (branch) => branch.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 
 // `now` is injectable so the buckets can be tested without freezing the clock.
+const HOUR = 3600, DAY = 86400, DAYS_PER_MONTH = 30, MONTH_THRESHOLD_DAYS = 60;
 export const ago = (s, now = Date.now()) => {
   const d = now / 1000 - s;
-  return d < 3600 ? `${Math.max(1, Math.round(d / 60))}m` : d < 86400 ? `${Math.round(d / 3600)}h` : d < 86400 * 60 ? `${Math.round(d / 86400)}d` : `${Math.round(d / 86400 / 30)}mo`;
+  if (d < HOUR) return `${Math.max(1, Math.round(d / 60))}m`;
+  if (d < DAY) return `${Math.round(d / HOUR)}h`;
+  if (d < DAY * MONTH_THRESHOLD_DAYS) return `${Math.round(d / DAY)}d`;
+  return `${Math.round(d / DAY / DAYS_PER_MONTH)}mo`;
 };
 
 // Where a space is now: its first terminal's live folder, else where it was made.

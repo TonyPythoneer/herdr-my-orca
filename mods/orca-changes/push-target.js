@@ -1,35 +1,78 @@
-// Resolve one configured push destination; never let push.default expand the refspec.
-export async function resolvePushTarget(git) {
-  const read = async (args, error) => {
-    const r = await git(args);
-    if (r.code !== 0) throw new Error(error);
-    return r.stdout.trim();
-  };
-  const branch = await read(["symbolic-ref", "--quiet", "HEAD"], "Cannot push a detached HEAD.");
-  if (!branch.startsWith("refs/heads/")) throw new Error("Cannot determine the current branch.");
-  const rows = await read(["for-each-ref", "--format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)", branch], "Cannot determine the push target.");
-  const matches = rows.split("\n").map((line) => line.split("\0")).filter((parts) => parts[0] === branch);
-  const [_, remote, pushRef, tracking, upstreamRemote, upstreamRef, upstream] = matches.length === 1 ? matches[0] : [];
-  const ref = pushRef || (remote === upstreamRemote && tracking && tracking === upstream ? upstreamRef : "");
-  if (!remote || remote === "." || remote.startsWith("-") || !ref?.startsWith("refs/heads/")) throw new Error("A single configured push target is required.");
+const BRANCH_PREFIX = "refs/heads/";
+const OBJECT_ID = /^[a-f0-9]{40}([a-f0-9]{24})?$/; // SHA-1 or SHA-256
+
+// `git config` answers 0 (set) or 1 (unset); any other code means the value could not be read.
+const unreadable = (r) => r.code !== 0 && r.code !== 1;
+
+async function readTrimmed(git, args, error) {
+  const r = await git(args);
+  if (r.code !== 0) throw new Error(error);
+  return r.stdout.trim();
+}
+
+async function assertNoCustomRefspecs(git, remote) {
   const configured = await git(["config", "--get-all", `remote.${remote}.push`]);
   if (configured.code === 0) throw new Error("Custom push refspecs are not supported by this panel.");
   if (configured.code !== 1) throw new Error("Cannot verify the configured push refspecs.");
+}
+
+async function assertPushPolicy(git) {
   const policy = await git(["config", "--get", "push.default"]);
-  if (policy.code !== 0 && policy.code !== 1) throw new Error("Cannot verify the push policy.");
+  if (unreadable(policy)) throw new Error("Cannot verify the push policy.");
   if (policy.code === 0 && ["matching", "nothing"].includes(policy.stdout.trim().toLowerCase())) throw new Error("The configured push policy does not select one branch.");
+}
+
+async function assertNotMirror(git, remote) {
   const mirror = await git(["config", "--bool", "--get", `remote.${remote}.mirror`]);
-  if (mirror.code !== 0 && mirror.code !== 1) throw new Error("Cannot verify the remote mirror setting.");
+  if (unreadable(mirror)) throw new Error("Cannot verify the remote mirror setting.");
   if (mirror.code === 0 && mirror.stdout.trim() !== "false") throw new Error("Mirror pushes are not supported by this panel.");
-  const upstreams = await git(["config", "--get-all", `branch.${branch.slice("refs/heads/".length)}.merge`]);
-  if (upstreams.code !== 0 && upstreams.code !== 1) throw new Error("Cannot verify the branch upstream.");
+}
+
+async function assertSingleUpstream(git, branch) {
+  const upstreams = await git(["config", "--get-all", `branch.${branch.slice(BRANCH_PREFIX.length)}.merge`]);
+  if (unreadable(upstreams)) throw new Error("Cannot verify the branch upstream.");
   if (upstreams.code === 0 && (!upstreams.stdout.trim() || upstreams.stdout.trim().split("\n").length !== 1)) throw new Error("Branch has multiple upstreams or invalid configuration; push cancelled.");
-  const urls = await read(["remote", "get-url", "--push", "--all", remote], "Cannot determine the push remote.");
+}
+
+// The one row `for-each-ref` printed for the branch: where it pushes and what it tracks.
+function parsePushRow(rows, branch) {
+  const matches = rows.split("\n").map((line) => line.split("\0")).filter((parts) => parts[0] === branch);
+  const [, remote, pushRef, tracking, upstreamRemote, upstreamRef, upstream] = matches.length === 1 ? matches[0] : [];
+  return { remote, pushRef, tracking, upstreamRemote, upstreamRef, upstream };
+}
+
+// The explicit push ref, else the upstream's own branch when both name the same tracking ref.
+function pushDestinationRef({ remote, pushRef, tracking, upstreamRemote, upstreamRef, upstream }) {
+  return pushRef || (remote === upstreamRemote && tracking && tracking === upstream ? upstreamRef : "");
+}
+
+// The remote-tracking ref a lease can be taken from: only when push and upstream are the same branch.
+function leaseTrackingRef({ remote, tracking, upstreamRemote, upstreamRef, upstream }, ref) {
+  return remote === upstreamRemote && ref === upstreamRef && tracking === upstream && tracking?.startsWith("refs/remotes/") ? tracking : null;
+}
+
+async function readPushUrl(git, remote) {
+  const urls = await readTrimmed(git, ["remote", "get-url", "--push", "--all", remote], "Cannot determine the push remote.");
   if (!urls || urls.split("\n").length !== 1) throw new Error("Push remote has multiple destinations or an invalid URL; choose one outside this panel.");
-  const oid = await read(["rev-parse", "--verify", "HEAD^{commit}"], "Cannot determine the commit to push.");
-  if (!/^[a-f0-9]{40}([a-f0-9]{24})?$/.test(oid)) throw new Error("Cannot determine the commit to push.");
-  const leaseTracking = remote === upstreamRemote && ref === upstreamRef && tracking === upstream && tracking?.startsWith("refs/remotes/") ? tracking : null;
-  return { branch, remote, ref, oid, destination: urls, leaseTracking };
+  return urls;
+}
+
+// Resolve one configured push destination; never let push.default expand the refspec.
+export async function resolvePushTarget(git) {
+  const branch = await readTrimmed(git, ["symbolic-ref", "--quiet", "HEAD"], "Cannot push a detached HEAD.");
+  if (!branch.startsWith(BRANCH_PREFIX)) throw new Error("Cannot determine the current branch.");
+  const rows = await readTrimmed(git, ["for-each-ref", "--format=%(refname)%00%(push:remotename)%00%(push:remoteref)%00%(push)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)", branch], "Cannot determine the push target.");
+  const row = parsePushRow(rows, branch);
+  const { remote } = row, ref = pushDestinationRef(row);
+  if (!remote || remote === "." || remote.startsWith("-") || !ref?.startsWith(BRANCH_PREFIX)) throw new Error("A single configured push target is required.");
+  await assertNoCustomRefspecs(git, remote);
+  await assertPushPolicy(git);
+  await assertNotMirror(git, remote);
+  await assertSingleUpstream(git, branch);
+  const destination = await readPushUrl(git, remote);
+  const oid = await readTrimmed(git, ["rev-parse", "--verify", "HEAD^{commit}"], "Cannot determine the commit to push.");
+  if (!OBJECT_ID.test(oid)) throw new Error("Cannot determine the commit to push.");
+  return { branch, remote, ref, oid, destination, leaseTracking: leaseTrackingRef(row, ref) };
 }
 
 export const pushArgs = ({ remote, ref, oid }) => ["push", "--no-follow-tags", "--recurse-submodules=no", "--", remote, `${oid}:${ref}`];
@@ -64,7 +107,7 @@ export async function forcePushTarget(git) {
   if (!target.leaseTracking) throw new Error("A unique remote-tracking branch is required for Force Push.");
   const r = await git(["rev-parse", "--verify", `${target.leaseTracking}^{commit}`]);
   const expected = r.stdout?.trim();
-  if (r.code !== 0 || !/^[a-f0-9]{40}([a-f0-9]{24})?$/.test(expected)) throw new Error("Cannot determine the remote-tracking commit for Force Push.");
+  if (r.code !== 0 || !OBJECT_ID.test(expected)) throw new Error("Cannot determine the remote-tracking commit for Force Push.");
   return { ...target, expected };
 }
 
