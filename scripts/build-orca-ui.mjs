@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Build the managed Orca UI outputs from `orca-ui/features/**/manifest.json`.
 //
-// Usage: node scripts/build-orca-ui.mjs --out <dir> [--check] [--root <dir>]
+// Usage: node scripts/build-orca-ui.mjs --out <dir> [--check | --force] [--root <dir>]
 //   The build writes only files a manifest declares, so an empty <dir> gets exactly that batch.
+//   A copy that differs and is newer than its source was probably edited by hand: the whole build
+//   stops with exit 1 and writes nothing. --force skips that mtime test only.
 //   --check compares bytes and file modes against <dir> without writing, and also reports files in
 //   a feature's mod folder that nothing declares. Exit 0 clean, 1 drift or an output I/O failure,
 //   2 a usage or manifest error. --root reads another repo's sources and is meant for tests.
@@ -11,7 +13,7 @@ import { dirname, join, parse, resolve, sep } from "node:path";
 import { ROOT, ManifestError, allowedExtras, loadManifests, walkFiles } from "./orca-ui-manifests.mjs";
 import { USES } from "./sync-shared.mjs";
 
-const USAGE = "usage: node scripts/build-orca-ui.mjs --out <dir> [--check] [--root <dir>]";
+const USAGE = "usage: node scripts/build-orca-ui.mjs --out <dir> [--check | --force] [--root <dir>]";
 
 function fail(message) {
   console.error(message);
@@ -20,14 +22,14 @@ function fail(message) {
 }
 
 function parseArgs(args) {
-  const opts = { out: null, check: false, root: ROOT };
+  const opts = { out: null, check: false, force: false, root: ROOT };
   const seen = new Set();
   for (let i = 0; i < args.length; i++) {
     const flag = args[i];
-    if (!["--out", "--check", "--root"].includes(flag)) fail(`unknown argument ${flag}`);
+    if (!["--out", "--check", "--force", "--root"].includes(flag)) fail(`unknown argument ${flag}`);
     if (seen.has(flag)) fail(`${flag} given more than once`);
     seen.add(flag);
-    if (flag === "--check") opts.check = true;
+    if (flag === "--check" || flag === "--force") opts[flag.slice(2)] = true;
     else {
       const value = args[++i];
       if (!value || value.startsWith("--")) fail(`${flag} needs a directory`);
@@ -35,6 +37,7 @@ function parseArgs(args) {
     }
   }
   if (!opts.out) fail("--out is required");
+  if (opts.check && opts.force) fail("--check and --force cannot be combined");
   return opts;
 }
 
@@ -55,7 +58,7 @@ function pathProblem(path) {
 }
 
 function main() {
-  const { out, check, root } = parseArgs(process.argv.slice(2));
+  const { out, check, force, root } = parseArgs(process.argv.slice(2));
   let loaded;
   try { loaded = loadManifests({ root, uses: USES }); }
   catch (error) {
@@ -97,6 +100,13 @@ function main() {
 
   if (problems.length) {
     for (const line of problems) console.error(line);
+    process.exit(1);
+  }
+  // Only an existing copy that must change can be a hand edit; missing files are always safe.
+  const blocked = force ? [] : pending.filter(p => p.why !== "missing" && statSync(p.to).mtimeMs > statSync(join(root, loaded.table.get(p.dest).source)).mtimeMs);
+  if (blocked.length) {
+    for (const p of blocked) console.error(p.dest);
+    console.error("newer than their source and different: edit the source, or rerun with --force to overwrite");
     process.exit(1);
   }
   try {
