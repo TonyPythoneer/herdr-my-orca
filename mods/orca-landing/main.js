@@ -33,9 +33,9 @@ function keyCap(label, t) {
 // `ShortcutKeyCombo` (:52-66): caps joined by `+` on Linux (`mx-0.5 text-xs`); macOS joins
 // them with no separator. `window().platform` IS available to a mod, but this page always
 // joins with `+`; `tip.js:21` is the only place that varies it by platform.
-function combo(keysFor, t) {
+function combo(caps, t) {
   const row = h_flex().items_center().gap(4);
-  keysFor.forEach((k, i) => {
+  caps.forEach((k, i) => {
     if (i) row.child(div().text_size(12).text_color(t.muted).child("+"));
     row.child(keyCap(k, t));
   });

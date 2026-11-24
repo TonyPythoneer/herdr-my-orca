@@ -48,14 +48,21 @@ const AGENT_MARKS = {
   aider: "mods/orca-pane/agent-icons/aider.svg",
 };
 
+const maskMark = (path, size, theme) => svg(path).size(size).flex_none().text_color(theme.muted);
+const imageMark = (path, size) => image(path).w(size).h(size).flex_none();
+
+// The mark Orca's catalog gives `app`; `mono` is the program table's own one-color icon.
+function catalogMark(app, icon, size, theme) {
+  const catalog = AGENT_MARKS[app];
+  if (catalog === "mono") return icon ? maskMark(icon, size, theme) : null;
+  return OWN_FILLS.has(app) || !catalog.endsWith(".svg") ? imageMark(catalog, size) : maskMark(catalog, size, theme);
+}
+
 // `terminals()` names the agent's app in `report.app`, not `app`.
 export function agentMark(term, size = 13, theme) {
-  const over = AGENT_MARKS[term?.report?.app];
-  const p = term?.program;
-  if (over === "mono") return p?.icon ? svg(p.icon).size(size).flex_none().text_color(theme.muted) : null;
-  if (over) return OWN_FILLS.has(term.report?.app) || !over.endsWith(".svg")
-    ? image(over).w(size).h(size).flex_none()
-    : svg(over).size(size).flex_none().text_color(theme.muted);
-  if (!p?.icon) return null;
-  return p.tint ? svg(p.icon).size(size).flex_none().text_color(theme.muted) : image(p.icon).w(size).h(size).flex_none();
+  const app = term?.report?.app;
+  const icon = term?.program?.icon;
+  if (AGENT_MARKS[app]) return catalogMark(app, icon, size, theme);
+  if (!icon) return null;
+  return term.program.tint ? maskMark(icon, size, theme) : imageMark(icon, size);
 }
