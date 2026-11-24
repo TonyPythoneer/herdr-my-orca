@@ -1,0 +1,9 @@
+     9	// `text-center text-muted-foreground`, a 32px glyph at 50% opacity and `text-sm` copy.
+    10	import { View, div, svg } from "gpui-kit";
+    11	import { v_flex } from "gpui-base";
+    12	import { theme, props } from "herdr";
+    13	import { panelFrame } from "../../shared/panel-motion.js";
+    14	throw new Error("ORCA_PROBE_L");
+    15	
+    16	const GAPS = {
+    17	  workspaces: {

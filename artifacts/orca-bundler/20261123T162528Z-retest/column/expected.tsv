@@ -1,0 +1,7 @@
+sample	non_ascii_before_throw	utf16_throw	utf16_newError	byte_throw	byte_newError
+s1_ascii	0	18	24	18	24
+s2_nonascii1	1	19	25	21	27
+s3_nonascii4	4	22	28	30	36
+s4_nonascii10	10	22	28	42	48
+s5_emoji	1	20	26	22	28
+s6_start	0	1	7	1	7

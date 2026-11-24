@@ -103,6 +103,10 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   and regenerated with `node scripts/build-orca-ui.mjs --out .`; its `manifest.json` lists every
   managed output, so the copy under `mods/` is delivery format, not an edit location
   (`--check` reports drift). Anything no manifest lists is still edited in place.
+- On a Herdr error (`herdr-app check`, `status`, or the window's Copy details), do not open the
+  `mods/` file it names: `herdr-app check mods/<mod> 2>&1 | node scripts/where-error.mjs` prints the
+  source file and line to edit (shared helpers one line up, migrated features in `orca-ui/`) and
+  the `app.mjs` entry, tests and layouts that own it.
 - A mod may import only files inside its own folder: `../x.js` and symlinks fail
   `herdr-app check`. Code several mods need lives in `shared/` and `scripts/sync-shared.mjs`
   copies it into each mod with a header line; `--check` (and a test) fails on drift. Edit only

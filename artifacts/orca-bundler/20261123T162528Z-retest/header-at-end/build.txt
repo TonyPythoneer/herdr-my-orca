@@ -1,0 +1,20 @@
+== shared-probe nl -ba (throw line) ==
+    19	}
+    20	
+    21	export function panelFrame(inner) {
+    22	  throw new Error("ORCA_PROBE_R");
+    23	  if (props()?.overlay) return inner;
+    24	  const open = shared("panel.openPx");
+    25	  const px = find(layout(), "panel")?.size?.px;
+== grep throw in shared-probe and mod ==
+/private/tmp/claude-501/rt-QvSR/shared-probe/panel-motion.js:22:  throw new Error("ORCA_PROBE_R");
+/private/tmp/claude-501/rt-QvSR/mods/orca-panel-gap/panel-motion.js:22:  throw new Error("ORCA_PROBE_R");
+== last line of mod ==
+// Generated from shared/panel-motion.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+== line1 of mod ==
+// Right sidebar, mirrored from the left sidebar's `sidebarFrame` (orca-nav / orca-spaces /
+== diff mod(probe) vs shared-probe (expect only header line) ==
+38a39
+> // Generated from shared/panel-motion.js by scripts/sync-shared.mjs. Edit that file, not this copy.
+== mod(healthy) must not contain throw ==
+0

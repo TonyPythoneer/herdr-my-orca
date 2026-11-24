@@ -1,0 +1,4 @@
+{
+  "error": "the window did not answer"
+}
+status exit 1

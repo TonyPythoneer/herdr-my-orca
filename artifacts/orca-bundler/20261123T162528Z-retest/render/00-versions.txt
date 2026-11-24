@@ -1,0 +1,7 @@
+S=/private/tmp/claude-501/rt-NLl4
+--- herdr-app --version
+herdr-app 0.1.17
+exit=0
+--- hc --version
+hc 0.1.22
+exit=0

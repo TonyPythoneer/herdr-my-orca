@@ -1,0 +1,4 @@
+poll done after 10s
+-rw-r--r--@ 1 tonyyang  wheel  37 24 Nov 00:26 /private/tmp/claude-501/rt-pfb0/marker-render.txt
+[/private/tmp/claude-501/rt-pfb0/marker-render.txt]
+/private/tmp/claude-501/rt-pfb0/home

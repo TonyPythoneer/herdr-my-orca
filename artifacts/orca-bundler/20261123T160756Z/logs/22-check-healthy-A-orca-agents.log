@@ -1,0 +1,6 @@
+cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
+cmd: herdr-app check /private/tmp/claude-501/orca-bundler.X7bUqY/chk/A-orca-agents
+check passed: /private/tmp/claude-501/orca-bundler.X7bUqY/chk/A-orca-agents
+WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real
+WARN  gpui_shell::engine::quickjs::scheduler: a reload stranded script tasks that will never settle (1 a HostModule's async function, 2 cx.timer.every(ms, fn)); re-register background work from init()
+exit: 0

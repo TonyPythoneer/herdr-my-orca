@@ -1,0 +1,3 @@
+herdr-app: launchd checker submission failed; checking in this process (shares the caller's coalition): Operation not permitted (os error 1)
+2026-11-24 00:44:48.174 Herdr[89740:7723105] Connection Invalid error for service com.apple.hiservices-xpcservice.
+2026-11-24 00:44:48.174 Herdr[89740:7723103] Error received in message reply handler: Connection invalid

@@ -1,0 +1,34 @@
+total 0
+drwxr-xr-x@  4 tonyyang  wheel  128 24 Nov 00:26 .
+drwx------@  4 tonyyang  wheel  128 24 Nov 00:26 ..
+drwxr-xr-x@ 11 tonyyang  wheel  352 24 Nov 00:26 orca-agents
+drwxr-xr-x@ 12 tonyyang  wheel  384 24 Nov 00:26 orca-panel-gap
+
+/private/tmp/claude-501/rt-NLl4/mods/orca-agents:
+total 120
+drwxr-xr-x@ 11 tonyyang  wheel    352 24 Nov 00:26 .
+drwxr-xr-x@  4 tonyyang  wheel    128 24 Nov 00:26 ..
+-rw-r--r--@  1 tonyyang  wheel    195 24 Nov 00:26 agent-working-spinner.svg
+-rw-r--r--@  1 tonyyang  wheel    368 24 Nov 00:26 archive-restore.svg
+-rw-r--r--@  1 tonyyang  wheel    315 24 Nov 00:26 circle-check.svg
+-rw-r--r--@  1 tonyyang  wheel  28513 24 Nov 00:26 main.js
+-rw-r--r--@  1 tonyyang  wheel    380 24 Nov 00:26 message-circle-question.svg
+-rw-r--r--@  1 tonyyang  wheel     20 24 Nov 00:26 mod.json
+-rw-r--r--@  1 tonyyang  wheel   2440 24 Nov 00:26 panel-motion.js
+-rw-r--r--@  1 tonyyang  wheel    222 24 Nov 00:26 search.svg
+-rw-r--r--@  1 tonyyang  wheel    241 24 Nov 00:26 x.svg
+
+/private/tmp/claude-501/rt-NLl4/mods/orca-panel-gap:
+total 80
+drwxr-xr-x@ 12 tonyyang  wheel   384 24 Nov 00:26 .
+drwxr-xr-x@  4 tonyyang  wheel   128 24 Nov 00:26 ..
+-rw-r--r--@  1 tonyyang  wheel   375 24 Nov 00:26 calendar-clock.svg
+-rw-r--r--@  1 tonyyang  wheel   311 24 Nov 00:26 list-checks.svg
+-rw-r--r--@  1 tonyyang  wheel   309 24 Nov 00:26 list.svg
+-rw-r--r--@  1 tonyyang  wheel  2287 24 Nov 00:26 main.js
+-rw-r--r--@  1 tonyyang  wheel    20 24 Nov 00:26 mod.json
+-rw-r--r--@  1 tonyyang  wheel  2440 24 Nov 00:26 panel-motion.js
+-rw-r--r--@  1 tonyyang  wheel  2384 24 Nov 00:26 panel-motion.test.js
+-rw-r--r--@  1 tonyyang  wheel   311 24 Nov 00:26 plug.svg
+-rw-r--r--@  1 tonyyang  wheel   266 24 Nov 00:26 smartphone.svg
+-rw-r--r--@  1 tonyyang  wheel   328 24 Nov 00:26 workflow.svg

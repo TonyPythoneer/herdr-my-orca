@@ -1,0 +1,4 @@
+[2m2026-11-23T16:30:47.144146Z[0m [33m WARN[0m [2mherdr_app::window[0m[2m:[0m mod orca-panel-gap failed to load: ORCA_PROBE_L
+    at <anonymous> (/private/tmp/claude-501/hp.VJUo/app/mods/orca-panel-gap/main.js?v=1:14:11)
+
+2026-11-24 00:30:47.646 Herdr[15421:7430806] error messaging the mach port for IMKCFRunLoopWakeUpReliable

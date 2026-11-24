@@ -1,4 +1,3 @@
-// Generated from shared/tasks.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // Task management: the schedule and reset-time logic both mods share, and the one-shot runner.
 //
 // Pure except `runTask`, which takes the host's `exec` as an argument so `node --test` runs it.
@@ -375,3 +374,4 @@ function newest(a, b) {
   if (b === null || b === undefined) return a;
   return Math.max(a, b);
 }
+// Generated from shared/tasks.js by scripts/sync-shared.mjs. Edit that file, not this copy.

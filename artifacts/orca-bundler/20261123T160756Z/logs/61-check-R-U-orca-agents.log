@@ -1,0 +1,11 @@
+cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
+cmd: env herdr-app check /private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-agents
+WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real
+WARN  gpui_shell::engine::quickjs::scheduler: a reload stranded script tasks that will never settle (1 a HostModule's async function, 2 cx.timer.every(ms, fn)); re-register background work from init()
+ORCA_PROBE_R
+    at panelFrame (/private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-agents/main.js?v=1:7:12)
+    at render (/private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-agents/main.js?v=1:256:37)
+
+
+check failed: /private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-agents
+exit: 1

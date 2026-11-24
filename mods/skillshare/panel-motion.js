@@ -1,4 +1,3 @@
-// Generated from shared/panel-motion.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // Right sidebar, mirrored from the left sidebar's `sidebarFrame` (orca-nav / orca-spaces /
 // orca-chrome): while `orca-tabs.togglePanelNative` steps the panel narrower, the panel's content
 // keeps the OPEN width and only slides out and fades, so nothing reflows or truncates on the way.
@@ -36,3 +35,4 @@ export function panelFrame(inner) {
     .child(div().w(open).h_full().relative().left(px - open + (1 - k) * 28).child(inner))
     .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
 }
+// Generated from shared/panel-motion.js by scripts/sync-shared.mjs. Edit that file, not this copy.

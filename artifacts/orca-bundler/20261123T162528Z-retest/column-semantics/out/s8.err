@@ -1,0 +1,7 @@
+Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at <input>:1:1
+    at parse (native)
+    at <anonymous> (/private/tmp/claude-501/rt-p2bm/samples/s8/main.js?v=1:3:6)
+
+
+check failed: /private/tmp/claude-501/rt-p2bm/samples/s8

@@ -1,0 +1,9 @@
+# herdr-app --version
+herdr-app 0.1.17
+exit=0
+# hc --version
+hc 0.1.22
+exit=0
+# Herdr binary --version
+herdr-app 0.1.17
+exit=0

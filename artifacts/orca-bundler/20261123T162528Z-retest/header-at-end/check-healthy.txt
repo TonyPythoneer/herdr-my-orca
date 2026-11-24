@@ -1,0 +1,7 @@
+== HEALTHY check ==
+no `main.js` in /private/tmp/claude-501/rt-QvSR/healthy
+
+An application directory must contain main.js,          which default-exports a view class.
+
+check failed: /private/tmp/claude-501/rt-QvSR/healthy
+exit=1

@@ -1,0 +1,9 @@
+== marker check at 2026-11-23T16:26:53Z
+total 8
+drwx------@  5 tonyyang  wheel  160 24 Nov 00:26 .
+drwx------@ 27 tonyyang  wheel  864 24 Nov 00:26 ..
+drwxr-xr-x@  3 tonyyang  wheel   96 24 Nov 00:26 home
+-rw-r--r--@  1 tonyyang  wheel   37 24 Nov 00:26 marker-render.txt
+drwxr-xr-x@  4 tonyyang  wheel  128 24 Nov 00:26 mods
+[/private/tmp/claude-501/rt-pfb0/marker-render.txt]
+/private/tmp/claude-501/rt-pfb0/home

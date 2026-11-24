@@ -1,0 +1,2 @@
+check passed: /private/tmp/claude-501/rt-pfb0/mods/probe-exec-top
+WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real

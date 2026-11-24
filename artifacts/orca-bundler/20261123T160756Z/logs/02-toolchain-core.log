@@ -1,0 +1,7 @@
+cwd: /private/tmp/claude-501/orca-bundler.X7bUqY/tool
+cmd: ./node_modules/.bin/vp toolchain vite-plus-core
+Vite+ toolchain (local)
+
+vite-plus@1.7.0
+└── depends on @voidzero-dev/vite-plus-core@8.3.8000
+exit: 0

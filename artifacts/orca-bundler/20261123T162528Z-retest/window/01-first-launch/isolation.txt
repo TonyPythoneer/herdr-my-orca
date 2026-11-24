@@ -1,0 +1,52 @@
+APP=3424 CONNECT= CORE=
+ps: Invalid (zero-length) process id
+== lsof 3424
+Herdr   3424 tonyyang  cwd    DIR               1,18       544           220415526 /Users/tonyyang/git/herdr-my-orca.worktrees/orca-ui-package-plan/artifacts/orca-bundler/20261123T162528Z-retest/window
+Herdr   3424 tonyyang  txt    REG               1,18  60765488           220204449 /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr
+Herdr   3424 tonyyang  txt    REG               1,18     76804           218980342 /private/var/db/diagnostics/logd/.plist-cache.Ua7uZvlT
+Herdr   3424 tonyyang  txt    REG               1,18    139864           218986126 /private/var/folders/f3/m7sdstwj1g36f2fbf1t9g_6m0000gn/C/com.apple.IntlDataCache.le.kbdx
+Herdr   3424 tonyyang  txt    REG               1,18    258727 1152921500312221409 /System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle/Contents/Resources/InfoPlist.loctable
+Herdr   3424 tonyyang  txt    REG               1,18     73240 1152921500312109350 /System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/FauxVibrantDark.car
+Herdr   3424 tonyyang  txt    REG               1,18   4129088 1152921500312613838 /usr/lib/dyld
+Herdr   3424 tonyyang  txt    REG               1,18  36108000 1152921500312624404 /usr/share/icu/icudt78l.dat
+Herdr   3424 tonyyang  txt    REG               1,18   1631720 1152921500312221407 /System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle/Contents/Resources/AppleKeyboardLayouts-L.dat
+Herdr   3424 tonyyang  txt    REG               1,18  12075008           220332171 /private/var/folders/f3/m7sdstwj1g36f2fbf1t9g_6m0000gn/0/com.apple.LaunchServices.dv/com.apple.LaunchServices-35651614-v2.csstore
+Herdr   3424 tonyyang  txt    REG               1,18    234656           206872155 /private/var/db/timezone/tz/2026f.1.0/icutz/icutz44l.dat
+Herdr   3424 tonyyang  txt    REG               1,18    137016 1152921500312109365 /System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/SystemAppearance.car
+Herdr   3424 tonyyang  txt    REG               1,18   7795064 1152921500312109338 /System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/DarkAqua.car
+Herdr   3424 tonyyang  txt    REG               1,18   6742984 1152921500312109369 /System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/VibrantDark.car
+Herdr   3424 tonyyang  txt    REG               1,18    163712           219677214 /private/var/db/analyticsd/events.allowlist
+Herdr   3424 tonyyang  txt    REG               1,18    330112 1152921500312613856 /usr/lib/libobjc-trampolines.dylib
+Herdr   3424 tonyyang  txt    REG               1,18      7023 1152921500312151508 /System/Library/Frameworks/AppKit.framework/Versions/C/Resources/InputManager.loctable
+Herdr   3424 tonyyang  txt    REG               1,18    186898 1152921500312151516 /System/Library/Frameworks/AppKit.framework/Versions/C/Resources/MenuCommands.loctable
+Herdr   3424 tonyyang  txt    REG               1,18      5050 1152921500312151482 /System/Library/Frameworks/AppKit.framework/Versions/C/Resources/DictationManager.loctable
+Herdr   3424 tonyyang  txt    REG               1,18 118706056 1152921500312376684 /System/Library/PrivateFrameworks/SFSymbols.framework/Versions/A/Resources/CoreGlyphs.bundle/Contents/Resources/Assets.car
+Herdr   3424 tonyyang  txt    REG               1,18  26067160 1152921500312376723 /System/Library/PrivateFrameworks/SFSymbols.framework/Versions/A/Resources/CoreGlyphsPrivate.bundle/Contents/Resources/Assets.car
+Herdr   3424 tonyyang  txt    REG               1,18   7872432 1152921500312149139 /System/Library/Fonts/SFNS.ttf
+Herdr   3424 tonyyang  txt    REG               1,18     72407 1152921500312151425 /System/Library/Frameworks/AppKit.framework/Versions/C/Resources/Common.loctable
+Herdr   3424 tonyyang  txt    REG               1,18   7916504 1152921500312109326 /System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/Aqua.car
+Herdr   3424 tonyyang  txt    REG               1,18       110 1152921500312109686 /System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.strings
+Herdr   3424 tonyyang  txt    REG               1,18   1632048 1152921500312136566 /System/Library/Extensions/AGXMetalG13X.bundle/Contents/Resources/ds.binary.metallib.g13s-b0
+Herdr   3424 tonyyang  txt    REG               1,18    180224           220414315 /private/var/folders/f3/m7sdstwj1g36f2fbf1t9g_6m0000gn/C/dev.herdr.app/com.apple.metal/32024/libraries2.data
+Herdr   3424 tonyyang  txt    REG               1,18    131072           220414589 /private/var/folders/f3/m7sdstwj1g36f2fbf1t9g_6m0000gn/C/dev.herdr.app/com.apple.metal/16777235_530/functions2.data
+Herdr   3424 tonyyang  txt    REG               1,18     25254 1152921500312151664 /System/Library/Frameworks/AppKit.framework/Versions/C/Resources/WindowTabs.loctable
+Herdr   3424 tonyyang  txt    REG               1,18   3364328 1152921500312109332 /System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/Assets.car
+Herdr   3424 tonyyang  txt    REG               1,18   3178496           219034991 /private/var/folders/f3/m7sdstwj1g36f2fbf1t9g_6m0000gn/C/com.apple.iconservices/store.index
+Herdr   3424 tonyyang  txt    REG               1,18    524336           219522444 /Library/Caches/com.apple.iconservices.store/0AB44EF0-6A5F-3CDB-9766-3F010807547D.isdata
+Herdr   3424 tonyyang  txt    REG               1,18   1404824 1152921500312151335 /System/Library/Frameworks/AppKit.framework/Versions/C/Resources/Assets.car
+Herdr   3424 tonyyang  txt    REG               1,18   2338064 1152921500312149063 /System/Library/Fonts/Helvetica.ttc
+Herdr   3424 tonyyang  txt    REG               1,18     50020 1152921500312286252 /System/Library/PrivateFrameworks/CoreEmoji.framework/Versions/A/Resources/emoji.dat
+Herdr   3424 tonyyang  txt    REG               1,18    139749 1152921500312286254 /System/Library/PrivateFrameworks/CoreEmoji.framework/Versions/A/Resources/emojimeta.dat
+Herdr   3424 tonyyang  txt    REG               1,16    243840              884798 /System/Volumes/Preboot/Cryptexes/OS/usr/lib/libMetalMetricsInterpose.dylib
+Herdr   3424 tonyyang    3u  unix 0x92772c9ba5af6770       0t0                     /private/tmp/claude-501/hp.VJUo/app/herdr-app.sock
+== user's live (read-only)
+  PID  PPID STARTED                      COMMAND
+84630     1 Mon 23 Nov 11:26:17 2026     /Users/tonyyang/.local/bin/herdr-core --hc-launchd /tmp/hc-launchd-84430-1795404376981119000-50e69019943edcc4157cae9850966187/ready
+86842     1 Tue 24 Nov 00:22:56 2026     /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr
+86847 86842 Tue 24 Nov 00:22:56 2026     /Users/tonyyang/.local/bin/herdr-core connect
+90861 84630 Mon 23 Nov 11:28:21 2026     /Users/tonyyang/.local/share/herdr-core/active/Herdr Core.app/Contents/MacOS/herdr-core hold --socket /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+Herdr     86842 tonyyang    3u  unix 0xe752370695aef073       0t0                     /Users/tonyyang/.config/herdr-app/herdr-app.sock
+herdr-cor 90861 tonyyang    3u  unix 0xe342dafc6cecc608       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+herdr-cor 90861 tonyyang    4u  unix 0x43b30e8443f99ee8       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+herdr-cor 90861 tonyyang    5u  unix 0x43b30e8443f99ee8       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock
+herdr-cor 90861 tonyyang    6u  unix 0x43b30e8443f99ee8       0t0                     /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock

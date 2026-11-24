@@ -1,0 +1,10 @@
+L-U 27:11  byteCol 11 -> utf16Col 11 -> ../../src/features/panel-gap/main.js 14 11
+L-M 1:55   byteCol 55 -> utf16Col 55 -> ../../src/features/panel-gap/main.js 14 1
+R-U orca-panel-gap 7:12  byteCol 12 -> utf16Col 12 -> ../../src/shared/panel-motion.js 22 13
+R-U orca-panel-gap 35:26  byteCol 26 -> utf16Col 26 -> ../../src/features/panel-gap/main.js 40 37
+R-U orca-agents 7:12  byteCol 12 -> utf16Col 12 -> ../../src/shared/panel-motion.js 22 13
+R-U orca-agents 256:37  byteCol 37 -> utf16Col 37 -> ../../src/features/agents/main.js 457 50
+R-M orca-panel-gap 1:146  byteCol 146 -> utf16Col 146 -> ../../src/shared/panel-motion.js 22 3
+R-M orca-panel-gap 1:816  byteCol 816 -> utf16Col 816 -> ../../src/features/panel-gap/main.js 40 32
+R-M orca-agents 1:228  byteCol 228 -> utf16Col 228 -> ../../src/shared/panel-motion.js 22 3
+R-M orca-agents 3:5020  byteCol 5020 -> utf16Col 5013 -> ../../src/features/agents/main.js 457 50

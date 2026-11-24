@@ -1,4 +1,3 @@
-// Generated from shared/clip.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // Clipboard and reveal. Writing to the clipboard synchronizes both GPUI's
 // in-app clipboard (__clipboard_write_text / cx.write_to_clipboard) and the host
 // display server clipboard (wl-copy / xclip / pbcopy) via piped stdin without
@@ -43,3 +42,4 @@ export function reveal(path, isDir = false) {
     "reveal", path, isDir ? "1" : "0", dir,
   ]).catch(() => {});
 }
+// Generated from shared/clip.js by scripts/sync-shared.mjs. Edit that file, not this copy.

@@ -1,0 +1,4 @@
+27291     1 Mon 23 Nov 13:16:54 2026     /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr
+27296 27291 Mon 23 Nov 13:16:54 2026     /Users/tonyyang/.local/bin/herdr-core connect
+84630     1 Mon 23 Nov 11:26:17 2026     /Users/tonyyang/.local/bin/herdr-core --hc-launchd /tmp/hc-launchd-84430-1795404376981119000-50e69019943edcc4157cae9850966187/ready
+90861 84630 Mon 23 Nov 11:28:21 2026     /Users/tonyyang/.local/share/herdr-core/active/Herdr Core.app/Contents/MacOS/herdr-core hold --socket /Users/tonyyang/.local/state/herdr-core/default/default.holder.3d73c90c.sock

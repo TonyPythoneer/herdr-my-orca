@@ -1,0 +1,8 @@
+cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
+cmd: env herdr-app check /private/tmp/claude-501/orca-bundler.X7bUqY/known/m6
+S6
+    at <anonymous> (/private/tmp/claude-501/orca-bundler.X7bUqY/known/m6/main.js?v=1:1:11)
+
+
+check failed: /private/tmp/claude-501/orca-bundler.X7bUqY/known/m6
+exit: 1

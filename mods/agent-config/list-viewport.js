@@ -1,4 +1,3 @@
-// Generated from shared/list-viewport.js by scripts/sync-shared.mjs. Edit that file, not this copy.
 // How tall a scrolling list is, for every capped list in the app's cards and popups (the Agent
 // Settings catalogs, the agent setup flyout's model, effort, choice, provider and checklist lists).
 //
@@ -37,3 +36,4 @@ export function viewportHeight(count, rowHeight, gap = 0) {
 
 /** Whether a list of `count` rows scrolls. */
 export const scrolls = (count) => count > FULL_ROWS;
+// Generated from shared/list-viewport.js by scripts/sync-shared.mjs. Edit that file, not this copy.

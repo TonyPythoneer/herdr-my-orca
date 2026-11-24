@@ -1,0 +1,6 @@
+ORCA_PROBE_R
+    at panelFrame (/private/tmp/claude-501/hp.VJUo/app/mods/orca-panel-gap/panel-motion.js?v=1:23:13)
+    at render (/private/tmp/claude-501/hp.VJUo/app/mods/orca-panel-gap/main.js?v=1:40:37)
+
+
+check failed: /private/tmp/claude-501/hp.VJUo/app/mods/orca-panel-gap
