@@ -163,3 +163,56 @@ test("task page owns every referenced icon and renders without sibling mods", ()
     assert.match(readFileSync(new URL(file, import.meta.url), "utf8"), /<svg/);
   }
 });
+
+test("rendered task controls never reuse expired render or event contexts", async () => {
+  const task = sample("a", { enabled: false });
+  const page = pageFixture([task]);
+  const current = () => JSON.parse(page.files.get("/home/tasks.json"));
+  globalThis.__herdrShared = key => ({
+    "tasks.text": page.files.get("/home/tasks.json"),
+    "tasks.config": current(),
+  })[key];
+  const callbacks = new Map();
+  globalThis.__gpuiClickHandler = (node, callback) => {
+    const id = node.c.find(([method]) => method === "id")?.[1]?.[0];
+    if (id) callbacks.set(id, callback);
+  };
+  const expired = { notify() { throw Error("render context expired"); }, spawn() { throw Error("render context expired"); } };
+  const click = async id => {
+    callbacks.clear();
+    page.view.render(expired);
+    const handler = callbacks.get(id);
+    assert.equal(typeof handler, "function", id);
+    let valid = true, pending;
+    const eventCx = {
+      notify() { assert.ok(valid, "event context expired"); },
+      spawn(fn) { assert.ok(valid); pending = Promise.resolve().then(() => fn(page.cx)); },
+    };
+    handler({}, eventCx);
+    valid = false;
+    await pending;
+  };
+  try {
+    await click("tm-json");
+    assert.equal(page.view.editing, true);
+    await click("tm-cancel");
+    assert.equal(page.view.editing, false);
+    await click("tm-json");
+    page.view.editor = { value: () => JSON.stringify(current()) };
+    await click("tm-save");
+    assert.equal(page.view.saved, true);
+    await click("tm-json");
+    assert.equal(page.view.editing, false);
+    await click("tm-on-a");
+    assert.equal(current().tasks[0].enabled, true);
+    await click("tm-run-a");
+    assert.equal(page.published["tasks.request"].id, "a");
+    await click("tm-add");
+    assert.equal(current().tasks.length, 2);
+    assert.equal(current().tasks[1].enabled, false);
+    await click("tm-del-a");
+    assert.equal(current().tasks.length, 1);
+  } finally {
+    delete globalThis.__gpuiClickHandler;
+  }
+});

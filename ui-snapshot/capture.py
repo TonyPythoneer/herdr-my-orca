@@ -49,6 +49,15 @@ def verify_delivery(target, config):
         raise RuntimeError("Incomplete Orca deployment")
     return records
 
+def click_errors(log_path, offset):
+    """Catch GPUI errors not reflected in native status(), including expired cx."""
+    with log_path.open("rb") as stream:
+        stream.seek(offset)
+        text = stream.read().decode("utf-8", errors="replace")
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    return [line.strip() for line in text.splitlines()
+            if re.search(r"\bERROR\b.*(?:error in .*handler|cx is no longer valid|render|quickjs)", line, re.I)]
+
 def blocking_overlays(status):
     return [o for o in status.get("overlays", []) if o != "toast"]
 
@@ -205,14 +214,50 @@ def main():
                         ax_error += " " + (e.stderr or "")
                     print("AX helper unavailable:", ax_error, flush=True)
                 from scenarios import CASES
+                def mouse(x, y, action="--click"):
+                    if ax_error:
+                        raise PermissionError(ax_error)
+                    run([ax,str(proc.pid),action,str(x),str(y),"1024","681"],timeout=10)
+                def park():
+                    mouse(150,530,"--move")
+                    time.sleep(.2)
+                def dismiss_toast():
+                    # The upstream version notification close control is at this
+                    # calibrated position, outside all fixture custom controls.
+                    # No screenshot is exported during setup.
+                    mouse(988,648)
+                    park()
+                def ensure_workspace():
+                    if not status().get("space"):
+                        command("space.new",name="Snapshot project",folder=str(fixture))
+                        time.sleep(2)
+                    if not status().get("space"):
+                        raise RuntimeError("Synthetic workspace missing")
+                def recover():
+                    nonlocal proc
+                    stop(proc)
+                    seed_startup(config, info.get("herdr-appVersion",""))
+                    proc=launch()
+                    state=wait_ready(proc)
+                    if state.get("layout") != "orca" or blocking_overlays(state):
+                        raise RuntimeError("Relaunch did not restore clean Orca window")
+                    ensure_workspace()
+                    dismiss_toast()
                 def clear():
-                    for _ in range(4):
-                        overlays = blocking_overlays(status())
-                        if not overlays:
+                    if not blocking_overlays(status()):
+                        return
+                    # Actual outside click first; restart only for test isolation,
+                    # never to claim a successful tested popup dismissal.
+                    try:
+                        mouse(150,530)
+                        time.sleep(.4)
+                        if not blocking_overlays(status()):
                             return
-                        command("mod.open", name=overlays[-1])
-                        time.sleep(.3)
-                    raise RuntimeError("Could not reset overlay: "+str(blocking_overlays(status())))
+                    except (PermissionError,subprocess.SubprocessError):
+                        pass
+                    recover()
+                    if blocking_overlays(status()):
+                        raise RuntimeError("Overlay remained after isolated relaunch")
                 def select(stack, child):
                     command("layout.select", stack=stack, child=child)
                 def setup(case):
@@ -225,11 +270,19 @@ def main():
                     command("layout.show", id="sidebar")
                     command("layout.show", id="panel")
                     select("panel-body","files")
+                    if case.get("group"):
+                        command("orca-spaces."+case["group"]+"-all")
+                    if case.get("files") == "contents":
+                        command("orca-panel-head.search")
+                    elif case.get("files") == "names":
+                        mouse(765,86)
+                        mouse(939,47)
                     if case.get("page"):
                         select("main",case["page"])
                     if case.get("panel"):
                         select("panel-body",case["panel"])
                     time.sleep(.7)
+                    park()
                     state = status()
                     if state.get("layout") != layout or blocking_overlays(state) or state.get("errors"):
                         raise RuntimeError("Fixture is not an unobstructed custom layout")
@@ -237,6 +290,8 @@ def main():
                     if ax_error:
                         raise PermissionError(ax_error)
                     try:
+                        if control.get("mouse_only"):
+                            raise subprocess.CalledProcessError(1, "coordinate-scoped control", stderr="Use calibrated position to disambiguate")
                         run([ax,str(proc.pid),control["label"]],timeout=10)
                         row["mode"]="accessibility-press"
                     except subprocess.CalledProcessError as e:
@@ -247,14 +302,14 @@ def main():
                             raise PermissionError("Coordinate fallback requires calibrated 1024x681 window") from e
                         x,y=control["xy"]
                         try:
-                            run([ax,str(proc.pid),"--click",str(x),str(y),"1024","681"],timeout=10)
+                            mouse(x,y,"--right-click" if control.get("right") else "--click")
                         except subprocess.CalledProcessError as err:
                             raise PermissionError(err.stderr.strip() or str(err)) from err
                         row["mode"]="native-mouse"
-                command("space.new", name="Snapshot project", folder=str(fixture))
-                time.sleep(2)
-                if not status().get("space"):
-                    raise RuntimeError("Local synthetic workspace was not created")
+                        row["clickPoint"]=[x,y]
+                    park()
+                ensure_workspace()
+                dismiss_toast()
                 info["coverage"] = {"repositoryMods":sorted(p.parent.name for p in (target/"mods").glob("*/mod.json")),
                                     "plannedMods":sorted({m for c in CASES for m in c["mods"]}),
                                     "scope":"Only real interactions with repository mods; no stock UI or native command screenshots."}
@@ -266,10 +321,15 @@ def main():
                     try:
                         setup(case)
                         shot(row,"before")
+                        log_offset = (out/"app.log").stat().st_size
                         interact(row,case["control"])
                         time.sleep(case.get("wait",1.0))
                         after = status()
                         row["status"] = after
+                        runtime_errors = click_errors(out/"app.log", log_offset)
+                        if runtime_errors:
+                            row["runtimeErrors"] = runtime_errors
+                            raise RuntimeError("Native click/render handler error: "+runtime_errors[0])
                         if after.get("layout") != case.get("layout","orca") or after.get("errors"):
                             raise RuntimeError("Unexpected layout or native runtime error")
                         expected = case.get("overlay")
@@ -285,12 +345,25 @@ def main():
                         if expected or case.get("popover"):
                             run([ax,str(proc.pid),"--escape"],timeout=10)
                             time.sleep(.5)
+                            row["escapeClosed"]=not blocking_overlays(status()) if expected else None
+                            # Some custom menus require an outside press instead
+                            # of Escape (confirmed in run 45367963624).
+                            if blocking_overlays(status()) or case.get("popover"):
+                                mouse(150,530)
+                                time.sleep(.5)
+                                row["closeMode"]="native-outside-click"
+                            else:
+                                row["closeMode"]="native-keyboard-escape"
+                            park()
                             if blocking_overlays(status()):
-                                raise RuntimeError("Popup remained after actual Escape key")
+                                raise RuntimeError("Popup remained after Escape and outside click")
                             shot(row,"closed")
                             if row["images"]["after"]["sha256"] == row["images"]["closed"]["sha256"]:
-                                raise RuntimeError("No visible change on Escape")
-                            row["closeMode"]="native-keyboard-escape"
+                                raise RuntimeError("No visible change on popup dismissal")
+                        runtime_errors = click_errors(out/"app.log", log_offset)
+                        if runtime_errors:
+                            row["runtimeErrors"] = runtime_errors
+                            raise RuntimeError("Native click/render handler error: "+runtime_errors[0])
                         row["result"]="captured"
                     except Exception as e:
                         row["result"]="blocked" if isinstance(e,PermissionError) else "failed"
@@ -306,6 +379,14 @@ def main():
                     if row["result"] == "blocked":
                         for img in row.pop("images",{}).values():
                             (out/img["file"]).unlink(missing_ok=True)
+                    if row["result"] != "captured":
+                        # Do not let a failed interaction poison the following case.
+                        # Recovery is never included as a successful closed screenshot.
+                        try:
+                            recover()
+                            row["recovery"]="relaunch-succeeded"
+                        except Exception as recovery_error:
+                            row["recovery"]="relaunch-failed: "+str(recovery_error)
                     print("UI_RESULT "+json.dumps({k:v for k,v in row.items() if k != "status"}),flush=True)
                     report(out,info)
                 info["coverage"]["observedMods"]=sorted({m for r in info["steps"] if r["result"]=="captured" for m in r["mods"]})

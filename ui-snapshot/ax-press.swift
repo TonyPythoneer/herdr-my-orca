@@ -23,7 +23,7 @@ if wanted == "--escape" {
     print("Native Escape")
     exit(0)
 }
-if wanted == "--click" {
+if ["--click","--right-click","--move"].contains(wanted) {
     guard CommandLine.arguments.count == 7,
           let x = Double(CommandLine.arguments[3]), let y = Double(CommandLine.arguments[4]),
           let w = Double(CommandLine.arguments[5]), let h = Double(CommandLine.arguments[6]),
@@ -45,11 +45,14 @@ if wanted == "--click" {
     }
     guard windows.count == 1 else { fail("Window geometry does not match calibrated screenshot") }
     let p = CGPoint(x:windows[0].minX+x,y:windows[0].minY+y)
-    guard let move = CGEvent(mouseEventSource:nil,mouseType:.mouseMoved,mouseCursorPosition:p,mouseButton:.left),
-          let down = CGEvent(mouseEventSource:nil,mouseType:.leftMouseDown,mouseCursorPosition:p,mouseButton:.left),
-          let up = CGEvent(mouseEventSource:nil,mouseType:.leftMouseUp,mouseCursorPosition:p,mouseButton:.left)
+    let right = wanted == "--right-click"
+    let button: CGMouseButton = right ? .right : .left
+    guard let move = CGEvent(mouseEventSource:nil,mouseType:.mouseMoved,mouseCursorPosition:p,mouseButton:button),
+          let down = CGEvent(mouseEventSource:nil,mouseType:right ? .rightMouseDown : .leftMouseDown,mouseCursorPosition:p,mouseButton:button),
+          let up = CGEvent(mouseEventSource:nil,mouseType:right ? .rightMouseUp : .leftMouseUp,mouseCursorPosition:p,mouseButton:button)
     else { fail("Cannot create native mouse events") }
     move.post(tap:.cghidEventTap)
+    if wanted == "--move" { exit(0) }
     Thread.sleep(forTimeInterval:0.12)
     down.post(tap:.cghidEventTap)
     Thread.sleep(forTimeInterval:0.08)
