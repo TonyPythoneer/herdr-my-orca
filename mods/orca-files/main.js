@@ -10,9 +10,13 @@ import { mutateFile } from "./file-mutation.js";
 import { queueSave } from "./save-queue.js";
 import { canEditPath, writeEditorFile } from "./editor-path.js";
 import { resolveTreeKey } from "./tree-nav.js";
+import { splitGlobs, searchResults } from "./text-search.js";
+import { parseStatus } from "./git-status.js";
 import { panelFrame } from "./panel-motion.js";
 
 const plat = () => (typeof window === "function" ? window()?.platform : null);
+// The entry of `table` for the host platform, or `fallback`.
+const byPlatform = (table, fallback) => Object.hasOwn(table, plat()) ? table[plat()] : fallback;
 
 // "Open in" lists the apps the system offers for the file (macOS: LaunchServices, what Finder's
 // Open With shows), not a built-in list. Orca keeps its own `openInApplications` setting instead;
@@ -30,12 +34,19 @@ async function openInApps(full) {
   try {
     const list = JSON.parse(await readTextFile(openInFile(), null));
     if (Array.isArray(list) && list.length) return list.filter(a => a?.label && a?.app);
-  } catch {}
+  } catch { /* Missing or invalid preferences fall back to the system list. */ }
   return systemApps(full);
 }
 
 // herdr's JS has no ICU collation: localeCompare orders by code point (README before keys). Orca sorts case-insensitively.
-const byName = (a, b) => { const x = a.toLowerCase(), y = b.toLowerCase(); return x < y ? -1 : x > y ? 1 : a < b ? -1 : a > b ? 1 : 0; };
+function compareNames(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
+function compareEntries(a, b) {
+  return Number(b.dir) - Number(a.dir) || compareNames(a.name.toLowerCase(), b.name.toLowerCase()) || compareNames(a.name, b.name);
+}
 
 // Reads write nothing under .git (no index refresh or lock, no fsmonitor cookie):
 // the folder watch would see it, and every refresh would start the next one.
@@ -49,41 +60,18 @@ function location() {
   return { cwd: space?.folder ?? null, on: space?.machine ?? null, space: space?.id };
 }
 let mainFilesView = null;
-const key = () => JSON.stringify(location());
+const workspaceKey = () => JSON.stringify(location());
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
 const PER_FOLDER = 500, TOTAL = 5000;
+const REFRESH_INTERVAL_MS = 10000, SEARCH_DEBOUNCE_MS = 200, AUTOSAVE_DELAY_MS = 800;
+const MAX_LISTED_PATHS = 20001, MAX_NAME_QUERY_LENGTH = 2048, MAX_TREE_DEPTH = 40;
+const MAX_PREVIEW_CHARS = 400000, SPIN_PERIOD_MS = 1000;
 
 // Orca mixes the accent at 70%/80% and uses `bg-input/50` (FileExplorerNameFilter.tsx:23,
 // main.css:1453-1471). Herdr stores colors as `#rrggbb[aa]`, so scale the alpha.
 function fade(color, factor) {
   const alpha = color.length === 9 ? parseInt(color.slice(7), 16) : 255;
   return color.slice(0, 7) + Math.round(alpha * factor).toString(16).padStart(2, "0");
-}
-
-// splitSearchGlobPatterns (text-search-glob-patterns.ts:2-62): a comma separates several
-// globs unless escaped or inside `{…}` / `[…]`; trim each piece and drop empties.
-// shortcut: POSIX classes (`[[:alpha:],]`) are not tracked for rg; upgrade if one is needed.
-function splitGlobs(text) {
-  const out = [];
-  let cur = "", escape = false, brace = 0, classStart = -1;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (escape) { cur += "\\" + ch; escape = false; continue; }
-    if (ch === "\\" && classStart === -1) { escape = true; continue; }
-    if (classStart !== -1) { if (ch === "]" && i > classStart) classStart = -1; }
-    else if (ch === "[") classStart = i + (text[i + 1] === "!" || text[i + 1] === "^" ? 2 : 1);
-    else if (ch === "{") brace++;
-    else if (ch === "}") brace = Math.max(0, brace - 1);
-    if (ch === "," && !brace && classStart === -1) {
-      if (cur.trim()) out.push(cur.trim());
-      cur = "";
-      continue;
-    }
-    cur += ch;
-  }
-  if (escape) cur += "\\";
-  if (cur.trim()) out.push(cur.trim());
-  return out;
 }
 
 // Orca's FileTypeIcon tables (file-type-icons.ts:24-54, file-type-icon-extension-table.ts,
@@ -184,15 +172,28 @@ function setFilter(root, name, value) {
   setShared("orca-files.filters", { ...all, [root]: { ...(all[root] ?? {}), [name]: value } });
 }
 
-// Orca's status priority: deleted > modified > added/untracked > renamed > copied
-// (git-path-decoration.ts:14-22); labels are U/A/M/D/R/C (git-status-labels.ts:3-10).
-// Porcelain chars outside the set (T, unmerged U) are `modified`, as parseStatusChar does
-// (git-status-porcelain-parser.ts:179-194).
-function statusRank(letter) {
-  return letter === "D" ? 5 : letter === "M" ? 4 : letter === "A" || letter === "U" ? 3 : letter === "R" ? 2 : 1;
+// New File / New Folder: the shell mode and the prompt title.
+const NEW_ITEM = { "new-file": ["touch", "New File"], "new-folder": ["mkdir", "New Folder"] };
+
+function confirmDelete(loc, full) {
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return openOverlay({ mod: "orca-confirm", kind: "dialog", width: 420, height: 180,
+    props: { title: "Delete?", detail: `${full}\nHost: ${loc.on ?? "local"}`,
+      confirmShared: { key: `orca-files.target.${token}`, value: { ...loc, path: full } },
+      command: { name: `orca-files.remove-${token}` } } });
 }
-function statusLetter(char) {
-  return char === "D" ? "D" : char === "M" ? "M" : char === "A" ? "A" : char === "R" ? "R" : char === "C" ? "C" : "M";
+
+// ⌘⌥C copies the row's path (⇧ for the relative one); ⌘Backspace alone asks to delete it.
+const isCopyPathKey = (e, mods) => mods.platform && mods.alt && e.key === "c";
+const isDeleteKey = (e, mods) => mods.platform && e.key === "backspace" && !mods.control && !mods.alt && !mods.shift;
+
+const centeredBox = () => div().flex_1().flex().items_center().justify_center();
+const statusMessage = (t, text) => centeredBox().px(16).text_center().text_size(11).text_color(t.muted).child(text);
+const spinner = (t) => svg("mods/orca-files/loader-circle.svg").size(16).flex_none().text_color(t.muted).spin(SPIN_PERIOD_MS);
+
+function previewPath(path, root) {
+  if (path.startsWith("/")) return path;
+  return root ? `${root.replace(/\/+$/, "")}/${path}` : null;
 }
 
 export default class Files extends View {
@@ -222,9 +223,9 @@ export default class Files extends View {
     this.name = InputState.new({ placeholder: "Find files" }); // FileExplorerNameFilter.tsx:39
     // A new query blanks the projection and shows the listing spinner, as Orca's
     // `relativePaths: null` does while `nameFilterFiles.loading` (use-file-explorer-name-filter.ts:57-61).
-    this.name.on("change", (_e, cx) => {
+    this.name.on("change", (_e, eventCx) => {
       if (this.name.value().trim()) { this.nfMap = null; this.nfLoading = true; }
-      cx.notify(); this.scheduleName(cx);
+      eventCx.notify(); this.scheduleName(eventCx);
     });
     // SearchQueryRow.tsx:53 — the Contents input's placeholder is `Search`.
     this.q = InputState.new({ placeholder: "Search" });
@@ -236,7 +237,7 @@ export default class Files extends View {
     this.exclude = InputState.new({ placeholder: "e.g. *.min.js, dist/**" }); // SearchFilters.tsx:97-100
     this.filtersOpen = false; // SearchFilters.tsx:31 — defaultOpen is activeCount > 0
     // useFileSearchPanel.ts:294-300 — a filter edit reruns the current query at once.
-    for (const state of [this.include, this.exclude]) state.on("change", (_e, cx) => this.rerun(cx));
+    for (const state of [this.include, this.exclude]) state.on("change", (_e, eventCx) => this.rerun(eventCx));
     // Debounce through `cx.timer.after`, not `setTimeout`: a `cx` captured in a
     // `setTimeout` closure is stale by the time it fires, and the runtime rejects it
     // ("cx is no longer valid…", `scope.rs:420`). A rejected build makes the shell
@@ -244,23 +245,21 @@ export default class Files extends View {
     // orange 2px bar at the top of the sidebar that appeared while typing.
     // `cx.timer.after` hands each callback a fresh context (`typings.rs:3914-3921`).
     this.searchTimer = null; this.searchGeneration = 0;
-    this.q.on("change", (_e, cx) => {
-      this.rerun(cx);
-    });
+    this.q.on("change", (_e, eventCx) => this.rerun(eventCx));
     // `focus-within:border-ring ring-1 ring-ring` (FileExplorerNameFilter.tsx:23): GPUI has no
     // `:focus-within` or ring, so the input's own focus events paint the border in ring colour.
-    this.q.on("focus", (_e, cx) => { this.qFocused = true; cx.notify(); });
-    this.q.on("blur", (_e, cx) => { this.qFocused = false; cx.notify(); });
+    this.q.on("focus", (_e, eventCx) => { this.qFocused = true; eventCx.notify(); });
+    this.q.on("blur", (_e, eventCx) => { this.qFocused = false; eventCx.notify(); });
     this.input = InputState.new({ placeholder: "Name" });
-    this.input.on("change", (_e, cx) => cx.notify());
-    this.input.on("submit", (_e, cx) => { void this.apply(this.input.value(), cx); cx.notify(); });
+    this.input.on("change", (_e, eventCx) => eventCx.notify());
+    this.input.on("submit", (_e, eventCx) => { void this.apply(this.input.value(), eventCx); eventCx.notify(); });
     this.refresh(cx);
-    cx.timer.every(10000, cx => this.refresh(cx));
-    cx.spawn(async cx => {
+    cx.timer.every(REFRESH_INTERVAL_MS, timerCx => this.refresh(timerCx));
+    cx.spawn(async taskCx => {
       for (;;) {
         const c = await nextCommand();
-        if (c) await this.command(c, cx).catch(() => {});
-        cx.notify();
+        if (c) await this.command(c, taskCx).catch(() => { /* A rejected action must allow the next command to run. */ });
+        taskCx.notify();
       }
     });
   }
@@ -269,14 +268,14 @@ export default class Files extends View {
     if (this.on || this.watched === root) return;
     this.watched = root;
     const context = this.context;
-    cx.spawn(async cx => {
-      try { while (this.context === context) { await watchFolder(root); if (this.current(context)) this.refresh(cx); } }
+    cx.spawn(async taskCx => {
+      try { while (this.context === context) { await watchFolder(root); if (this.current(context)) this.refresh(taskCx); } }
       catch { if (this.context === context) this.watched = null; }
     });
   }
 
   current(context) {
-    return this.context === context && key() === context.key;
+    return this.context === context && workspaceKey() === context.key;
   }
 
   async loadFolder(path, context) {
@@ -284,97 +283,74 @@ export default class Files extends View {
     const entries = await directory(path ? `${root}/${path}` : root, on);
     if (!this.current(context) || (path && !this.folders.has(path))) return;
     const used = [...this.entries.entries()].filter(([p]) => p !== path).reduce((n, [, e]) => n + e.length, 0);
-    this.entries.set(path, entries.slice(0, Math.max(0, Math.min(PER_FOLDER, TOTAL - used))).sort((a, b) => Number(b.dir) - Number(a.dir) || byName(a.name, b.name)));
+    this.entries.set(path, entries.slice(0, Math.max(0, Math.min(PER_FOLDER, TOTAL - used))).sort(compareEntries));
     if (entries.length > PER_FOLDER || used + entries.length > TOTAL) this.limited = true;
   }
 
+  switchWorkspace({ cwd, on, key: next }, cx) {
+    this.searchGeneration++; this.searchTimer?.cancel(); this.searchTimer = null;
+    if (this.context) this.saved.set(this.context.key, { folders: this.folders, file: this.file });
+    const saved = this.saved.get(next);
+    this.context = { key: next, cwd, on }; this.root = cwd; this.on = on; this.entries = new Map(); this.folders = new Set(saved?.folders);
+    this.pending = new Set(); this.marks = {}; this.folderMarks = {}; this.folderErrors = {};
+    this.ignored = new Set(); this.git = false;
+    this.names = null; this.nfMap = null; this.nfCollapsed = new Set(); this.nfLoading = false;
+    // The file-search store is per worktree (useFileSearchPanel.ts:43-51), so the match
+    // toggles and patterns start empty again for the worktree being entered.
+    this.caseSensitive = false; this.wholeWord = false; this.useRegex = false;
+    this.include.set_value(""); this.exclude.set_value(""); this.filtersOpen = false;
+    this.hits = null; this.searching = false; this.collapsedSearch = new Set();
+    this.selected = null; this.visible = [];
+    this.show(null); this.watched = null; this.error = null; this.limited = false;
+    this.loading = false;
+    if (saved?.file) this.show(saved.file, cx);
+    if (this.propFile) { this.show(this.propFile, cx); this.propFile = null; }
+  }
+
   refresh(cx) {
-    const { cwd, on } = location(), next = key();
-    if (next !== this.context?.key) {
-      this.searchGeneration++; this.searchTimer?.cancel(); this.searchTimer = null;
-      if (this.context) this.saved.set(this.context.key, { folders: this.folders, file: this.file });
-      const saved = this.saved.get(next);
-      this.context = { key: next, cwd, on }; this.root = cwd; this.on = on; this.entries = new Map(); this.folders = new Set(saved?.folders);
-      this.pending = new Set(); this.marks = {}; this.folderMarks = {}; this.folderErrors = {};
-      this.ignored = new Set(); this.git = false;
-      this.names = null; this.nfMap = null; this.nfCollapsed = new Set(); this.nfLoading = false;
-      // The file-search store is per worktree (useFileSearchPanel.ts:43-51), so the match
-      // toggles and patterns start empty again for the worktree being entered.
-      this.caseSensitive = false; this.wholeWord = false; this.useRegex = false;
-      this.include.set_value(""); this.exclude.set_value(""); this.filtersOpen = false;
-      this.hits = null; this.searching = false; this.collapsedSearch = new Set();
-      this.selected = null; this.visible = [];
-      this.show(null); this.watched = null; this.error = null; this.limited = false;
-      this.loading = false;
-      if (saved?.file) this.show(saved.file, cx);
-      if (this.propFile) { this.show(this.propFile, cx); this.propFile = null; }
-    }
+    const { cwd, on } = location(), next = workspaceKey();
+    if (next !== this.context?.key) this.switchWorkspace({ cwd, on, key: next }, cx);
     if (!cwd || this.loading) return;
     const context = this.context;
     this.loading = true;
     this.limited = false;
     this.names = null; // a fresh listing each cycle picks up files the filter must see
     cx.notify();
-    cx.spawn(async cx => {
+    cx.spawn(async taskCx => {
       try {
         for (const path of ["", ...this.folders]) {
           if (!this.current(context)) return;
           await this.loadFolder(path, context);
         }
-        const top = await exec("git", [...READ, "rev-parse", "--show-toplevel"], { cwd, on }).catch(() => null);
-        // Status keys are relative to `this.root`, as Orca looks them up by `relativePath`
-        // (FileExplorerVirtualRows.tsx:198-232): the tree root is the space folder,
-        // which can sit below the repo root `git rev-parse` reports.
-        const posix = p => p.replace(/\\/g, "/").replace(/\/+$/, "");
-        const root = posix(this.root ?? ""), base = top?.stdout.trim() ? posix(top.stdout.trim()) : "";
-        const marks = {}, folderMarks = {}, ignored = new Set();
-        if (top?.code === 0) {
-          // --ignored: Orca draws ignored rows with CircleSlash (FileExplorerRow.tsx:258-267).
-          // Renames stay on so R/C rows reach the parser (git-status-porcelain-parser.ts:127-150).
-          const status = await exec("git", [...READ, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"], { cwd, on }).catch(() => null);
-          if (status?.code === 0) {
-            const fields = status.stdout.split("\0").filter(Boolean);
-            for (let i = 0; i < fields.length && i < TOTAL; i++) {
-              const entry = fields[i], xy = entry.slice(0, 2);
-              const abs = `${base}/${entry.slice(3).replace(/\/$/, "")}`;
-              if (!abs.startsWith(`${root}/`)) continue;
-              const rel = abs.slice(root.length + 1);
-              if (xy === "!!") { marks[rel] = "!"; ignored.add(rel); continue; }
-              // `??` is untracked, not added (git-status-labels.ts:3-10).
-              if (xy === "??") { marks[rel] = "U"; continue; }
-              let best = "M", rank = 0;
-              for (const char of xy) {
-                if (char === " " || char === ".") continue;
-                const next = statusRank(statusLetter(char));
-                if (next > rank) { best = statusLetter(char); rank = next; }
-              }
-              marks[rel] = best;
-              // Rename/copy entries put the original path in the next NUL field (-z).
-              if (xy[0] === "R" || xy[0] === "C") i += 1;
-            }
-            // buildFolderStatusMap (git-path-decoration.ts:53-88): a folder takes the
-            // dominant status of its descendants; deleted files do not propagate (:86-88).
-            for (const [rel, letter] of Object.entries(marks)) {
-              if (letter === "!" || letter === "D") continue;
-              let cur = "";
-              for (const segment of rel.split("/").slice(0, -1)) {
-                cur = cur ? `${cur}/${segment}` : segment;
-                if (!folderMarks[cur] || statusRank(letter) > statusRank(folderMarks[cur])) folderMarks[cur] = letter;
-              }
-            }
-          }
-        }
+        const { decorations, git } = await this.gitDecorations(cwd, on);
         if (!this.current(context)) return;
-        this.marks = marks; this.folderMarks = folderMarks;
-        this.ignored = ignored; this.git = top?.code === 0;
-        this.error = null; this.watch(cwd, cx);
+        Object.assign(this, decorations);
+        this.git = git;
+        this.error = null; this.watch(cwd, taskCx);
       } catch (e) { if (this.current(context)) this.error = String(e); }
       finally {
         if (this.context === context) this.loading = false;
-        if (this.view === "files" && this.name.value().trim()) this.scheduleName(cx);
-        cx.notify();
+        if (this.view === "files" && this.name.value().trim()) this.scheduleName(taskCx);
+        taskCx.notify();
       }
     });
+  }
+
+  // The git marks for the tree, from `git rev-parse` and `git status`; both stay empty outside a repository.
+  async gitDecorations(cwd, on) {
+    const top = await exec("git", [...READ, "rev-parse", "--show-toplevel"], { cwd, on }).catch(() => null);
+    // Status keys are relative to `this.root`, as Orca looks them up by `relativePath`
+    // (FileExplorerVirtualRows.tsx:198-232): the tree root is the space folder,
+    // which can sit below the repo root `git rev-parse` reports.
+    const posix = p => p.replace(/\\/g, "/").replace(/\/+$/, "");
+    const root = posix(this.root ?? ""), base = top?.stdout.trim() ? posix(top.stdout.trim()) : "";
+    let stdout = "";
+    if (top?.code === 0) {
+      // Keep ignored rows and rename/copy pairs for the tree decorations.
+      const status = await exec("git", [...READ, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"], { cwd, on }).catch(() => null);
+      if (status?.code === 0) stdout = status.stdout;
+    }
+    return { decorations: parseStatus(stdout, base, root, TOTAL), git: top?.code === 0 };
   }
 
   toggle(path, cx) {
@@ -389,10 +365,10 @@ export default class Files extends View {
       if (!this.entries.has(path) && !this.pending.has(path)) {
         const context = this.context;
         this.pending.add(path);
-        cx.spawn(async cx => {
+        cx.spawn(async taskCx => {
           try { await this.loadFolder(path, context); delete this.folderErrors[path]; }
           catch (e) { if (this.current(context)) this.folderErrors[path] = String(e); }
-          finally { if (this.context === context) this.pending.delete(path); cx.notify(); }
+          finally { if (this.context === context) this.pending.delete(path); taskCx.notify(); }
         });
       }
     }
@@ -431,7 +407,7 @@ export default class Files extends View {
       cx.notify();
       return;
     }
-    this.nfTimer = cx.timer.after(200, cx => { cx.spawn(cx => this.nameMatches(cx)); });
+    this.nfTimer = cx.timer.after(SEARCH_DEBOUNCE_MS, timerCx => { timerCx.spawn(taskCx => this.nameMatches(taskCx)); });
   }
 
   // The listing behind Names: one `git ls-files` (tracked + untracked, ignored included —
@@ -456,7 +432,7 @@ export default class Files extends View {
       if (r?.stdout) paths = r.stdout.split("\0").map(p => p.replace(/^\.\//, ""));
     }
     // `.git` never enters the tree (directory() skips it).
-    paths = paths.filter(p => p && p !== "." && p !== ".git" && !p.startsWith(".git/")).slice(0, 20001);
+    paths = paths.filter(p => p && p !== "." && p !== ".git" && !p.startsWith(".git/")).slice(0, MAX_LISTED_PATHS);
     this.names = { key, paths };
     return paths;
   }
@@ -470,12 +446,25 @@ export default class Files extends View {
     if (!query) { this.nfMap = null; this.nfCollapsed = new Set(); this.nfLoading = false; cx.notify(); return; }
     const f = filters(this.root);
     this.nfLoading = true; cx.notify();
-    if (query.length > 2048) { // FILE_NAME_FILTER_QUERY_MAX_BYTES, approximated by string length
+    if (query.length > MAX_NAME_QUERY_LENGTH) { // FILE_NAME_FILTER_QUERY_MAX_BYTES, approximated by string length
       this.nfMap = new Map(); this.nfLoading = false; cx.notify(); return;
     }
     // Tokens are whitespace-split and lowercased by splitFileNameFilterTokens (:15-32).
     const tokens = query.toLowerCase().split(/\s+/).filter(Boolean), paths = await this.fileList();
     if (!this.current(context) || this.name.value().trim() !== query) return;
+    this.nfMap = this.nameProjection(paths, f, tokens); this.nfLoading = false;
+    cx.notify();
+  }
+
+  matchesName(rel, f, tokens) {
+    if (!f.dotfiles && rel.split("/").some(s => s.length > 1 && s.startsWith("."))) return false;
+    if (!f.ignored && this.isGitIgnored(rel)) return false;
+    if (this.marks[rel] === "D") return false; // the index still lists an unstaged deletion
+    const hay = rel.toLowerCase();
+    return tokens.every(token => hay.includes(token));
+  }
+
+  nameProjection(paths, f, tokens) {
     const map = new Map(), seen = new Set(), add = (prefix, name, dir) => {
       const id = `${prefix}\0${name}`;
       if (seen.has(id)) return;
@@ -486,11 +475,7 @@ export default class Files extends View {
     let count = 0;
     for (const rel of paths) {
       if (count >= TOTAL) break;
-      if (!f.dotfiles && rel.split("/").some(s => s.length > 1 && s.startsWith("."))) continue;
-      if (!f.ignored && this.isGitIgnored(rel)) continue;
-      if (this.marks[rel] === "D") continue; // the index still lists an unstaged deletion
-      const hay = rel.toLowerCase();
-      if (!tokens.every(token => hay.includes(token))) continue;
+      if (!this.matchesName(rel, f, tokens)) continue;
       count++;
       const parts = rel.split("/");
       let prefix = "";
@@ -498,9 +483,8 @@ export default class Files extends View {
       add(prefix, parts[parts.length - 1], false);
     }
     // appendNameFilteredEntries (:196-205) sorts directories first, then by name.
-    for (const list of map.values()) list.sort((a, b) => a.dir !== b.dir ? (a.dir ? -1 : 1) : byName(a.name, b.name));
-    this.nfMap = map; this.nfLoading = false;
-    cx.notify();
+    for (const list of map.values()) list.sort(compareEntries);
+    return map;
   }
 
   // nameFilterCollapsedPaths (use-file-explorer-name-filter.ts:15): the filtered tree opens
@@ -523,16 +507,16 @@ export default class Files extends View {
     doc.failure = null;
     const v = ++doc.ver;
     doc.status = "editing";
-    cx.timer.after(800, (cx) => { if (this.doc === doc && doc.ver === v) this.save(doc, cx); });
+    cx.timer.after(AUTOSAVE_DELAY_MS, (timerCx) => { if (this.doc === doc && doc.ver === v) this.save(doc, timerCx); });
     cx.notify();
   }
 
   save(doc, cx) {
     const text = this.code.value(), v = doc.ver;
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try { await queueSave(doc, text, (_path, value, expected) => writeEditorFile(doc, value, expected, exec, writeTextFile)); if (doc.ver === v) doc.status = "saved"; }
       catch (e) { doc.status = "failed"; doc.error = String(e); }
-      cx.notify();
+      taskCx.notify();
     });
   }
 
@@ -561,46 +545,73 @@ export default class Files extends View {
   async close() { await this.flush(); }
 
   show(path, cx) {
-    this.flush()?.catch(() => {});
+    this.flush()?.catch(() => { /* flush retains the draft and publishes its error. */ });
     this.code?.release(); this.code = null; this.doc = null; this.file = path; this.fileError = null; this.viewDraft = null;
     if (!path || !cx) return;
     const context = this.context, root = this.root, on = this.on;
-    cx.spawn(async cx => {
-      try {
-        const full = path.startsWith("/") ? path : root ? `${root.replace(/\/+$/, "")}/${path}` : null;
-        if (!full) { this.fileError = "Select a workspace to open this file"; return; }
-        let draft = !on ? this.drafts.get(full) : null;
-        let text = await readTextFile(full, { on }).catch((e) => { if (draft) return null; throw e; });
-        if (this.file !== path || !this.current(context)) return;
-        if (draft && this.drafts.get(full) !== draft) {
-          draft = this.drafts.get(full) ?? null;
-          if (!draft) { text = await readTextFile(full, { on }); if (this.file !== path || !this.current(context)) return; }
-        }
-        if (text === null && !draft) { this.fileError = "This file is no longer available"; return; }
-        const content = draft?.text ?? text;
-        if (content.includes("\0")) { this.fileError = "Binary file · no text preview"; return; }
-        const t = theme(), ext = path.includes(".") ? path.split(".").pop() : "txt";
-        // Read-only where saving is unsafe: another machine (`writeTextFile` is local only), a truncated preview, and
-        // text the editor does not hand back unchanged (line endings, BOM, normalisation), which a save would rewrite.
-        const make = (readonly) => EditorState.new({ language: LANG[ext] ?? ext, readonly,
-          value: !draft && content.length > 400000 ? content.slice(0, 400000) + "\n… (file truncated)" : content,
-          font_family: settings().font_family, font_size: 12,
-          syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
-        const pathSafe = !on && !draft && content.length <= 400000 ? await canEditPath(root, full, exec) : false;
-        let editable = pathSafe;
-        if (this.file !== path || !this.current(context)) return;
-        this.code = make(!editable);
-        if (editable && this.code.value() !== text) { this.code.release(); this.code = make(true); editable = false; }
-        if (draft) { this.viewDraft = { draft, path, context }; this.fileError = `Unsaved draft (read-only): ${draft.error}. Copy its contents before closing.`; }
-        else if (!on && content.length <= 400000 && !pathSafe) this.fileError = "Read-only: file path is outside the workspace, unsafe, or cannot be verified.";
-        else if (pathSafe && !editable) this.fileError = "Read-only: this text cannot be saved without changing it.";
-        if (editable) {
-          const doc = this.doc = { full, root, disk: text, status: "", ver: 0 };
-          this.code.on("change", (_e, cx) => this.edited(doc, cx));
-        }
-      } catch { if (this.file === path && this.current(context)) this.fileError = "Cannot preview this file (binary, too large, or unreadable)"; }
-      finally { cx.notify(); }
+    cx.spawn(async taskCx => {
+      try { await this.loadPreview(path, { context, root, on }); }
+      catch { if (this.previewCurrent(path, context)) this.fileError = "Cannot preview this file (binary, too large, or unreadable)"; }
+      finally { taskCx.notify(); }
     });
+  }
+
+  async loadPreview(path, { context, root, on }) {
+    const full = previewPath(path, root);
+    if (!full) { this.fileError = "Select a workspace to open this file"; return; }
+    const read = await this.readPreview(path, full, { context, on });
+    if (!read) return;
+    const { text, draft } = read;
+    if (text === null && !draft) { this.fileError = "This file is no longer available"; return; }
+    const content = draft?.text ?? text;
+    if (content.includes("\0")) { this.fileError = "Binary file · no text preview"; return; }
+    const make = this.previewEditor(path, content, draft);
+    const pathSafe = this.canCheckPath(on, draft, content) ? await canEditPath(root, full, exec) : false;
+    if (!this.previewCurrent(path, context)) return;
+    this.installPreview({ path, context, root, full, on, draft, text, content, pathSafe }, make);
+  }
+
+  // Reads the file, following a draft that changes while it is read; null when the view moved on meanwhile.
+  async readPreview(path, full, { context, on }) {
+    let draft = !on ? this.drafts.get(full) : null;
+    let text = await readTextFile(full, { on }).catch((error) => { if (draft) return null; throw error; });
+    if (!this.previewCurrent(path, context)) return null;
+    if (draft && this.drafts.get(full) !== draft) {
+      draft = this.drafts.get(full) ?? null;
+      if (!draft) { text = await readTextFile(full, { on }); if (!this.previewCurrent(path, context)) return null; }
+    }
+    return { text, draft };
+  }
+
+  previewCurrent(path, context) {
+    return this.file === path && this.current(context);
+  }
+
+  canCheckPath(on, draft, content) {
+    return !on && !draft && content.length <= MAX_PREVIEW_CHARS;
+  }
+
+  previewEditor(path, content, draft) {
+    const t = theme(), ext = path.includes(".") ? path.split(".").pop() : "txt";
+    // Read-only where saving is unsafe: another machine (`writeTextFile` is local only), a truncated preview, and
+    // text the editor does not hand back unchanged (line endings, BOM, normalisation), which a save would rewrite.
+    return (readonly) => EditorState.new({ language: LANG[ext] ?? ext, readonly,
+      value: !draft && content.length > MAX_PREVIEW_CHARS ? content.slice(0, MAX_PREVIEW_CHARS) + "\n… (file truncated)" : content,
+      font_family: settings().font_family, font_size: 12,
+      syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
+  }
+
+  installPreview({ path, context, root, full, on, draft, text, content, pathSafe }, make) {
+    let editable = pathSafe;
+    this.code = make(!editable);
+    if (editable && this.code.value() !== text) { this.code.release(); this.code = make(true); editable = false; }
+    if (draft) { this.viewDraft = { draft, path, context }; this.fileError = `Unsaved draft (read-only): ${draft.error}. Copy its contents before closing.`; }
+    else if (this.canCheckPath(on, draft, content) && !pathSafe) this.fileError = "Read-only: file path is outside the workspace, unsafe, or cannot be verified.";
+    else if (pathSafe && !editable) this.fileError = "Read-only: this text cannot be saved without changing it.";
+    if (editable) {
+      const doc = this.doc = { full, root, disk: text, status: "", ver: 0 };
+      this.code.on("change", (_e, eventCx) => this.edited(doc, eventCx));
+    }
   }
 
   // A row's menu. It opens as this mod's own popup: props() carries the target.
@@ -618,51 +629,40 @@ export default class Files extends View {
     const { path, dir } = target;
     const overlay = props()?.overlay;
     const close = () => { if (overlay) closeOverlay(overlay); };
-    if (!target.location || JSON.stringify(target.location) !== key()) {
+    if (!target.location || JSON.stringify(target.location) !== workspaceKey()) {
       if (mainFilesView) { mainFilesView.operationError = "Workspace or host changed; action was cancelled."; cx.notify(); }
       return close();
     }
     const full = `${target.location.cwd.replace(/\/+$/, "")}/${path}`;
-    // New File / New Folder target a folder; for a file row that is its parent, as Orca
-    // computes `targetDir` (FileExplorerVirtualRows.tsx:242 ->
-    // file-explorer-row-context-menu.tsx:153,160).
-    const parent = dir ? full : full.replace(/\/[^/]*$/, "") || "/";
-    // Typed text cannot cross mods: run("<mod>.<cmd>") delivers only the command
-    // string to nextCommand(). So New/Rename ask in this mod's own popup instead.
-    // Stay in this popup: closing it first would take the prompt with it.
-    const ask = (mode, title, value, base = full) => {
-      this.prompt = { mode, title, full: base, overlay, value: value ?? "", ...target.location };
-      if (value) this.input.set_value(value), this.input.set_selected_range({ start: 0, end: value.length });
-      else this.input.set_value("");
-      this.input.focus();
-      cx.notify();
-    };
+    if (Object.hasOwn(NEW_ITEM, name)) {
+      const [mode, title] = NEW_ITEM[name], parent = dir ? full : full.replace(/\/[^/]*$/, "") || "/";
+      return this.askName(mode, title, parent, { overlay, location: target.location }, cx);
+    }
+    if (name === "rename") return this.askName("mv", "Rename", full, { overlay, location: target.location, value: path.replace(/^.*\//, "") }, cx);
+    return this.fileAction(name, { target, full, close }, cx);
+  }
+
+  // Typed text cannot cross mods, so New and Rename keep the prompt in this popup.
+  askName(mode, title, full, { overlay, location: where, value }, cx) {
+    this.prompt = { mode, title, full, overlay, value: value ?? "", ...where };
+    this.input.set_value(value || "");
+    if (value) this.input.set_selected_range({ start: 0, end: value.length });
+    this.input.focus();
+    cx.notify();
+  }
+
+  fileAction(name, { target, full, close }, cx) {
+    const { path, dir } = target;
     switch (name) {
-      case "new-file": return ask("touch", "New File", null, parent);
-      case "new-folder": return ask("mkdir", "New Folder", null, parent);
       // Copy — puts the file itself on the pasteboard (macOS), so Finder can paste it; elsewhere its path.
       case "copy-file":
-        if (plat() === "macos") exec("osascript", ["-e", "on run argv\nset the clipboard to (POSIX file (item 1 of argv))\nend run", full]).catch(() => {});
+        if (plat() === "macos") exec("osascript", ["-e", "on run argv\nset the clipboard to (POSIX file (item 1 of argv))\nend run", full]).catch(() => { /* The host action is best effort. */ });
         else void copyText(full, cx);
         return close();
       case "copy-path": void copyText(full, cx); return close();
       case "copy-rel": void copyText(path, cx); return close();
       // Duplicate — file-explorer-row-context-menu.tsx:197-202 & useFileDuplicate.ts:34-63,89-91
-      case "duplicate": {
-        close();
-        const source = { ...target.location, full, mode: "duplicate" };
-        cx.spawn(async (cx) => {
-          try {
-            await mutateFile(source, location(), path.slice(path.lastIndexOf("/") + 1), exec);
-            if (mainFilesView && key() === JSON.stringify(target.location)) { mainFilesView.operationError = null; mainFilesView.refresh(cx); }
-            run("orca-files.refresh");
-          } catch (e) {
-            if (mainFilesView && key() === JSON.stringify(target.location)) mainFilesView.operationError = `Duplicate failed: ${e.message || e}`;
-            run("orca-files.refresh"); cx.notify();
-          }
-        });
-        return;
-      }
+      case "duplicate": close(); return this.duplicateFile(target, full, cx);
       // Open in Terminal — file-explorer-row-context-menu.tsx:210 (directories only)
       case "terminal": run("terminal.open", { folder: dir ? full : this.root }); return close();
       // View File — file-explorer-row-context-menu.tsx:220-225: show file in preview pane
@@ -674,15 +674,23 @@ export default class Files extends View {
       }
       // Reveal in File Manager / Open Containing Folder — file-explorer-row-context-menu.tsx:254-263
       case "reveal": void reveal(full, Boolean(dir)); return close();
-      case "rename": return ask("mv", "Rename", path.replace(/^.*\//, ""));
-      case "delete":
-        close();
-        const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-        return openOverlay({ mod: "orca-confirm", kind: "dialog", width: 420, height: 180,
-          props: { title: "Delete?", detail: `${full}\nHost: ${target.location.on ?? "local"}`,
-            confirmShared: { key: `orca-files.target.${token}`, value: { ...target.location, path: full } },
-            command: { name: `orca-files.remove-${token}` } } });
+      case "delete": close(); return confirmDelete(target.location, full);
     }
+  }
+
+  duplicateFile(target, full, cx) {
+    const { path } = target;
+    const source = { ...target.location, full, mode: "duplicate" };
+    cx.spawn(async (taskCx) => {
+      try {
+        await mutateFile(source, location(), path.slice(path.lastIndexOf("/") + 1), exec);
+        if (mainFilesView && workspaceKey() === JSON.stringify(target.location)) { mainFilesView.operationError = null; mainFilesView.refresh(taskCx); }
+        run("orca-files.refresh");
+      } catch (e) {
+        if (mainFilesView && workspaceKey() === JSON.stringify(target.location)) mainFilesView.operationError = `Duplicate failed: ${e.message || e}`;
+        run("orca-files.refresh"); taskCx.notify();
+      }
+    });
   }
 
   // The pending New/Rename, applied here because typed text cannot cross mods.
@@ -693,14 +701,14 @@ export default class Files extends View {
     const p = this.prompt;
     if (!p || p.busy) return;
     p.busy = true; p.error = null; cx.notify();
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try {
         await mutateFile(p, location(), name, exec);
         if (this.prompt === p) { this.prompt = null; if (p.overlay) closeOverlay(p.overlay); }
-        if (mainFilesView) mainFilesView.refresh(cx);
+        if (mainFilesView) mainFilesView.refresh(taskCx);
         run("orca-files.refresh");
       } catch (e) { if (this.prompt === p) p.error = String(e.message || e); }
-      finally { p.busy = false; cx.notify(); }
+      finally { p.busy = false; taskCx.notify(); }
     });
   }
 
@@ -757,12 +765,12 @@ export default class Files extends View {
     this.searchTimer?.cancel();
     if (!v) { this.searchTimer = null; this.hits = null; this.searching = false; this.collapsedSearch = new Set(); cx.notify(); return; }
     this.searching = true; cx.notify();
-    this.searchTimer = cx.timer.after(200, (cx) => {
+    this.searchTimer = cx.timer.after(SEARCH_DEBOUNCE_MS, (timerCx) => {
       this.searchTimer = null;
-      cx.spawn(async (cx) => {
+      timerCx.spawn(async (taskCx) => {
         const h = await this.search(v);
         if (generation !== this.searchGeneration || !this.current(context)) return;
-        this.hits = h; this.searching = false; cx.notify();
+        this.hits = h; this.searching = false; taskCx.notify();
       });
     });
   }
@@ -778,7 +786,7 @@ export default class Files extends View {
   // `files` keeps first-seen order and holds at most 200 matches for display; every line
   // rg printed still counts toward `totalMatches`, so the summary and `truncated` are true.
   async search(query) {
-    if (!query) return { totalMatches: 0, fileCount: 0, files: [], truncated: false };
+    if (!query) return searchResults("");
     const args = ["--vimgrep"];
     if (!this.caseSensitive) args.push("--ignore-case");      // text-search.ts:56-58
     if (this.wholeWord) args.push("--word-regexp");            // text-search.ts:59-61
@@ -789,20 +797,7 @@ export default class Files extends View {
     const r = await exec("rg", args, { cwd: this.root, on: this.on }).catch(() => null);
     // Same as the listing: rg exits 2 after an unreadable directory and still printed
     // the hits; only a run that produced nothing is a failure.
-    if (!r?.stdout) return { totalMatches: 0, fileCount: 0, files: [], truncated: false };
-    const groups = new Map();
-    let totalMatches = 0;
-    for (const l of (r.stdout || "").split("\n")) {
-      const [file, lineS, colS, ...rest] = l.split(":");
-      if (!file || !lineS) continue;
-      totalMatches += 1;
-      if (totalMatches > 200) continue; // count all hits, keep 200 for display
-      let group = groups.get(file);
-      if (!group) { group = { path: file, matches: [] }; groups.set(file, group); }
-      group.matches.push({ line: Number(lineS), column: Number(colS) || 1, text: rest.join(":").trim() });
-    }
-    const files = [...groups.values()];
-    return { totalMatches, fileCount: files.length, files, truncated: totalMatches > 200 };
+    return searchResults(r?.stdout || "");
   }
 
   // `source === "name"` walks `nfMap`, the projection nameMatches built from the worktree
@@ -811,16 +806,13 @@ export default class Files extends View {
   // filter matches thousands of rows — building them all in one frame overruns the engine's
   // 50 ms render budget (`sandbox.rs` Budgets::render) and paints the stale-frame banner.
   flat(prefix, depth, out, source) {
-    if (out.length >= TOTAL || depth > 40) return out;
+    if (out.length >= TOTAL || depth > MAX_TREE_DEPTH) return out;
     const named = source === "name", f = filters(this.root);
-    for (const entry of (named ? this.nfMap?.get(prefix) : this.entries.get(prefix)) ?? []) {
+    for (const entry of this.listed(prefix, named)) {
       if (out.length >= TOTAL) break;
       const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-      // Show Dotfiles: Orca drops any dot-prefixed segment (file-explorer-entries.ts:7-14).
-      if (!named && !f.dotfiles && entry.name.length > 1 && entry.name !== ".." && entry.name.startsWith(".")) continue;
-      // Show Git Ignored Files: Orca hides ignored paths and their ancestors
-      // (git-path-decoration.ts:90-108). nameMatches already applied both toggles.
-      if (!named && !f.ignored && this.isGitIgnored(path)) continue;
+      // nameMatches already applied both toggles to the name projection.
+      if (!named && this.hiddenByFilter(entry, path, f)) continue;
       // The filtered tree opens every ancestor of a match unless the branch was collapsed
       // (nameFilterCollapsedPaths, file-explorer-name-filter-projection.ts:206-208).
       const open = named ? !this.nfCollapsed.has(path) : this.folders.has(path);
@@ -830,47 +822,77 @@ export default class Files extends View {
     return out;
   }
 
+  listed(prefix, named) {
+    return (named ? this.nfMap?.get(prefix) : this.entries.get(prefix)) ?? [];
+  }
+
+  hiddenByFilter(entry, path, f) {
+    // Show Dotfiles: Orca drops any dot-prefixed segment (file-explorer-entries.ts:7-14).
+    if (!f.dotfiles && entry.name.length > 1 && entry.name !== ".." && entry.name.startsWith(".")) return true;
+    // Show Git Ignored Files: Orca hides ignored paths and their ancestors (git-path-decoration.ts:90-108).
+    return !f.ignored && this.isGitIgnored(path);
+  }
+
   // Orca's explorer keys (useFileExplorerKeys.ts:200-260, file-explorer-keyboard-navigation.ts):
   // Space activates the row, Enter renames it, Delete removes it, ⌘⌥C copies its path and
   // ⌘⌥⇧C its workspace-relative path. Selection only changes while the tree holds focus, so
   // typing in the query inputs and terminals is never intercepted.
   treeKey(e, cx) {
-    if (this.view !== "files" || this.file || this.prompt || !this.treeFocus.is_focused()) return;
+    if (!this.treeOwnsKeyboard()) return;
     const mods = e.modifiers ?? {};
     const index = this.visible.findIndex((r) => r.path === this.selected);
     const row = index === -1 ? null : this.visible[index];
-    if (mods.platform && mods.alt && e.key === "c") {
-      if (row) void copyText(mods.shift ? row.path : `${(this.root ?? "").replace(/\/+$/, "")}/${row.path}`, cx);
-      cx.stop_propagation(); return;
-    }
-    if (mods.platform && e.key === "backspace" && !mods.control && !mods.alt && !mods.shift) {
-      if (row) this.requestDelete(row.path, row.dir, cx);
-      cx.stop_propagation(); return;
-    }
-    if (mods.platform || mods.control || mods.alt) return;
+    if (mods.platform || mods.control || mods.alt) return this.treeShortcut(e, mods, row, cx);
     const resolved = resolveTreeKey(e.key, index === -1 ? null : index, this.visible);
-    if (resolved.type === "move") {
-      this.selected = this.visible[resolved.index]?.path ?? null;
-      this.treeScroll.scroll_to_item(resolved.index);
-      cx.stop_propagation(); cx.notify(); return;
-    }
-    if (resolved.type === "expand" || resolved.type === "collapse") {
-      const isOpen = row.open;
-      if (resolved.type === "expand" ? !isOpen : isOpen) {
-        this.name.value().trim() ? this.nameToggle(resolved.path, cx) : this.toggle(resolved.path, cx);
-      }
-      cx.stop_propagation(); cx.notify(); return;
-    }
-    if (!row) return;
-    if (e.key === "space") {
-      if (row.dir) this.name.value().trim() ? this.nameToggle(row.path, cx) : this.toggle(row.path, cx);
+    if (this.navigateTree(resolved, row, cx)) return;
+    if (row) this.rowKey(e.key, row, cx);
+  }
+
+  treeOwnsKeyboard() {
+    return this.view === "files" && !this.file && !this.prompt && this.treeFocus.is_focused();
+  }
+
+  // Space opens the row, Enter renames it, Delete asks to remove it.
+  rowKey(key, row, cx) {
+    if (key === "space") {
+      if (row.dir) this.toggleFolder(row.path, cx);
       else this.show(row.path, cx);
       cx.stop_propagation(); cx.notify(); return;
     }
-    if (e.key === "enter") { this.startRename(row, cx); cx.stop_propagation(); return; }
-    if (e.key === "delete") {
+    if (key === "enter") { this.startRename(row, cx); cx.stop_propagation(); return; }
+    if (key === "delete") {
       this.requestDelete(row.path, row.dir, cx); cx.stop_propagation();
     }
+  }
+
+  // A folder row toggles in the name projection while a filter is typed, in the loaded tree otherwise.
+  toggleFolder(path, cx) {
+    if (this.name.value().trim()) this.nameToggle(path, cx);
+    else this.toggle(path, cx);
+  }
+
+  treeShortcut(e, mods, row, cx) {
+    if (isCopyPathKey(e, mods)) {
+      if (row) void copyText(mods.shift ? row.path : `${(this.root ?? "").replace(/\/+$/, "")}/${row.path}`, cx);
+      cx.stop_propagation(); return;
+    }
+    if (isDeleteKey(e, mods)) {
+      if (row) this.requestDelete(row.path, row.dir, cx);
+      cx.stop_propagation(); return;
+    }
+  }
+
+  navigateTree(resolved, row, cx) {
+    if (resolved.type === "move") {
+      this.selected = this.visible[resolved.index]?.path ?? null;
+      this.treeScroll.scroll_to_item(resolved.index);
+      cx.stop_propagation(); cx.notify(); return true;
+    }
+    if (resolved.type === "expand" || resolved.type === "collapse") {
+      if (resolved.type === "expand" ? !row.open : row.open) this.toggleFolder(resolved.path, cx);
+      cx.stop_propagation(); cx.notify(); return true;
+    }
+    return false;
   }
 
   // Enter rename and Delete confirmation, reachable without the row menu. The target is
@@ -893,11 +915,7 @@ export default class Files extends View {
       this.operationError = "Workspace or host changed; action was cancelled."; cx.notify(); return;
     }
     const full = `${loc.cwd.replace(/\/+$/, "")}/${path}`;
-    const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-    openOverlay({ mod: "orca-confirm", kind: "dialog", width: 420, height: 180,
-      props: { title: "Delete?", detail: `${full}\nHost: ${loc.on ?? "local"}`,
-        confirmShared: { key: `orca-files.target.${token}`, value: { ...loc, path: full } },
-        command: { name: `orca-files.remove-${token}` } } });
+    confirmDelete(loc, full);
   }
 
   // v_virtual_list hands its renderer a {start,end} range, not an index (defaults/mods/changes
@@ -932,6 +950,16 @@ export default class Files extends View {
       .size_full());
   }
 
+  // FileExplorerRow.tsx:204-226,242-248 — Loader2 while the folder loads, CircleAlert on a
+  // read error, Link for a symlink, FileTypeIcon per extension.
+  rowIcon({ path, name, dir, link, open }, failed, t) {
+    const glyph = (file) => svg(`mods/orca-files/${file}.svg`).size(12).flex_none();
+    if (!dir) return (link ? glyph("link") : glyph(fileIcon(name))).text_color(t.muted);
+    if (this.pending.has(path)) return glyph("loader-circle").text_color(t.muted).spin(SPIN_PERIOD_MS);
+    if (failed) return glyph("circle-alert").text_color(t.blocked);
+    return glyph(open ? "folder-open" : "folder").text_color(t.muted);
+  }
+
   // FileExplorerRow.tsx:147-152 — px-2 py-1 text-xs gap-1, indent depth*16 + 8; 26px is
   // Orca's own row constant (virtualizer estimateSize, inline-input row, drag ghost).
   // Colours: git-path-decoration.ts:5-12 -> main.css:489-496.
@@ -939,19 +967,12 @@ export default class Files extends View {
   // accent-foreground text; hover is `bg-accent` (FileExplorerRow.tsx:148).
   // Divergence: rounded(2), not rounded-sm (6px): the hover fill is only 26px tall.
   row(r, t) {
-    const { path, name, dir, link, depth, open } = r;
+    const { path, name, dir, depth, open } = r;
     // A folder row shows its descendants' dominant status when it has no mark of its own
     // (buildFolderStatusMap, git-path-decoration.ts:53-88; FileExplorerVirtualRows.tsx:170-176).
     const mark = this.marks[path] ?? (dir ? this.folderMarks[path] : undefined);
-    // FileExplorerRow.tsx:204-226,242-248 — Loader2 while the folder loads, CircleAlert on a
-    // read error, Link for a symlink, FileTypeIcon per extension.
-    const loading = dir && this.pending.has(path), failed = dir ? this.folderErrors[path] : null;
-    const icon = dir
-      ? loading ? svg("mods/orca-files/loader-circle.svg").size(12).flex_none().text_color(t.muted).spin(1000)
-        : failed ? svg("mods/orca-files/circle-alert.svg").size(12).flex_none().text_color(t.blocked)
-        : svg(`mods/orca-files/${open ? "folder-open" : "folder"}.svg`).size(12).flex_none().text_color(t.muted)
-      : link ? svg("mods/orca-files/link.svg").size(12).flex_none().text_color(t.muted)
-      : svg(`mods/orca-files/${fileIcon(name)}.svg`).size(12).flex_none().text_color(t.muted);
+    const failed = dir ? this.folderErrors[path] : null;
+    const icon = this.rowIcon(r, failed, t);
     return h_flex().id(`file-${path}`).w_full().h(24).flex_none().pl(8 + depth * 16).pr(8).gap(4).items_center().rounded(2).text_size(12).cursor_pointer()
       .role("button").accessibility_label(name)
       .when(this.file === path, el => el.bg(fade(t.accent, 0.7)).border_1().border_color(t.border).text_color(t.accent_foreground).hover(s => s.bg(fade(t.accent, 0.8))))
@@ -991,7 +1012,7 @@ export default class Files extends View {
   menuView(t) {
     const target = props()?.target ?? {};
     const { dir } = target;
-    const revealLabel = plat() === "macos" ? "Reveal in Finder" : plat() === "windows" ? "Reveal in File Explorer" : "Open Containing Folder";
+    const revealLabel = byPlatform({ macos: "Reveal in Finder", windows: "Reveal in File Explorer" }, "Open Containing Folder");
 
     // Rows are 26 tall with the shortcut right-aligned and muted, as in Orca's menu. The shortcuts are
     // display only: Herdr binds none of them.
@@ -1065,7 +1086,7 @@ export default class Files extends View {
     // Looked up once per flyout; notify runs on the spawn's own cx, as render's is invalid after an await.
     if (!this.openApps) {
       this.openApps = [];
-      cx.spawn(async (cx) => { this.openApps = await openInApps(full); cx.notify(); });
+      cx.spawn(async (taskCx) => { this.openApps = await openInApps(full); taskCx.notify(); });
     }
     const close = () => { closeOverlay(props().overlay); if (menu) closeOverlay(menu); setShared("orca-files.openIn", null); };
     const row = (i, label, onClick, icon) => h_flex().id(`oi-${i}`).h(26).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
@@ -1075,14 +1096,14 @@ export default class Files extends View {
     // shortcut: no per-app icon (Orca shows a favicon); a generic one stands in until Herdr can load remote images.
     return v_flex().id("orca-files-open-in").w_full().min_h(0).p(4).bg(t.popover).text_size(12.8).text_color(t.foreground)
       .children(this.openApps.map((a, i) => row(i, a.label, () => {
-        exec("open", ["-a", a.app, full]).catch(() => {});
+        exec("open", ["-a", a.app, full]).catch(() => { /* The host action is best effort. */ });
         close();
       })))
       .child(div().h(1).my(3).mx(4).bg(t.border))
       .child(row("customize", "Customize apps…", () => {
         void (async () => {
           if (this.openApps.length && await readTextFile(openInFile(), null).then(() => false, () => true)) await writeTextFile(openInFile(), JSON.stringify(this.openApps.map(({ label, app }) => ({ label, app })), null, 2) + "\n", null);
-          exec("open", ["-t", openInFile()]).catch(() => {});
+          exec("open", ["-t", openInFile()]).catch(() => { /* The host action is best effort. */ });
         })();
         close();
       }, "square-pen"));
@@ -1110,7 +1131,7 @@ export default class Files extends View {
       // :107-144 — Refresh Explorer; Loader2-style spinner while `refresh.isRefreshing`,
       // disabled outside the files view (`aria-disabled={!canRefresh || refresh.isRefreshing}`).
       .child(btn("files-refresh", "Refresh Explorer",
-        this.loading ? svg("mods/orca-files/refresh-cw.svg").size(12).flex_none().spin(1000) : svg("mods/orca-files/refresh-cw.svg").size(12).flex_none(),
+        this.loading ? svg("mods/orca-files/refresh-cw.svg").size(12).flex_none().spin(SPIN_PERIOD_MS) : svg("mods/orca-files/refresh-cw.svg").size(12).flex_none(),
         (_e, cx) => this.refresh(cx), files && !this.loading))
       // :145-198 — More Explorer Actions; the dropdown opens at the pointer.
       .child(btn("files-more", "More Explorer Actions", svg("mods/orca-files/ellipsis.svg").size(12).flex_none(),
@@ -1131,7 +1152,7 @@ export default class Files extends View {
       .hover(s => s.bg(t.hover)).on_click(action)
       .child(svg(`mods/orca-files/${icon}.svg`).size(14).flex_none().text_color(t.muted))
       .child(div().child(label));
-    const fm = window()?.platform === "windows" ? "File Explorer" : window()?.platform === "macos" ? "Finder" : "File Manager";
+    const fm = byPlatform({ windows: "File Explorer", macos: "Finder" }, "File Manager");
     return v_flex().id("orca-files-more").w_full().min_h(0).p(5).bg(t.popover).text_size(12.8).text_color(t.foreground)
       // The plain tree reads `filters()` every render, but the name projection caches its
       // rows, so a toggle also asks the main copy to rebuild it (FileExplorer.tsx:134-148
@@ -1168,8 +1189,8 @@ export default class Files extends View {
       .child(h_flex().w_full().h(28).p(2).gap(4).rounded(6).bg(t.raised)
         .child(seg("files-names", "Names", "files"))
         .child(seg("files-contents", "Contents", "search")))
-      .child(this.queryRow(this.name, "names", !search, !search && this.nfLoading, t))
-      .child(this.queryRow(this.q, "contents", search, search && this.searching, t, this.searchToggles(t)))
+      .child(this.queryRow({ state: this.name, id: "names", active: !search, busy: !search && this.nfLoading }, t))
+      .child(this.queryRow({ state: this.q, id: "contents", active: search, busy: search && this.searching, controls: this.searchToggles(t) }, t))
       // SearchFilters.tsx:29-108 nests under the Contents row in FileExplorer.tsx:307-309.
       .child(this.filtersRow(t));
   }
@@ -1180,12 +1201,12 @@ export default class Files extends View {
   // listing or the search runs; X clears that input and its projection.
   // `controls` are SearchQueryRow.tsx:75-101's toggles, appended after Clear; the Names
   // row has none because FileExplorerNameFilter.tsx has no equivalent.
-  queryRow(state, id, active, busy, t, controls) {
+  queryRow({ state, id, active, busy, controls }, t) {
     return h_flex().w_full().h(32).min_h(0).px(8).gap(4).items_center().rounded(8).overflow_hidden().border_1().border_color(this.qFocused ? t.ring : t.border).bg(fade(t.input, 0.5))
       .when(!active, el => el.hidden())
       .child(svg("mods/orca-files/list-filter.svg").size(14).flex_none().text_color(t.muted))
       .child(Input.new(state).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"))
-      .when(busy, el => el.child(svg("mods/orca-files/loader-circle.svg").size(12).flex_none().text_color(t.muted).spin(1000)))
+      .when(busy, el => el.child(svg("mods/orca-files/loader-circle.svg").size(12).flex_none().text_color(t.muted).spin(SPIN_PERIOD_MS)))
       .when(Boolean(state.value().trim()), el => el.child(div().id(`files-clear-${id}`).p(2).flex_none().rounded(6).cursor_pointer().text_color(t.muted).hover(s => s.text_color(t.foreground))
         .on_click((_e, cx) => {
           state.set_value("");
@@ -1205,7 +1226,7 @@ export default class Files extends View {
     const toggle = (id, active, flip, label, icon) => div().id(id).flex_none().p(2).rounded(4).cursor_pointer()
       .role("button").accessibility_label(label).tooltip(label)
       .when(active, s => s.bg(t.accent).text_color(t.accent_foreground))
-      .when(!active, s => s.text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)))
+      .when(!active, s => s.text_color(t.muted).hover(h => h.bg(t.hover).text_color(t.foreground)))
       .on_click((_e, cx) => { flip(); this.rerun(cx); })
       .child(svg(`mods/orca-files/${icon}.svg`).size(14).flex_none());
     return [
@@ -1319,19 +1340,13 @@ export default class Files extends View {
     // and `refresh()` calls `cx.notify()` before it awaits anything — so spawning it here ran a
     // notify inside the render phase, which the engine refuses. A timer runs after the frame, so
     // the refresh lands in the task phase where notify is allowed.
-    if (key() !== this.context?.key) cx.timer.after(0, (cx) => this.refresh(cx));
+    if (workspaceKey() !== this.context?.key) cx.timer.after(0, (timerCx) => this.refresh(timerCx));
     const t = theme();
-    if (this.prompt) return this.promptView(t);
-    if (props()?.tab === "file") return this.menuView(t);
-    if (props()?.tab === "open-in") return this.openInView(t, cx);
-    if (props()?.tab === "more") return this.moreView(t);
+    const popup = this.popupView(t, cx);
+    if (popup) return popup;
     return v_flex().id("files").size_full().min_h(0).overflow_hidden().text_color(t.foreground).text_size(13)
       .when(Boolean(this.operationError), el => el.child(div().px(12).py(6).text_size(11).text_color(t.ansi1).child(this.operationError)))
-      .when(Boolean(this.file), el => el.child(h_flex().h(30).flex_none().px(10).gap(6).items_center().border_b(1).border_color(t.border)
-        .child(div().id("files-back").w(20).cursor_pointer().text_color(t.muted).on_click((_e, cx) => { this.show(null, cx); cx.notify(); }).child("←"))
-        .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.dim).child(this.file ?? ""))
-        .when(Boolean(this.code), el => el.child(div().flex_none().text_size(10).text_color(this.doc?.status === "failed" ? t.ansi1 : t.muted)
-          .child(!this.doc ? this.fileError || "Read-only" : this.doc.status === "failed" ? `Not saved: ${this.doc.error.slice(0, 60)}` : ({ editing: "Editing…", saved: "Saved" })[this.doc.status] ?? "")))))
+      .when(Boolean(this.file), el => el.child(this.fileHeader(t)))
       // FileExplorerToolbar.tsx:66-198 (the h-8 title/actions band, above) then
       // FileExplorerQueryStrip.tsx:35-52 (switch + active query input) then the tree.
       .when(!this.file, el => el.child(this.toolbar(t)))
@@ -1339,33 +1354,90 @@ export default class Files extends View {
       // SearchResultsPane.tsx:88-94 — the summary is a fixed header above the scrolled rows.
       .when(!this.file && this.view === "search" && this.hits && (this.hits.files.length > 0 || this.hits.truncated),
         el => el.child(this.searchSummary(t)))
-      .when(!this.file, el => el.child(v_flex().id("files-tree").flex_1().min_h(0).relative().pt(8).pb(4)
-        // The virtual list scrolls itself; only the contents hits still ride a scroll container.
-        .when(this.view === "search", s => s.overflow_y_scrollbar().mode("always"))
-        // SearchResultsPane.tsx:57-70 — its virtualizer mixes 28px file rows with 20px match
-        // rows; this Herdr `v_virtual_list` takes one height for the whole list, so the
-        // grouped rows are a plain column, cheap because search() keeps at most 200 matches.
-        .when(this.view === "search", el => el.children(this.searchResults(t)))
-        .when(this.view !== "search", el => el.child(this.treeList(t)))
-        .when(this.view !== "search", el => el.child(Scrollbar.vertical("files-rows").viewport_from_layout().absolute().inset_0()))
-        // FileExplorerFilesTreePane.tsx:116-136 — with a name filter the empty state is a
-        // Loader2 while the listing is pending, then "No files match this filter".
-        .when(this.view === "files" && Boolean(this.name.value().trim()) && !this.nfMap && this.nfLoading, el => el.child(div().flex_1().flex().items_center().justify_center().child(svg("mods/orca-files/loader-circle.svg").size(16).flex_none().text_color(t.muted).spin(1000))))
-        .when(this.view === "files" && Boolean(this.name.value().trim()) && this.nfMap?.size === 0, el => el.child(div().flex_1().flex().items_center().justify_center().px(16).text_center().text_size(11).text_color(t.muted).child("No files match this filter")))
-        // FileExplorerTreeStatus.tsx:38-95, FileExplorerFilesTreePane.tsx:131-135 — every empty
-        // state is a centred 11px muted line; loading is a bare 16px Loader2. The contents-search
-        // no-results copy is SearchResultsPane.tsx:153-158.
-        .when(this.view === "search" && this.hits && this.hits.totalMatches === 0 && !this.searching, el => el.child(div().flex_1().flex().items_center().justify_center().px(16).text_center().text_size(11).text_color(t.muted).child("No results. Try another search or adjust your filters.")))
-        .when(this.view === "files" && !this.name.value().trim() && (this.error || !this.entries.get("")?.length), el => el.child(this.error
-          ? div().flex_1().flex().items_center().justify_center().px(16).text_center().text_size(11).text_color(t.muted).child(`Could not load files for this workspace: ${this.error}`)
-          : this.loading ? div().flex_1().flex().items_center().justify_center().child(svg("mods/orca-files/loader-circle.svg").size(16).flex_none().text_color(t.muted).spin(1000))
-          : div().flex_1().flex().items_center().justify_center().px(16).text_center().text_size(11).text_color(t.muted).child(this.root ? "No files in this workspace" : "Select a workspace to browse files")))
-        .when(this.limited, el => el.child(div().p(8).text_size(11).text_color(t.dim).child("File list limited to 500 entries per folder and 5,000 total")))))
-      .when(Boolean(this.file), el => el.child(this.code
-        // The editor is a native element with no scroll API of its own, so it rides the
-        // retained scroll container: the same `overflow_y_scrollbar` the tree uses, or a long
-        // file cannot be read past the first screen.
-        ? div().flex_1().min_h(0).overflow_y_scrollbar().mode("always").child(Editor.new(this.code))
-        : div().p(12).text_color(t.dim).child(this.fileError || "Loading file…")));
+      .when(!this.file, el => el.child(this.treePane(t)))
+      .when(Boolean(this.file), el => el.child(this.fileBody(t)));
+  }
+
+  // The popups this mod opens as copies of itself (props.tab), and the New/Rename prompt, replace the pane.
+  popupView(t, cx) {
+    if (this.prompt) return this.promptView(t);
+    const tab = props()?.tab;
+    if (tab === "file") return this.menuView(t);
+    if (tab === "open-in") return this.openInView(t, cx);
+    if (tab === "more") return this.moreView(t);
+    return null;
+  }
+
+  // The open file's title band: back arrow, path and save status.
+  fileHeader(t) {
+    return h_flex().h(30).flex_none().px(10).gap(6).items_center().border_b(1).border_color(t.border)
+      .child(div().id("files-back").w(20).cursor_pointer().text_color(t.muted).on_click((_e, clickCx) => { this.show(null, clickCx); clickCx.notify(); }).child("←"))
+      .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.dim).child(this.file ?? ""))
+      .when(Boolean(this.code), el => el.child(div().flex_none().text_size(10).text_color(this.doc?.status === "failed" ? t.ansi1 : t.muted)
+        .child(this.saveStatusText())));
+  }
+
+  saveStatusText() {
+    if (!this.doc) return this.fileError || "Read-only";
+    if (this.doc.status === "failed") return `Not saved: ${this.doc.error.slice(0, 60)}`;
+    return ({ editing: "Editing…", saved: "Saved" })[this.doc.status] ?? "";
+  }
+
+  fileBody(t) {
+    // The editor is a native element with no scroll API of its own, so it rides the
+    // retained scroll container: the same `overflow_y_scrollbar` the tree uses, or a long
+    // file cannot be read past the first screen.
+    if (this.code) return div().flex_1().min_h(0).overflow_y_scrollbar().mode("always").child(Editor.new(this.code));
+    return div().p(12).text_color(t.dim).child(this.fileError || "Loading file…");
+  }
+
+  treePane(t) {
+    const search = this.view === "search";
+    const status = this.treeStatus(t);
+    return v_flex().id("files-tree").flex_1().min_h(0).relative().pt(8).pb(4)
+      // The virtual list scrolls itself; only the contents hits still ride a scroll container.
+      .when(search, pane => pane.overflow_y_scrollbar().mode("always"))
+      // SearchResultsPane.tsx:57-70 — its virtualizer mixes 28px file rows with 20px match
+      // rows; this Herdr `v_virtual_list` takes one height for the whole list, so the
+      // grouped rows are a plain column, cheap because search() keeps at most 200 matches.
+      .when(search, pane => pane.children(this.searchResults(t)))
+      .when(!search, pane => pane.child(this.treeList(t)))
+      .when(!search, pane => pane.child(Scrollbar.vertical("files-rows").viewport_from_layout().absolute().inset_0()))
+      .when(Boolean(status), pane => pane.child(status))
+      .when(this.limited, pane => pane.child(div().p(8).text_size(11).text_color(t.dim).child("File list limited to 500 entries per folder and 5,000 total")));
+  }
+
+  // The empty or pending state shown in place of rows, or null when there are rows.
+  treeStatus(t) {
+    if (this.view === "search") return this.searchStatus(t);
+    if (this.view !== "files") return null;
+    return this.name.value().trim() ? this.filterStatus(t) : this.folderStatus(t);
+  }
+
+  // FileExplorerTreeStatus.tsx:38-95, FileExplorerFilesTreePane.tsx:131-135 — every empty
+  // state is a centred 11px muted line; loading is a bare 16px Loader2. The contents-search
+  // no-results copy is SearchResultsPane.tsx:153-158.
+  searchStatus(t) {
+    if (this.hits && this.hits.totalMatches === 0 && !this.searching) return statusMessage(t, "No results. Try another search or adjust your filters.");
+    return null;
+  }
+
+  // FileExplorerFilesTreePane.tsx:116-136 — with a name filter the empty state is a
+  // Loader2 while the listing is pending, then "No files match this filter".
+  filterStatus(t) {
+    if (!this.nfMap && this.nfLoading) return centeredBox().child(spinner(t));
+    if (this.nfMap?.size === 0) return statusMessage(t, "No files match this filter");
+    return null;
+  }
+
+  folderStatus(t) {
+    if (!this.error && this.entries.get("")?.length) return null;
+    return this.emptyTreeState(t);
+  }
+
+  emptyTreeState(t) {
+    if (this.error) return statusMessage(t, `Could not load files for this workspace: ${this.error}`);
+    if (this.loading) return centeredBox().child(spinner(t));
+    return statusMessage(t, this.root ? "No files in this workspace" : "Select a workspace to browse files");
   }
 }
