@@ -32,7 +32,7 @@ test("unknown views have no commands", () => {
 });
 
 test("every bridged key in keys.json names a known reveal", () => {
-  const keys = JSON.parse(readFileSync(new URL("../../keys.json", import.meta.url), "utf8"));
+  const keys = JSON.parse(readFileSync(new URL("../../../../keys.json", import.meta.url), "utf8"));
   const bridged = Object.values(keys["layout:orca"])
     .filter((action) => String(action).startsWith("orca-panel-head."))
     .map((action) => String(action).slice("orca-panel-head.".length));
