@@ -4,3 +4,4 @@ gpui-kit.d.ts
 jsconfig.json
 .agents/settings.local.json
 .agents/worktrees/
+artifacts
