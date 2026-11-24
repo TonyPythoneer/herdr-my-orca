@@ -374,6 +374,25 @@ function visibleGroups(visibleRows) {
   return groups;
 }
 
+/** Collect open identities and discoverable rows in one pass, before synthesizing main checkouts. */
+function collectOpenRows(sp, gitState, loaded, getWhere) {
+  // Orca draws rows only after discovery completes.
+  // startup-worktree-refresh.ts:78-82 sets startupWorktreeRefreshCompleted in a finally block,
+  // and EmptyState.tsx:14 gates "No workspaces found" on that flag.
+  const open = new Set();
+  const rows = [];
+  for (let i = 0; i < sp.length; i++) {
+    if (!(i in sp)) continue;
+    const w = sp[i];
+    const key = getWhere(w);
+    open.add(key);
+    const g = gitState[key] ?? null;
+    if (g?.linked && g.worktrees && !g.worktrees.some(wt => wt.path === g.top)) continue;
+    rows.push({ w, i, g, ok: loaded || key in gitState });
+  }
+  return { open, rows };
+}
+
 /**
  * Projects the worktree plan from active spaces, terminal panes, and cached git state.
  * Pure data transformation: no UI components, timers, or side effects.
@@ -401,20 +420,7 @@ export function projectWorktreePlan({
   options = {},
 } = {}) {
   const getWhere = (w) => (whereFn ? whereFn(w, ps) : where(w, ps));
-  // Orca draws rows only after discovery completes.
-  // startup-worktree-refresh.ts:78-82 sets startupWorktreeRefreshCompleted in a finally block,
-  // and EmptyState.tsx:14 gates "No workspaces found" on that flag.
-  const open = new Set();
-  const rows = [];
-  for (let i = 0; i < sp.length; i++) {
-    if (!(i in sp)) continue;
-    const w = sp[i];
-    const key = getWhere(w);
-    open.add(key);
-    const g = gitState[key] ?? null;
-    if (g?.linked && g.worktrees && !g.worktrees.some(wt => wt.path === g.top)) continue;
-    rows.push({ w, i, g, ok: loaded || key in gitState });
-  }
+  const { open, rows } = collectOpenRows(sp, gitState, loaded, getWhere);
 
   // The main checkout precedes any linked spaces in its group.
   const list = mergeWorktreeRows(unopenedMainRows(gitState, open).concat(rows));
