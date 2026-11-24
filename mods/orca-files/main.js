@@ -13,7 +13,7 @@ import { resolveTreeKey } from "./tree-nav.js";
 import { splitGlobs, searchResults } from "./text-search.js";
 import { parseStatus } from "./git-status.js";
 import { panelFrame } from "./panel-motion.js";
-import { SPIN_PERIOD_MS } from "../orca-assets/ui-settings.js";
+import { SPIN_PERIOD_MS } from "./ui-settings.js";
 
 const plat = () => (typeof window === "function" ? window()?.platform : null);
 // The entry of `table` for the host platform, or `fallback`.

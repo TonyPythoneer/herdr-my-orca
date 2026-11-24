@@ -8,7 +8,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand, panes, spaces, hc, setShared, checking, notify } from "herdr";
 import { probeLocal } from "./local-usage.js";
-import { SPIN_PERIOD_MS } from "../orca-assets/ui-settings.js";
+import { SPIN_PERIOD_MS } from "./ui-settings.js";
 import { FOLLOW_EVERY_MS, FOLLOW_STATE_KEY, planFollow, parseCheckout } from "./wt-follow.js";
 import { probeAllProviders, getTightestUsageBucket, formatBucketChipLabel } from "./usage.js";
 

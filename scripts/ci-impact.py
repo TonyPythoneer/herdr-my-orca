@@ -198,8 +198,6 @@ def select(root, files, changed, force=False):
         lint.update(("mods", "scripts", "orca-ui"))
     else:
         lint.update("mods/" + m for m in direct)
-        if any(p.startswith("mods/orca-assets/") and p.endswith((".js", ".mjs")) for p in changed):
-            lint.add("mods/orca-assets")
         if any(p.startswith("orca-ui/") and not TEST.search(p) for p in changed):
             lint.add("orca-ui")
     groups = defaultdict(list)
