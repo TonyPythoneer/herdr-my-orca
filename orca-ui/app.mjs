@@ -58,9 +58,11 @@ export const inPlace = [
       "mods/agent-config/agent-flyout.test.js",
       "mods/agent-config/argv.golden.test.js",
       "mods/agent-config/codex-provider.test.js",
+      "mods/agent-config/flyout.golden.test.js",
       "mods/agent-config/launch.test.js",
       "mods/agent-config/lists.test.js",
-      "mods/agent-config/render.golden.test.js"
+      "mods/agent-config/render.golden.test.js",
+      "mods/agent-config/settings.flow.test.js"
     ],
     "next": [
       "mods/orca-files/main.js"
@@ -112,6 +114,9 @@ export const inPlace = [
     "opens": [
       "terminal.open",
       "agent.focus"
+    ],
+    "tests": [
+      "mods/orca-agents/agents-flow.test.js"
     ]
   },
   {
@@ -142,8 +147,11 @@ export const inPlace = [
       "mods/orca-changes/conflict-safety.test.js",
       "mods/orca-changes/create-pr.test.js",
       "mods/orca-changes/discard-snapshot.test.js",
+      "mods/orca-changes/git-matrix.test.js",
+      "mods/orca-changes/main.golden.test.js",
       "mods/orca-changes/operation-target.test.js",
       "mods/orca-changes/push-target.test.js",
+      "mods/orca-changes/refresh.flow.test.js",
       "mods/orca-changes/section-view.test.js"
     ],
     "next": [
@@ -174,6 +182,9 @@ export const inPlace = [
       "tasks.text",
       "tasks.state",
       "tasks.resets"
+    ],
+    "tests": [
+      "mods/orca-chrome/chrome-flow.test.js"
     ],
     "next": [
       "mods/orca-chrome/runner.js",
@@ -294,6 +305,10 @@ export const inPlace = [
     ],
     "reachedBy": [
       "overlay:dialog opened by orca-menu (handoff and fork items)"
+    ],
+    "tests": [
+      "mods/orca-handoff/dialog.flow.test.js",
+      "mods/orca-handoff/main.golden.test.js"
     ]
   },
   {
@@ -337,7 +352,9 @@ export const inPlace = [
     "tests": [
       "mods/orca-menu/close-row.test.js",
       "mods/orca-menu/close-sides.test.js",
-      "mods/orca-menu/close-space.test.js"
+      "mods/orca-menu/close-space.test.js",
+      "mods/orca-menu/menu.flow.test.js",
+      "mods/orca-menu/menu.golden.test.js"
     ],
     "next": [
       "mods/orca-tabs/main.js",
@@ -398,6 +415,8 @@ export const inPlace = [
     ],
     "tests": [
       "mods/orca-new-menu/inventory.test.js",
+      "mods/orca-new-menu/menu.flow.test.js",
+      "mods/orca-new-menu/menu.golden.test.js",
       "mods/orca-new-menu/rows.test.js"
     ],
     "next": [
@@ -512,6 +531,10 @@ export const inPlace = [
     "reachedBy": [
       "mod.open:orca-split-menu (keys.json)"
     ],
+    "tests": [
+      "mods/orca-split-menu/actions.flow.test.js",
+      "mods/orca-split-menu/menu.golden.test.js"
+    ],
     "next": [
       "mods/orca-files/main.js",
       "mods/orca-changes/main.js"
@@ -544,6 +567,8 @@ export const inPlace = [
     "tests": [
       "mods/orca-status/claude-statusline.test.js",
       "mods/orca-status/local-usage.test.js",
+      "mods/orca-status/status-flow.test.js",
+      "mods/orca-status/usage-edge.test.js",
       "mods/orca-status/usage.test.js",
       "mods/orca-status/wt-follow.test.js"
     ],
@@ -625,6 +650,7 @@ export const inPlace = [
       "tasks.request"
     ],
     "tests": [
+      "mods/orca-tasks/tasks-flow.test.js",
       "mods/orca-tasks/tasks.test.js"
     ],
     "next": [
@@ -644,7 +670,9 @@ export const inPlace = [
     ],
     "tests": [
       "mods/orca-worktree/create.test.js",
+      "mods/orca-worktree/dialog.flow.test.js",
       "mods/orca-worktree/helpers.test.js",
+      "mods/orca-worktree/main.golden.test.js",
       "mods/orca-worktree/remove.test.js",
       "mods/orca-worktree/switch.test.js"
     ]
