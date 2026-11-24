@@ -15,6 +15,9 @@ def run(args, **kw):
     return subprocess.run([str(a) for a in args], text=True, capture_output=True,
                           timeout=kw.pop("timeout", 20), check=True, **kw).stdout
 
+def command_args(command_name, **args):
+    return ["do", command_name, *[part for k, v in args.items() for part in ("--"+k, str(v))]]
+
 def sha(path):
     return run(["git", "-C", path, "rev-parse", "HEAD"]).strip()
 
@@ -28,7 +31,7 @@ def report(out, info):
         cards.append(f'<section><h2>{h(row["id"])} · {h(row["title"])}</h2><p>{h(row["mode"])} · {h(row["result"])}</p><p>{h(row["action"])}</p><p>{h(row.get("error", ""))}</p><div class="pair">{images}</div></section>')
     (out / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Main UI snapshot</title><style>body{font:16px system-ui;background:#15171a;color:#eee;margin:24px}section{border-top:1px solid #555;padding:16px 0}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}figure{margin:0}img{width:100%;height:auto}a{color:#a9cfff}p{overflow-wrap:anywhere}</style><h1>Real Herdr App · main</h1><p>Commit: '+h(info["mainSha"])+'</p><p>'+h(info.get("fatal",""))+'</p><p>Native command = state navigation, not a mouse click. AX press = native accessibility interaction.</p><p><a href="manifest.json">Machine-readable manifest</a></p>'+''.join(cards))
     counts = {k: sum(r["result"] == k for r in rows) for k in ("captured", "failed", "blocked", "not-run")}
-    (out / "summary.md").write_text(f'Main: `{info["mainSha"]}`\n\nCaptured: {counts["captured"]} / {len(rows)}; failed: {counts["failed"]}; blocked: {counts["blocked"]}; not run: {counts["not-run"]}.\n\nDownload the artifact and open index.html. Native command captures do not prove click behavior.\n\n{info.get("fatal", "")}\n')
+    (out / "summary.md").write_text(f'Main: `{info["mainSha"]}`\n\nCaptured: {counts["captured"]} / {len(rows)}; failed: {counts["failed"]}; blocked: {counts["blocked"]}; not run: {counts["not-run"]}.\n\nDownload the artifact and open index.html. Native command captures do not prove click behavior. Blocked accessibility observations are explicitly incomplete, not successful clicks.\n\n{info.get("fatal", "")}\n')
 
 def main():
     p = argparse.ArgumentParser()
@@ -68,8 +71,8 @@ def main():
                    "LANG": "en_US.UTF-8", "TMPDIR": str(root)}
             def cli(*args, timeout=20):
                 return run([app, *args], env=env, cwd=fixture, timeout=timeout)
-            def command(name, **args):
-                return cli("do", name, *[part for k,v in args.items() for part in ("--"+k, str(v))])
+            def command(command_name, **args):
+                return cli(*command_args(command_name, **args))
             def status():
                 return json.loads(cli("status", timeout=8))
             def shot(row, phase):
@@ -116,12 +119,15 @@ def main():
                     run(["swiftc", Path(__file__).with_name("ax-press.swift"), "-o", ax], timeout=90)
                 except Exception as e:
                     ax_error = str(e)
+                    if isinstance(e, subprocess.CalledProcessError):
+                        ax_error += " " + (e.stderr or "")
+                    print("AX helper unavailable:", ax_error, flush=True)
                 scenarios = []
                 def add(title, name=None, args=None, label=None, check=None, wait=0.8):
                     mode = "accessibility-press" if label else ("native-command" if name else "initial-state")
                     scenarios.append((title, name, args or {}, label, check, wait, mode))
                 add("First launch")
-                add("Dismiss startup overlay if present", "overlay.close", check=None)
+                add("Dismiss startup overlay if present", "overlay.close", check=lambda s:not s.get("overlays"))
                 add("Switch to Orca layout", "layout.switch", {"name":"orca"}, check=lambda s:s.get("layout")=="orca")
                 add("Welcome / landing page", "layout.select", {"stack":"main","child":"main-landing"})
                 add("Create fixture workspace", "space.new", {"name":"Snapshot project","folder":str(fixture)}, check=lambda s:bool(s.get("space")),wait=2)
@@ -165,6 +171,15 @@ def main():
                     row = {"id":f"{i:02d}","title":title,"mode":mode,
                            "action":label or (name+" "+json.dumps(args) if name else "Launch app"),"result":"not-run"}
                     info["steps"].append(row)
+                    if i > 3 and info["steps"][2]["result"] != "captured":
+                        row["result"] = "not-run"
+                        row["error"] = "Orca layout prerequisite failed"
+                        continue
+                    if i > 2 and info["steps"][1]["result"] != "captured":
+                        row["result"] = "not-run"
+                        row["error"] = "Startup overlay prerequisite failed"
+                        continue
+                    print(f'UI_STEP {row["id"]} {title}', flush=True)
                     try:
                         if name or label:
                             shot(row, "before")
@@ -175,8 +190,28 @@ def main():
                                 run([ax,str(proc.pid),label],timeout=10)
                             except subprocess.CalledProcessError as e:
                                 raise PermissionError(e.stderr.strip() or str(e)) from e
-                        elif name == "overlay.close" and not status().get("overlays"):
-                            row["action"] += " (no overlay present; no-op)"
+                        elif name == "overlay.close":
+                            overlays = status().get("overlays") or []
+                            if not overlays:
+                                row["action"] += " (no overlay present; no-op)"
+                            else:
+                                command("overlay.close", id=overlays[-1])
+                                time.sleep(0.5)
+                                remaining = status().get("overlays") or []
+                                if i == 2 and "frame-welcome" in remaining:
+                                    if ax_error:
+                                        raise RuntimeError(ax_error)
+                                    # First-run native welcome has a verified close control near
+                                    # the upper-right of the modal at the observed 1024x681 size.
+                                    # The helper guards window aspect ratio and owning PID.
+                                    image = row["images"]["before"]
+                                    run([ax, str(proc.pid), "--welcome-close",
+                                         str(image["width"]), str(image["height"])], timeout=10)
+                                    row["mode"] = "native-command+mouse"
+                                    row["action"] += " + native welcome close click"
+                                    time.sleep(1)
+                                if overlays[-1] in (status().get("overlays") or []):
+                                    raise RuntimeError("Overlay did not close: "+overlays[-1])
                         elif name:
                             command(name,**args)
                         time.sleep(wait)
@@ -192,11 +227,12 @@ def main():
                         row["result"]="blocked" if isinstance(e,PermissionError) else "failed"
                         row["error"]=str(e)
                         if isinstance(e,subprocess.CalledProcessError):
-                            row["error"] += " "+(e.stderr or "")
+                            row["error"] += " "+(e.stderr or "")+" "+(e.stdout or "")
                         try:
                             shot(row,"diagnostic")
                         except Exception:
                             pass
+                    print("UI_RESULT "+json.dumps({k:v for k,v in row.items() if k != "status"}), flush=True)
                     report(out,info)
             finally:
                 if proc.poll() is None:
@@ -213,7 +249,10 @@ def main():
             info["fatal"] += " "+(e.stderr or "")
     finally:
         report(out,info)
-    return 1 if info.get("fatal") or not info["steps"] or any(s["result"]!="captured" for s in info["steps"]) else 0
+        print((out/"summary.md").read_text(), flush=True)
+    # AX coverage is reported independently from the required native state capture.
+    # A missing AX element is an incomplete observation, never a successful click.
+    return 1 if info.get("fatal") or not info["steps"] or any(s["result"] in ("failed","not-run") for s in info["steps"]) else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
