@@ -76,8 +76,8 @@ CASES = [
     case("Task management: JSON editor","orca-tasks","Edit JSON",(612,271),page="main-tasks",afterText=["Close JSON","Save","Cancel"],follow=[
         text("Cancel",MAIN,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]) ]),
     case("Task management: back to terminals","orca-tasks","Back to terminals",(318,68),page="main-tasks",absentText=["Task management"]),
-    case("Unified sidebar collapse","orca-chrome orca-tabs","Collapse sidebar",(91,15),layout="orca-unified",absentText=["Projects"]),
-    case("Unified right panel collapse","orca-panel-head orca-tabs","Collapse right sidebar",(1000,15),layout="orca-unified",absentText=["Find files","Names"]),
+    case("Sidebar collapse","orca-tabs","Collapse sidebar",(91,15)),
+    case("Right panel collapse","orca-panel-head orca-tabs","Collapse right sidebar",(1000,15)),
     # New native interaction cases.
     case("Landing: create workspace","orca-landing orca-new-menu","Create workspace",visible=True,region=MAIN,occurrence="top",page="main-landing",overlay="orca-new-menu"),
     case("Group: open New worktree dialog and cancel","orca-menu orca-worktree","New worktree",visible=True,region=LEFT,group="expand",prepare=[text("sample-project",LEFT,right=True)],setupOverlay="orca-menu",overlay="orca-worktree",afterText=["New worktree"],follow=[escape(noOverlay=True,absentText=["New worktree"])]),

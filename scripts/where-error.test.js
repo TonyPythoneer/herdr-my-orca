@@ -33,7 +33,7 @@ test("a migrated feature points at its orca-ui source and its app.mjs entry", as
   assert.equal(hit.kind, "feature");
   assert.match(hit.note, /feature "panel\/head"/);
   assert.match(hit.note, /panel-views\.test\.js/);
-  assert.match(hit.note, /layouts orca#panel-head, orca-unified#panel-head/);
+  assert.match(hit.note, /layouts orca#panel-head;/);
   assert.match(hit.note, /next mods\/orca-files\/main\.js$/);
 });
 

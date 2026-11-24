@@ -173,7 +173,7 @@ test("every mod is a feature or has one in-place map entry, and the entry matche
   assert.equal(mods.length, 24);
   assert.deepEqual([...owned, ...inPlace.map(e => e.mod)].sort(), mods);
   const mounts = {};
-  for (const layout of ["orca", "orca-unified"]) {
+  for (const layout of ["orca"]) {
     // A pane header's `content` has no id of its own, so it counts for the node that carries it.
     const walk = (node, id) => {
       if (Array.isArray(node)) node.forEach(n => walk(n, id));

@@ -74,9 +74,7 @@ export const inPlace = [
     "description": "Settings-style page for the agent catalog: installs, commands, permissions, model providers.",
     "layouts": [
       "orca#main-agents",
-      "orca#main-providers",
-      "orca-unified#main-agents",
-      "orca-unified#main-providers"
+      "orca#main-providers"
     ],
     "props": "main-providers: props.page=providers; props.expand deep link via tab.new",
     "opens": [
@@ -111,10 +109,8 @@ export const inPlace = [
     "area": "panel-right",
     "description": "Agents panel: live agents above on-disk session history, with search and resume.",
     "layouts": [
-      "orca#vault",
-      "orca-unified#vault"
+      "orca#vault"
     ],
-    "props": "unified:true (unified layout only)",
     "opens": [
       "terminal.open",
       "agent.focus"
@@ -128,10 +124,8 @@ export const inPlace = [
     "area": "panel-right",
     "description": "Source Control panel: changed files, stage, discard, commit, push and create PR.",
     "layouts": [
-      "orca#changes",
-      "orca-unified#changes"
+      "orca#changes"
     ],
-    "props": "unified:true (unified layout only)",
     "opens": [
       "orca-diff.show",
       "pane.split(mod:orca-diff)",
@@ -165,23 +159,17 @@ export const inPlace = [
   },
   {
     "mod": "orca-chrome",
-    "area": "sidebar-left",
-    "description": "Sidebar top bar with collapse toggle; the status bar's leftmost footer with Agents, Tasks, Settings and Help buttons.",
+    "area": "status-bar",
+    "description": "The status bar's leftmost footer with Agents, Providers, Tasks, Settings and Help buttons; also keeps the task runner alive.",
     "layouts": [
-      "orca#brand",
-      "orca#status-footer",
-      "orca-unified#status-footer"
+      "orca#status-footer"
     ],
-    "props": "footer:true (both); brand node is orca-only",
     "opens": [
       "layout.select",
       "app.settings",
-      "app.palette",
-      "mod.open:picker"
+      "app.palette"
     ],
     "shared": [
-      "left-sidebar.collapsed",
-      "left-sidebar.openPx",
       "tasks.config",
       "tasks.text",
       "tasks.state",
@@ -241,10 +229,8 @@ export const inPlace = [
     "area": "panel-right",
     "description": "File explorer for the space folder: tree, previews, editing and a context menu.",
     "layouts": [
-      "orca#files",
-      "orca-unified#files"
+      "orca#files"
     ],
-    "props": "unified:true (unified layout only)",
     "opens": [
       "orca-files.refresh",
       "orca-files.view",
@@ -287,8 +273,7 @@ export const inPlace = [
     "area": "overlay-or-menu",
     "description": "Floating bottom-right workspace panel toggled by Ctrl+Alt+A; opens new tabs.",
     "layouts": [
-      "orca#float-workspace",
-      "orca-unified#float-workspace"
+      "orca#float-workspace"
     ],
     "props": "floating: edge bottom, align end",
     "keys": [
@@ -335,8 +320,7 @@ export const inPlace = [
     "area": "center",
     "description": "Welcome page shown with no workspace open; tiles start a new space or tab.",
     "layouts": [
-      "orca#main-landing",
-      "orca-unified#main-landing"
+      "orca#main-landing"
     ],
     "opens": [
       "space.new",
@@ -355,7 +339,7 @@ export const inPlace = [
     "mod": "orca-menu",
     "area": "overlay-or-menu",
     "description": "Right-click context menu for panes, tabs, spaces and groups: split, close, copy, move.",
-    "props": "root.terminal_menu='orca-menu' in both layouts (not a node)",
+    "props": "root.terminal_menu='orca-menu' (not a node)",
     "opens": [
       "overlay:orca-tabs",
       "overlay:orca-handoff",
@@ -366,7 +350,7 @@ export const inPlace = [
     ],
     "reachedBy": [
       "overlay:popup props.tab pane|tab|space|group",
-      "terminal_menu (root, both layouts)"
+      "terminal_menu (root)"
     ],
     "shared": [
       "orca-spaces.forget",
@@ -391,10 +375,8 @@ export const inPlace = [
     "area": "sidebar-left",
     "description": "Sidebar top: search field, page rows (Tasks etc.), and the Projects header.",
     "layouts": [
-      "orca#nav-top",
-      "orca-unified#nav-top"
+      "orca#nav-top"
     ],
-    "props": "unified:true (unified layout only)",
     "opens": [
       "mod.open:picker",
       "layout.select",
@@ -453,8 +435,7 @@ export const inPlace = [
     "area": "header",
     "description": "Pane title bar: on hover, split and close buttons; click focuses the pane.",
     "layouts": [
-      "orca#main-terminals",
-      "orca-unified#main-terminals"
+      "orca#main-terminals"
     ],
     "props": "pane.header on main-terminals (height 32, top); props {pane, terminal}",
     "opens": [
@@ -488,13 +469,9 @@ export const inPlace = [
       "orca#workspaces",
       "orca#pr-checks",
       "orca#checks",
-      "orca#ports",
-      "orca-unified#workspaces",
-      "orca-unified#pr-checks",
-      "orca-unified#checks",
-      "orca-unified#ports"
+      "orca#ports"
     ],
-    "props": "tab: workspaces|pr-checks|checks|ports; unified:true (unified only)",
+    "props": "tab: workspaces|pr-checks|checks|ports",
     "tests": [
       "mods/orca-panel-gap/panel-motion.test.js"
     ]
@@ -504,10 +481,8 @@ export const inPlace = [
     "area": "sidebar-left",
     "description": "Project tree of workspaces by repo and machine; click switches, drag reorders.",
     "layouts": [
-      "orca#spaces",
-      "orca-unified#spaces"
+      "orca#spaces"
     ],
-    "props": "unified:true (unified only)",
     "opens": [
       "space.new",
       "layout.select",
@@ -577,8 +552,7 @@ export const inPlace = [
     "area": "status",
     "description": "Bottom bar plug button: counts the listening ports the open spaces own and opens the Ports popover.",
     "layouts": [
-      "orca#status-ports",
-      "orca-unified#status-ports"
+      "orca#status-ports"
     ],
     "opens": [
       "space.select",
@@ -600,8 +574,7 @@ export const inPlace = [
     "area": "status",
     "description": "Bottom status bar: provider usage, maintenance segments, float toggle, updates.",
     "layouts": [
-      "orca#status-bar",
-      "orca-unified#status-bar"
+      "orca#status-bar"
     ],
     "opens": [
       "orca-float.toggle",
@@ -636,10 +609,9 @@ export const inPlace = [
     "area": "header",
     "description": "Tab strip with sidebar and panel toggles, drag-to-split, new tab and window controls.",
     "layouts": [
-      "orca#tabs",
-      "orca-unified#tabs"
+      "orca#tabs"
     ],
-    "props": "unified:true, motion:'native', pinSidebarTerminal:true (unified only)",
+    "props": "motion:'native', pinSidebarTerminal:true",
     "keys": [
       "global:cmd-t",
       "global:cmd-b",
@@ -692,8 +664,7 @@ export const inPlace = [
     "area": "center",
     "description": "Task page: scheduled tasks with toggles, New task, delete and a JSON view.",
     "layouts": [
-      "orca#main-tasks",
-      "orca-unified#main-tasks"
+      "orca#main-tasks"
     ],
     "opens": [
       "orca-chrome.tasks-scan",

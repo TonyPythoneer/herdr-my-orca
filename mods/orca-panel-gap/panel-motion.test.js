@@ -9,7 +9,7 @@ const { panelFrame } = await import("./panel-motion.js");
 const inner = () => ({ content: 1 });
 
 const at = (open, px) => {
-  globalThis.__herdrProps = () => ({ unified: true });
+  globalThis.__herdrProps = () => ({});
   globalThis.__herdrShared = (key) => (key === "panel.openPx" ? open : undefined);
   globalThis.__herdrLayout = () => ({ children: [{ id: "panel", size: { px } }] });
   globalThis.__herdrTheme = () => ({ surface: "#171717" });

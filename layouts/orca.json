@@ -38,58 +38,7 @@
       ],
       "children": [
         {
-          "id": "left-sidebar",
-          "type": "column",
-          "size": {
-            "px": 280
-          },
-          "min": 220,
-          "max": 500,
-          "background": "chrome",
-          "resizable": false,
-          "children": [
-            {
-              "id": "brand",
-              "type": "block",
-              "size": {
-                "px": 32
-              },
-              "window_drag": true,
-              "content": {
-                "mod": "orca-chrome"
-              }
-            },
-            {
-              "id": "nav",
-              "type": "column",
-              "resizable": false,
-              "children": [
-                {
-                  "id": "nav-top",
-                  "type": "block",
-                  "content": {
-                    "mod": "orca-nav"
-                  },
-                  "size": {
-                    "px": 86
-                  }
-                },
-                {
-                  "id": "spaces",
-                  "type": "block",
-                  "size": {
-                    "weight": 1
-                  },
-                  "content": {
-                    "mod": "orca-spaces"
-                  }
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "id": "work",
+          "id": "left",
           "type": "column",
           "resizable": false,
           "children": [
@@ -101,69 +50,119 @@
               },
               "window_drag": true,
               "content": {
-                "mod": "orca-tabs"
+                "mod": "orca-tabs",
+                "props": {
+                  "motion": "native",
+                  "pinSidebarTerminal": true
+                }
               }
             },
             {
-              "id": "work-body",
+              "id": "under",
               "type": "row",
               "children": [
                 {
-                  "id": "main",
-                  "type": "stack",
-                  "active": "main-terminals",
+                  "id": "left-sidebar",
+                  "type": "column",
+                  "size": {
+                    "px": 280
+                  },
+                  "min": 0,
+                  "max": 500,
+                  "background": "surface",
+                  "resizable": false,
                   "children": [
                     {
-                      "id": "main-terminals",
-                      "type": "block",
-                      "movable": false,
-                      "content": {
-                        "tab": "active",
-                        "pane": {
-                          "gap": 0,
-                          "radius": 0,
-                          "background": "background",
-                          "lone": false,
-                          "header": {
-                            "content": {
-                              "mod": "orca-pane"
-                            },
-                            "height": 32,
-                            "position": "top"
+                      "id": "nav",
+                      "type": "column",
+                      "resizable": false,
+                      "children": [
+                        {
+                          "id": "nav-top",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-nav"
+                          },
+                          "size": {
+                            "px": 86
+                          }
+                        },
+                        {
+                          "id": "spaces",
+                          "type": "block",
+                          "size": {
+                            "weight": 1
+                          },
+                          "content": {
+                            "mod": "orca-spaces"
                           }
                         }
-                      }
-                    },
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "work-body",
+                  "type": "row",
+                  "children": [
                     {
-                      "id": "main-landing",
-                      "type": "block",
-                      "content": {
-                        "mod": "orca-landing"
-                      }
-                    },
-                    {
-                      "id": "main-agents",
-                      "type": "block",
-                      "content": {
-                        "mod": "orca-agent-manager"
-                      }
-                    },
-                    {
-                      "id": "main-providers",
-                      "type": "block",
-                      "content": {
-                        "mod": "orca-agent-manager",
-                        "props": {
-                          "page": "providers"
+                      "id": "main",
+                      "type": "stack",
+                      "active": "main-terminals",
+                      "children": [
+                        {
+                          "id": "main-terminals",
+                          "type": "block",
+                          "movable": false,
+                          "content": {
+                            "tab": "active",
+                            "pane": {
+                              "gap": 0,
+                              "radius": 0,
+                              "background": "background",
+                              "lone": false,
+                              "header": {
+                                "content": {
+                                  "mod": "orca-pane"
+                                },
+                                "height": 32,
+                                "position": "top"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "main-landing",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-landing"
+                          }
+                        },
+                        {
+                          "id": "main-agents",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-agent-manager"
+                          }
+                        },
+                        {
+                          "id": "main-providers",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-agent-manager",
+                            "props": {
+                              "page": "providers"
+                            }
+                          }
+                        },
+                        {
+                          "id": "main-tasks",
+                          "type": "block",
+                          "content": {
+                            "mod": "orca-tasks"
+                          }
                         }
-                      }
-                    },
-                    {
-                      "id": "main-tasks",
-                      "type": "block",
-                      "content": {
-                        "mod": "orca-tasks"
-                      }
+                      ]
                     }
                   ]
                 }
@@ -177,7 +176,7 @@
           "size": {
             "px": 350
           },
-          "min": 220,
+          "min": 0,
           "max": 900,
           "children": [
             {
@@ -287,10 +286,7 @@
             "px": 144
           },
           "content": {
-            "mod": "orca-chrome",
-            "props": {
-              "footer": true
-            }
+            "mod": "orca-chrome"
           }
         },
         {

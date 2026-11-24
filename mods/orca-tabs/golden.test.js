@@ -77,7 +77,6 @@ function scenario(name, o = {}) {
 }
 
 const overflow = { viewportWidth: 300, tabWidths: new Map(FOUR.map((c) => [c.id, 144])) };
-const unified = { unified: true };
 const SCENARIOS = [
   ["mac four tabs", { window: MAC, panes: AGENTS, terminals: TERMINALS }],
   ["mac fullscreen", { window: { ...MAC, fullscreen: true }, panes: AGENTS }],
@@ -100,21 +99,19 @@ const SCENARIOS = [
   ["landing stack", { window: MAC, spaces: [SPACE([])], layout: LAYOUT({ main: { active: "main-landing" } }) }],
   ["remembered panel", { window: MAC, state: { panels: { s1: "git" } }, layout: LAYOUT({ panel: { hidden: true } }), shared: { "workspace.panels": ["files", "git"] } }],
   ["remembered hide", { window: MAC, state: { panels: { s1: null } }, shared: { "workspace.panels": ["files", "git"] } }],
-  ["unified", { window: MAC, props: unified, panes: AGENTS }],
-  ["unified sidebar hidden", { window: MAC, props: unified, layout: LAYOUT({ sidebar: { hidden: true } }) }],
-  ["unified narrow sidebar", { window: MAC, props: unified, layout: LAYOUT({ sidebar: { size: { px: 90 } } }) }],
-  ["unified panel hidden, zoom", { window: MAC, props: unified, layout: LAYOUT({ panel: { hidden: true } }), settings: { zoom: 2 } }],
-  ["unified native pinned", { window: MAC, props: { ...unified, motion: "native", pinSidebarTerminal: true }, state: { nativeHeaderWidth: 1000 } }],
-  ["unified native clocks", { window: MAC, props: { ...unified, motion: "native" }, steps: [(t) => { t.drawers.sidebar.clockPx = 77; t.drawers.panel.clockPx = 55; }] }],
-  ["unified busy drawers", { window: MAC, props: unified, steps: [(t) => { t.drawers.sidebar.busy = true; t.drawers.panel.busy = true; }] }],
-  ["unified main already flexible", { window: MAC, props: unified, layout: LAYOUT({ main: { size: undefined } }) }],
-  ["unified pending toggles", { window: MAC, props: unified, state: { wantToggle: 3, wantPanelToggle: 2 } }],
-  ["plain pending toggle", { window: MAC, state: { wantToggle: 1, wantPanelToggle: 1 } }],
+  ["sidebar hidden, panel shown", { window: MAC, layout: LAYOUT({ sidebar: { hidden: true } }) }],
+  ["narrow sidebar", { window: MAC, layout: LAYOUT({ sidebar: { size: { px: 90 } } }) }],
+  ["panel hidden, zoom 2", { window: MAC, layout: LAYOUT({ panel: { hidden: true } }), settings: { zoom: 2 } }],
+  ["native pinned", { window: MAC, props: { motion: "native", pinSidebarTerminal: true }, state: { nativeHeaderWidth: 1000 } }],
+  ["native clocks", { window: MAC, props: { motion: "native" }, steps: [(t) => { t.drawers.sidebar.clockPx = 77; t.drawers.panel.clockPx = 55; }] }],
+  ["busy drawers", { window: MAC, steps: [(t) => { t.drawers.sidebar.busy = true; t.drawers.panel.busy = true; }] }],
+  ["main already flexible", { window: MAC, layout: LAYOUT({ main: { size: undefined } }) }],
+  ["pending toggles", { window: MAC, state: { wantToggle: 3, wantPanelToggle: 2 } }],
   ["overflow", { window: MAC, state: overflow, panes: AGENTS }],
   ["overflow scrolled", { window: MAC, state: { ...overflow, scrollX: 100, activeTabId: "a" } }],
   ["overflow scrolled to end, active last", { window: MAC, spaces: [SPACE(FOUR.map((c) => ({ ...c, active: c.id === "d" })))], state: { ...overflow, scrollX: 500 } }],
   ["overflow sliding", { window: MAC, state: { ...overflow, scrollX: 100, animatedUntil: Number.MAX_SAFE_INTEGER } }],
-  ["overflow unified", { window: MAC, props: unified, state: { ...overflow, scrollX: 50 } }],
+  ["overflow, scrolled 50", { window: MAC, state: { ...overflow, scrollX: 50 } }],
   ["unmeasured widths", { window: MAC, state: { viewportWidth: 300, tabWidths: new Map([["a", 144]]) } }],
   ["hovered tab", { window: MAC, state: { hoveredTab: "b" } }],
   ["hovered active tab", { window: MAC, state: { hoveredTab: "a" } }],
@@ -123,7 +120,7 @@ const SCENARIOS = [
   ["pressed on own tab", { window: MAC, state: { pressed: 0, overTab: "a", overSide: null } }],
   ["pane drag over the strip", { window: MAC, shared: { "orca-tabs.pane-drag": { active: true, inTabStrip: true, pane: "p1", terminal: "tty-p1" } } }],
   ["pane drag below the strip", { window: MAC, shared: { "orca-tabs.pane-drag": { active: true, inTabStrip: false } } }],
-  ["unified mixed apps", { window: MAC, props: unified, panes: [
+  ["mixed apps", { window: MAC, panes: [
     pane("p1", "a", { app: "kilo", program: { agent: true } }), pane("p2", "b", { program: { icon: "own.png", tint: false } }),
     pane("p3", "c", { program: { icon: "own.svg", tint: true } }), pane("p4", "d", { app: "freebuff", program: {} })] }],
   ["terminal unofficial and cursor", { window: MAC, panes: [pane("p1", "a", { app: "cursor", program: { agent: true } }), pane("p2", "b", { app: "grok" }),
@@ -152,7 +149,7 @@ SCENARIOS.push(["drop overlay without a record", { props: { drop: true, overlay:
 SCENARIOS.push(["drop overlay own zone", { props: { drop: true, overlay: "ov" }, initProps: { drop: true }, state: { zone: "down" }, shared: { "orca-tabs.drop": { tab: "a", zone: "down", strip: { ...STRIP, stripHeight: 0 } } } }]);
 SCENARIOS.push(["actions are consumed", { window: MAC, shared: { "orca-tabs.action": { kind: "unsplit-to-tab", pane: "p1" } }, panes: AGENTS }]);
 
-const GOLDEN = "5c8a3cdf3fc4a5db91e5190d6dcf2f60ff1bfefc7579cd0b5cc8482cc57dfbac";
+const GOLDEN = "01a3828e0d0471ab8e956b3ea1213cefe7786671684184d2beff5f036effdc19";
 
 test("golden render and commands over the state matrix", () => {
   const realNow = Date.now;

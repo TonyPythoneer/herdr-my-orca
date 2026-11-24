@@ -2,10 +2,9 @@
 """The one place the titlebar row height is configured for the Orca layouts.
 
 Herdr layouts have no variables, so edit TITLEBAR_HEIGHT and run this script: it writes the
-nodes each layout builds its titlebar row from in the repo layout. `orca` has brand (left sidebar
-top), tabs (tab strip) and panel-head (right panel header); `orca-unified` has no brand and keeps
-the tab strip in the drawer, so only tabs and panel-head are controlled there. `orca-tabs` reads
-the `tabs` node for its drop geometry, so nothing else holds the number.
+nodes each layout builds its titlebar row from in the repo layout. `orca` has tabs (the one header
+over the sidebar and the work column) and panel-head (right panel header). `orca-tabs` reads the
+`tabs` node for its drop geometry, so nothing else holds the number.
 
 Usage: scripts/titlebar-height.py [--check] [--root DIR] [--write-live]
   --check       exits nonzero on a mismatch, writes nothing
@@ -21,8 +20,7 @@ TRAFFIC_LIGHTS = [12, TITLEBAR_HEIGHT // 2 - 8]
 # equal px (32 and 40 both); cause unknown, re-measure after a Herdr update.
 PANEL_HEAD_OFFSET = -1
 ROWS = {
-    "orca": {"brand": 0, "tabs": 0, "panel-head": PANEL_HEAD_OFFSET},
-    "orca-unified": {"tabs": 0, "panel-head": PANEL_HEAD_OFFSET},
+    "orca": {"tabs": 0, "panel-head": PANEL_HEAD_OFFSET},
 }
 # Header-like rows this script does not control, shown so a mismatch is easy to spot.
 OTHER = {"status-footer": "layout node", "main-terminals pane header": "layout `header.height`",

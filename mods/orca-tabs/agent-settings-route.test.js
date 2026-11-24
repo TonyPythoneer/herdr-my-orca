@@ -23,7 +23,7 @@ test("return target preserves an existing nonterminal page or chooses active ter
 test("settings route cannot be ejected by syncLanding and renders only its Back control", () => {
   const calls=[];
   globalThis.__herdrRun=(name,args)=>calls.push([name,args]);
-  globalThis.__herdrProps=()=>({unified:true});
+  globalThis.__herdrProps=()=>({});
   globalThis.__herdrLayout=()=>({id:"main",active:"main-agents",children:[]});
   globalThis.__herdrSpaces=()=>[{active:true,tabs:[{id:"one"}]}];
   globalThis.__herdrTheme=()=>new Proxy({}, {get:(_t,k)=>String(k)});
@@ -42,8 +42,8 @@ test("settings route cannot be ejected by syncLanding and renders only its Back 
 });
 
 const SIDEBAR = { id: "left-sidebar", size: { px: 259 } };
-test("settings narrows the unified sidebar once, and leaving restores it once", () => {
-  const enter = { open: true, prior: null, unified: true, sidebar: SIDEBAR, busy: false };
+test("settings narrows the sidebar once, and leaving restores it once", () => {
+  const enter = { open: true, prior: null, sidebar: SIDEBAR, busy: false };
   assert.deepEqual(settingsSidebarPlan(enter), { flag: { px: 259 }, show: false, resize: SETTINGS_SIDEBAR_PX });
   assert.equal(settingsSidebarPlan({ ...enter, prior: { px: 259 }, sidebar: { size: { px: SETTINGS_SIDEBAR_PX } } }), null, "no second pass once narrow");
   assert.deepEqual(settingsSidebarPlan({ ...enter, prior: { px: 259 }, sidebar: { size: { px: 160 } } }),
@@ -51,30 +51,27 @@ test("settings narrows the unified sidebar once, and leaving restores it once", 
   assert.deepEqual(settingsSidebarPlan({ ...enter, open: false, prior: { px: 259 } }), { flag: null, show: true, resize: 259 });
   assert.equal(settingsSidebarPlan({ ...enter, open: false }), null, "nothing to undo when it never entered");
 });
-test("settings leaves the width alone outside unified or without a sidebar", () => {
-  for (const over of [{ unified: false }, { sidebar: null }]) {
-    const plan = settingsSidebarPlan({ open: true, prior: null, unified: true, sidebar: SIDEBAR, busy: false, ...over });
-    assert.deepEqual(plan, { flag: { px: null }, show: false, resize: null });
-    assert.deepEqual(settingsSidebarPlan({ open: false, prior: plan.flag, unified: true, sidebar: SIDEBAR, busy: false }), { flag: null, show: true, resize: null });
-  }
+test("settings leaves the width alone without a sidebar", () => {
+  const plan = settingsSidebarPlan({ open: true, prior: null, sidebar: null, busy: false });
+  assert.deepEqual(plan, { flag: { px: null }, show: false, resize: null });
+  assert.deepEqual(settingsSidebarPlan({ open: false, prior: plan.flag, sidebar: SIDEBAR, busy: false }), { flag: null, show: true, resize: null });
 });
 test("hidden and toggle-collapsed sidebars open to the rail and restore their hidden state", () => {
   const flag = { px: 259, hidden: true };
   for (const sidebar of [{ ...SIDEBAR, hidden: true }, { ...SIDEBAR, size: { px: 1 } }]) {
-    const enter = { open: true, unified: true, sidebar, wide: 259 };
+    const enter = { open: true, sidebar, wide: 259 };
     assert.deepEqual(settingsSidebarPlan(enter), { flag, show: false, resize: 76 });
     assert.deepEqual(settingsSidebarPlan({ ...enter, prior: { px: null } }), { flag, show: false, resize: 76 });
     assert.deepEqual(settingsSidebarPlan({ ...enter, prior: flag }), { flag, show: false, resize: 76 });
     assert.deepEqual(settingsSidebarPlan({ ...enter, open: false, prior: flag }), { flag: null, show: true, resize: 0 });
-    assert.deepEqual(settingsSidebarPlan({ ...enter, unified: false }), { flag: { px: null, hidden: true }, show: false, resize: null });
   }
 });
 test("a sidebar that is moving blocks both directions until it settles", () => {
   const sidebar = { ...SIDEBAR, size: { px: 40 } };
-  assert.equal(settingsSidebarPlan({ open: true, prior: null, unified: true, sidebar, busy: true, wide: 259 }), null);
-  assert.deepEqual(settingsSidebarPlan({ open: true, prior: null, unified: true, sidebar, busy: false, wide: 259 }),
+  assert.equal(settingsSidebarPlan({ open: true, prior: null, sidebar, busy: true, wide: 259 }), null);
+  assert.deepEqual(settingsSidebarPlan({ open: true, prior: null, sidebar, busy: false, wide: 259 }),
     { flag: { px: 259 }, show: false, resize: 76 });
-  assert.equal(settingsSidebarPlan({ open: false, prior: { px: 259 }, unified: true, sidebar: SIDEBAR, busy: true }), null);
+  assert.equal(settingsSidebarPlan({ open: false, prior: { px: 259 }, sidebar: SIDEBAR, busy: true }), null);
 });
 test("settings renders one narrowing motion and restores from the saved width after a reload", async (t) => {
   const log = [], shared = {}, tasks = [];
@@ -98,7 +95,7 @@ test("settings renders one narrowing motion and restores from the saved width af
   };
   globalThis.__herdrSetShared = (key, value) => { log.push(["setShared", key, value]); shared[key] = value; };
   globalThis.__herdrShared = key => shared[key];
-  globalThis.__herdrProps = () => ({ unified: true });
+  globalThis.__herdrProps = () => ({});
   globalThis.__herdrLayout = () => layoutTree;
   globalThis.__herdrSpaces = () => [{ active: true, tabs: [{ id: "one" }] }];
   globalThis.__herdrTheme = () => new Proxy({}, { get: (_t, k) => String(k) });
@@ -135,7 +132,7 @@ test("settings renders one narrowing motion and restores from the saved width af
 
     // Restart while the settings rail was just opening from a previously hidden sidebar.
     log.length = 0;
-    globalThis.__herdrProps = () => ({ unified: true, motion: "native", pinSidebarTerminal: true });
+    globalThis.__herdrProps = () => ({ motion: "native", pinSidebarTerminal: true });
     shared["left-sidebar.settingsPrior"] = { px: 259, hidden: true };
     sidebar.hidden = true;
     const restarted = new Tabs();
@@ -179,7 +176,7 @@ test("settings renders one narrowing motion and restores from the saved width af
       && args[0]?.c?.some(([style, values]) => style === "id" && values[0] === "sidebar-native-clock"));
     const settingsTree = restarted.render(cx).__node;
     layoutTree = tree("main-terminals");
-    restarted.stripFrame = () => ({ unified: true, leftPad: 0, bar: "#000", shown: [], w: { platform: "macos" },
+    restarted.stripFrame = () => ({ leftPad: 0, bar: "#000", shown: [], w: { platform: "macos" },
       geometry: { arrows: {}, viewportWidth: 0 }, t: globalThis.__herdrTheme() });
     const normalTree = restarted.render(cx).__node;
     assert.equal(settingsTree.n, normalTree.n);
@@ -208,13 +205,13 @@ test("settings renders one narrowing motion and restores from the saved width af
 });
 
 test("the narrow width follows the window zoom, and keys pressed on the settings page are dropped", () => {
-  const plan = settingsSidebarPlan({ open: true, prior: null, unified: true, sidebar: SIDEBAR, busy: false, zoom: 1.25 });
+  const plan = settingsSidebarPlan({ open: true, prior: null, sidebar: SIDEBAR, busy: false, zoom: 1.25 });
   assert.equal(plan.resize, Math.round(SETTINGS_SIDEBAR_PX * 1.25));
-  assert.equal(settingsSidebarPlan({ open: true, prior: { px: 259 }, unified: true, sidebar: { id: "left-sidebar", size: { px: 95 } }, busy: false, zoom: 1.25 }), null);
+  assert.equal(settingsSidebarPlan({ open: true, prior: { px: 259 }, sidebar: { id: "left-sidebar", size: { px: 95 } }, busy: false, zoom: 1.25 }), null);
   globalThis.__herdrRun = () => {};
   globalThis.__herdrSetShared = () => {};
   globalThis.__herdrShared = () => null;
-  globalThis.__herdrProps = () => ({ unified: true });
+  globalThis.__herdrProps = () => ({});
   globalThis.__herdrLayout = () => ({ id: "root", children: [{ id: "main", active: "main-agents" }] });
   globalThis.__herdrSpaces = () => [{ active: true, tabs: [{ id: "one" }] }];
   globalThis.__herdrTheme = () => new Proxy({}, { get: (_t, k) => String(k) });

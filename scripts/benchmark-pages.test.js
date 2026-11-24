@@ -6,12 +6,12 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 const script = fileURLToPath(new URL("./benchmark-pages.py", import.meta.url));
 
-test("benchmark plan covers every stack child in both layouts without native dependencies", () => {
+test("benchmark plan covers every stack child in the layout without native dependencies", () => {
   const r = spawnSync("python3", [script, "--plan"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   const plan = JSON.parse(r.stdout);
-  assert.equal(plan.length, 24);
-  for (const layout of ["orca", "orca-unified"]) {
+  assert.equal(plan.length, 12);
+  for (const layout of ["orca"]) {
     const rows = plan.filter(p => p.layout === layout);
     assert.equal(rows.filter(p => p.stack === "main").length, 5);
     assert.equal(rows.filter(p => p.stack === "panel-body").length, 7);

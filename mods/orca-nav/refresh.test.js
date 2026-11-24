@@ -211,23 +211,21 @@ function views() {
   globalThis.__herdrMachines = () => [{ name: 'remote' }, { name: 'other' }];
   store.set('git.cache.v2', JSON.stringify({ a: { repo: 'r1', name: 'One' }, b: { repo: 'r2' } }));
   const cx = { notify() {} };
-  for (const unified of [false, true]) {
-    for (const [name, shared, hover, options] of [
-      ['plain', {}, false, {}],
-      ['hover', { 'projects.count': 3, 'projects.allCollapsed': true }, true, { hideDefaultBranchWorkspace: true }],
-      ['filters', { 'projects.count': 2, 'left-sidebar.openPx': 240 }, true, { hideSleepingWorkspaces: true, alwaysShowDefaultBranchWorkspace: false, hideDetachedHeadWorkspaces: true, visibleWorkspaceHostIds: [null], filterRepoIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }],
-      ['narrow', { 'left-sidebar.openPx': 240 }, false, {}],
-      ['badcolor', { 'left-sidebar.openPx': 240 }, false, {}],
-    ]) {
-      Object.keys(sharedValues).forEach(k => delete sharedValues[k]);
-      Object.assign(sharedValues, shared);
-      store.set('workspace.options.v1', JSON.stringify(options));
-      globalThis.__herdrProps = () => ({ unified });
-      globalThis.__herdrTheme = name === 'badcolor' ? () => ({ ...palette, surface: 'red', chrome: 'red' }) : () => new Proxy({ surface: '#101010' }, { get: (t, k) => t[k] ?? `#${String(k)}` });
-      const nav = new Nav();
-      nav.headerHover = hover;
-      out[`nav-${unified}-${name}`] = rec(nav.render(cx));
-    }
+  for (const [name, shared, hover, options] of [
+    ['plain', {}, false, {}],
+    ['hover', { 'projects.count': 3, 'projects.allCollapsed': true }, true, { hideDefaultBranchWorkspace: true }],
+    ['filters', { 'projects.count': 2, 'left-sidebar.openPx': 240 }, true, { hideSleepingWorkspaces: true, alwaysShowDefaultBranchWorkspace: false, hideDetachedHeadWorkspaces: true, visibleWorkspaceHostIds: [null], filterRepoIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }],
+    ['narrow', { 'left-sidebar.openPx': 240 }, false, {}],
+    ['badcolor', { 'left-sidebar.openPx': 240 }, false, {}],
+  ]) {
+    Object.keys(sharedValues).forEach(k => delete sharedValues[k]);
+    Object.assign(sharedValues, shared);
+    store.set('workspace.options.v1', JSON.stringify(options));
+    globalThis.__herdrProps = () => ({});
+    globalThis.__herdrTheme = name === 'badcolor' ? () => ({ ...palette, surface: 'red', chrome: 'red' }) : () => new Proxy({ surface: '#101010' }, { get: (t, k) => t[k] ?? `#${String(k)}` });
+    const nav = new Nav();
+    nav.headerHover = hover;
+    out[`nav-${name}`] = rec(nav.render(cx));
   }
   globalThis.__herdrTheme = () => palette;
   const nav = new Nav();
@@ -253,6 +251,16 @@ test('every nav view renders as recorded', () => {
   const out = digests(views());
   assert.deepEqual(out, JSON.parse(readFileSync(GOLDEN, 'utf8')));
   assert.ok(new Set(Object.values(out)).size >= 30);
+});
+
+test('the workspace options popup is not sidebar content, so a narrow sidebar never frames it', () => {
+  const { nav, cx } = fixture();
+  globalThis.__herdrShared = key => (key === 'left-sidebar.openPx' ? 240 : undefined);
+  globalThis.__herdrLayout = () => ({ children: [{ id: 'left-sidebar', size: { px: 120 } }] });
+  globalThis.__herdrProps = () => ({ navMenu: 'workspace-options' });
+  assert.deepEqual(rec(nav.render(cx)), rec(nav.optionsView(cx)));
+  globalThis.__herdrProps = () => ({});
+  assert.notDeepEqual(rec(nav.render(cx)), rec(nav.renderBody(cx)), 'the sidebar itself is still framed');
 });
 
 test('unknown row kinds render an empty value and leave options alone', () => {

@@ -24,7 +24,7 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
-LAYOUTS = ("orca", "orca-unified")
+LAYOUTS = ("orca",)
 BUDGETS = {"feedback_ms": 100, "warm_match_ms": 200, "local_ready_ms": 500}
 # The right panel deliberately hides routes which are not relevant to the workspace.
 FIXTURES = {"workspaces": "folder", "pr-checks": "folder", "ports": "ssh"}

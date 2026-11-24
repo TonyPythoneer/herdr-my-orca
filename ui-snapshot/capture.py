@@ -45,7 +45,7 @@ def verify_delivery(target, config):
         if expected != actual:
             raise RuntimeError("Installed file differs from main: "+path)
         records.append({"path":path,"sha256":actual})
-    if not records or not {"layouts/orca.json","layouts/orca-unified.json","keys.json","programs.json","settings.json"}.issubset({r["path"] for r in records}):
+    if not records or not {"layouts/orca.json","keys.json","programs.json","settings.json"}.issubset({r["path"] for r in records}):
         raise RuntimeError("Incomplete Orca deployment")
     return records
 
@@ -559,7 +559,7 @@ def main():
                         row["error"]=str(e)
                         if row["result"] == "failed":
                             try:
-                                if status().get("layout") in ("orca","orca-unified"):
+                                if status().get("layout") == "orca":
                                     shot(row,"diagnostic")
                                     row["diagnosticVisibleText"]=[r["text"] for r in words(out/row["images"]["diagnostic"]["file"]) if r["confidence"]>=.5]
                             except Exception:

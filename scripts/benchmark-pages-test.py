@@ -275,8 +275,8 @@ class ReportTests(unittest.TestCase):
         self.generate()
         result = self.aggregate()
         self.assertEqual(result["status"],"complete_provisional")
-        self.assertEqual(result["coverage"]["provisional"],22)
-        self.assertEqual(result["coverage"]["excluded"],2)
+        self.assertEqual(result["coverage"]["provisional"],11)
+        self.assertEqual(result["coverage"]["excluded"],1)
         self.assertEqual(result["coverage"]["approved"],0)
         self.assertEqual(result["routes"][0]["route_id"],"orca--main-tasks")
         self.assertEqual(result["routes"][0]["priority"],1)
@@ -284,18 +284,18 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.aggregate("failure")["status"],"needs_investigation")
 
     def test_scoped_aggregation_does_not_treat_unselected_routes_as_missing(self):
-        self.generate(missing="orca-unified-main")
+        self.generate(missing="orca-panel-body")
         selection = {"include": [{"layout":"orca","stack":"main","pages":["main-agents"]}]}
         result = self.report["aggregate"](self.root,self.sha,self.sha,"https://example.invalid/run","success",30,selection)
         self.assertEqual(result["status"],"complete_provisional")
         self.assertEqual(result["coverage"]["required"],1)
-        self.assertEqual(result["coverage"]["not_selected"],23)
+        self.assertEqual(result["coverage"]["not_selected"],11)
         self.assertEqual([r["route_id"] for r in result["routes"]],["orca--main-agents"])
 
     def test_incomplete_and_missing_groups_are_not_passes(self):
-        self.generate(missing="orca-unified-main", incomplete="orca--main-providers")
+        self.generate(missing="orca-panel-body", incomplete="orca--main-providers")
         result = self.aggregate("failure")
-        self.assertEqual(result["coverage"]["by_status"]["missing"],5)
+        self.assertEqual(result["coverage"]["by_status"]["missing"],7)
         self.assertEqual(result["coverage"]["by_status"]["incomplete"],1)
         self.assertEqual(result["status"],"needs_investigation")
         row = next(r for r in result["routes"] if r["route_id"] == "orca--main-providers")
