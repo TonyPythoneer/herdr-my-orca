@@ -3,9 +3,9 @@
 This permanent branch is an observation harness, not a product feature. Each branch push (or a re-run of an existing Actions run) checks out the current main in a separate directory, installs the official macOS Herdr app/core and loads its tracked configuration. It never syncs observer files into main or commits generated screenshots. Only the disposable GitHub-hosted runner is supported.
 
 ## Run
-Push an empty commit to feature/main-ui-snapshot:
+Push an empty commit to ci/main-ui-snapshot:
 ```sh
-git switch feature/main-ui-snapshot
+git switch ci/main-ui-snapshot
 git commit --allow-empty -m "snapshot: observe current main"
 git push
 ```

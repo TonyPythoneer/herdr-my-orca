@@ -1,7 +1,7 @@
 name: Main UI snapshot
 on:
   push:
-    branches: [feature/main-ui-snapshot]
+    branches: [ci/main-ui-snapshot]
 permissions:
   contents: read
 concurrency:
