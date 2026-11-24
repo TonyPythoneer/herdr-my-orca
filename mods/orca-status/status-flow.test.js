@@ -219,3 +219,13 @@ test("agent CWD uses the native pane value and queries core only for missing val
     assert.deepEqual(result, { native: "/native", fallback: "/wt" });
   } finally { globalThis.__hc = previous; }
 });
+
+
+test("known spaces reuse already probed folders and skip remote folders", async () => {
+  const view = new Status(), calls = [];
+  view.wtCheckout = async folder => { calls.push(folder); return { top: folder }; };
+  const snapshot = [{ folder: "/already" }, { folder: "/new" }, { folder: "/new" }, { folder: "/remote", machine: "remote" }];
+  const known = await view.knownSpaces(snapshot, new Map([["/already", { top: "/already" }]]));
+  assert.deepEqual(calls, ["/new"]);
+  assert.deepEqual(known.map(s => s.checkout?.top ?? null), ["/already", "/new", "/new", null]);
+});

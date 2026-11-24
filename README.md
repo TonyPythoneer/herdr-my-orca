@@ -139,8 +139,7 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   reviewed improvement. A pull request fails when tests fail, the drift check fails, lint findings
   rise above the baseline, or line coverage drops more than 1 point.
 - Not used: a bundler. Measured on two sample mods with Vite+, source maps doubled the output and
-  herdr-app 0.1.17 ignores them, so errors would name bundle lines
-  ([evaluation](docs/plan-orca-bundler-evaluation.md)).
+  herdr-app 0.1.17 ignores them, so errors would name bundle lines.
 
 ## Setup
 

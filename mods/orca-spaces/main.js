@@ -264,7 +264,7 @@ export default class Spaces extends View {
     this.busy = {}; // pane -> an agent working or a program in front of its shell
     this.ready = {}; // machine -> its layout was readable at the last look
     this.at = {}; // space -> its where() at the last look
-    this.watching = new Set(); // local repos' git folders
+    this.watching = new Map(); // repo -> native cancellable FolderWatch
     // Orca startupWorktreeRefreshCompleted (startup-worktree-refresh.ts:80).
     // When cached git state exists, rows paint immediately without a loading flash.
     this.loaded = Object.keys(this.git).length > 0;
@@ -382,6 +382,8 @@ export default class Spaces extends View {
   }
 
   close() {
+    this.closed = true;
+    for (const repo of this.watching.keys()) this.stopWatch(repo);
     for (const { entity } of this.retainedRows.values()) entity.release();
     this.retainedRows.clear();
   }
@@ -572,7 +574,7 @@ export default class Spaces extends View {
         await Promise.all(batch.map((key) => this.check(key, taskCx)));
       }
       const used = new Set(Object.values(this.git).filter(Boolean).map((g) => readPair(g.repo)).filter(([on]) => !on).map(([, repo]) => repo));
-      for (const repo of this.watching) if (!used.has(repo)) this.watching.delete(repo);
+      for (const repo of this.watching.keys()) if (!used.has(repo)) this.stopWatch(repo);
       this.refreshing = false;
       this.refreshingAll = false;
       this.loaded = true;
@@ -592,7 +594,7 @@ export default class Spaces extends View {
     try {
       // No optional locks: a status that touched the index would wake the watch again.
       // Writes nothing under .git (index lock, fsmonitor cookie): watch() would wake on it.
-      const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch"], { cwd, on });
+      const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch", "--untracked-files=no"], { cwd, on });
       if (r.code !== 0) {
         await this.refreshCatalog(cached, on);
         // Only git's own "no" is remembered as no repo; anything else is asked again.
@@ -631,17 +633,32 @@ export default class Spaces extends View {
     } catch { /* the catalog is a refresh of what the row already shows: keep it as it was */ }
   }
 
+  stopWatch(repo) {
+    const pending = this.watching.get(repo);
+    this.watching.delete(repo);
+    pending?.cancel?.();
+  }
+
   watch(repo, cx) {
-    if (this.watching.has(repo)) return;
-    this.watching.add(repo);
+    if (this.closed || this.watching.has(repo)) return;
+    const pending = watchFolder(repo);
+    this.watching.set(repo, pending);
     cx.spawn(async (taskCx) => {
+      let current = pending;
       try {
-        while (this.watching.has(repo)) {
-          await watchFolder(repo);
+        for (;;) {
+          await current;
+          if (this.watching.get(repo) !== current) return;
           const mine = JSON.stringify([null, repo]);
-          if (this.watching.has(repo)) this.refreshGit(Object.keys(this.git).filter((k) => this.git[k]?.repo === mine), taskCx);
+          const keys = Object.keys(this.git).filter((k) => this.git[k]?.repo === mine);
+          if (!keys.length) break;
+          this.refreshGit(keys, taskCx);
+          if (this.watching.get(repo) !== current) return;
+          current = watchFolder(repo);
+          this.watching.set(repo, current);
         }
-      } catch { this.watching.delete(repo); }
+      } catch { /* fallback refresh remains active */ }
+      if (this.watching.get(repo) === current) this.stopWatch(repo);
     });
   }
 
@@ -826,6 +843,8 @@ export default class Spaces extends View {
     if (!repo) return;
     const live = spaces().map((s) => where(s));
     if (!forgetProjectCache(this.git, repo, live)) return;
+    const [on, commonDir] = readPair(repo);
+    if (!on) this.stopWatch(commonDir);
     for (const key of Object.keys(this.checked)) if (!(key in this.git)) delete this.checked[key];
     localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
     this.notify(cx);

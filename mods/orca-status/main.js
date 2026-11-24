@@ -304,9 +304,12 @@ export default class OrcaStatus extends View {
     return cwds;
   }
 
-  async knownSpaces() {
+  async knownSpaces(snapshot = spaces() ?? [], checkouts = new Map()) {
     const known = [];
-    for (const space of spaces() ?? []) known.push({ ...space, checkout: space.machine ? null : await this.wtCheckout(space.folder) });
+    for (const space of snapshot) {
+      if (!space.machine && !checkouts.has(space.folder)) checkouts.set(space.folder, await this.wtCheckout(space.folder));
+      known.push({ ...space, checkout: space.machine ? null : checkouts.get(space.folder) });
+    }
     return known;
   }
 
@@ -318,9 +321,10 @@ export default class OrcaStatus extends View {
     cx.spawn(async (jobCx) => {
       try {
         const cwds = await this.agentCwds(agentPanes);
-        const cwdCheckouts = {};
-        for (const cwd of new Set(Object.values(cwds).filter(Boolean))) cwdCheckouts[cwd] = await this.wtCheckout(cwd);
-        const known = await this.knownSpaces();
+        const checkouts = new Map();
+        for (const cwd of new Set(Object.values(cwds).filter(Boolean))) checkouts.set(cwd, await this.wtCheckout(cwd));
+        const known = await this.knownSpaces(spaces() ?? [], checkouts);
+        const cwdCheckouts = Object.fromEntries(checkouts);
         const move = planFollow({ spaces: known, panes: agentPanes, cwds, cwdCheckouts, moved: shared(FOLLOW_STATE_KEY) ?? {} });
         if (move) await this.followMove(move, known, jobCx);
       } finally {

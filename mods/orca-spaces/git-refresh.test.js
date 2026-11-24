@@ -133,7 +133,7 @@ test('the workspace options Refresh asks git again for every project it knows', 
 
 test('a manual refresh ends its loading row when the git pass commits', async () => {
   const view = {
-    pending: new Set(), refreshing: false, refreshingAll: true, loaded: false, git: {}, watching: new Set(),
+    pending: new Set(), refreshing: false, refreshingAll: true, loaded: false, git: {}, watching: new Map(),
     notified: 0,
     notify() { this.notified++; },
     async check() {},
@@ -283,13 +283,13 @@ test('check records the repo identity and asks for the review once, for each rem
   await runCheck('machine', { on: 'far', scripted: scriptOf({ [ORIGIN]: remoteOf('https://github.com/me/proj') }) });
   await runCheck('bare-repo-name', { scripted: scriptOf({ 'rev-parse --path-format=absolute --git-common-dir': { code: 0, stdout: '/srv/proj.git\n' } }) });
   await runCheck('linked', { scripted: scriptOf({ 'rev-parse --show-toplevel': { code: 0, stdout: '/wt\n' } }), cwd: '/wt' });
-  await runCheck('detached', { scripted: scriptOf({ 'status --porcelain=v2 --branch': undefined, [`--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch`]: { code: 0, stdout: '# branch.head (detached)\n' } }) });
-  await runCheck('no-branch-line', { scripted: scriptOf({ '--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch': { code: 0, stdout: '' } }) });
+  await runCheck('detached', { scripted: scriptOf({ 'status --porcelain=v2 --branch': undefined, [`--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no`]: { code: 0, stdout: '# branch.head (detached)\n' } }) });
+  await runCheck('no-branch-line', { scripted: scriptOf({ '--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no': { code: 0, stdout: '' } }) });
 });
 
 test('check keeps what it knew, or remembers "not a repo", when git cannot answer', async () => {
   const cached = { repo: JSON.stringify([null, '/repo/.git']), linked: true, worktrees: [{ path: 'old' }], branch: 'b', top: '/repo' };
-  const statusLine = '--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch';
+  const statusLine = '--no-optional-locks -c core.fsmonitor=false status --porcelain=v2 --branch --untracked-files=no';
   await runCheck('not-a-repo', { scripted: scriptOf({ [statusLine]: { code: 128, stderr: 'fatal: not a git repository' } }) });
   await runCheck('not-a-repo-cached', { cached, scripted: scriptOf({ [statusLine]: { code: 128, stderr: 'Not a git repository (or any parent)' } }) });
   await runCheck('away', { scripted: scriptOf({ [statusLine]: { code: 255, stderr: 'ssh: connect timed out' } }) });
@@ -837,4 +837,29 @@ test('an avatar is attempted once and published only after the file is ready', a
     ensureAvatar(url, renderCx);
     assert.equal(tasks.length, 1);
   }
+});
+
+
+test('native folder watch cancellation does not affect a replacement', async () => {
+  const pending = [], tasks = [], cancelled = [];
+  const repo = '/r';
+  const { view } = live({ host: { watchFolder: () => {
+    let resolve;
+    const promise = new Promise(r => { resolve = r; });
+    promise.cancel = () => { cancelled.push(promise); resolve([]); };
+    pending.push(promise);
+    return promise;
+  } } });
+  view.git = { a: { repo: JSON.stringify([null, repo]) } };
+  view.refreshGit = () => assert.fail('cancelled watch refreshed');
+  const cx = { spawn: fn => tasks.push(fn) };
+  view.watch(repo, cx);
+  view.stopWatch(repo);
+  view.watch(repo, cx);
+  await tasks[0](cx);
+  assert.equal(view.watching.get(repo), pending[1]);
+  assert.deepEqual(cancelled, [pending[0]]);
+  view.stopWatch(repo);
+  await tasks[1](cx);
+  assert.equal(view.watching.size, 0);
 });
