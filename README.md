@@ -164,3 +164,203 @@ These are runtime state or files Herdr writes itself, so they are not in this re
 ### Retired Skillshare panel
 
 The Skillshare UI was removed from both layouts and is no longer shipped. For an existing live config, update both layout files and the panel-head mod together, and remove only the obsolete repo-owned `mods/skillshare` directory after checking for local edits. This does not uninstall the external Skillshare CLI or delete any installed skills or their data.
+
+## Page performance benchmark
+
+The native desktop benchmark is intentionally separate from deterministic CI. CI runs the
+benchmark harness tests without a GUI. The benchmark itself needs an active desktop session,
+`herdr-app`, `hc`, Python 3.10+ and Pillow (install into a disposable virtual environment).
+It creates its own app home, core session, and local Git/folder fixtures. It does not use your
+real workspace, terminal sessions, agent accounts, or API keys.
+
+```sh
+# Inspect coverage without installing anything:
+python3 scripts/benchmark-pages.py --plan
+
+# One-time dependency (optional, for native screenshots only):
+python3 -m venv /tmp/herdr-bench-venv
+/tmp/herdr-bench-venv/bin/pip install Pillow
+
+# Collect candidate reference images. Start with one page, then capture both layouts.
+# Keep the display/viewport/zoom and Herdr version identical between runs.
+/tmp/herdr-bench-venv/bin/python scripts/benchmark-pages.py --capture \
+  --layout orca --page main-agents --output /tmp/herdr-bench-reference
+```
+
+Open the reference PNGs, verify the actual requested page and that the expected local data is
+loaded (not an error, placeholder, or spinner), and edit `approved.json`: set `approved` to
+`true` only for valid images, and adjust the normalized ROI `[left, top, right, bottom]` to
+include distinguishing page content but exclude unrelated animated areas and unstable paths.
+Do not approve a page redirected by its gating logic. Recollect references when the intended UI,
+fixture, screen geometry, theme or upstream version changes.
+
+```sh
+/tmp/herdr-bench-venv/bin/python scripts/benchmark-pages.py \
+  --references /tmp/herdr-bench-reference --layout orca --page main-agents \
+  --samples 30 --output /tmp/herdr-bench-result
+```
+
+Omit `--layout` and `--page` to cover all stack children in both layouts (24 route/layout
+pairs today). Git and ordinary-folder scenarios are deliberately distinct; SSH-only Ports is
+explicitly unmeasured until a disposable SSH fixture is available. Contextual menus, second-level
+agent dropdowns, popups, real provider/agent discovery, and keyboard/scroll interactions need
+separate context-aware scenarios; they are not silently counted as tested by this route suite.
+
+**Report:** `report.json` contains raw samples, reference-match failures, first observed visit
+(not a guaranteed cold cache), warm P50/P95/max, metadata, screenshot overhead and per-page
+settled CPU-frame aggregates. `summary.csv` is the AI-review-friendly table, `frames.jsonl`
+contains Herdr's upstream per-second counters, and `app.log` contains isolated app diagnostics.
+A failed or indistinguishable transition is never converted to zero. No approved successful
+measurement exits nonzero. Unmeasured pages are marked separately, not treated as passing.
+
+### Performance budgets and review policy
+
+| Metric | Project target | Measurement contract |
+| --- | --- | --- |
+| First visible feedback | <=100 ms; investigate >200 ms | CLI dispatch to first distinguishable screenshot change; proxy, may include unrelated changes |
+| Warm page transition | P95 <=200 ms; investigate >500 ms | CLI dispatch to approved reference match, including capture overhead |
+| Local data ready | P95 <=500 ms; investigate >1000 ms | Reference match only where reviewed ROI proves relevant content is loaded; not a general data-ready event |
+| Cold startup | <=1000 ms; investigate >2000 ms | Process launch to first successful screenshot, not proof of fully interactive app |
+| 60 Hz frame budget | 16.7 ms | Actual individual frames need native tracing; upstream aggregate CPU-frame mean is diagnostic only |
+| Frozen frame | >=700 ms, target zero | Requires individual frame timing; not inferable from per-second aggregates |
+
+References: [NN/g response time](https://www.nngroup.com/articles/powers-of-10-time-scales-in-ux/),
+[Google INP](https://web.dev/articles/inp), [Android startup timing](https://developer.android.com/topic/performance/vitals/launch-time),
+[Android slow rendering](https://developer.android.com/topic/performance/issues/render),
+[Herdr native benchmark](https://github.com/herdrdev/herdr-app/blob/master/scripts/bench.py).
+
+These are engineering targets, not Herdr guarantees or browser Web Vitals. Screenshot timings are
+observation upper bounds, not physical click-to-display timing. Do not subtract guessed IPC or
+capture overhead. A warning above budget needs confirmation using native traces. For PR regression
+review compare the same hardware, app build, layout, viewport, fixture, ROI, sample count and
+reference policy; collect at least 30 warm samples, compare P50/P95/max and failure rate, and
+repeat suspected regressions. Investigate a repeatable P95 increase of both >20% and >20 ms.
+Do not gate merge on noisy hosted-runner wall-clock timings until a representative baseline exists.
+No claimed result for GPU presentation, scroll jank, real network/CLI latency, or data not included
+in the approved ROI. Use Herdr's frame counter and Instruments/native tracing to diagnose those
+separately.
+
+
+### Diagnose and compare
+
+Run the latency baseline without probes; use a separate diagnostic run for attribution:
+
+```sh
+python scripts/benchmark-pages.py --references /tmp/herdr-bench-reference \
+  --layout orca --page main-agents --samples 30 --output /tmp/baseline
+
+python scripts/benchmark-pages.py --references /tmp/herdr-bench-reference \
+  --layout orca --page main-agents --samples 5 --diagnostic --output /tmp/diagnostic
+
+# After a targeted change, use the exact same fixture, reference and device:
+python scripts/benchmark-pages.py --references /tmp/herdr-bench-reference \
+  --layout orca --page main-agents --samples 30 --output /tmp/candidate
+python scripts/benchmark-compare.py /tmp/baseline/report.json /tmp/candidate/report.json \
+  --output /tmp/comparison.json
+```
+
+The optional diagnostic run instruments only temporary mod copies, not the tracked source or
+your live configuration. It records completed JS init/render and host `exec`, `hc`,
+`readTextFile` and `knownAgents` calls, with counts, median, maximum, and elapsed-duration
+sums by module and operation. Only whitelisted executable families are named; arguments,
+paths, results and exception text are not emitted by these probes. Target-module and
+background events are separated. Overlapping calls are **not** additive wall-clock time;
+spans crossing a measurement boundary are excluded. Missing events or unsupported exports
+are not proof of zero cost. Render duration is JS execution, not native layout or GPU paint.
+Check `instrumentation` and the raw app log before trusting a diagnostic report.
+Instrumentation and logging can affect performance; never compare instrumented timings
+against an ordinary baseline.
+
+`--fixture-files 10`, `100` (default), or `1000` tests file-count scalability; capture matching
+references for each size. This is not workspace-count scalability. The comparator checks
+reported environment parameters, same page/fixture/from-page, reference SHA-256, ROI, viewport,
+30+ warm samples and complete successful metrics. It rejects instrumented/incomplete runs and
+reports P50/P95/max, absolute and relative P95 changes, and overhead warnings.
+A repeatable increase of both >20 ms and >20% is a regression candidate, not proof of causation.
+Use the same physical machine (metadata alone cannot verify that), display and power state.
+If the intended visual output changes, establish a new approved baseline rather than comparing
+different reference images as though equivalent.
+
+Review order for AI: (1) verify coverage, errors and screenshot overhead; (2) rank slow/changed
+pages; (3) use diagnostic spans to identify expensive modules and repeated host calls;
+(4) inspect the actual source and confirm unnecessary work before changing it; (5) rerun
+functional tests and compare a non-instrumented benchmark. Call counts alone cannot prove
+duplicates. Per-frame GPU timing, async critical path tracing, idle CPU/RSS, leak testing,
+and contextual interaction scenarios still require native validation or additional probes.
+
+
+### Idle CPU and retained memory
+
+Each matched page settles for the configured interval, then measures the app process's
+CPU-time delta and resident memory over `--idle-seconds 10` (default; minimum 3).
+100% means one CPU core, not the entire machine. This excludes herdr-core, spawned
+terminals and other processes. The report also records RSS after successful visits;
+with at least six observations it compares the median of the first and last three.
+Growth above both 16 MiB and 10% is a diagnostic candidate, not a proven leak:
+allocator retention, caches, other mods and normal warming can increase RSS.
+Repeat the same route on the same device and inspect trends before modifying code.
+Raw observations and before/after differences are preserved; a missing observation is
+not zero. Do not gate PRs on hosted-runner CPU or memory thresholds.
+
+The separate **Native benchmark smoke** workflow runs on relevant same-repository PRs
+and supports manual dispatch. It installs the current official Herdr release on
+macOS ARM64 and attempts two real native reference captures with resource sampling,
+uploading the screenshots and logs even on failure. The workflow checks that the
+images differ, not that the intended content is fully loaded; candidates remain
+unapproved. It is an integration smoke test, not a representative latency baseline.
+A runner without a usable desktop must fail explicitly rather than fabricate data.
+
+### Native benchmark fixture requirements
+
+The Providers transition starts from Agents rather than a nearly empty terminal, so its screenshot distance is distinguishable without lowering the threshold. References must stabilize, all 30 warm samples must match, and failed screenshots are retained. Never approve an error-state reference. Candidate timings remain provisional until visual review.
+
+### CI → AI performance feedback loop
+
+Relevant mod/config/benchmark PRs trigger the native matrix. Each job captures an
+uninstrumented 30-visit provisional baseline, preserves images and raw timings, and
+runs **at most one** separate five-visit diagnostic candidate (first incomplete
+route, otherwise slowest P95). Diagnostic failure or missing spans are reported,
+not treated as zero cost or used in the primary latency measurements.
+
+A final Linux job runs even after a failed matrix, downloads the raw artifacts, checks
+checkout SHA, exact route coverage, sample counts, reference evidence and runner
+outcomes, then publishes:
+- **ai-benchmark-report/ai-report.json**: versioned machine-readable route metrics,
+  failures, environment, diagnostic hot groups and evidence pointers.
+- **report.md**: ranked compact Markdown with complete/provisional/invalid/missing
+  distinctions, budget warnings and suggested next actions.
+- **next-actions.json**: evidence-linked P0 measurement blockers, P1 budget
+  candidates and P2 retention candidates, with source path hints and acceptance steps.
+- One sticky PR comment (updated each run) and a GitHub Actions job summary. Raw
+  matrix artifacts retain screenshots, logs and samples for 30 days.
+
+No external LLM API or subscription is used by CI. AI reviewers start with
+`ai-report.json`, resolve P0 before optimizing, inspect actual evidence, choose a
+small source patch, add a functional regression test, and rerun. A successful CI
+means complete **provisional** evidence, not approved screenshot content or a
+proven speed improvement. Use the existing strict comparator for approved,
+controlled before/after runs; hosted machine changes are not a valid regression
+baseline. The reporter neither edits product code nor merges PRs. A stale or
+closed PR does not receive a comment.
+
+### First evidence-driven optimization
+
+Native run 45347252667 measured all 24 local routes. The Landing and Unified
+Agents feedback P95 warnings had paired sample capture durations accounting for
+much of the observation interval; they are not proof of slow JS. Inspecting the
+Agents render path revealed duplicate inventory derivation and one JSON parse
+per row. The inventory now parses one snapshot per derivation, and the permission
+card reuses the already-derived rows. Tests assert one parse and equivalent
+permission results, including configuration changes and malformed files. No UI,
+permission policy, CLI launch behavior or persistent format changes.
+
+Every visit now records the origin screenshot as a no-transition control and
+the number/duration of transition captures, per-observation distances and match
+state. Reports expose paired capture share and first-capture match rate. These
+are measurement-attribution signals, not a subtraction-based latency estimate.
+Hosted P95 values cannot prove that the code patch speeds up the UI; retain
+before/after evidence and use a controlled comparison for that claim.
+
+### Current coverage after layout changes
+
+Skillshare was removed from the product on main. The benchmark follows the current layouts: 5 main and 7 panel routes per layout, 22 measurable local routes and 2 explicitly excluded SSH Ports routes. Historical 24-local-route runs above predate this removal and are not directly comparable. No Skillshare CLI or workload is required.

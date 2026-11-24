@@ -170,7 +170,16 @@ function parseRoot(text) {
 
 /** The `run` this mod wrote/reads in programs.json, or null when the built-in command is used. */
 export function readRunOverride(text, key) {
+  return readParsedRunOverride(parseRoot(text), key);
+}
+
+/** One read-only snapshot per inventory derivation. Returned run arrays are copied. */
+export function createRunOverrideReader(text) {
   const parsed = parseRoot(text);
+  return (key) => readParsedRunOverride(parsed, key);
+}
+
+function readParsedRunOverride(parsed, key) {
   if (parsed.error) return { error: parsed.error };
   const entry = parsed.root.programs?.[key];
   if (entry === undefined) return { run: null, entry: null };
