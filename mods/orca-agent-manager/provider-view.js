@@ -1,7 +1,7 @@
 // The Model providers page: a back arrow, a title and one card for each saved provider. Each
 // builder takes the page (`owner`) and reads its cards; the logic that saves and deletes stays in main.js.
 import { div, svg } from "gpui-kit";
-import { v_flex, h_flex, Input } from "gpui-base";
+import { Button, v_flex, h_flex, Input } from "gpui-base";
 import { appHome, theme } from "herdr";
 import { keyHint, linkInfo, presetFor } from "./codex-provider.js";
 import { backButton, icon } from "./parts.js";
@@ -67,8 +67,8 @@ export function modelProvidersView(owner, t) {
 }
 
 function addProviderButton(owner, t) {
-  return h_flex()
-    .id("am-provider-add")
+  return Button.new("am-provider-add")
+    .disabled(false)
     .w_full()
     .h(44)
     .gap(8)
@@ -179,8 +179,8 @@ function keyField(owner, card, record, t) {
 
 function revealButton(card, t) {
   const label = card.reveal ? "Hide key" : "Show key";
-  return div()
-    .id(`am-key-eye-${card.id ?? "new"}`)
+  return Button.new(`am-key-eye-${card.id ?? "new"}`)
+    .disabled(false)
     .size(22)
     .flex_none()
     .flex()

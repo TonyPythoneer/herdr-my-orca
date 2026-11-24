@@ -29,5 +29,6 @@ export function legacyButtonTree(value) {
   if (!value || typeof value !== "object") return value;
   const node = Object.fromEntries(Object.entries(value).map(([key, child]) => [key, legacyButtonTree(child)]));
   if (node.n !== "Button.new" || node.c?.[0]?.[0] !== "disabled") return node;
-  return { ...node, n: "h_flex", a: [], c: [["id", [node.a[0]]], ...node.c.slice(1)] };
+  const original = node.a[0]?.startsWith("am-key-eye-") ? "div" : "h_flex";
+  return { ...node, n: original, a: [], c: [["id", [node.a[0]]], ...node.c.slice(1)] };
 }
