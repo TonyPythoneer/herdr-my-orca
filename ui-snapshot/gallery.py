@@ -25,12 +25,12 @@ def build(source, output):
     lines += ["Tracked configuration files verified after native launch: "+str(deployment.get("verifiedAfterLaunch", 0)), ""]
     counts = {k:sum(r["result"]==k for r in rows) for k in ("captured","failed","blocked","not-run")}
     lines += [" · ".join(f"{k}: {v}" for k,v in counts.items()), "",
-              "Only custom controls. Captured means a real interaction and visible change; semantic review is required. Closed frames show fixture cleanup, not tested clicks.", ""]
+              "Only custom controls. Captured means a real interaction and visible change; semantic review is required. Closed frames show the actual Escape key interaction.", ""]
     if data.get("fatal"):
         lines += ["**Capture stopped before completion.** See full artifact for details.", ""]
     lines += ["## Mod coverage", "", "Observed: "+", ".join(coverage.get("observedMods", [])), "", "Not observed: "+", ".join(coverage.get("unobservedMods", [])), ""]
     for r in rows:
-        lines += [f'## {r["id"]} — {r["mod"]}: {r["title"]}', "", f'**{r["result"]}** · {r["mode"]}', ""]
+        lines += [f'## {r["id"]} — {r["mod"]}: {r["title"]}', "", f'**{r["result"]}** · {r["mode"]} · {r.get("verification", "not verified")}', ""]
         # Do not publish raw error text, native status, terminal logs, or paths.
         if r["result"] != "captured":
             lines += ["Incomplete operation; consult manifest.json in the full artifact.", ""]
