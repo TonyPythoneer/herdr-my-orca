@@ -88,3 +88,14 @@ class VisibleEvidenceTests(unittest.TestCase):
         self.assertTrue(any(c.get("closePane") and c.get("follow") for c in CASES))
         self.assertTrue(any(c.get("fileAssert",{}).get("file")=="tasks.json" for c in CASES))
         self.assertTrue(any(c.get("fileAssert",{}).get("file")=="agent-manager.json" for c in CASES))
+
+    def test_duplicate_labels_require_explicit_position_and_distinct_rows(self):
+        from capture import select_visible
+        rows=[{"text":"Create workspace","confidence":.95,"x":.5,"y":.40},
+              {"text":"Create workspace","confidence":.95,"x":.5,"y":.60}]
+        with self.assertRaises(RuntimeError):
+            select_visible(rows,"Create workspace")
+        self.assertEqual(select_visible(rows,"Create workspace",occurrence="top"),rows[0])
+        self.assertEqual(select_visible(rows,"Create workspace",occurrence="bottom"),rows[1])
+        with self.assertRaises(RuntimeError):
+            select_visible([rows[0],dict(rows[0],x=.55)],"Create workspace",occurrence="top")

@@ -55,15 +55,30 @@ def normalized(text):
 def visible_matches(rows, text, region=None):
     """Only accept confident, unambiguous visible text in the requested screen region."""
     needle=normalized(text)
+    if not needle:
+        return []
     return [r for r in rows if r["confidence"] >= .5 and needle in normalized(r["text"])
             and (region is None or region[0] <= r["x"] <= region[2] and region[1] <= r["y"] <= region[3])]
 
-def assert_visible(rows, required=(), absent=()):
+def select_visible(rows, label, region=None, occurrence=None):
+    matches=visible_matches(rows,label,region)
+    exact=[r for r in matches if normalized(r["text"])==normalized(label)]
+    if exact:
+        matches=exact
+    if len(matches)>1 and occurrence in ("top","bottom"):
+        ranked=sorted(matches,key=lambda r:r["y"])
+        if ranked[-1]["y"]-ranked[0]["y"] >= .02:
+            return ranked[0 if occurrence=="top" else -1]
+    if len(matches)>1:
+        raise RuntimeError("Ambiguous visible control: "+label)
+    return matches[0] if matches else None
+
+def assert_visible(rows, required=(), absent=(), region=None):
     for label in required:
-        if not visible_matches(rows,label):
+        if not visible_matches(rows,label,region):
             raise RuntimeError("Expected visible text missing: "+label)
     for label in absent:
-        if visible_matches(rows,label):
+        if visible_matches(rows,label,region):
             raise RuntimeError("Unexpected visible text remains: "+label)
 
 def click_errors(log_path, offset):
@@ -261,33 +276,42 @@ def main():
                     nonlocal viewport
                     if viewport==size:
                         return
-                    run([ax,str(proc.pid),"--resize",str(size[0]),str(size[1])],timeout=10)
-                    time.sleep(.7)
-                    viewport=dimensions(probe())
-                    if viewport!=size:
-                        raise RuntimeError("Native viewport did not resize: "+str(viewport))
-                def visible_click(label, region=None, scroll=False, right=False):
+                    requested=size
+                    for _ in range(3):
+                        run([ax,str(proc.pid),"--resize",str(requested[0]),str(requested[1])],timeout=10)
+                        time.sleep(.7)
+                        viewport=dimensions(probe())
+                        if viewport==size:
+                            return
+                        requested=tuple(requested[i]+size[i]-viewport[i] for i in range(2))
+                    raise RuntimeError("Native viewport did not resize: "+str(viewport))
+                def visible_click(label, region=None, scroll=False, right=False, occurrence=None):
                     # Search the current rendered window; scroll only inside the intended pane.
                     for attempt in range(4 if scroll else 1):
                         rows=words()
-                        matches=visible_matches(rows,label,region)
-                        exact=[r for r in matches if normalized(r["text"])==normalized(label)]
-                        if exact:
-                            matches=exact
-                        if len(matches)==1:
-                            p=matches[0]
+                        p=select_visible(rows,label,region,occurrence)
+                        if p:
                             x,y=round(p["x"]*viewport[0]),round(p["y"]*viewport[1])
                             mouse(x,y,"--right-click" if right else "--click")
                             park()
                             return [x,y]
-                        if len(matches)>1:
-                            raise RuntimeError("Ambiguous visible control: "+label)
                         if scroll:
                             x=round(viewport[0]*((region[0]+region[2])/2 if region else .5))
                             y=round(viewport[1]*((region[1]+region[3])/2 if region else .65))
                             mouse(x,y,"--scroll",extra=("-420",))
                             time.sleep(.5)
                     raise RuntimeError("Visible control not found: "+label)
+                def wait_visible(required=(), absent=(), region=None, timeout=12):
+                    deadline=time.monotonic()+timeout
+                    while True:
+                        rows=words()
+                        try:
+                            assert_visible(rows,required,absent,region)
+                            return rows
+                        except RuntimeError:
+                            if time.monotonic()>=deadline:
+                                raise
+                            time.sleep(.4)
                 def ensure_workspace():
                     if not status().get("space"):
                         command("space.new",name="Snapshot project",folder=str(fixture))
@@ -324,6 +348,8 @@ def main():
                 def select(stack, child):
                     command("layout.select", stack=stack, child=child)
                 def setup(case):
+                    if case.get("fresh"):
+                        recover()
                     clear()
                     resize((1024,681))
                     layout = case.get("layout","orca")
@@ -335,7 +361,12 @@ def main():
                     command("layout.show", id="panel")
                     select("panel-body","files")
                     if case.get("group"):
-                        command("orca-spaces."+case["group"]+"-all")
+                        # Wait for the real local Git group and primary checkout before toggling.
+                        command("orca-spaces.expand-all")
+                        wait_visible(["sample-project","Snapshot project"],region=(0,0,.28,1))
+                        if case["group"]=="collapse":
+                            command("orca-spaces.collapse-all")
+                            wait_visible(["sample-project"],["Snapshot project"],region=(0,0,.28,1))
                     if case.get("files") == "contents":
                         command("orca-panel-head.search")
                     elif case.get("files") == "names":
@@ -360,7 +391,7 @@ def main():
                 def perform(action):
                     kind=action["kind"]
                     if kind=="text":
-                        return visible_click(action["label"],action.get("region"),action.get("scroll",False),action.get("right",False))
+                        return visible_click(action["label"],action.get("region"),action.get("scroll",False),action.get("right",False),action.get("occurrence"))
                     if kind=="mouse":
                         mouse(*action["xy"],"--right-click" if action.get("right") else "--click")
                         park()
@@ -375,7 +406,7 @@ def main():
                         return None
                     if kind=="paste":
                         if action.get("label"):
-                            visible_click(action["label"],action.get("region"),scroll=True)
+                            visible_click(action["label"],action.get("region"),scroll=True,occurrence=action.get("occurrence"))
                         run([ax,str(proc.pid),"--paste",action["value"]],timeout=10)
                         park()
                         return None
@@ -387,7 +418,7 @@ def main():
                         return
                     if control.get("visible"):
                         row["mode"]="native-mouse-visible-text"
-                        row["clickPoint"]=visible_click(control["label"],control.get("region"),control.get("scroll",False),control.get("right",False))
+                        row["clickPoint"]=visible_click(control["label"],control.get("region"),control.get("scroll",False),control.get("right",False),control.get("occurrence"))
                         return
                     if ax_error:
                         raise PermissionError(ax_error)
@@ -429,7 +460,7 @@ def main():
                         row["viewport"]=list(viewport)
                         before_state=status()
                         before_words=words(out/row["images"]["before"]["file"]) if case.get("beforeText") else []
-                        assert_visible(before_words,case.get("beforeText",[]))
+                        assert_visible(before_words,case.get("beforeText",[]),region=case.get("evidenceRegion"))
                         log_offset = (out/"app.log").stat().st_size
                         interact(row,case["control"])
                         time.sleep(case.get("wait",1.0))
@@ -447,11 +478,13 @@ def main():
                             raise RuntimeError("Expected popup "+expected+"; got "+str(actual))
                         if actual and (case.get("noOverlay") or (not expected and not case.get("popover"))):
                             raise RuntimeError("Unexpected blocking popup "+str(actual))
+                        if case.get("afterText") or case.get("absentText"):
+                            wait_visible(case.get("afterText",[]),case.get("absentText",[]),case.get("evidenceRegion"))
                         shot(row,"after")
                         if row["images"]["before"]["sha256"] == row["images"]["after"]["sha256"]:
                             raise RuntimeError("No visible change after interaction")
                         after_words=words(out/row["images"]["after"]["file"]) if case.get("afterText") or case.get("absentText") else []
-                        assert_visible(after_words,case.get("afterText",[]),case.get("absentText",[]))
+                        assert_visible(after_words,case.get("afterText",[]),case.get("absentText",[]),case.get("evidenceRegion"))
                         if case.get("paneChange") and after.get("focused_pane")==before_state.get("focused_pane"):
                             raise RuntimeError("Expected a new focused pane")
                         row["verification"]="expected-popup" if expected else ("visible-content" if case.get("afterText") or case.get("absentText") else "visible-change; manual semantic review required")
@@ -461,6 +494,8 @@ def main():
                                 point=perform(action)
                                 time.sleep(.6)
                                 phase=f'action{n:02d}'
+                                if action.get("afterText") or action.get("absentText"):
+                                    wait_visible(action.get("afterText",[]),action.get("absentText",[]),action.get("region") if action.get("scopeEvidence") else None)
                                 shot(row,phase)
                                 step={"action":action.get("label",action["kind"]),"phase":phase}
                                 if point:
@@ -522,6 +557,7 @@ def main():
                             try:
                                 if status().get("layout") in ("orca","orca-unified"):
                                     shot(row,"diagnostic")
+                                    row["diagnosticVisibleText"]=[r["text"] for r in words(out/row["images"]["diagnostic"]["file"]) if r["confidence"]>=.5]
                             except Exception:
                                 pass
                     # A blocked interaction has no useful action evidence; do not
