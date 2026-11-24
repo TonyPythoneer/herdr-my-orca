@@ -10,6 +10,19 @@ guard [3,7].contains(CommandLine.arguments.count),
       let pid = Int32(CommandLine.arguments[1]) else { fail("Usage: ax-press PID LABEL") }
 guard AXIsProcessTrusted() else { fail("macOS Accessibility permission unavailable; no interaction performed") }
 let wanted = CommandLine.arguments[2]
+if wanted == "--escape" {
+    guard let running = NSRunningApplication(processIdentifier: pid) else { fail("Missing target app") }
+    _ = running.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+    Thread.sleep(forTimeInterval:0.2)
+    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+          let down = CGEvent(keyboardEventSource:nil,virtualKey:53,keyDown:true),
+          let up = CGEvent(keyboardEventSource:nil,virtualKey:53,keyDown:false)
+    else { fail("Cannot send Escape to foreground Herdr") }
+    down.post(tap:.cghidEventTap)
+    up.post(tap:.cghidEventTap)
+    print("Native Escape")
+    exit(0)
+}
 if wanted == "--click" {
     guard CommandLine.arguments.count == 7,
           let x = Double(CommandLine.arguments[3]), let y = Double(CommandLine.arguments[4]),

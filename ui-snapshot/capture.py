@@ -276,28 +276,36 @@ def main():
                         actual = blocking_overlays(after)
                         if expected and expected not in actual:
                             raise RuntimeError("Expected popup "+expected+"; got "+str(actual))
-                        if not expected and actual:
+                        if not expected and actual and not case.get("popover"):
                             raise RuntimeError("Unexpected blocking popup "+str(actual))
                         shot(row,"after")
                         if row["images"]["before"]["sha256"] == row["images"]["after"]["sha256"]:
                             raise RuntimeError("No visible change after interaction")
                         row["verification"]="expected-popup" if expected else "visible-change; manual semantic review required"
-                        if expected:
-                            clear()
-                            time.sleep(.4)
+                        if expected or case.get("popover"):
+                            run([ax,str(proc.pid),"--escape"],timeout=10)
+                            time.sleep(.5)
                             if blocking_overlays(status()):
-                                raise RuntimeError("Popup remained after fixture reset")
+                                raise RuntimeError("Popup remained after actual Escape key")
                             shot(row,"closed")
+                            if row["images"]["after"]["sha256"] == row["images"]["closed"]["sha256"]:
+                                raise RuntimeError("No visible change on Escape")
+                            row["closeMode"]="native-keyboard-escape"
                         row["result"]="captured"
                     except Exception as e:
                         row["result"]="blocked" if isinstance(e,PermissionError) else "failed"
                         row["error"]=str(e)
-                        if row.get("images"):
+                        if row.get("images") and row["mode"] != "not-attempted":
                             try:
                                 if status().get("layout") in ("orca","orca-unified"):
                                     shot(row,"diagnostic")
                             except Exception:
                                 pass
+                    # A blocked interaction has no useful action evidence; do not
+                    # keep its duplicate before-only screenshot in the artifact.
+                    if row["result"] == "blocked":
+                        for img in row.pop("images",{}).values():
+                            (out/img["file"]).unlink(missing_ok=True)
                     print("UI_RESULT "+json.dumps({k:v for k,v in row.items() if k != "status"}),flush=True)
                     report(out,info)
                 info["coverage"]["observedMods"]=sorted({m for r in info["steps"] if r["result"]=="captured" for m in r["mods"]})
@@ -312,8 +320,7 @@ def main():
     finally:
         report(out,info)
         print((out/"summary.md").read_text(), flush=True)
-    # AX coverage is reported independently from the required native state capture.
-    # A missing AX element is an incomplete observation, never a successful click.
+    # A missing control or failed interaction is incomplete, never a passing click.
     return 1 if info.get("fatal") or not info["steps"] or any(s["result"] != "captured" for s in info["steps"]) else 0
 
 if __name__ == "__main__":
