@@ -20,7 +20,7 @@ test("a shared helper copy points at the same line in orca-ui/shared/, an unmigr
   assert.equal(helper.edit, "orca-ui/shared/panel-motion.js:22:13");
   assert.equal(helper.kind, "shared");
   assert.match(helper.note, /orca-agents/);
-  assert.match(helper.note, /orca-files, orca-changes, orca-agents, orca-panel-gap, skillshare/);
+  assert.equal(helper.note, "shared helper, copied into orca-files, orca-changes, orca-agents, orca-panel-gap");
   assert.equal(entry.edit, "mods/orca-panel-gap/main.js:40:37");
   assert.equal(entry.kind, "in-place");
   assert.match(entry.note, /not in app\.mjs/);
