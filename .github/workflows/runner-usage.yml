@@ -1,0 +1,42 @@
+name: CI runner usage
+on:
+  workflow_run:
+    workflows: [CI, quality, Native page benchmark, Native retention (100 interactions)]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+jobs:
+  report:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const run = context.payload.workflow_run;
+            const {owner, repo} = context.repo;
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {owner, repo, run_id:run.id, filter:'latest', per_page:100});
+            const rows = jobs.map(j => ({name:j.name,conclusion:j.conclusion,runner:j.runner_name || null,labels:j.labels,seconds:j.started_at && j.completed_at ? Math.max(0,(Date.parse(j.completed_at)-Date.parse(j.started_at))/1000):null}));
+            const active = rows.filter(j=>j.conclusion!=='skipped' && j.seconds!==null);
+            const seconds = active.reduce((s,j)=>s+j.seconds,0);
+            const result = {schema:1,workflow:run.name,run_id:run.id,head_sha:run.head_sha,attempt:run.run_attempt,conclusion:run.conclusion,jobs:rows,runner_seconds:seconds,runner_minutes:seconds/60,scope:'sum of observed job wall times, not billable quota or queue time'};
+            fs.writeFileSync('runner-usage.json',JSON.stringify(result,null,2));
+            await core.summary.addHeading('Runner usage').addRaw(run.name+': '+(seconds/60).toFixed(2)+' observed runner-minutes (not billed minutes)').write();
+            for (const pr of run.pull_requests || []) {
+              const {data:current}=await github.rest.pulls.get({owner,repo,pull_number:pr.number});
+              if(current.state!=='open'||current.head.sha!==run.head_sha||current.head.repo.full_name!==context.payload.repository.full_name) continue;
+              const marker='<!-- herdr-runner-usage:'+run.workflow_id+' -->';
+              const body=[marker,'**'+run.name+' runner usage**: '+(seconds/60).toFixed(2)+' observed runner-minutes; '+active.length+' executed jobs. Not a billing estimate.','[Run]('+run.html_url+')'].join('\n');
+              const comments=await github.paginate(github.rest.issues.listComments,{owner,repo,issue_number:pr.number,per_page:100});
+              const old=comments.find(c=>c.user?.login==='github-actions[bot]'&&c.body?.startsWith(marker));
+              if(old) await github.rest.issues.updateComment({owner,repo,comment_id:old.id,body});
+              else await github.rest.issues.createComment({owner,repo,issue_number:pr.number,body});
+            }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runner-usage
+          path: runner-usage.json
+          retention-days: 14

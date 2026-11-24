@@ -1,0 +1,103 @@
+name: Native retention (100 interactions)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mods/orca-spaces/main.js'
+      - 'mods/orca-files/main.js'
+      - 'mods/orca-status/main.js'
+      - 'scripts/benchmark-resources.py'
+      - '.github/workflows/performance-retention.yml'
+  workflow_dispatch:
+    inputs:
+      page:
+        type: choice
+        options: [main-terminals, files]
+        default: main-terminals
+permissions:
+  contents: read
+concurrency:
+  group: retention-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.routes.outputs.matrix }}
+      has_routes: ${{ steps.routes.outputs.has_routes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: routes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          MANUAL: ${{ inputs.page }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          base = os.environ["BASE"]
+          files = subprocess.check_output(["git","diff","--name-only","--no-renames",base,"HEAD"],text=True).splitlines() if base else []
+          pages = set()
+          if not base:
+              pages.add(os.environ.get("MANUAL") or "main-terminals")
+          if any(p in files for p in ("mods/orca-spaces/main.js","mods/orca-status/main.js","scripts/benchmark-resources.py",".github/workflows/performance-retention.yml")):
+              pages.add("main-terminals")
+          if "mods/orca-files/main.js" in files:
+              pages.add("files")
+          matrix = {"include":[{"page":p,"stack":"main" if p=="main-terminals" else "panel-body"} for p in sorted(pages)]}
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              f.write("matrix="+json.dumps(matrix)+"\n")
+              f.write("has_routes="+str(bool(pages)).lower()+"\n")
+          PY
+  measure:
+    needs: select
+    if: needs.select.outputs.has_routes == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: macos-15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Herdr and screenshot dependency
+        run: |
+          test "$(uname -m)" = arm64
+          curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
+          sh "$RUNNER_TEMP/herdr-install.sh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          python -m pip install Pillow
+      - name: Repeat selected page 100 times
+        run: |
+          python scripts/benchmark-pages.py --candidate-baseline --layout orca --stack "${{ matrix.stack }}" --page "${{ matrix.page }}" --samples 100 --settle 0.5 --idle-seconds 10 --output "$RUNNER_TEMP/retention"
+      - name: Validate and summarize resource evidence
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"retention"
+          report=json.loads((root/"report.json").read_text())
+          page,=report["pages"]
+          warm=page.get("warm",{})
+          rss=page.get("rss_after_matches",{})
+          idle=page.get("idle_app_process",{})
+          result={"schema":1,"scope":"isolated native app process; RSS growth is not a leak verdict","page":page["page"],"warm_attempts":warm.get("attempts"),"warm_matches":warm.get("matched"),"rss":rss,"idle":idle}
+          (root/"retention-summary.json").write_text(json.dumps(result,indent=2))
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as f:
+              f.write("## Native retention evidence\n\n")
+              f.write(f"Warm matches: {warm.get('matched')}/100; RSS delta MiB: {rss.get('delta_mib')}; idle CPU % of one core: {idle.get('cpu_pct_one_core')}\n")
+          assert warm.get("attempts")==100 and warm.get("matched")==100 and rss.get("count")==101 and idle
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retention-${{ matrix.page }}
+          path: ${{ runner.temp }}/retention/
+          retention-days: 14
