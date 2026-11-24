@@ -297,11 +297,11 @@ export default class Spaces extends View {
     // The lane whose bell the pointer reveals; GPUI has no `group-hover`, so one id marks it.
     this.laneHot = null;
     this.refreshMachines(cx);
-    cx.timer.every(15000, cx => this.refreshMachines(cx));
-    cx.timer.every(15000, cx => { void this.checkSaved(cx); });
+    cx.timer.every(15000, timerCx => this.refreshMachines(timerCx));
+    cx.timer.every(15000, timerCx => { void this.checkSaved(timerCx); });
     // `git status` walks the whole tree, on another machine a process there:
     // only when its answer could have changed (see `due`).
-    cx.timer.every(250, (cx) => this.checkNew(cx));
+    cx.timer.every(250, (timerCx) => this.checkNew(timerCx));
   }
 
   notify(_cx) {

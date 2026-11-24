@@ -75,8 +75,9 @@ const machines = () => [];
     git_init = re.search(r'this\.git = (?:\{ \.{3}stored\("git.cache.v2", \{\}\) \}|stored\("git.cache.v2", \{\}\));', source)
     assert git_init, 'Probe needs updating: git initialization'
     replace_once(git_init[0], 'this.git = {};')
-    replace_once('    this.refreshMachines(cx);\n    cx.timer.every(15000, cx => this.refreshMachines(cx));\n    cx.timer.every(15000, cx => { void this.checkSaved(cx); });', '    this.perfTicks = 0;\n    cx.timer.every(200, cx => { if (++this.perfTicks <= 150) { console.log("PERF interval", metrics.created); metrics.created = 0; cx.notify(); } });')
-    replace_once('    cx.timer.every(250, (cx) => this.checkNew(cx));', '    cx.timer.every(250, cx => { if (this.syncRetained(cx)) cx.notify(); });' if 'syncRetained(cx)' in source else '')
+    timer_cx = 'timerCx' if 'timerCx => this.refreshMachines(timerCx)' in source else 'cx'
+    replace_once('    this.refreshMachines(cx);\n    cx.timer.every(15000, CX => this.refreshMachines(CX));\n    cx.timer.every(15000, CX => { void this.checkSaved(CX); });'.replace('CX', timer_cx), '    this.perfTicks = 0;\n    cx.timer.every(200, cx => { if (++this.perfTicks <= 150) { console.log("PERF interval", metrics.created); metrics.created = 0; cx.notify(); } });')
+    replace_once('    cx.timer.every(250, (CX) => this.checkNew(CX));'.replace('CX', timer_cx), '    cx.timer.every(250, cx => { if (this.syncRetained(cx)) cx.notify(); });' if 'syncRetained(cx)' in source else '')
     # Current Spaces wraps the actual list render in sidebarFrame(renderBody(cx)).
     # Keep the historical render anchor for git-ref benchmarks of older revisions.
     render_entry = re.search(r'^  (renderBody|render)\(cx\) \{\n    const t = theme\(\);', source, re.M)
