@@ -203,6 +203,10 @@ export const inPlace = [
     ],
     "shared": [
       "props.confirmShared.key (dynamic set)"
+    ],
+    "tests": [
+      "mods/orca-confirm/confirm.flow.test.js",
+      "mods/orca-confirm/render.flow.test.js"
     ]
   },
   {
@@ -220,9 +224,12 @@ export const inPlace = [
       "orca-diff.target"
     ],
     "tests": [
+      "mods/orca-diff/data.flow.test.js",
       "mods/orca-diff/diff-data.test.js",
       "mods/orca-diff/diff-load.test.js",
-      "mods/orca-diff/diff.test.js"
+      "mods/orca-diff/diff.test.js",
+      "mods/orca-diff/pane.flow.test.js",
+      "mods/orca-diff/view.flow.test.js"
     ]
   },
   {
@@ -260,6 +267,9 @@ export const inPlace = [
       "mods/orca-files/editor-drafts.test.js",
       "mods/orca-files/editor-path.test.js",
       "mods/orca-files/file-mutation.test.js",
+      "mods/orca-files/files-data.flow.test.js",
+      "mods/orca-files/files-ui.flow.test.js",
+      "mods/orca-files/pure.flow.test.js",
       "mods/orca-files/save-queue.test.js",
       "mods/orca-files/tree-keys.test.js",
       "mods/orca-files/tree-nav.test.js"
