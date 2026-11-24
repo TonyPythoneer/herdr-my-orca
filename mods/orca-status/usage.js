@@ -72,35 +72,31 @@ export function formatPoolShortLabel(groupName, bucket) {
   return `${groupLabel} ${windowLabel}`.trim();
 }
 
+// Flat buckets carrying their pool name, as Orca's parser returns them
+// (antigravity-usage-response.ts:96-130): `group` is a field, not a nesting level,
+// because only Antigravity groups pools; every other provider's windows are flat.
+function antigravityGroupBuckets(group) {
+  if (!group || typeof group.name !== 'string' || !Array.isArray(group.buckets)) return [];
+  return group.buckets
+    .filter((b) => b && typeof b.remaining_fraction === 'number')
+    .map((b) => ({
+      id: b.id ?? '',
+      group: group.name,
+      name: b.name ?? '',
+      window: b.window ?? '',
+      windowMinutes: windowMinutesFor(b.window) ?? 0,
+      remainingFraction: b.remaining_fraction,
+      usedPercent: clampUsedPercent((1 - b.remaining_fraction) * 100),
+      resetTime: b.reset_time ?? null
+    }));
+}
+
 export function parseAntigravityOutput(stdout) {
   if (!stdout || typeof stdout !== 'string') return null;
   try {
-    const data = JSON.parse(stdout);
-    const groupsRaw = data?.command?.data?.groups;
-    if (!Array.isArray(groupsRaw) || groupsRaw.length === 0) return null;
-
-    // Flat buckets carrying their pool name, as Orca's parser returns them
-    // (antigravity-usage-response.ts:96-130): `group` is a field, not a nesting level,
-    // because only Antigravity groups pools; every other provider's windows are flat.
-    const buckets = [];
-    for (const g of groupsRaw) {
-      if (!g || typeof g.name !== 'string') continue;
-      if (!Array.isArray(g.buckets)) continue;
-      for (const b of g.buckets) {
-        if (!b || typeof b.remaining_fraction !== 'number') continue;
-        const remainingFraction = b.remaining_fraction;
-        buckets.push({
-          id: b.id ?? '',
-          group: g.name,
-          name: b.name ?? '',
-          window: b.window ?? '',
-          windowMinutes: windowMinutesFor(b.window) ?? 0,
-          remainingFraction,
-          usedPercent: clampUsedPercent((1 - remainingFraction) * 100),
-          resetTime: b.reset_time ?? null
-        });
-      }
-    }
+    const groups = JSON.parse(stdout)?.command?.data?.groups;
+    if (!Array.isArray(groups) || groups.length === 0) return null;
+    const buckets = groups.flatMap(antigravityGroupBuckets);
     return buckets.length > 0 ? { buckets } : null;
   } catch {
     return null;
@@ -130,6 +126,43 @@ export function formatBucketChipLabel(bucket) {
     : formatPoolWindowName(bucket);
 }
 
+/** The outermost `{...}` of OMP's output, parsed; null when there is none or it is not JSON. */
+function parseOmpEnvelope(stdout) {
+  const start = stdout.indexOf('{');
+  const end = stdout.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try {
+    return JSON.parse(stdout.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+const windowMinutesOf = (durationMs) =>
+  typeof durationMs === 'number' && durationMs > 0 ? Math.round(durationMs / MINUTE_MS) : 0;
+
+// A balance row carries no window and no fraction, so it never becomes a bucket.
+function ompBucket(limit) {
+  const fraction = limit?.amount?.usedFraction;
+  if (typeof fraction !== 'number' || !Number.isFinite(fraction)) return null;
+  return {
+    id: limit.id ?? '',
+    name: limit.window?.label ?? limit.label ?? '',
+    windowMinutes: windowMinutesOf(limit.window?.durationMs),
+    usedPercent: clampUsedPercent(fraction * 100),
+    resetTime: limit.window?.resetsAt ?? null
+  };
+}
+
+// A provider is one pool: OMP meters the provider as a whole, so its buckets carry no
+// `group`, and the chip reads "5h" rather than repeating the provider beside its own mark.
+function ompReading(report) {
+  const provider = report?.provider;
+  if (typeof provider !== 'string') return null;
+  const buckets = (Array.isArray(report.limits) ? report.limits : []).map(ompBucket).filter(Boolean);
+  return { provider, status: buckets.length > 0 ? 'ok' : 'unavailable', label: '', buckets };
+}
+
 /**
  * `omp usage --json` as Orca-shaped readings: one per provider OMP has an account for,
  * its metered windows as buckets. OMP prints update notices before the envelope
@@ -137,48 +170,9 @@ export function formatBucketChipLabel(bucket) {
  */
 export function parseOmpUsage(stdout) {
   if (!stdout || typeof stdout !== 'string') return null;
-  const start = stdout.indexOf('{');
-  const end = stdout.lastIndexOf('}');
-  if (start === -1 || end <= start) return null;
-
-  let data;
-  try {
-    data = JSON.parse(stdout.slice(start, end + 1));
-  } catch {
-    return null;
-  }
+  const data = parseOmpEnvelope(stdout);
   if (!Array.isArray(data?.reports)) return null;
-
-  const readings = [];
-  for (const report of data.reports) {
-    const provider = report?.provider;
-    if (typeof provider !== 'string') continue;
-    // A provider is one pool: OMP meters the provider as a whole, so its buckets carry no
-    // `group`, and the chip reads "5h" rather than repeating the provider beside its own mark.
-    const buckets = [];
-    for (const limit of Array.isArray(report.limits) ? report.limits : []) {
-      const fraction = limit?.amount?.usedFraction;
-      if (typeof fraction !== 'number' || !Number.isFinite(fraction)) continue;
-      const durationMs = limit?.window?.durationMs;
-      buckets.push({
-        id: limit.id ?? '',
-        name: limit.window?.label ?? limit.label ?? '',
-        windowMinutes:
-          typeof durationMs === 'number' && durationMs > 0
-            ? Math.round(durationMs / MINUTE_MS)
-            : 0,
-        usedPercent: clampUsedPercent(fraction * 100),
-        // A balance row carries no window and no fraction, so it never reaches here.
-        resetTime: limit.window?.resetsAt ?? null
-      });
-    }
-    readings.push({
-      provider,
-      status: buckets.length > 0 ? 'ok' : 'unavailable',
-      label: '',
-      buckets
-    });
-  }
+  const readings = data.reports.map(ompReading).filter(Boolean);
   return readings.length > 0 ? readings : null;
 }
 

@@ -14,6 +14,12 @@ import { clampUsedPercent } from './usage.js';
 // MIN_REFETCH_MS = 5 minutes; the poll itself runs every 15 minutes (DEFAULT_POLL_MS).
 const LIVE_FRESH_MINUTES = 5;
 const OAUTH_FRESH_MINUTES = 15;
+// The two windows every quota source here reports, in minutes.
+const SESSION_MINUTES = 300;
+const WEEK_MINUTES = 10080;
+const SCRIPT_TIMEOUT_MS = 20000;
+// Epoch values above this are milliseconds (see resetSeconds).
+const EPOCH_MS_FLOOR = 1e10;
 
 // A provider is drawn only when its CLI is installed (the create menu's knownAgents) and signed
 // in: each script below prints nothing without its credential, so a logged-out CLI leaves no chip.
@@ -61,12 +67,15 @@ select coalesce(sum(json_extract(data,'$.tokens.input')+json_extract(data,'$.tok
 from session_message, w where type in ('assistant','compaction') and time_created >= s
   and json_extract(data,'$.model.providerID')='opencode' and json_extract(data,'$.model.id') like '%-free'" 2>/dev/null`;
 
-export const formatTokens = (n) =>
-  n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : `${n}`;
+export const formatTokens = (n) => {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
+  return `${n}`;
+};
 
 const sh = async (execFn, script) => {
   try {
-    const r = await execFn('sh', ['-c', script], { timeout: 20000 });
+    const r = await execFn('sh', ['-c', script], { timeout: SCRIPT_TIMEOUT_MS });
     return r?.code === 0 ? r.stdout.trim() : '';
   } catch {
     return '';
@@ -79,15 +88,16 @@ const json = (text) => {
 // A window's reset time in epoch seconds. Orca's parseClaudeUsageResetTimestamp: 1e10 sits
 // between any plausible seconds epoch (<2286) and any milliseconds one (>2001), so both
 // units and an ISO string are accepted. A reset time never decides the percentage.
+const toSeconds = (epoch) => (epoch > EPOCH_MS_FLOOR ? epoch / 1000 : epoch);
 const resetSeconds = (value) => {
   if (typeof value === 'string') {
     const numeric = Number(value);
-    if (value.trim() !== '' && Number.isFinite(numeric)) return numeric > 1e10 ? numeric / 1000 : numeric;
+    if (value.trim() !== '' && Number.isFinite(numeric)) return toSeconds(numeric);
     const parsed = Date.parse(value);
     return Number.isFinite(parsed) ? parsed / 1000 : null;
   }
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return value > 1e10 ? value / 1000 : value;
+  return toSeconds(value);
 };
 
 // A window past its reset has nothing used. It stays 0% with its full length as static text
@@ -99,21 +109,25 @@ const bucket = (id, windowMinutes, usedPercent, resetsAt, label) => {
     id, name: '', label, windowMinutes,
     usedPercent: over ? 0 : clampUsedPercent(usedPercent),
     resetTime: at === null || over ? null : new Date(at * 1000).toISOString(),
-    ...(over && { idleText: windowMinutes >= 10080 ? `${windowMinutes / 1440}d` : `${windowMinutes / 60}h` })
+    ...(over && { idleText: windowMinutes >= WEEK_MINUTES ? `${windowMinutes / 1440}d` : `${windowMinutes / 60}h` })
   };
 };
 const reading = (provider, buckets) => buckets.length
   ? { provider, status: 'ok', label: '', buckets } : null;
 
 // oauth/usage's limits: the session, the week, and a per-model week such as Fable.
+const limitLabel = (limit) => {
+  if (limit.kind === 'session') return '5h';
+  if (limit.kind === 'weekly_all') return 'wk';
+  return limit.scope?.model?.display_name ?? limit.kind;
+};
 const fromUsageApi = (limits) => limits.map((l) => bucket(
-  l.kind, l.kind === 'session' ? 300 : 10080, l.percent, l.resets_at,
-  l.kind === 'session' ? '5h' : l.kind === 'weekly_all' ? 'wk' : l.scope?.model?.display_name ?? l.kind));
+  l.kind, l.kind === 'session' ? SESSION_MINUTES : WEEK_MINUTES, l.percent, l.resets_at, limitLabel(l)));
 
 // Windows Claude Code reports besides 5h and the week (e.g. a per-model one): "seven_day_fable" is "Fable".
 const extraClaude = (limits) => Object.entries(limits ?? {})
   .filter(([k, v]) => k !== 'five_hour' && k !== 'seven_day' && typeof v?.used_percentage === 'number')
-  .map(([k, v]) => bucket(k, 10080, v.used_percentage, v.resets_at, k.replace(/^seven_day_?/, '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) || 'wk'));
+  .map(([k, v]) => bucket(k, WEEK_MINUTES, v.used_percentage, v.resets_at, k.replace(/^seven_day_?/, '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) || 'wk'));
 
 // The API snapshot as a reading: array-shaped `limits` today, the older five_hour/seven_day
 // object shape still accepted (`api`/`bedrock` snapshots carry no subscription windows).
@@ -121,8 +135,8 @@ const fromApiSnapshot = (api) => {
   if (!api || api.api || api.bedrock) return null;
   if (Array.isArray(api.limits) && api.limits[0]?.kind) return reading('claude', fromUsageApi(api.limits));
   return reading('claude', [
-    api.five_hour && bucket('5h', 300, api.five_hour.used_percentage, api.five_hour.resets_at, '5h'),
-    api.seven_day && bucket('7d', 10080, api.seven_day.used_percentage, api.seven_day.resets_at, 'wk'),
+    api.five_hour && bucket('5h', SESSION_MINUTES, api.five_hour.used_percentage, api.five_hour.resets_at, '5h'),
+    api.seven_day && bucket('7d', WEEK_MINUTES, api.seven_day.used_percentage, api.seven_day.resets_at, 'wk'),
     ...extraClaude(api.limits)
   ].filter(Boolean));
 };
@@ -146,17 +160,22 @@ export function parseClaudeStatusLine(rateLimits) {
   if (!rateLimits || typeof rateLimits !== 'object') return null;
   const window = (id, minutes, label, w) => {
     if (!w || typeof w !== 'object') return null;
-    const pct = typeof w.used_percentage === 'number' ? w.used_percentage
-      : typeof w.utilization === 'number' ? w.utilization : null;
+    const pct = [w.used_percentage, w.utilization].find((v) => typeof v === 'number') ?? null;
     if (pct === null) return null;
     return bucket(id, minutes, pct, w.resets_at, label);
   };
   const buckets = [
-    window('5h', 300, '5h', rateLimits.five_hour),
-    window('7d', 10080, 'wk', rateLimits.seven_day)
+    window('5h', SESSION_MINUTES, '5h', rateLimits.five_hour),
+    window('7d', WEEK_MINUTES, 'wk', rateLimits.seven_day)
   ].filter(Boolean);
   return buckets.length ? reading('claude', buckets) : null;
 }
+
+const codexWindowLabel = (minutes) => {
+  if (minutes === SESSION_MINUTES) return '5h';
+  if (minutes === WEEK_MINUTES) return 'wk';
+  return `${minutes}m`;
+};
 
 /** `installed`: the CLI names `knownAgents()` found; null (not known) skips that check. opencode needs no login: its free tokens count either way. */
 export async function probeLocal(execFn, installed = null) {
@@ -174,7 +193,7 @@ export async function probeLocal(execFn, installed = null) {
     claudeReading,
     // Codex reports the windows its plan has: both for Plus and Pro, so both are shown.
     codex && reading('codex', [codex.primary, codex.secondary].filter(Boolean)
-      .map((w) => bucket(String(w.window_minutes), w.window_minutes, w.used_percent, w.resets_at, w.window_minutes === 300 ? '5h' : w.window_minutes === 10080 ? 'wk' : `${w.window_minutes}m`))),
+      .map((w) => bucket(String(w.window_minutes), w.window_minutes, w.used_percent, w.resets_at, codexWindowLabel(w.window_minutes)))),
     Number.isFinite(tokens) && Number.isFinite(resetAt) && {
       provider: 'opencode', status: 'ok', label: '', buckets: [],
       // A window the server's own cycle set and nothing has used since is "inactive"; any other
