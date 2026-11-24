@@ -1,4 +1,0 @@
-cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
-cmd: herdr-app check /private/tmp/claude-501/orca-bundler.X7bUqY/chk/A-orca-panel-gap
-check passed: /private/tmp/claude-501/orca-bundler.X7bUqY/chk/A-orca-panel-gap
-exit: 0

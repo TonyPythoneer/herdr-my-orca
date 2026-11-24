@@ -1,3 +1,0 @@
-請先閱讀 README.md，從 README 指引的入口了解專案，再完成下列任務。
-
-將 unified 右面板收窄時的額外滑移從 28px 改為 16px，內容寬度、淡出和 drawer 時序照舊。在標準版 `orca`，⌘⇧F 保持立即展開右面板、選到 Files 並聚焦 Contents，且保留已有查詢與搜尋結果，按下時不重新查詢。原有 `orca-files.search` command 保留原本行為。請修改並測試。

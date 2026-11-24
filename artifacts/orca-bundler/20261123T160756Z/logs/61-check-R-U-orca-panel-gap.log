@@ -1,9 +1,0 @@
-cwd: /private/tmp/claude-501/orca-bundler.X7bUqY
-cmd: env herdr-app check /private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-panel-gap
-ORCA_PROBE_R
-    at panelFrame (/private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-panel-gap/main.js?v=1:7:12)
-    at render (/private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-panel-gap/main.js?v=1:35:26)
-
-
-check failed: /private/tmp/claude-501/orca-bundler.X7bUqY/chk/RU-orca-panel-gap
-exit: 1

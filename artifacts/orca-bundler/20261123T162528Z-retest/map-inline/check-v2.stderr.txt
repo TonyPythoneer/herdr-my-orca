@@ -1,5 +1,0 @@
-ORCA_PROBE_INLINE
-    at <anonymous> (/private/tmp/claude-501/rt-E34l/mods/probe-inline-v2/main.js?v=1:5:11)
-
-
-check failed: /private/tmp/claude-501/rt-E34l/mods/probe-inline-v2

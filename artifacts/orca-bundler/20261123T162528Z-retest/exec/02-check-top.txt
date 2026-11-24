@@ -1,4 +1,0 @@
-$ env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=$S/home HERDR_TELEMETRY=0 /Users/tonyyang/Applications/Herdr.app/Contents/MacOS/Herdr check $S/mods/probe-exec-top
-check passed: /private/tmp/claude-501/rt-pfb0/mods/probe-exec-top
-WARN  herdr_app::mods: check: mod exec'd `sh`; the child runs for real
-exit=0

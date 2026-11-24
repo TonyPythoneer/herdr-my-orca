@@ -1,6 +1,0 @@
-s1_ascii "const s=\"abcdef\";throw new Error(\"X\");" { u1: 18, u2: 24, b1: 18, b2: 24, nonAscii: 0, utf16Len: 38 }
-s2_nonascii1 "const s=\"—abcdef\";throw new Error(\"X\");" { u1: 19, u2: 25, b1: 21, b2: 27, nonAscii: 1, utf16Len: 39 }
-s3_nonascii4 "const s=\"—中—中abcdef\";throw new Error(\"X\");" { u1: 22, u2: 28, b1: 30, b2: 36, nonAscii: 4, utf16Len: 42 }
-s4_nonascii10 "const s=\"—中—中—中—中—中\";throw new Error(\"X\");" { u1: 22, u2: 28, b1: 42, b2: 48, nonAscii: 10, utf16Len: 42 }
-s5_emoji "const s=\"😀abcdef\";throw new Error(\"X\");" { u1: 20, u2: 26, b1: 22, b2: 28, nonAscii: 1, utf16Len: 40 }
-s6_start "throw new Error(\"X\");" { u1: 1, u2: 7, b1: 1, b2: 7, nonAscii: 0, utf16Len: 21 }

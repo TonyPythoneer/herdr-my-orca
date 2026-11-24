@@ -1,5 +1,0 @@
-    20	
-    21	export function panelFrame(inner) {
-    22	  throw new Error("ORCA_PROBE_R");
-    23	  if (props()?.overlay) return inner;
-    24	  const open = shared("panel.openPx");

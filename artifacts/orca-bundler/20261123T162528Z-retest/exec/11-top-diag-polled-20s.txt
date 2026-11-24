@@ -1,4 +1,0 @@
-variant=top check_exit=0 marker=/private/tmp/claude-501/rt-pfb0/home
-variant=diag check_exit=0 marker=/private/tmp/claude-501/rt-pfb0/home
-variant=top check_exit=0 marker=/private/tmp/claude-501/rt-pfb0/home
-variant=diag check_exit=0 marker=ABSENT after 20s
