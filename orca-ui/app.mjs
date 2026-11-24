@@ -725,6 +725,13 @@ export const inPlace = [
       "skillshare.panelUpdate.v1",
       "skillshare.inSyncView.v1",
       "skillshare.recent.v1"
+    ],
+    "tests": [
+      "mods/skillshare/flow-view.test.js",
+      "mods/skillshare/flow.test.js",
+      "mods/skillshare/model.test.js",
+      "mods/skillshare/render.test.js",
+      "mods/skillshare/view.test.js"
     ]
   }
 ];
