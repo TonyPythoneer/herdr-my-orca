@@ -56,8 +56,7 @@
         "mods/orca-files/panel-motion.js",
         "mods/orca-changes/panel-motion.js",
         "mods/orca-agents/panel-motion.js",
-        "mods/orca-panel-gap/panel-motion.js",
-        "mods/skillshare/panel-motion.js"
+        "mods/orca-panel-gap/panel-motion.js"
       ]
     }
   ]

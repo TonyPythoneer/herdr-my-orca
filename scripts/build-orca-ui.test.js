@@ -33,17 +33,17 @@ test("an empty directory receives exactly the managed batch, twice identically",
   assert.equal(run("--root", root, "--check", "--out", a).status, 0);
 });
 
-test("the real repo builds its 32 files, 20 of them shared copies, and matches", t => {
+test("the real repo builds its 30 files, 19 of them shared copies, and matches", t => {
   const out = temp(t);
   assert.equal(run("--out", out).status, 0);
-  assert.equal(files(out).length, 32);
+  assert.equal(files(out).length, 30);
   assert.equal(run("--check", "--out", out).status, 0);
 });
 
-test("the real repo builds its 12 panel-head files and matches", t => {
+test("the real repo builds its 11 panel-head files and matches", t => {
   const out = temp(t);
   assert.equal(run("--out", out).status, 0);
-  assert.equal(files(out).filter(f => f.startsWith("mods/orca-panel-head/")).length, 12);
+  assert.equal(files(out).filter(f => f.startsWith("mods/orca-panel-head/")).length, 11);
   for (const f of files(out)) {
     assert.ok(readFileSync(join(out, f)).equals(readFileSync(join(fileURLToPath(new URL("..", import.meta.url)), f))), f);
     assert.equal(statSync(join(out, f)).mode & 0o777, statSync(join(fileURLToPath(new URL("..", import.meta.url)), f)).mode & 0o777, f);

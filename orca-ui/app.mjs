@@ -700,39 +700,6 @@ export const inPlace = [
       "mods/orca-worktree/remove.test.js",
       "mods/orca-worktree/switch.test.js"
     ]
-  },
-  {
-    "mod": "skillshare",
-    "area": "panel-right",
-    "description": "Skills and agents panel: sync status, updates, install from URL, source sync.",
-    "layouts": [
-      "orca#skillshare",
-      "orca-unified#skillshare"
-    ],
-    "props": "unified:true (unified layout only)",
-    "opens": [
-      "layout.toggle",
-      "layout.hide",
-      "agent.focus",
-      "overlay:skillshare dialogs (install, audit, source, syncboth, upgrade)"
-    ],
-    "reachedBy": [
-      "command:focus",
-      "overlay:dialog by props.role (install, audit, source, syncboth, upgrade, preview)",
-      "toggle: layout node skillshare-panel"
-    ],
-    "shared": [
-      "skillshare.panelUpdate.v1",
-      "skillshare.inSyncView.v1",
-      "skillshare.recent.v1"
-    ],
-    "tests": [
-      "mods/skillshare/flow-view.test.js",
-      "mods/skillshare/flow.test.js",
-      "mods/skillshare/model.test.js",
-      "mods/skillshare/render.test.js",
-      "mods/skillshare/view.test.js"
-    ]
   }
 ];
 

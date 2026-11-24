@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 import { ROOT, loadManifests } from "./orca-ui-manifests.mjs";
 
 const { table, shared } = loadManifests();
-const shared20 = [...table].filter(([, row]) => row.kind === "shared");
+const sharedCopies = [...table].filter(([, row]) => row.kind === "shared");
 
 test("every copy of a shared helper matches orca-ui/shared/", () => {
-  assert.equal(shared20.length, 20);
-  for (const [dest, row] of shared20) {
+  assert.equal(sharedCopies.length, 19);
+  for (const [dest, row] of sharedCopies) {
     const source = readFileSync(`${ROOT}/${row.source}`, "utf8");
     const want = `${source}${source.endsWith("\n") ? "" : "\n"}// Generated from ${row.source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;
     assert.equal(readFileSync(`${ROOT}/${dest}`, "utf8"), want, dest);
