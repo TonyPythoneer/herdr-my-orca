@@ -14,7 +14,6 @@ import {
   closeOverlay,
   theme,
   panes,
-  spaces,
   agents,
   hc,
   exec
@@ -37,6 +36,10 @@ const AGENT_CATALOG = [
   { id: "aider", name: "Aider", run: ["aider"] }
 ];
 
+// How long "Copied!" stays visible before the dialog closes.
+const COPY_CLOSE_DELAY_MS = 600;
+const FORK_TAB_FALLBACK_NAME = "Session Fork";
+
 export default class HandoffDialog extends View {
   init(_props, cx) {
     this.handle = cx.focus_handle();
@@ -53,7 +56,13 @@ export default class HandoffDialog extends View {
     this.terminal = p.terminal ?? "";
     this.paneId = p.pane ?? "";
 
-    // Resolve workspace and pane context
+    this.resolveSource();
+    this.startCapture(cx);
+  }
+
+  // The pane and agent this dialog was opened for: working folder, title and the agent's name,
+  // with the picker starting on an agent other than the source (avoidSourceAgent).
+  resolveSource() {
     const pane = panes().find((x) => x.pane === this.paneId || x.terminal === this.terminal);
     this.cwd = pane?.cwd || "";
     this.paneTitle = pane?.title || "";
@@ -61,23 +70,25 @@ export default class HandoffDialog extends View {
     const agent = agents().find((a) => a.address === this.terminal || a.pane === this.paneId);
     this.sourceAgent = agent?.app || agent?.program?.name || "Agent";
 
-    // Select initial agent index different from source agent if possible (avoidSourceAgent)
     const initialIndex = AGENT_CATALOG.findIndex((a) => a.id !== this.sourceAgent.toLowerCase());
     if (initialIndex >= 0) {
       this.selectedAgentIndex = initialIndex;
     }
+  }
 
-    // Capture terminal scrollback and buffer using `hc read`
-    if (this.terminal) {
-      cx.spawn(async (cx) => {
-        const res = await hc(["read", this.terminal]).catch(() => null);
-        this.capturedText = res?.code === 0 && res?.stdout ? res.stdout : "";
-        this.loading = false;
-        cx.notify();
-      });
-    } else {
+  // Capture terminal scrollback and buffer using `hc read`
+  startCapture(cx) {
+    if (!this.terminal) {
       this.loading = false;
+      return;
     }
+    cx.spawn(async (taskCx) => {
+      // A failed read leaves the transcript empty; the dialog still opens without it.
+      const res = await hc(["read", this.terminal]).catch(() => null);
+      this.capturedText = res?.code === 0 && res?.stdout ? res.stdout : "";
+      this.loading = false;
+      taskCx.notify();
+    });
   }
 
   getContinuationPrompt() {
@@ -107,7 +118,7 @@ export default class HandoffDialog extends View {
     this.copied = true;
     this.statusMessage = "Prompt copied to clipboard";
     cx.notify();
-    cx.timer.after(600, () => {
+    cx.timer.after(COPY_CLOSE_DELAY_MS, () => {
       closeOverlay(props()?.overlay);
     });
   }
@@ -137,32 +148,10 @@ export default class HandoffDialog extends View {
     cx.notify();
 
     const prompt = this.getForkPrompt();
-    const space = spaces().find((s) => s.active);
+    const name = await this.forkTabName();
 
-    // If in a git repository, create a fork branch/worktree if possible
-    if (this.cwd) {
-      const gitTop = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: this.cwd }).catch(() => null);
-      if (gitTop?.code === 0) {
-        const repoTop = gitTop.stdout.trim();
-        const branchRes = await exec("git", ["branch", "--show-current"], { cwd: this.cwd }).catch(() => null);
-        const currentBranch = branchRes?.code === 0 ? branchRes.stdout.trim() : "main";
-        const forkBranch = `${currentBranch || "session"}-fork`;
-
-        // Launch in new tab
-        run("tab.new", {
-          name: `Fork: ${forkBranch}`,
-          folder: this.cwd,
-          task: prompt || undefined
-        });
-
-        closeOverlay(props()?.overlay);
-        return;
-      }
-    }
-
-    // Default fallback: new tab with the forked context
     run("tab.new", {
-      name: "Session Fork",
+      name,
       folder: this.cwd || undefined,
       task: prompt || undefined
     });
@@ -170,14 +159,20 @@ export default class HandoffDialog extends View {
     closeOverlay(props()?.overlay);
   }
 
-  render(cx) {
+  // In a git repository the fork tab is named after the current branch; elsewhere it gets the plain name.
+  async forkTabName() {
+    if (!this.cwd) return FORK_TAB_FALLBACK_NAME;
+    // A git call that fails is treated as "not a repository" / "no branch name": the fork still opens.
+    const gitTop = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: this.cwd }).catch(() => null);
+    if (gitTop?.code !== 0) return FORK_TAB_FALLBACK_NAME;
+    const branchRes = await exec("git", ["branch", "--show-current"], { cwd: this.cwd }).catch(() => null);
+    const currentBranch = branchRes?.code === 0 ? branchRes.stdout.trim() : "main";
+    return `Fork: ${currentBranch || "session"}-fork`;
+  }
+
+  render(_cx) {
     const t = theme();
     const isFork = this.action === "fork";
-    const title = isFork ? "Fork Agent Session" : "Hand off to another agent";
-    const description = isFork
-      ? "Create an independent session fork with captured context from this terminal."
-      : "Start a fresh Agent session from this stopping point. The original session stays unchanged.";
-    const iconName = isFork ? "git-fork" : "message-square-plus";
 
     return v_flex()
       .id("orca-handoff-dialog")
@@ -194,173 +189,193 @@ export default class HandoffDialog extends View {
         if (e.key === "escape") {
           closeOverlay(props()?.overlay);
         } else if (e.key === "enter" && !this.loading && !this.busy) {
-          if (isFork) void this.executeFork(cx);
-          else void this.executeHandoff(cx);
+          this.startAction(isFork, cx);
         }
       })
       .children([
-        // Header (Orca: AgentSessionContinuationDialog.tsx:238-251)
+        this.headerView(t, isFork),
+        this.metadataCard(t),
+        ...(!isFork ? [this.agentPicker(t)] : []),
+        ...(this.statusMessage ? [this.statusBanner(t)] : []),
+        this.actionFooter(t, isFork)
+      ]);
+  }
+
+  // The Start button and Enter both launch the dialog's action.
+  startAction(isFork, cx) {
+    if (isFork) void this.executeFork(cx);
+    else void this.executeHandoff(cx);
+  }
+
+  // Header (Orca: AgentSessionContinuationDialog.tsx:238-251)
+  headerView(t, isFork) {
+    const title = isFork ? "Fork Agent Session" : "Hand off to another agent";
+    const description = isFork
+      ? "Create an independent session fork with captured context from this terminal."
+      : "Start a fresh Agent session from this stopping point. The original session stays unchanged.";
+    const iconName = isFork ? "git-fork" : "message-square-plus";
+
+    return h_flex()
+      .w_full()
+      .items_start()
+      .justify_between()
+      .child(
+        v_flex()
+          .gap(3)
+          .child(
+            h_flex()
+              .gap(8)
+              .items_center()
+              .child(svg(`mods/orca-handoff/${iconName}.svg`).size(16).text_color(t.foreground))
+              .child(div().font_semibold().text_size(14).text_color(t.foreground).child(title))
+          )
+          .child(div().text_size(11).text_color(t.muted).child(description))
+      )
+      .child(
+        div()
+          .id("dialog-close")
+          .size(20)
+          .rounded(4)
+          .flex()
+          .items_center()
+          .justify_center()
+          .cursor_pointer()
+          .hover((s) => s.bg(t.hover))
+          .on_click(() => closeOverlay(props()?.overlay))
+          .child(svg("mods/orca-handoff/x.svg").size(12).text_color(t.muted))
+      );
+  }
+
+  // Session metadata card (Orca: AgentSessionContinuationDialog.tsx:254-265)
+  metadataCard(t) {
+    return v_flex()
+      .w_full()
+      .p(10)
+      .gap(4)
+      .rounded(6)
+      .border(1)
+      .border_color(t.border)
+      .bg(t.background)
+      .children([
         h_flex()
           .w_full()
-          .items_start()
           .justify_between()
+          .items_center()
           .child(
-            v_flex()
-              .gap(3)
-              .child(
-                h_flex()
-                  .gap(8)
-                  .items_center()
-                  .child(svg(`mods/orca-handoff/${iconName}.svg`).size(16).text_color(t.foreground))
-                  .child(div().font_semibold().text_size(14).text_color(t.foreground).child(title))
-              )
-              .child(div().text_size(11).text_color(t.muted).child(description))
+            h_flex()
+              .gap(6)
+              .items_center()
+              .child(div().font_medium().text_size(12).text_color(t.foreground).child(this.paneTitle || "Active Terminal"))
+              .child(div().text_size(11).text_color(t.muted).child(`· ${this.sourceAgent}`))
           )
           .child(
             div()
-              .id("dialog-close")
-              .size(20)
-              .rounded(4)
-              .flex()
-              .items_center()
-              .justify_center()
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover))
-              .on_click(() => closeOverlay(props()?.overlay))
-              .child(svg("mods/orca-handoff/x.svg").size(12).text_color(t.muted))
+              .text_size(11)
+              .text_color(t.muted)
+              .child(this.loading ? "Capturing transcript…" : `${this.capturedText.length} chars`)
           ),
+        div()
+          .text_size(11)
+          .text_color(t.muted)
+          .truncate()
+          .child(this.cwd || "Working directory: (not set)")
+      ]);
+  }
 
-        // Session metadata card (Orca: AgentSessionContinuationDialog.tsx:254-265)
-        v_flex()
+  // Agent selection picker (for handoff)
+  agentPicker(t) {
+    return v_flex()
+      .gap(6)
+      .child(div().text_size(11).font_medium().text_color(t.muted).child("Target Agent"))
+      .child(
+        h_flex()
           .w_full()
-          .p(10)
-          .gap(4)
+          .gap(6)
+          .flex_wrap()
+          .children(
+            AGENT_CATALOG.map((agent, i) => {
+              const selected = this.selectedAgentIndex === i;
+              return div()
+                .id(`agent-opt-${agent.id}`)
+                .px(8)
+                .py(4)
+                .rounded(5)
+                .border(1)
+                .border_color(selected ? t.foreground : t.border)
+                .bg(selected ? t.selected : t.background)
+                .text_color(selected ? t.foreground : t.muted)
+                .cursor_pointer()
+                .hover((s) => s.bg(t.hover))
+                .on_click((_e, cx) => {
+                  this.selectedAgentIndex = i;
+                  cx.notify();
+                })
+                .child(div().text_size(11).font_medium().child(agent.name));
+            })
+          )
+      );
+  }
+
+  statusBanner(t) {
+    return div()
+      .px(8)
+      .py(4)
+      .rounded(4)
+      .bg(t.selected)
+      .text_size(11)
+      .text_color(t.foreground)
+      .child(this.statusMessage);
+  }
+
+  startLabel(isFork) {
+    if (this.busy) return "Launching…";
+    return isFork ? "Start Fork" : "Start Session";
+  }
+
+  // Action footer (Orca: AgentSessionContinuationDialog.tsx:392-412)
+  actionFooter(t, isFork) {
+    return h_flex()
+      .w_full()
+      .mt(8)
+      .items_center()
+      .justify_end()
+      .gap(8)
+      .children([
+        div()
+          .id("btn-copy-prompt")
+          .px(10)
+          .h(28)
           .rounded(6)
           .border(1)
           .border_color(t.border)
-          .bg(t.background)
-          .children([
-            h_flex()
-              .w_full()
-              .justify_between()
-              .items_center()
-              .child(
-                h_flex()
-                  .gap(6)
-                  .items_center()
-                  .child(div().font_medium().text_size(12).text_color(t.foreground).child(this.paneTitle || "Active Terminal"))
-                  .child(div().text_size(11).text_color(t.muted).child(`· ${this.sourceAgent}`))
-              )
-              .child(
-                div()
-                  .text_size(11)
-                  .text_color(t.muted)
-                  .child(this.loading ? "Capturing transcript…" : `${this.capturedText.length} chars`)
-              ),
-            div()
-              .text_size(11)
-              .text_color(t.muted)
-              .truncate()
-              .child(this.cwd || "Working directory: (not set)")
-          ]),
-
-        // Agent selection picker (for handoff)
-        ...(!isFork
-          ? [
-              v_flex()
-                .gap(6)
-                .child(div().text_size(11).font_medium().text_color(t.muted).child("Target Agent"))
-                .child(
-                  h_flex()
-                    .w_full()
-                    .gap(6)
-                    .flex_wrap()
-                    .children(
-                      AGENT_CATALOG.map((agent, i) => {
-                        const selected = this.selectedAgentIndex === i;
-                        return div()
-                          .id(`agent-opt-${agent.id}`)
-                          .px(8)
-                          .py(4)
-                          .rounded(5)
-                          .border(1)
-                          .border_color(selected ? t.foreground : t.border)
-                          .bg(selected ? t.selected : t.background)
-                          .text_color(selected ? t.foreground : t.muted)
-                          .cursor_pointer()
-                          .hover((s) => s.bg(t.hover))
-                          .on_click((_e, cx) => {
-                            this.selectedAgentIndex = i;
-                            cx.notify();
-                          })
-                          .child(div().text_size(11).font_medium().child(agent.name));
-                      })
-                    )
-                )
-            ]
-          : []),
-
-        // Status banner
-        ...(this.statusMessage
-          ? [
-              div()
-                .px(8)
-                .py(4)
-                .rounded(4)
-                .bg(t.selected)
-                .text_size(11)
-                .text_color(t.foreground)
-                .child(this.statusMessage)
-            ]
-          : []),
-
-        // Action footer (Orca: AgentSessionContinuationDialog.tsx:392-412)
-        h_flex()
-          .w_full()
-          .mt(8)
+          .flex()
           .items_center()
-          .justify_end()
-          .gap(8)
-          .children([
-            div()
-              .id("btn-copy-prompt")
-              .px(10)
-              .h(28)
-              .rounded(6)
-              .border(1)
-              .border_color(t.border)
-              .flex()
-              .items_center()
-              .gap(6)
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover))
-              .on_click((_e, cx) => void this.copyCurrentPrompt(cx))
-              .child(svg("mods/orca-handoff/copy.svg").size(12).text_color(t.foreground))
-              .child(div().text_size(12).text_color(t.foreground).child(this.copied ? "Copied!" : "Copy Prompt")),
+          .gap(6)
+          .cursor_pointer()
+          .hover((s) => s.bg(t.hover))
+          .on_click((_e, cx) => void this.copyCurrentPrompt(cx))
+          .child(svg("mods/orca-handoff/copy.svg").size(12).text_color(t.foreground))
+          .child(div().text_size(12).text_color(t.foreground).child(this.copied ? "Copied!" : "Copy Prompt")),
 
+        div()
+          .id("btn-start-action")
+          .px(12)
+          .h(28)
+          .rounded(6)
+          .bg(t.foreground)
+          .text_color(t.background)
+          .flex()
+          .items_center()
+          .gap(6)
+          .cursor_pointer()
+          .hover((s) => s.opacity(0.9))
+          .on_click((_e, cx) => this.startAction(isFork, cx))
+          .child(
             div()
-              .id("btn-start-action")
-              .px(12)
-              .h(28)
-              .rounded(6)
-              .bg(t.foreground)
-              .text_color(t.background)
-              .flex()
-              .items_center()
-              .gap(6)
-              .cursor_pointer()
-              .hover((s) => s.opacity(0.9))
-              .on_click((_e, cx) => {
-                if (isFork) void this.executeFork(cx);
-                else void this.executeHandoff(cx);
-              })
-              .child(
-                div()
-                  .text_size(12)
-                  .font_medium()
-                  .child(this.busy ? "Launching…" : isFork ? "Start Fork" : "Start Session")
-              )
-          ])
+              .text_size(12)
+              .font_medium()
+              .child(this.startLabel(isFork))
+          )
       ]);
   }
 }
