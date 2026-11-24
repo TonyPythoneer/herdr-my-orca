@@ -12,8 +12,8 @@ def text(label, region=None, **kw):
 def mouse(x,y,**kw):
     return {"kind":"mouse","xy":(x,y),**kw}
 
-def cmd(name,**args):
-    return {"kind":"command","name":name,"args":args}
+def cmd(command_name,**args):
+    return {"kind":"command","name":command_name,"args":args}
 
 def escape(**kw):
     return {"kind":"escape",**kw}
