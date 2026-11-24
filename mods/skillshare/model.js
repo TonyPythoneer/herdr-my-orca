@@ -167,16 +167,18 @@ export function parseGitStatus(text) {
   const out = { repo: true, top: null, branch: null, upstream: null, ahead: 0, behind: 0, files: [] };
   for (const line of lines) {
     if (line.startsWith("top ")) out.top = line.slice(4);
-    else if (line.startsWith("## ")) {
-      const m = line.slice(3).match(/^(?:No commits yet on )?(\S+?)(?:\.\.\.(\S+))?(?: \[(.*)\])?$/);
-      if (m) {
-        out.branch = m[1]; out.upstream = m[2] ?? null;
-        const a = m[3]?.match(/ahead (\d+)/), b = m[3]?.match(/behind (\d+)/);
-        out.ahead = a ? Number(a[1]) : 0; out.behind = b ? Number(b[1]) : 0;
-      }
-    } else if (line.length > 3) out.files.push({ code: line.slice(0, 2).trim() || "?", path: line.slice(3) });
+    else if (line.startsWith("## ")) Object.assign(out, branchInfo(line));
+    else if (line.length > 3) out.files.push({ code: line.slice(0, 2).trim() || "?", path: line.slice(3) });
   }
   return out;
+}
+
+// The branch line's branch, upstream and counts; nothing when the line does not parse.
+function branchInfo(line) {
+  const m = line.slice(3).match(/^(?:No commits yet on )?(\S+?)(?:\.\.\.(\S+))?(?: \[(.*)\])?$/);
+  if (!m) return null;
+  const a = m[3]?.match(/ahead (\d+)/), b = m[3]?.match(/behind (\d+)/);
+  return { branch: m[1], upstream: m[2] ?? null, ahead: a ? Number(a[1]) : 0, behind: b ? Number(b[1]) : 0 };
 }
 
 // The source line in the footer, and whether it needs attention.
@@ -197,16 +199,16 @@ export function sourceLine(git) {
 export function driftFrom(diff) {
   const out = new Map();
   for (const t of diff?.targets ?? []) {
-    for (const item of t.items ?? []) {
-      if (!item.is_sync) continue;
-      const kind = item.kind === "agent" ? "agents" : "skills";
-      const key = `${kind}:${item.name.replace(/\.md$/, "")}`;
-      const was = out.get(key);
-      out.set(key, { action: was?.action === "modify" ? "modify" : item.action, reason: was?.reason ?? item.reason, targets: [...(was?.targets ?? []), t.name] });
+    for (const item of (t.items ?? []).filter((i) => i.is_sync)) {
+      const key = `${item.kind === "agent" ? "agents" : "skills"}:${item.name.replace(/\.md$/, "")}`;
+      out.set(key, mergeDrift(out.get(key), item, t.name));
     }
   }
   return out;
 }
+
+// A resource's drift once one more target waits on it: a modify beats an add, the first reason stays.
+const mergeDrift = (was, item, target) => ({ action: was?.action === "modify" ? "modify" : item.action, reason: was?.reason ?? item.reason, targets: [...(was?.targets ?? []), target] });
 
 // What each target still needs, most first: [{ name, n }]; n is 0 for a target in sync.
 export function targetDrift(diff) {
@@ -220,26 +222,39 @@ export function targetDrift(diff) {
 // server, plugin, hook or extra in items adds one to each target it waits on. known: a diff answered;
 // scopes: the ones with a waiting target.
 export function targetList(raw, scope = "all", items = []) {
-  const by = new Map();
+  const by = new Map(), scopes = [];
   let known = false;
-  const scopes = [];
   for (const s of Object.keys(raw ?? {})) {
     if (scope !== "all" && s !== scope) continue;
     if (raw[s]?.diff?.targets) known = true;
-    const unknown = raw[s]?.pending?.includes("diff") || raw[s]?.errors?.diff;
-    for (const x of targetDrift(raw[s]?.diff)) {
-      const n = unknown ? 0 : x.n;
-      by.set(x.name, (by.get(x.name) ?? 0) + n);
-      if (n && !scopes.includes(s)) scopes.push(s);
-    }
-    for (const name of raw[s]?.targets ?? []) if (!by.has(name)) by.set(name, 0);
+    countScopeTargets(by, scopes, s, raw[s]);
   }
-  for (const i of items) {
-    if (!(scope === "all" || i.scope === scope) || i.notice || !waitsForSync(i) || !["mcp", "plugins", "hooks", "extras"].includes(i.kind)) continue;
+  countWaitingResources(by, items, scope);
+  return { known, scopes, list: [...by].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)) };
+}
+
+// One scope's targets and how many of its resources each still waits on; a scope whose diff is
+// unread counts none.
+function countScopeTargets(by, scopes, s, one) {
+  const unknown = diffUnread(one);
+  for (const x of targetDrift(one?.diff)) {
+    const n = unknown ? 0 : x.n;
+    by.set(x.name, (by.get(x.name) ?? 0) + n);
+    if (n && !scopes.includes(s)) scopes.push(s);
+  }
+  for (const name of one?.targets ?? []) if (!by.has(name)) by.set(name, 0);
+}
+
+const diffUnread = (one) => Boolean(one?.pending?.includes("diff") || one?.errors?.diff);
+
+// diff counts skills and agents only: a waiting MCP server, plugin, hook or extra adds one to each target it waits on.
+const COUNTED_KINDS = ["mcp", "plugins", "hooks", "extras"];
+const countsAsWaiting = (i, scope) => (scope === "all" || i.scope === scope) && !i.notice && waitsForSync(i) && COUNTED_KINDS.includes(i.kind);
+function countWaitingResources(by, items, scope) {
+  for (const i of items.filter((x) => countsAsWaiting(x, scope))) {
     // An extra can wait on two folders of one target; that target still waits on one resource.
     for (const name of new Set(previewTargets(i).filter((r) => r.warn).map((r) => r.name))) if (by.has(name)) by.set(name, by.get(name) + 1);
   }
-  return { known, scopes, list: [...by].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)) };
 }
 
 // A row Sync would act on: a waiting resource, or a hook notice with native changes.
@@ -276,37 +291,58 @@ const andMore = (list) => (list.length <= 2 ? list.map((x) => x.name).join(" and
 // Overview's answer in two lines: { kind, headline, sub }, kind one of loading, failed, moving,
 // waiting, look, ok. pending: rows Sync would act on; lag: targets with something waiting;
 // broken: extras whose source is missing, which no sync fixes.
-export function overviewAnswer({ loading, failed, error, moving, reading = [], incomplete = false, pending = 0, lag = [], total = 0, targets = 0, broken = 0 }) {
+export function overviewAnswer(state) {
+  return busyAnswer(state) ?? settledAnswer(state);
+}
+
+// The answers that hold while something is still being read or moved; nothing when none applies.
+function busyAnswer({ loading, failed, error, moving, reading, incomplete, lag = [] }) {
   if (loading) return { kind: "loading", headline: "Reading skillshare", sub: "one moment" };
   if (failed) return { kind: "failed", headline: "skillshare could not be read", sub: error ?? "" };
   if (moving) return { kind: "moving", headline: lag.length ? `Syncing ${plural(lag.length, "target")}` : "Syncing", sub: lag.length ? andMore(lag) : "every target" };
-  if (reading.length) return { kind: "loading", headline: "Reading skillshare", sub: `Still reading ${reading.join(", ")} · other resources are available` };
+  if (reading?.length) return { kind: "loading", headline: "Reading skillshare", sub: `Still reading ${reading.join(", ")} · other resources are available` };
   if (incomplete) return { kind: "failed", headline: "Some sync states are unconfirmed", sub: "Available resources are shown below" };
-  if (pending || lag.length) {
-    return { kind: "waiting", headline: lag.length ? `${plural(lag.length, "target")} need${lag.length === 1 ? "s" : ""} a sync` : `${plural(pending, "resource")} to sync`,
-      sub: pending ? `${plural(pending, "resource")} waiting${lag.length ? ` for ${andMore(lag)}` : ""}` : `waiting on ${andMore(lag)}` };
-  }
-  if (broken) return { kind: "look", headline: `${plural(broken, "extra")} need${broken === 1 ? "s" : ""} a look`, sub: broken === 1 ? "its source is missing, so a sync can't fix it" : "their sources are missing, so a sync can't fix them" };
+  return undefined;
+}
+
+function settledAnswer({ pending = 0, lag = [], total = 0, targets = 0, broken = 0 }) {
+  if (pending || lag.length) return waitingAnswer(pending, lag);
+  if (broken) return lookAnswer(broken);
   return { kind: "ok", headline: "Everything is in sync", sub: `${plural(total, "resource")} · ${plural(targets, "target")}` };
+}
+
+function waitingAnswer(pending, lag) {
+  const headline = lag.length ? `${plural(lag.length, "target")} need${lag.length === 1 ? "s" : ""} a sync` : `${plural(pending, "resource")} to sync`;
+  const sub = pending ? `${plural(pending, "resource")} waiting${lag.length ? ` for ${andMore(lag)}` : ""}` : `waiting on ${andMore(lag)}`;
+  return { kind: "waiting", headline, sub };
+}
+
+function lookAnswer(broken) {
+  const one = broken === 1;
+  return { kind: "look", headline: `${plural(broken, "extra")} need${one ? "s" : ""} a look`, sub: one ? "its source is missing, so a sync can't fix it" : "their sources are missing, so a sync can't fix them" };
 }
 
 // Loading/error state for the shown scopes. A kind's count is unknown until all its
 // inventories answer; diff/status affect sync confidence but not inventory counts.
+// What each inventory command holds. Memory notes are not counted, so the memory read holds no kind's count.
+const INVENTORY_KINDS = { list: ["skills", "agents"], mcp: ["mcp"], plugins: ["plugins"], hooks: ["hooks"], extras: ["extras"], memory: [] };
 export function resourceProgress(raw, scope = "all") {
-  const pending = new Set(), errors = [], unknown = new Set();
-  let available = false, incomplete = false;
-  // Memory notes are not counted, so the memory read holds no kind's count.
-  const kinds = { list: ["skills", "agents"], mcp: ["mcp"], plugins: ["plugins"], hooks: ["hooks"], extras: ["extras"], memory: [] };
+  const progress = { pending: new Set(), errors: [], unknown: new Set(), available: false, incomplete: false };
   for (const [s, one] of Object.entries(raw)) {
-    if (scope !== "all" && scope !== s) continue;
-    available ||= Object.keys(kinds).some((key) => one[key] != null);
-    // Memory notes never wait for a sync, so their read leaves sync states confirmed.
-    for (const key of one.pending ?? []) { pending.add(key); incomplete ||= key !== "memory"; }
-    for (const [key, message] of Object.entries(one.errors ?? {})) { errors.push(`${s} ${key}: ${message}`); incomplete ||= key !== "memory"; }
-    for (const [key, names] of Object.entries(kinds)) if ((one.pending ?? []).includes(key) || one.errors?.[key]) for (const name of names) unknown.add(name);
+    if (scope === "all" || scope === s) noteScopeProgress(progress, s, one);
   }
-  return { pending: [...pending], errors, unknown, available, incomplete };
+  return { ...progress, pending: [...progress.pending] };
 }
+
+function noteScopeProgress(progress, s, one) {
+  progress.available ||= Object.keys(INVENTORY_KINDS).some((key) => one[key] != null);
+  // Memory notes never wait for a sync, so their read leaves sync states confirmed.
+  for (const key of one.pending ?? []) { progress.pending.add(key); progress.incomplete ||= key !== "memory"; }
+  for (const [key, message] of Object.entries(one.errors ?? {})) { progress.errors.push(`${s} ${key}: ${message}`); progress.incomplete ||= key !== "memory"; }
+  for (const key of Object.keys(INVENTORY_KINDS)) if (unreadInventory(one, key)) for (const name of INVENTORY_KINDS[key]) progress.unknown.add(name);
+}
+
+const unreadInventory = (one, key) => (one.pending ?? []).includes(key) || one.errors?.[key];
 
 // A machine card's remote line, and the targets that wait on it by name (max at most).
 export function remoteLine(git) {
@@ -320,34 +356,54 @@ export const needsBothWays = (git) => Boolean((git?.files?.length || git?.ahead)
 
 const shortSource = (s) => String(s ?? "").replace(/^https?:\/\//, "").replace(/\.git(\/|$)/, "$1").replace(/\/$/, "");
 
-// One scope's rows for every kind. `raw` holds each command's parsed JSON (missing ones are null).
+// One scope's rows for every kind, in the order the panel lists them. `raw` holds each command's
+// parsed JSON (missing ones are null).
 export function buildItems(scope, raw) {
-  const items = [];
+  const items = [...listRows(scope, raw), ...mcpRows(scope, raw), ...pluginRows(scope, raw), ...hookRows(scope, raw), ...extraRows(scope, raw), ...memoryRows(scope, raw)];
+  if (raw.pending || raw.errors) markUnknown(items, raw);
+  return items;
+}
+
+// A source for a row: the check's or the list's own, else the tracked repo's name, else its path.
+function rowSource(s, check, rel) {
+  const given = shortSource(check?.source ?? s.source);
+  if (given) return given;
+  if (s.repoName) return `tracked repo ${s.repoName}`;
+  return rel.includes("/") ? rel : "local";
+}
+
+// Skills and agents from `list`, with their update checks and the drift `diff` found.
+function listRows(scope, raw) {
   const drift = driftFrom(raw.diff);
   const checks = new Map();
   for (const s of raw.check?.skills ?? []) checks.set(`skills:${s.name}`, s);
   for (const s of Array.isArray(raw.checkAgents) ? raw.checkAgents : []) checks.set(`agents:${s.name}`, s);
   const behind = new Map((raw.check?.tracked_repos ?? []).map((r) => [r.name, r]));
+  return (Array.isArray(raw.list) ? raw.list : []).map((s) => listRow(scope, s, { drift, checks, behind }));
+}
 
-  for (const s of Array.isArray(raw.list) ? raw.list : []) {
-    const kind = s.kind === "agent" ? "agents" : "skills";
-    const flat = kind === "agents" ? s.name.replace(/\.md$/, "") : s.name;
-    const rel = String(s.relPath ?? s.name).replace(/\.md$/, "");
-    const check = checks.get(`${kind}:${rel}`) ?? checks.get(`${kind}:${flat}`);
-    const repo = s.repoName ? behind.get(s.repoName) : null;
-    const d = drift.get(`${kind}:${flat}`);
-    const item = {
-      key: `${scope}:${kind}:${flat}`, kind, scope, name: flat, label: rel.split("/").pop(), rel, path: String(s.relPath ?? s.name),
-      src: shortSource(check?.source ?? s.source) || (s.repoName ? `tracked repo ${s.repoName}` : rel.includes("/") ? rel : "local"),
-      disabled: Boolean(s.disabled), version: check?.version ?? null, state: "ok", repo: s.repoName || null,
-    };
-    if (item.disabled) item.state = "off";
-    else if (check?.status === "update_available" || repo?.status === "behind") {
-      item.state = "update"; item.behind = repo?.behind ?? 0; item.update = repo ? repo.name : rel;
-    } else if (d) { item.state = d.action === "add" ? "missing" : "sync"; item.reason = d.reason; item.targets = d.targets; }
-    items.push(item);
-  }
+function listRow(scope, s, { drift, checks, behind }) {
+  const kind = s.kind === "agent" ? "agents" : "skills";
+  const flat = kind === "agents" ? s.name.replace(/\.md$/, "") : s.name;
+  const rel = String(s.relPath ?? s.name).replace(/\.md$/, "");
+  const check = checks.get(`${kind}:${rel}`) ?? checks.get(`${kind}:${flat}`);
+  const item = {
+    key: `${scope}:${kind}:${flat}`, kind, scope, name: flat, label: rel.split("/").pop(), rel, path: String(s.relPath ?? s.name),
+    src: rowSource(s, check, rel),
+    disabled: Boolean(s.disabled), version: check?.version ?? null, state: "ok", repo: s.repoName || null,
+  };
+  return Object.assign(item, listState(item, check, s.repoName ? behind.get(s.repoName) : null, drift.get(`${kind}:${flat}`)));
+}
 
+// A skill or agent's state: off, update available (its own check or its tracked repo's), or what diff found.
+function listState(item, check, repo, d) {
+  if (item.disabled) return { state: "off" };
+  if (check?.status === "update_available" || repo?.status === "behind") return { state: "update", behind: repo?.behind ?? 0, update: repo ? repo.name : item.rel };
+  if (d) return { state: d.action === "add" ? "missing" : "sync", reason: d.reason, targets: d.targets };
+  return {};
+}
+
+function mcpRows(scope, raw) {
   const mcp = new Map();
   for (const c of raw.mcp?.changes ?? []) {
     const m = mcp.get(c.name) ?? { targets: [], pending: [] };
@@ -355,106 +411,163 @@ export function buildItems(scope, raw) {
     if (c.action && c.action !== "unchanged") m.pending.push(`${c.target}: ${c.action}`);
     mcp.set(c.name, m);
   }
-  for (const [name, m] of mcp) {
-    items.push({ key: `${scope}:mcp:${name}`, kind: "mcp", scope, name, label: name, src: "MCP server",
-      state: m.pending.length ? "sync" : "ok", reason: m.pending.join(", "), targets: m.targets });
-  }
+  return [...mcp].map(([name, m]) => ({ key: `${scope}:mcp:${name}`, kind: "mcp", scope, name, label: name, src: "MCP server",
+    state: m.pending.length ? "sync" : "ok", reason: m.pending.join(", "), targets: m.targets }));
+}
 
-  for (const [name, p] of Object.entries(raw.plugins?.packages ?? {})) {
+function pluginState(pending, bindings) {
+  if (pending.length) return "sync";
+  return bindings.length ? "ok" : "missing";
+}
+
+function pluginRows(scope, raw) {
+  return Object.entries(raw.plugins?.packages ?? {}).map(([name, p]) => {
     const bindings = Object.values(p.bindings ?? {});
     const pending = Object.entries(p.bindings ?? {}).filter(([, b]) => b.pending || b.sync === false).map(([t]) => t);
-    items.push({ key: `${scope}:plugins:${name}`, kind: "plugins", scope, name, label: name,
+    return { key: `${scope}:plugins:${name}`, kind: "plugins", scope, name, label: name,
       src: shortSource(p.source ?? bindings[0]?.id ?? "") || "plugin", version: p.version ?? bindings[0]?.version ?? null,
-      state: pending.length ? "sync" : bindings.length ? "ok" : "missing", reason: pending.length ? `pending in ${pending.join(", ")}` : "", targets: Object.keys(p.bindings ?? {}) });
+      state: pluginState(pending, bindings), reason: pending.length ? `pending in ${pending.join(", ")}` : "", targets: Object.keys(p.bindings ?? {}) };
+  });
+}
+
+// A hook notice row (status, an error, a warning) and a declared hook row, both keyed in `hooks`.
+function hookStatus(hooks, scope, id, root = "") {
+  const item = { key: `${scope}:hooks:status:${id}`, kind: "hooks", scope, root, name: "Hook status", label: "Hook status", targets: [], changes: [], declared: false, notice: true, pending: false };
+  hooks.set(item.key, item);
+  return item;
+}
+function hookRow(hooks, scope, root, name) {
+  const key = `${scope}:hooks:${root ? root + "/" : ""}${name}`;
+  if (!hooks.has(key)) hooks.set(key, { key, kind: "hooks", scope, root, name, label: name, targets: [], changes: [], declared: false });
+  return hooks.get(key);
+}
+
+const hookChangeLine = (c) => [[c.target, c.action].filter(Boolean).join(": "),
+  ...new Set([c.message, c.inactiveReason].filter(Boolean))].join(" · ");
+
+function hookState(raw, item, pending) {
+  if (!raw.hooks?.plan) return "unknown";
+  if (pending.length) return "sync";
+  return item.disabled ? "off" : "ok";
+}
+
+function hookLines(item, error) {
+  if (!error) return [...item.changes.map(hookChangeLine), ...(item.warnings ?? [])];
+  return item.notice ? [error] : [];
+}
+
+// What a hook row says once its changes are known: its agents, text lines, and state.
+function describeHook(raw, item, error) {
+  item.src = item.targets.join(", ") || "no agents";
+  const pending = item.changes.filter((c) => !["unchanged", "inactive"].includes(c.action));
+  item.lines = hookLines(item, error);
+  item.diagnostic = Boolean(item.changes.some((c) => c.action === "inactive" || c.inactiveReason));
+  const summary = pending.length ? item.changes.filter((c) => c.action !== "unchanged" || c.inactiveReason) : item.changes;
+  item.reason = item.notice ? item.lines.join("; ") : summary.map(hookChangeLine).join("; ");
+  if (item.notice) {
+    item.pending = item.changes.some((c) => ["add", "update", "remove", "adopt", "release"].includes(c.action));
+    item.blocker = Boolean(error || item.changes.some((c) => c.action === "conflict"));
   }
-  const hooks = new Map();
-  const status = (id, root = "") => {
-    const item = { key: `${scope}:hooks:status:${id}`, kind: "hooks", scope, root, name: "Hook status", label: "Hook status", targets: [], changes: [], declared: false, notice: true, pending: false };
-    hooks.set(item.key, item);
-    return item;
-  };
-  const hook = (root, name) => {
-    const key = `${scope}:hooks:${root ? root + "/" : ""}${name}`;
-    if (!hooks.has(key)) hooks.set(key, { key, kind: "hooks", scope, root, name, label: name, targets: [], changes: [], declared: false });
-    return hooks.get(key);
-  };
-  for (const [root, source] of [["", raw.hooks?.source], ...Object.entries(raw.hooks?.source?.projects ?? {})]) {
-    for (const [name, entry] of Object.entries(source?.entries ?? {})) {
-      Object.assign(hook(root, name), { declared: true, disabled: entry.enabled === false, description: entry.description, targets: Object.keys(entry.bindings ?? {}) });
+  item.state = hookState(raw, item, pending);
+}
+
+function hookRows(scope, raw) {
+  const hooks = new Map(), json = raw.hooks;
+  declareHooks(hooks, scope, json?.source);
+  addPlannedChanges(hooks, scope, json?.plan?.changes ?? []);
+  const error = hookNotices(hooks, scope, raw);
+  for (const item of hooks.values()) describeHook(raw, item, error);
+  return [...hooks.values()];
+}
+
+function hookNotices(hooks, scope, raw) {
+  const json = raw.hooks;
+  const error = json?.error || json?.previewError;
+  if (error && Array.isArray(raw.list)) hookStatus(hooks, scope, "error");
+  for (const [index, warning] of (json?.plan?.warnings ?? []).entries()) hookStatus(hooks, scope, `warning:${index}`).warnings = [warning];
+  return error;
+}
+
+// The hooks the source declares, at the top level and under each project root.
+function declareHooks(hooks, scope, source) {
+  for (const [root, one] of [["", source], ...Object.entries(source?.projects ?? {})]) {
+    for (const [name, entry] of Object.entries(one?.entries ?? {})) {
+      Object.assign(hookRow(hooks, scope, root, name), { declared: true, disabled: entry.enabled === false, description: entry.description, targets: Object.keys(entry.bindings ?? {}) });
     }
   }
-  for (const [index, c] of (raw.hooks?.plan?.changes ?? []).entries()) {
-    const item = c.name ? hook(c.root ?? "", c.name) : status(index, c.root ?? "");
+}
+
+// The plan's changes go on the hook they name, or on a status row; a conflict naming neither goes on every hook of its root.
+function addPlannedChanges(hooks, scope, changes) {
+  for (const [index, c] of changes.entries()) {
+    const item = c.name ? hookRow(hooks, scope, c.root ?? "", c.name) : hookStatus(hooks, scope, index, c.root ?? "");
     if (c.target && !item.targets.includes(c.target)) item.targets.push(c.target);
     item.changes.push(c);
   }
-  for (const c of raw.hooks?.plan?.changes ?? []) {
-    if (!c.name && !c.target && c.action === "conflict") {
-      for (const row of hooks.values()) if (!row.notice && row.root === (c.root ?? "")) row.changes.push(c);
-    }
+  for (const c of changes.filter((x) => !x.name && !x.target && x.action === "conflict")) {
+    for (const row of hooks.values()) if (!row.notice && row.root === (c.root ?? "")) row.changes.push(c);
   }
-  const error = raw.hooks?.error || raw.hooks?.previewError;
-  if (error && Array.isArray(raw.list)) status("error");
-  for (const [index, warning] of (raw.hooks?.plan?.warnings ?? []).entries()) status(`warning:${index}`).warnings = [warning];
-  const changeLine = (c) => [[c.target, c.action].filter(Boolean).join(": "),
-    ...new Set([c.message, c.inactiveReason].filter(Boolean))].join(" · ");
-  for (const item of hooks.values()) {
-    item.src = item.targets.join(", ") || "no agents";
-    const pending = item.changes.filter((c) => !["unchanged", "inactive"].includes(c.action));
-    item.lines = error ? (item.notice ? [error] : []) : [...item.changes.map(changeLine), ...(item.warnings ?? [])];
-    item.diagnostic = Boolean(item.changes.some((c) => c.action === "inactive" || c.inactiveReason));
-    const summary = pending.length ? item.changes.filter((c) => c.action !== "unchanged" || c.inactiveReason) : item.changes;
-    item.reason = item.notice ? item.lines.join("; ") : summary.map(changeLine).join("; ");
-    if (item.notice) {
-      item.pending = item.changes.some((c) => ["add", "update", "remove", "adopt", "release"].includes(c.action));
-      item.blocker = Boolean(error || item.changes.some((c) => c.action === "conflict"));
-    }
-    item.state = !raw.hooks?.plan ? "unknown" : pending.length ? "sync" : item.disabled ? "off" : "ok";
-    items.push(item);
-  }
-  // An extra's target is named by the target whose skills folder shares its parent folder.
-  // Relative project paths start from the project folder; the first target by name wins a shared folder.
-  // Windows paths ignore case; POSIX ones keep it, where .Claude and .claude are different folders.
+}
+
+// An extra's target is named by the target whose skills folder shares its parent folder.
+// Relative project paths start from the project folder; the first target by name wins a shared folder.
+// Windows paths ignore case; POSIX ones keep it, where .Claude and .claude are different folders.
+function targetOwner(raw) {
   const windows = [raw.root, ...(raw.targetPaths ?? []).map((t) => t.path)].some((p) => /^[a-z]:|\\/i.test(String(p ?? "")));
   const segments = (path) => (windows ? String(path ?? "").toLowerCase() : String(path ?? "")).split(/[\\/]+/).filter((s) => s && s !== ".");
   const root = raw.root ? segments(raw.root) : null;
   const homes = (raw.targetPaths ?? []).map((t) => ({ name: t.name, dir: segments(t.path).slice(0, -1) })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  const owner = (path) => {
+  return (path) => {
     const abs = /^([a-z]:)?[\\/]/i.test(path);
     if (!abs && !root) return path;
-    const p = abs ? segments(path) : [...root, ...segments(path)];
-    let best = null;
-    for (const { name, dir } of homes) {
-      if (dir.length && dir.length <= p.length && dir.every((s, i) => s === p[i]) && dir.length > (best?.n ?? 0)) best = { name, n: dir.length };
-    }
-    return best?.name ?? path;
+    return longestHome(homes, abs ? segments(path) : [...root, ...segments(path)])?.name ?? path;
   };
-  for (const e of Array.isArray(raw.extras) ? raw.extras : []) {
+}
+
+// The target whose folder holds the most of the path's leading segments.
+function longestHome(homes, p) {
+  let best = null;
+  for (const { name, dir } of homes) {
+    if (dir.length && dir.length <= p.length && dir.every((s, i) => s === p[i]) && dir.length > (best?.n ?? 0)) best = { name, n: dir.length };
+  }
+  return best;
+}
+
+function extraState(gone, rows) {
+  if (gone) return "broken";
+  return rows.some((r) => r.warn) ? "sync" : "ok";
+}
+
+function extraRows(scope, raw) {
+  const owner = targetOwner(raw);
+  return (Array.isArray(raw.extras) ? raw.extras : []).map((e) => {
     const rows = (e.targets ?? []).map((x) => {
       const how = [x.mode, x.as && `as ${x.as}`].filter(Boolean).join(" ");
       return { name: owner(x.path), warn: !["synced", "no source"].includes(x.status), text: x.status === "synced" ? how || "in sync" : [x.status, how].filter(Boolean).join(" · ") };
     });
     // sourceMissing: the source itself is gone. A target also says "no source" when its files can't be listed.
     const sourceMissing = e.source_exists === false, gone = sourceMissing || (e.targets ?? []).some((x) => x.status === "no source");
-    items.push({ key: `${scope}:extras:${e.name}`, kind: "extras", extra: e.file ? "file" : "folder", scope, name: e.name, label: e.name,
+    return { key: `${scope}:extras:${e.name}`, kind: "extras", extra: e.file ? "file" : "folder", scope, name: e.name, label: e.name,
       file: e.file, dir: e.source_dir, rows, sourceMissing, src: gone ? "source missing" : `${e.file || plural(e.file_count ?? 0, "file")} · ${plural(rows.length, "target")}`,
-      state: gone ? "broken" : rows.some((r) => r.warn) ? "sync" : "ok" });
-  }
-  // A memory note is a file inside the memory extra: it has no sync state of its own and is not counted.
-  for (const n of raw.memory?.notes ?? []) {
-    items.push({ key: `${scope}:extras:memory/${n.path}`, kind: "extras", extra: "note", scope, name: n.path, label: n.path,
-      file: n.path, dir: raw.memory.root, rows: [], src: "memory note", state: "note" });
-  }
-  if (raw.pending || raw.errors) {
-    for (const item of items) {
-      const keys = item.kind === "skills" || item.kind === "agents" ? ["list", "diff", "status"] : [item.kind];
-      if (!item.notice && item.state !== "off" && item.state !== "note" && keys.some((key) => raw.pending?.includes(key) || raw.errors?.[key])) {
-        item.cachedState = item.state;
-        item.state = "unknown";
-      }
+      state: extraState(gone, rows) };
+  });
+}
+
+// A memory note is a file inside the memory extra: it has no sync state of its own and is not counted.
+function memoryRows(scope, raw) {
+  return (raw.memory?.notes ?? []).map((n) => ({ key: `${scope}:extras:memory/${n.path}`, kind: "extras", extra: "note", scope, name: n.path, label: n.path,
+    file: n.path, dir: raw.memory.root, rows: [], src: "memory note", state: "note" }));
+}
+
+// A row whose read is still pending or failed cannot claim its state: keep it as cachedState.
+function markUnknown(items, raw) {
+  for (const item of items) {
+    const keys = item.kind === "skills" || item.kind === "agents" ? ["list", "diff", "status"] : [item.kind];
+    if (!item.notice && item.state !== "off" && item.state !== "note" && keys.some((key) => raw.pending?.includes(key) || raw.errors?.[key])) {
+      item.cachedState = item.state;
+      item.state = "unknown";
     }
   }
-  return items;
 }
 
 // Only top-level declared hooks can be changed with the panel's scoped CLI actions.
@@ -513,45 +626,65 @@ export function afterRead(pending, ended, checking) {
 export const afterChecks = (pending, late) => pending.filter((r) => !late.includes(r));
 
 // A row's one short state; everything longer is in its preview.
+const STATE_WORDS = { update: "update available", missing: "new", sync: "changed", unknown: "sync status unknown" };
 export function rowState(item, showScope) {
   const pre = showScope ? `${item.scope} · ` : "";
   if (item.notice) return item.scope;
   if (item.doing) return `${pre}${item.doing}…`;
-  const state = { update: "update available", missing: "new", sync: "changed", unknown: "sync status unknown" }[item.state];
-  if (state) return pre + state;
+  if (STATE_WORDS[item.state]) return pre + STATE_WORDS[item.state];
   if (item.state === "off") return `${pre}disabled`;
   if (item.diagnostic) return `${pre}inactive on an agent`;
-  if (item.kind === "mcp" || item.kind === "hooks") { const n = item.targets?.length ?? 0; return `${pre}${n} ${item.kind === "mcp" ? "target" : "agent"}${n === 1 ? "" : "s"}`; }
-  const src = sourceLabel(item).label;
-  return `${pre}${src}${item.version && item.kind === "plugins" ? ` · ${item.version}` : ""}`;
+  if (item.kind === "mcp" || item.kind === "hooks") return `${pre}${targetCount(item)}`;
+  return `${pre}${sourceLabel(item).label}${item.version && item.kind === "plugins" ? ` · ${item.version}` : ""}`;
+}
+
+function targetCount(item) {
+  const n = item.targets?.length ?? 0;
+  return `${n} ${item.kind === "mcp" ? "target" : "agent"}${n === 1 ? "" : "s"}`;
 }
 
 // The targets a skill or an agent can go to in its scope, by name. one: raw[scope], whose
 // skillTargets and agentTargets come from status; a target the item waits on is always one.
 // diff's targets stand in only when status named none: diff also lists targets that take agents alone.
 export function eligibleTargets(item, one) {
-  const base = item.kind === "agents" ? one?.agentTargets ?? [] : one?.skillTargets?.length ? one.skillTargets : (one?.diff?.targets ?? []).map((x) => x.name);
+  const base = baseTargets(item, one);
   return [...new Set([...base, ...(item.state === "off" ? [] : item.targets ?? [])])].sort();
+}
+
+function baseTargets(item, one) {
+  if (item.kind === "agents") return one?.agentTargets ?? [];
+  if (one?.skillTargets?.length) return one.skillTargets;
+  return (one?.diff?.targets ?? []).map((x) => x.name);
 }
 
 // Who gets an item and what each still needs, waiting first: [{ name, text, warn }].
 // names: every target of the item's scope, for skills and agents (their rows name only the waiting ones).
 export function previewTargets(item, names = []) {
-  let rows;
-  if (item.kind === "extras") rows = [...item.rows];
-  else if (item.kind === "hooks") {
-    const by = new Map((item.targets ?? []).map((n) => [n, { name: n, text: "in sync", warn: false }]));
-    for (const c of item.changes ?? []) if (c.target) by.set(c.target, { name: c.target, text: c.action === "unchanged" ? "in sync" : c.action, warn: !["unchanged", "inactive"].includes(c.action) });
-    rows = [...by.values()];
-  } else if (item.kind === "mcp" || item.kind === "plugins") {
-    const waits = new Map(String(item.reason ?? "").replace(/^pending in /, "").split(", ").filter(Boolean).map((x) => { const [n, a] = x.split(": "); return [n, a ?? "pending"]; }));
-    rows = (item.targets ?? []).map((n) => ({ name: n, text: waits.get(n) ?? "in sync", warn: waits.has(n) }));
-  } else {
-    const waits = new Set(item.targets ?? []);
-    rows = names.map((n) => ({ name: n, text: item.state === "off" ? "disabled" : waits.has(n) ? "needs sync" : "in sync", warn: item.state !== "off" && waits.has(n) }));
-  }
+  let rows = kindTargets(item, names);
   if (item.state === "unknown") rows = rows.map((row) => ({ ...row, text: "sync status unknown", warn: false }));
   return rows.sort((a, b) => Number(b.warn) - Number(a.warn) || a.name.localeCompare(b.name));
+}
+
+function kindTargets(item, names) {
+  if (item.kind === "extras") return [...item.rows];
+  if (item.kind === "hooks") return hookTargets(item);
+  if (item.kind === "mcp" || item.kind === "plugins") {
+    const waits = new Map(String(item.reason ?? "").replace(/^pending in /, "").split(", ").filter(Boolean).map((x) => { const [n, a] = x.split(": "); return [n, a ?? "pending"]; }));
+    return (item.targets ?? []).map((n) => ({ name: n, text: waits.get(n) ?? "in sync", warn: waits.has(n) }));
+  }
+  const waits = new Set(item.targets ?? []);
+  return names.map((n) => ({ name: n, text: skillTargetText(item, waits.has(n)), warn: item.state !== "off" && waits.has(n) }));
+}
+
+function hookTargets(item) {
+  const by = new Map((item.targets ?? []).map((n) => [n, { name: n, text: "in sync", warn: false }]));
+  for (const c of item.changes ?? []) if (c.target) by.set(c.target, { name: c.target, text: c.action === "unchanged" ? "in sync" : c.action, warn: !["unchanged", "inactive"].includes(c.action) });
+  return [...by.values()];
+}
+
+function skillTargetText(item, waits) {
+  if (item.state === "off") return "disabled";
+  return waits ? "needs sync" : "in sync";
 }
 
 // sh -c READ_SKILL <name> <dir>: its files (40 at most), "@@", then SKILL.md's first 60 kB.
@@ -587,18 +720,29 @@ export function splitFrontmatter(text) {
 const SECRET = /^(env|headers|bearerToken)$/, MASK = "••••••••";
 export function mcpServer(text, name) {
   const lines = String(text ?? "").split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
-  const depth = (l) => l.match(/^ */)[0].length, bare = (k) => k.trim().replace(/^(["'])(.*)\1$/, "$2");
-  // The file can hold several server lists (the global one, and one per project root): the first that names it wins.
-  let start = -1, child = null;
-  for (let at = 0; at < lines.length && start < 0; at++) {
+  const found = findServer(lines, name);
+  return found ? serverRows(lines, found.start, found.child) : null;
+}
+
+const depth = (l) => l.match(/^ */)[0].length;
+const bare = (k) => k.trim().replace(/^(["'])(.*)\1$/, "$2");
+
+// The line of the server's own key and the indent its siblings share. The file can hold several
+// server lists (the global one, and one per project root): the first that names it wins.
+function findServer(lines, name) {
+  for (let at = 0; at < lines.length; at++) {
     if (!/^\s*servers:\s*$/.test(lines[at])) continue;
-    child = null;
+    let child = null;
     for (let j = at + 1; j < lines.length && depth(lines[j]) > depth(lines[at]); j++) {
       child ??= depth(lines[j]);
-      if (depth(lines[j]) === child && bare(lines[j].replace(/:\s*$/, "")) === name) { start = j; break; }
+      if (depth(lines[j]) === child && bare(lines[j].replace(/:\s*$/, "")) === name) return { start: j, child };
     }
   }
-  if (start < 0) return null;
+  return null;
+}
+
+// The server's fields as rows; a nested list or map is joined, and a secret's values masked.
+function serverRows(lines, start, child) {
   const rows = [];
   let field = null;
   for (let j = start + 1; j < lines.length && depth(lines[j]) > child; j++) {
@@ -606,14 +750,23 @@ export function mcpServer(text, name) {
     const s = lines[j].trim(), last = rows[rows.length - 1];
     if (depth(lines[j]) === field) {
       const m = /^([^:]+):\s*(.*)$/.exec(s);
-      if (m) rows.push({ key: bare(m[1]), secret: SECRET.test(bare(m[1])), parts: m[2] ? [SECRET.test(bare(m[1])) ? MASK : m[2].replace(/^\[(.*)\]$/, "$1")] : [], inner: null });
-    } else if (last) {
-      last.inner ??= depth(lines[j]);
-      if (depth(lines[j]) !== last.inner) continue;
-      last.parts.push(last.secret ? `${bare(s.replace(/^- /, "").split(":")[0])} = ${MASK}` : bare(s.replace(/^- /, "")));
-    }
+      if (m) rows.push(serverField(m));
+    } else if (last) addNested(last, depth(lines[j]), s);
   }
   return rows.map((r) => ({ key: r.key, value: r.parts.join(r.secret ? ", " : " ") }));
+}
+
+function serverField(m) {
+  const key = bare(m[1]), secret = SECRET.test(key);
+  let parts = [];
+  if (m[2]) parts = [secret ? MASK : m[2].replace(/^\[(.*)\]$/, "$1")];
+  return { key, secret, parts, inner: null };
+}
+
+function addNested(last, indent, s) {
+  last.inner ??= indent;
+  if (indent !== last.inner) return;
+  last.parts.push(last.secret ? `${bare(s.replace(/^- /, "").split(":")[0])} = ${MASK}` : bare(s.replace(/^- /, "")));
 }
 
 export function filterItems(items, { scope, kind, query }) {
@@ -680,17 +833,20 @@ export function cloneUrl(source) {
 
 // Keep exit status authoritative even with valid JSON from an older CLI.
 export function installResult(r) {
-  const j = parseJSON(r.stdout), done = j?.skills ?? [], failed = j?.failed ?? [], skipped = j?.skipped ?? [];
+  const j = parseJSON(r.stdout);
+  const { skills: done = [], failed = [], skipped = [] } = j ?? {};
   if (j?.error) return { done: null, error: j.error };
-  if (r.code !== 0) {
-    const details = [done.length ? `Installed: ${done.join(", ")}.` : "", failed.length ? `Failed: ${failed.join(", ")}.` : "", lastLine(r.stderr)].filter(Boolean);
-    details.push(`skillshare install exited with ${r.code}.`);
-    return { done: null, error: details.join(" ") };
-  }
+  if (r.code !== 0) return { done: null, error: exitedWith(r, done, failed) };
   if (failed.length) return { done: null, error: `Installed ${done.length} skill(s); ${failed.join(", ")} failed. The install's own audit can stop one.` };
   if (skipped.length) return { done: null, error: `Installed ${done.length} skill(s); ${skipped.join(", ")} already installed and left as is.` };
   if (!j) return { done: null, error: failure(r, "skillshare install returned no JSON") };
   return { done, error: null };
+}
+
+function exitedWith(r, done, failed) {
+  const details = [done.length ? `Installed: ${done.join(", ")}.` : "", failed.length ? `Failed: ${failed.join(", ")}.` : "", lastLine(r.stderr)].filter(Boolean);
+  details.push(`skillshare install exited with ${r.code}.`);
+  return details.join(" ");
 }
 
 export function newerVersion(a, b) {
@@ -750,9 +906,9 @@ export function ago(ms) {
 
 // The message an agent gets when asked to audit a resource.
 export function auditMessage(item) {
-  const flag = item.scope === "project" ? " -p" : " -g";
+  const scopeFlag = item.scope === "project" ? " -p" : " -g";
   const kind = item.kind === "agents" ? "agents " : "";
-  return `Audit the ${item.kind === "agents" ? "agent" : "skill"} "${item.name}": run \`skillshare audit ${kind}${item.name}${flag} --json\` and \`skillshare diff${flag}\`. Summarize what changed and any findings, then wait for me.`;
+  return `Audit the ${item.kind === "agents" ? "agent" : "skill"} "${item.name}": run \`skillshare audit ${kind}${item.name}${scopeFlag} --json\` and \`skillshare diff${scopeFlag}\`. Summarize what changed and any findings, then wait for me.`;
 }
 
 // DISCOVER's output → the audit clone and the CLI's exact install plan. Never fall back
@@ -788,18 +944,19 @@ export function parseAudit(text, dir) {
     const j = parseJSON(part.slice(nl + 1));
     if (!j?.results) continue;
     read++;
-    for (const r of j.results) {
-      if (!r.isBlocked) continue;
+    for (const r of j.results.filter((x) => x.isBlocked)) {
       const skill = folder === "." ? "." : folder.split("/").pop(); // "." is the repository root; the caller names it
       blocked.push(skill);
-      for (const f of r.findings ?? []) {
-        const file = prefix && String(f.file ?? "").startsWith(prefix) ? f.file.slice(prefix.length) : f.file;
-        findings.push({ skill, severity: f.severity, pattern: f.pattern, file, line: f.line, snippet: f.snippet ?? f.message ?? "" });
-      }
+      findings.push(...(r.findings ?? []).map((f) => auditFinding(f, skill, prefix)));
     }
   }
   findings.sort((a, b) => SEVERITY.indexOf(a.severity) - SEVERITY.indexOf(b.severity));
   return { unknown: read === 0, blocked, findings };
+}
+
+function auditFinding(f, skill, prefix) {
+  const file = prefix && String(f.file ?? "").startsWith(prefix) ? f.file.slice(prefix.length) : f.file;
+  return { skill, severity: f.severity, pattern: f.pattern, file, line: f.line, snippet: f.snippet ?? f.message ?? "" };
 }
 
 // PREVIEW's output → { path: { local, remote } }, null for a side that deleted the file.
@@ -822,6 +979,13 @@ export function parsePreview(text) {
 // runs folded to `context` lines around each change.
 export function diffSides(a, b, context = 2) {
   const x = a == null ? [] : String(a).split("\n"), y = b == null ? [] : String(b).split("\n");
+  const { markX, markY } = markDifferences(x, y);
+  const differ = Math.max(markX.filter(Boolean).length, markY.filter(Boolean).length);
+  return { local: a == null ? null : foldLines(x, markX, context), remote: b == null ? null : foldLines(y, markY, context), differ };
+}
+
+// Which lines of each side the other lacks, by their longest common subsequence.
+function markDifferences(x, y) {
   const n = x.length, m = y.length;
   const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
   for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
@@ -829,15 +993,16 @@ export function diffSides(a, b, context = 2) {
   for (let i = 0, j = 0; i < n && j < m;) {
     if (x[i] === y[j]) { markX[i++] = false; markY[j++] = false; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++;
   }
-  const fold = (lines, marks) => {
-    const keep = marks.map((_, i) => marks.slice(Math.max(0, i - context), i + context + 1).some(Boolean));
-    const out = [];
-    lines.forEach((text, i) => {
-      if (keep[i]) out.push({ text, mark: marks[i] });
-      else if (out.at(-1)?.gap !== true) out.push({ text: "…", gap: true });
-    });
-    return out;
-  };
-  const differ = Math.max(markX.filter(Boolean).length, markY.filter(Boolean).length);
-  return { local: a == null ? null : fold(x, markX), remote: b == null ? null : fold(y, markY), differ };
+  return { markX, markY };
+}
+
+// Lines with their marks; unchanged runs further than `context` lines from a change become one gap.
+function foldLines(lines, marks, context) {
+  const keep = marks.map((_, i) => marks.slice(Math.max(0, i - context), i + context + 1).some(Boolean));
+  const out = [];
+  lines.forEach((text, i) => {
+    if (keep[i]) out.push({ text, mark: marks[i] });
+    else if (out.at(-1)?.gap !== true) out.push({ text: "…", gap: true });
+  });
+  return out;
 }
