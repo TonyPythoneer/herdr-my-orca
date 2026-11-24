@@ -217,7 +217,13 @@ test("every menu records as before", async () => {
   for (const [name, scn] of Object.entries(SCENARIOS)) got[name] = await record(scn);
   const now = summary(got);
   if (!existsSync(GOLDEN)) writeFileSync(GOLDEN, `${JSON.stringify(now, null, 1)}\n`);
-  assert.deepEqual(now, JSON.parse(readFileSync(GOLDEN, "utf8")));
+  const expected = JSON.parse(readFileSync(GOLDEN, "utf8"));
+  const changes = Object.fromEntries(Object.entries(now).flatMap(([scenario, sections]) => {
+    const changed = Object.fromEntries(Object.entries(sections).filter(([key, value]) => expected[scenario]?.[key] !== value));
+    return Object.keys(changed).length ? [[scenario, changed]] : [];
+  }));
+  if (Object.keys(changes).length) console.log("GOLDEN_CHANGED " + JSON.stringify(changes));
+  assert.deepEqual(now, expected);
 });
 
 test("copy and transcript rows act on their own data", async () => {

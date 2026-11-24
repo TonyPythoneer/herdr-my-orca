@@ -51,8 +51,10 @@ function splitRow({ direction, swap, mod, ...row }, focusedPane) {
     ...row,
     action: (_cx, overlay) => {
       closeOverlay(overlay);
+      if (swap && !focusedPane?.pane) return;
       run("pane.split", { direction, pane: focusedPane?.pane, ...(mod ? { mod } : {}) });
-      if (swap) run("pane.swap", { direction: swap });
+      // Swap the original pane with its newly created neighbor, not the current focus.
+      if (swap) run("pane.swap", { pane: focusedPane.pane, direction });
     },
   };
 }

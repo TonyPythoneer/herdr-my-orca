@@ -124,7 +124,13 @@ test("every layout records as before", async () => {
   for (const [name, scn] of Object.entries(SCENARIOS)) got[name] = await record(scn);
   const now = summary(got);
   if (!existsSync(GOLDEN)) writeFileSync(GOLDEN, `${JSON.stringify(now, null, 1)}\n`);
-  assert.deepEqual(now, JSON.parse(readFileSync(GOLDEN, "utf8")));
+  const expected = JSON.parse(readFileSync(GOLDEN, "utf8"));
+  const changes = Object.fromEntries(Object.entries(now).flatMap(([scenario, sections]) => {
+    const changed = Object.fromEntries(Object.entries(sections).filter(([key, value]) => expected[scenario]?.[key] !== value));
+    return Object.keys(changed).length ? [[scenario, changed]] : [];
+  }));
+  if (Object.keys(changes).length) console.log("GOLDEN_CHANGED " + JSON.stringify(changes));
+  assert.deepEqual(now, expected);
 });
 
 test("the folder rows split only after a folder is picked", async () => {
@@ -135,5 +141,14 @@ test("the folder rows split only after a folder is picked", async () => {
     effects.length = 0;
     await settle(jobs, cx);
     assert.deepEqual(effects.filter(e => e[0] === "run"), expected);
+  }
+});
+
+test("left/up swaps address the original target rather than the focused pane", () => {
+  for (const [id, direction] of [["split-left", "right"], ["split-up", "down"]]) {
+    const effects = [];
+    const { menu, cx } = start(SCENARIOS["two panes, target given"], effects);
+    menu.choose(menu.items().findIndex(row => row.id === id), cx);
+    assert.deepEqual(effects.filter(e => e[0] === "run"), [["run", "pane.split", { direction, pane: "b" }], ["run", "pane.swap", { direction, pane: "b" }]]);
   }
 });
