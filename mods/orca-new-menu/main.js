@@ -54,7 +54,7 @@ function rememberModels(key, models) {
     const all = JSON.parse(localStorage.getItem(MODELS_KEY) ?? "{}");
     all[key] = { at: Date.now(), models };
     localStorage.setItem(MODELS_KEY, JSON.stringify(all));
-  } catch {}
+  } catch { /* storage is unavailable or full: the list is asked for again next time */ }
 }
 
 // Visible row counts follow the 288x512 popup and its 32px rows (orca-tabs/main.js:343).
@@ -62,6 +62,27 @@ function rememberModels(key, models) {
 const FLYOUT_GAP = 6;
 const FIT = { list: 13, models: 11 };
 const CHEVRON_W = 32;
+// agent-config's content width, a guessed height (it sets none) and the window margin the flyout keeps.
+const FLYOUT_W = 300;
+const FLYOUT_H = 440;
+const WINDOW_MARGIN = 8;
+// The menu's own padding plus the divider: how far a flipped flyout sits from the row's left edge.
+const MENU_EDGE = 4;
+const WORKTREE_NEW_DIALOG = { width: 440, height: 260 };
+const WORKTREE_OPEN_DIALOG = { width: 560, height: 480 };
+
+// The agent to launch, or none when Settings removed it since the menu opened.
+function launchTarget(agent, unofficial, state) {
+  if (unofficial) return freebuffVisible(state.freebuff) ? agent : null;
+  return installedEnabledAgents(state.agents, state.disabled).find((item) => item.key === agent.key);
+}
+
+// Right of the row when it fits, else left of it, else pushed inside the window.
+function flyoutX(rightX, leftX, windowWidth) {
+  if (rightX + FLYOUT_W <= windowWidth - WINDOW_MARGIN) return rightX;
+  if (leftX >= WINDOW_MARGIN) return leftX;
+  return Math.max(WINDOW_MARGIN, Math.min(rightX, windowWidth - FLYOUT_W - WINDOW_MARGIN));
+}
 
 // Herdr keys are dash-joined (herdr's own keys.json ships "ctrl-shift-t"); Orca's menu shows
 // the combo in caps (ShortcutKeyCombo.tsx:6-18).
@@ -82,6 +103,19 @@ function shortcut(name) {
   }).join(" ");
 }
 
+// The probe's own answer wins; the manager's inventory fills in until it has run. A FreeBuff the
+// person turned off in the Agent Manager is not offered.
+function resolveFreebuff(detected, inventory, disabled) {
+  const found = detected === undefined && typeof inventory?.freebuff === "boolean" ? inventory.freebuff : detected;
+  return found === true && disabled.has("freebuff") ? false : found;
+}
+
+// The manager file is this computer's. A remote machine must not inherit its disabled list.
+function firstPaintDisabled(machine, inventory) {
+  if (machine) return new Set();
+  return new Set(Array.isArray(inventory?.disabled) ? inventory.disabled : disabledAgents);
+}
+
 export default class NewMenu extends View {
   init(_props, cx) {
     this.at = 0;
@@ -94,67 +128,73 @@ export default class NewMenu extends View {
     this.handle.focus();
     this.closeFlyout();
     this.input = InputState.new({ placeholder: "Search models…" });
-    this.input.on("change", (_e, cx) => { this.filter = this.input.value(); this.at = 0; cx.notify(); });
+    this.input.on("change", (_e, eventCx) => { this.filter = this.input.value(); this.at = 0; eventCx.notify(); });
     // The filter owns Enter while it is focused, so a model is chosen through submit.
-    this.input.on("submit", (_e, cx) => this.choose(this.at, cx));
+    this.input.on("submit", (_e, eventCx) => this.choose(this.at, eventCx));
 
     const machine = spaces().find((s) => s.active)?.machine ?? null;
     this.machine = machine;
     const key = machine ?? "__local__";
     const inventory = machine ? null : recentInventory();
     const cached = agentsByMachine.get(key);
-    this.agents = cached?.length ? mergeInventory(cached, inventory?.agents) : inventory?.agents ?? cached ?? null;
-    this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
-    // The manager file is this computer's. A remote machine must not inherit its disabled list.
-    this.disabled = machine ? new Set() : new Set(Array.isArray(inventory?.disabled) ? inventory.disabled : disabledAgents);
-    this.disabledReady = Boolean(machine);
-    this.freebuff = typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
+    this.restoreFirstPaint(machine, key, inventory, cached);
 
-    if (!machine) {
-      cx.spawn(async (cx) => {
-        const text = await readTextFile(MANAGER_FILE).catch(() => null);
-        this.disabled = parseDisabled(text);
-        disabledAgents = new Set(this.disabled);
-        this.disabledReady = true;
-        cx.notify();
-      });
-    }
+    if (!machine) cx.spawn((taskCx) => this.loadDisabled(taskCx));
 
     // The one unofficial integration: probe the same login shell its launch command uses.
     if (!checking()) {
-      cx.spawn(async (cx) => {
+      cx.spawn(async (taskCx) => {
         this.freebuff = await detectFreebuff(exec, machine);
-        cx.notify();
+        taskCx.notify();
       });
     }
 
     // Always re-read. A cached inventory paints immediately, but it is never the final answer.
-    cx.spawn(async (cx) => {
-      let known;
-      try {
-        known = await knownAgents({ on: machine });
-      } catch {
-        agentsFailedByMachine.set(key, true);
-        if (this.machine === machine) {
-          this.agentsFailed = true;
-          if (!this.agents) {
-            this.agents = inventory?.agents ?? cached ?? null;
-          }
-          cx.notify();
-        }
-        return;
-      }
-      if (!machine) known = await this.withLocalRuns(known);
-      // Not merged with the manager inventory here: currentState() does that on every render, so the
-      // overrides lapse with the inventory instead of sticking to the stored list.
-      agentsByMachine.set(key, known);
-      agentsFailedByMachine.set(key, false);
+    cx.spawn((taskCx) => this.refreshCatalog(taskCx, { machine, key, inventory, cached }));
+  }
+
+  // What the first paint shows: the cached catalog merged with the manager's inventory.
+  restoreFirstPaint(machine, key, inventory, cached) {
+    this.agents = cached?.length ? mergeInventory(cached, inventory?.agents) : inventory?.agents ?? cached ?? null;
+    this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
+    this.disabled = firstPaintDisabled(machine, inventory);
+    this.disabledReady = Boolean(machine);
+    this.freebuff = typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
+  }
+
+  async loadDisabled(taskCx) {
+    const text = await readTextFile(MANAGER_FILE).catch(() => null);
+    this.disabled = parseDisabled(text);
+    disabledAgents = new Set(this.disabled);
+    this.disabledReady = true;
+    taskCx.notify();
+  }
+
+  async refreshCatalog(taskCx, { machine, key, inventory, cached }) {
+    let known;
+    try {
+      known = await knownAgents({ on: machine });
+    } catch {
+      agentsFailedByMachine.set(key, true);
       if (this.machine === machine) {
-        this.agents = known;
-        this.agentsFailed = false;
-        cx.notify();
+        this.agentsFailed = true;
+        if (!this.agents) {
+          this.agents = inventory?.agents ?? cached ?? null;
+        }
+        taskCx.notify();
       }
-    });
+      return;
+    }
+    if (!machine) known = await this.withLocalRuns(known);
+    // Not merged with the manager inventory here: currentState() does that on every render, so the
+    // overrides lapse with the inventory instead of sticking to the stored list.
+    agentsByMachine.set(key, known);
+    agentsFailedByMachine.set(key, false);
+    if (this.machine === machine) {
+      this.agents = known;
+      this.agentsFailed = false;
+      taskCx.notify();
+    }
   }
 
   // Only local programs.json overrides apply. A remote machine's run comes from its own host.
@@ -164,10 +204,9 @@ export default class NewMenu extends View {
     let root;
     try { root = JSON.parse(text); } catch { return agents; }
     return (agents ?? []).map((agent) => {
-      const entry = root?.programs?.[agent.key];
-      const run = entry?.run;
-      if (Array.isArray(run) && run.length && run.every((part) => typeof part === "string")) {
-        return { ...agent, run: [...run] };
+      const override = root?.programs?.[agent.key]?.run;
+      if (Array.isArray(override) && override.length && override.every((part) => typeof part === "string")) {
+        return { ...agent, run: [...override] };
       }
       return agent;
     });
@@ -185,13 +224,8 @@ export default class NewMenu extends View {
     const agents = inventory?.agents
       ? mergeInventory(this.agents ?? [], inventory.agents)
       : this.agents;
-    const disabled = new Set(
-      inventory && Array.isArray(inventory.disabled) ? inventory.disabled : this.disabled,
-    );
-    const freebuff = this.freebuff !== undefined
-      ? this.freebuff
-      : typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
-    return { agents, disabled, freebuff: freebuff === true && disabled.has("freebuff") ? false : freebuff, ready: this.disabledReady && Boolean(agents) };
+    const disabled = new Set(Array.isArray(inventory?.disabled) ? inventory.disabled : this.disabled);
+    return { agents, disabled, freebuff: resolveFreebuff(this.freebuff, inventory, disabled), ready: this.disabledReady && Boolean(agents) };
   }
 
   createRows() {
@@ -212,9 +246,9 @@ export default class NewMenu extends View {
       // Orca has no worktree rows here; the stock Herdr menu did, and orca-landing's
       // "Create workspace" button opens this menu for them.
       { label: "New worktree…", icon: "git-branch-plus", sep: true,
-        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 440, height: 260, props: { space: space?.id, folder, action: "new" } }) },
+        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", ...WORKTREE_NEW_DIALOG, props: { space: space?.id, folder, action: "new" } }) },
       { label: "Open worktree…", icon: "workflow",
-        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", width: 560, height: 480, props: { space: space?.id, folder, action: "open" } }) },
+        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", ...WORKTREE_OPEN_DIALOG, props: { space: space?.id, folder, action: "open" } }) },
       // Agent Settings is reached from the empty agent state and from the sidebar's Agents
       // button. Keeping a permanent "Manage agents…" row here would give the empty state two
       // settings actions instead of the one required action.
@@ -236,7 +270,7 @@ export default class NewMenu extends View {
       label: a.name,
       program: a,
       hint: "",
-      ...(MODELS[a.key]?.flyout ? { run: () => this.launchConfigured(a), config: a } : MODELS[a.key] ? { stay: (cx) => this.pickModel(a, cx) } : { run: () => this.launch(a) }),
+      ...this.agentAction(a),
     }));
     if (showFreebuff) {
       const freebuff = { key: "freebuff", name: "FreeBuff CLI", run: freebuffRun(state.agents) };
@@ -255,6 +289,15 @@ export default class NewMenu extends View {
       }];
     }
     return rows;
+  }
+
+  // What a click on an agent's row does: a flyout agent launches with its saved setup, one with a
+  // model list opens the picker, and the rest launch as they are.
+  agentAction(agent) {
+    const seed = MODELS[agent.key];
+    if (seed?.flyout) return { run: () => this.launchConfigured(agent), config: agent };
+    if (seed) return { stay: (cx) => this.pickModel(agent, cx) };
+    return { run: () => this.launch(agent) };
   }
 
   // Orca only adds `--model` after selection (`AgentLaunchTextModelDefault.tsx:23-33`,
@@ -318,7 +361,7 @@ export default class NewMenu extends View {
     cx.timer.after(0, () => this.input.focus());
     const seed = MODELS[agent.key];
     if (this.models || !seed.probe) return;
-    cx.spawn(async (cx) => {
+    cx.spawn(async (taskCx) => {
       try {
         const models = await seed.probe();
         rememberModels(agent.key, models);
@@ -326,7 +369,7 @@ export default class NewMenu extends View {
       } catch {
         if (this.picking === agent) this.modelsFailed = true;
       }
-      cx.notify();
+      taskCx.notify();
     });
   }
 
@@ -350,17 +393,14 @@ export default class NewMenu extends View {
     // A menu left open while Settings changed availability cannot launch a removed agent.
     const state = this.currentState();
     if (!state.ready || this.machineChanged()) return;
-    if (!unofficial) {
-      agent = installedEnabledAgents(state.agents, state.disabled).find((item) => item.key === agent.key);
-      if (!agent) return;
-    }
-    if (unofficial && !freebuffVisible(state.freebuff)) return;
+    const target = launchTarget(agent, unofficial, state);
+    if (!target) return;
     const space = spaces().find((s) => s.active);
-    const seed = MODELS[agent.key];
+    const seed = MODELS[target.key];
     run("tab.new", {
       space: space?.id,
       ...(space?.folder ? { folder: space.folder } : {}),
-      argv: seed && model ? [...agent.run, seed.flag, model] : agent.run,
+      argv: seed && model ? [...target.run, seed.flag, model] : target.run,
     });
   }
 
@@ -424,7 +464,7 @@ export default class NewMenu extends View {
       kind: "popup",
       // A popup without a width is wider than the flyout; 300 is agent-config's content width.
       // Height is left to the content, as the other width-only popups (orca-menu, orca-files) do.
-      width: 300,
+      width: FLYOUT_W,
       at: this.flyoutAt(agent),
       props: {
         menu: props()?.overlay,
@@ -469,12 +509,8 @@ export default class NewMenu extends View {
     const vp = typeof window !== "undefined" ? window.viewport_size() : null;
     const rightX = r.right + FLYOUT_GAP;
     if (!vp) return { x: rightX, y: r.y };
-    const W = 300, H = 440, M = 8;
-    const leftX = r.left - 4 - FLYOUT_GAP - W;
-    const x = rightX + W <= vp.width - M ? rightX
-      : leftX >= M ? leftX
-      : Math.max(M, Math.min(rightX, vp.width - W - M));
-    return { x, y: Math.max(M, Math.min(r.y, vp.height - H - M)) };
+    const leftX = r.left - MENU_EDGE - FLYOUT_GAP - FLYOUT_W;
+    return { x: flyoutX(rightX, leftX, vp.width), y: Math.max(WINDOW_MARGIN, Math.min(r.y, vp.height - FLYOUT_H - WINDOW_MARGIN)) };
   }
 
   chevron(agent, t) {
@@ -534,7 +570,20 @@ export default class NewMenu extends View {
           .child(this.chevron(row.config, t))));
   }
 
-  render(cx) {
+  onKey(e, cx, picking) {
+    if (e.key === "down") this.move(1);
+    else if (e.key === "up") this.move(-1);
+    else if (e.key === "home") this.edge(false);
+    else if (e.key === "end") this.edge(true);
+    else if (e.key === "enter" || e.key === "space") this.choose(this.at, cx);
+    else if (e.key === "escape") {
+      if (!picking) return this.closeMenu();
+      this.back();
+    } else return;
+    cx.notify();
+  }
+
+  render() {
     const t = theme();
     const picking = this.picking;
     const agentRows = this.agentRows();
@@ -551,18 +600,7 @@ export default class NewMenu extends View {
       .p(4)
       .bg(t.popover)
       .text_size(12)
-      .on_key_down((e, cx) => {
-        if (e.key === "down") this.move(1);
-        else if (e.key === "up") this.move(-1);
-        else if (e.key === "home") this.edge(false);
-        else if (e.key === "end") this.edge(true);
-        else if (e.key === "enter" || e.key === "space") this.choose(this.at, cx);
-        else if (e.key === "escape") {
-          if (!picking) return this.closeMenu();
-          this.back();
-        } else return;
-        cx.notify();
-      })
+      .on_key_down((e, cx) => this.onKey(e, cx, picking))
       .on_scroll_wheel((e, cx) => {
         if (!e.delta.y) return;
         this.move(e.delta.y > 0 ? 1 : -1);
@@ -580,6 +618,6 @@ export default class NewMenu extends View {
           : sectioned;
       }))
       .when(picking, (el) => el.child(this.row({ label: "Back", icon: "chevron-left", sep: true }, -1, t,
-        (cx) => { this.back(); cx.notify(); })));
+        (clickCx) => { this.back(); clickCx.notify(); })));
   }
 }
