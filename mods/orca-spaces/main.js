@@ -602,14 +602,7 @@ export default class Spaces extends View {
       // Only branch headers are consumed; skip the untracked-file traversal.
       const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch", "--untracked-files=no"], { cwd, on });
       if (!stillCurrent()) return;
-      if (r.code !== 0) {
-        await this.refreshCatalog(cached, on);
-        if (!stillCurrent()) return;
-        // Only git's own "no" is remembered as no repo; anything else is asked again.
-        if (/not a git repository/i.test(r.stderr)) this.git[key] = null;
-        else { this.git[key] ??= null; this.unsure.add(key); }
-        return;
-      }
+      if (r.code !== 0) return await this.checkFailed(key, cached, on, stillCurrent, r.stderr);
       const { info, commonDir } = await readGitInfo(r.stdout, cwd, on);
       if (!stillCurrent()) return;
       for (const entry of Object.values(this.git)) {
@@ -622,22 +615,26 @@ export default class Spaces extends View {
       if (!on && info.branch) this.lookupPRByBranch(`${commonDir}::${info.branch}`, info, cwd, cx);
       if (!on) this.watch(commonDir, cx);
     } catch {
-      if (!stillCurrent()) return;
-      await this.refreshCatalog(cached, on);
-      if (!stillCurrent()) return;
-      // Couldn't ask (the machine is away): keep what it showed, look again later.
-      this.git[key] ??= null;
-      this.unsure.add(key);
+      await this.checkFailed(key, cached, on, stillCurrent);
     }
+  }
+
+  async checkFailed(key, cached, on, stillCurrent, stderr = "") {
+    if (!stillCurrent()) return;
+    await this.refreshCatalog(cached, on, stillCurrent);
+    if (!stillCurrent()) return;
+    // Only git's own "no" is remembered as no repo; anything else is asked again.
+    if (/not a git repository/i.test(stderr)) this.git[key] = null;
+    else { this.git[key] ??= null; this.unsure.add(key); }
   }
 
   // A project's worktree list is carried by every cached place of the repo; when a place cannot be
   // read, its repo's own git directory can still say which worktrees exist.
-  async refreshCatalog(cached, on) {
+  async refreshCatalog(cached, on, stillCurrent = () => true) {
     if (!cached?.linked) return;
     try {
       const wt = await exec("git", ["--git-dir", readPair(cached.repo)[1], "worktree", "list", "--porcelain"], { on });
-      if (wt.code === 0) {
+      if (wt.code === 0 && stillCurrent()) {
         const worktrees = parseWorktreeList(wt.stdout);
         for (const entry of Object.values(this.git)) if (entry?.repo === cached.repo) entry.worktrees = worktrees;
       }
