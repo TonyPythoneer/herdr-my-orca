@@ -23,6 +23,9 @@ import {
 const TERMINALS_PAGE = "main-terminals";
 const FILE = `${appHome()}/${TASKS_FILE}`;
 const PROVIDERS = ["claude", "codex"];
+// A write that lost a race is retried once against the text that won.
+const WRITE_ATTEMPTS = 2;
+const REFRESH_MS = 30_000;
 const MARKS = { claude: "mods/orca-status/claude.svg", codex: "mods/orca-status/codex.svg" };
 
 function find(node, id) {
@@ -34,6 +37,44 @@ function find(node, id) {
   return null;
 }
 
+// The file moved under a write: publish what is there now, so the retry works from it.
+async function adoptFreshText(expected) {
+  const fresh = await readTextFile(FILE).catch(() => null);
+  if (fresh === null || fresh === expected) return;
+  const parsedFresh = parseTasks(fresh);
+  setShared("tasks.text", fresh);
+  setShared("tasks.config", parsedFresh.config);
+  setShared("tasks.error", parsedFresh.error ?? "");
+}
+
+// What a reset row says about its window.
+function resetText(exempt, at, now) {
+  if (exempt) return "no 5h limit on this plan";
+  if (at) return `${formatClock(at)} · ${formatCountdown(at - now)}`;
+  return "no window reported";
+}
+
+// "Never ran." / "Last 08:00 · exit 2 · note · 3×": the last run's outcome in one line.
+function lastRunText(last) {
+  if (!last) return "Never ran.";
+  const outcome = last.code === 0 ? "ok" : `exit ${last.code}`;
+  const note = last.note ? ` · ${last.note}` : "";
+  const fails = last.code !== 0 && (last.fails ?? 0) >= 1 ? ` · ${last.fails}×` : "";
+  return `Last ${formatClock(last.at)} · ${outcome}${note}${fails}`;
+}
+
+function lastRunTone(last, t) {
+  if (!last) return t.dim;
+  return last.code === 0 ? t.done : t.blocked;
+}
+
+// The second line of a card: when the task runs next, or why it does not.
+function scheduleText(task, disabled, next) {
+  if (disabled) return `${describeTrigger(task)} · no 5h limit on this plan`;
+  if (!task.enabled) return `${describeTrigger(task)} · paused`;
+  return `${describeTrigger(task)} · ${next ? formatCountdown(next - Date.now()) : "no next run"}`;
+}
+
 const taskText = (task) => (Array.isArray(task.argv) ? task.argv.join(" ") : "");
 
 export default class Tasks extends View {
@@ -43,8 +84,8 @@ export default class Tasks extends View {
     this.error = ""; // this page's write error
     this.saved = false;
     // The countdowns are computed at render time; only the shown page needs the clock to move.
-    cx.timer.every(30_000, (cx) => {
-      if (find(layout(), "main")?.active === "main-tasks") cx.notify();
+    cx.timer.every(REFRESH_MS, (tickCx) => {
+      if (find(layout(), "main")?.active === "main-tasks") tickCx.notify();
     });
   }
 
@@ -73,44 +114,44 @@ export default class Tasks extends View {
   async apply(cx, mutate, options = {}) {
     this.error = "";
     this.saved = false;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
       const expected = shared("tasks.text") ?? "";
       const parsed = parseTasks(expected);
-      if (!parsed.config) {
-        this.error = parsed.error;
-        cx.notify();
-        return;
-      }
+      if (!parsed.config) return this.fail(cx, parsed.error);
       let next;
       try {
         next = mutate(parsed.config);
       } catch (error) {
-        this.error = String(error?.message ?? error);
+        return this.fail(cx, String(error?.message ?? error));
+      }
+      if (await this.tryWrite(next, expected, options)) {
         cx.notify();
         return;
       }
-      const text = serializeTasks(next);
-      try {
-        await writeTextFile(FILE, text, expected === "" ? null : expected);
-        setShared("tasks.text", text);
-        setShared("tasks.config", next);
-        setShared("tasks.error", "");
-        this.saved = Boolean(options.saved);
-        run("orca-chrome.tasks-scan");
-        cx.notify();
-        return;
-      } catch {
-        const fresh = await readTextFile(FILE).catch(() => null);
-        if (fresh !== null && fresh !== expected) {
-          const parsedFresh = parseTasks(fresh);
-          setShared("tasks.text", fresh);
-          setShared("tasks.config", parsedFresh.config);
-          setShared("tasks.error", parsedFresh.error ?? "");
-        }
-      }
+      await adoptFreshText(expected);
     }
-    this.error = "tasks.json changed while saving; try again.";
+    this.fail(cx, "tasks.json changed while saving; try again.");
+  }
+
+  fail(cx, message) {
+    this.error = message;
     cx.notify();
+  }
+
+  // One expected-text write of `next`; false when the file moved under it (or the write failed).
+  async tryWrite(next, expected, options) {
+    const text = serializeTasks(next);
+    try {
+      await writeTextFile(FILE, text, expected === "" ? null : expected);
+      setShared("tasks.text", text);
+      setShared("tasks.config", next);
+      setShared("tasks.error", "");
+      this.saved = Boolean(options.saved);
+      run("orca-chrome.tasks-scan");
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   update(id, change) {
@@ -161,10 +202,9 @@ export default class Tasks extends View {
     this.error = "";
     this.editor = TextareaState.new({ value: shared("tasks.text") ?? "", rows: 16 });
     this.editor.set_soft_wrap(false);
-    this.editor.on("change", (event, cx) => {
-      void event;
+    this.editor.on("change", (_event, changeCx) => {
       this.saved = false;
-      cx.notify();
+      changeCx.notify();
     });
     this.editing = true;
     cx.notify();
@@ -287,9 +327,6 @@ export default class Tasks extends View {
 
   render(cx) {
     const t = theme();
-    const config = this.config;
-    const error = this.error || shared("tasks.error") || "";
-    const tasks = config?.tasks ?? [];
     return v_flex()
       .id("tm-root")
       .size_full()
@@ -297,38 +334,7 @@ export default class Tasks extends View {
       .overflow_hidden()
       .bg(t.background)
       .text_size(12)
-      .child(
-        h_flex()
-          .w_full()
-          .max_w(760)
-          .mx_auto()
-          .px(24)
-          .pt(20)
-          .pb(12)
-          .items_center()
-          .gap(8)
-          .child(
-            div()
-              .id("tm-back")
-              .size(28)
-              .flex_none()
-              .flex()
-              .items_center()
-              .justify_center()
-              .rounded(6)
-              .text_color(t.muted)
-              .cursor_pointer()
-              .hover((s) => s.bg(t.hover).text_color(t.foreground))
-              .role("button")
-              .accessibility_label("Back to terminals")
-              .tooltip("Back to terminals")
-              .on_click(() => run("layout.select", { stack: "main", child: TERMINALS_PAGE }))
-              .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
-          )
-          .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Task management"))
-          .child(div().flex_1())
-          .child(this.button("tm-add", "New task", t, () => this.add(cx))),
-      )
+      .child(this.pageHeader(t, cx))
       .child(
         v_flex()
           .id("tm-body")
@@ -351,33 +357,72 @@ export default class Tasks extends View {
                   .child("Schedules run while Herdr is open. Times are local; the last run of each task is kept by Herdr."),
               )
               .child(this.resetCard(t))
-              .child(
-                v_flex()
-                  .w_full()
-                  .gap(8)
-                  .child(
-                    this.sectionHead(
-                      "TASKS",
-                      t,
-                      `${tasks.length}`,
-                      h_flex()
-                        .items_center()
-                        .gap(8)
-                        .when(this.saved, (el) => el.child(div().text_size(11).text_color(t.done).child("Saved.")))
-                        .child(this.button("tm-json", this.editing ? "Close JSON" : "Edit JSON", t, () => (this.editing ? this.closeEditor(cx) : this.openEditor(cx)))),
-                    ),
-                  )
-                  .when(error, (el) => el.child(div().w_full().p(10).rounded(8).border_1().border_color(t.blocked).text_size(11).text_color(t.blocked).child(error)))
-                  .when(!config && !error, (el) => el.child(div().p(16).text_size(12).text_color(t.muted).child("Waiting for the task runner…")))
-                  .children(
-                    tasks.length
-                      ? tasks.map((task) => this.taskCard(task, t, cx))
-                      : [div().p(16).rounded(8).border_1().border_color(t.border).border_dashed().text_size(12).text_color(t.muted).child("No tasks. New task adds a disabled template; Edit JSON writes the file directly.")],
-                  )
-                  .when(this.editing, (el) => el.child(this.editorCard(t, cx))),
-              ),
+              .child(this.taskSection(t, cx)),
           ),
       );
+  }
+
+  pageHeader(t, cx) {
+    return h_flex()
+      .w_full()
+      .max_w(760)
+      .mx_auto()
+      .px(24)
+      .pt(20)
+      .pb(12)
+      .items_center()
+      .gap(8)
+      .child(
+        div()
+          .id("tm-back")
+          .size(28)
+          .flex_none()
+          .flex()
+          .items_center()
+          .justify_center()
+          .rounded(6)
+          .text_color(t.muted)
+          .cursor_pointer()
+          .hover((s) => s.bg(t.hover).text_color(t.foreground))
+          .role("button")
+          .accessibility_label("Back to terminals")
+          .tooltip("Back to terminals")
+          .on_click(() => run("layout.select", { stack: "main", child: TERMINALS_PAGE }))
+          .child(svg("mods/orca-agent-manager/chevron-left.svg").size(16)),
+      )
+      .child(div().text_size(20).font_semibold().text_color(t.foreground).child("Task management"))
+      .child(div().flex_1())
+      .child(this.button("tm-add", "New task", t, () => this.add(cx)));
+  }
+
+  // The TASKS list: header with the JSON toggle, the write error, one card per task, the editor.
+  taskSection(t, cx) {
+    const config = this.config;
+    const error = this.error || shared("tasks.error") || "";
+    const tasks = config?.tasks ?? [];
+    return v_flex()
+      .w_full()
+      .gap(8)
+      .child(
+        this.sectionHead(
+          "TASKS",
+          t,
+          `${tasks.length}`,
+          h_flex()
+            .items_center()
+            .gap(8)
+            .when(this.saved, (el) => el.child(div().text_size(11).text_color(t.done).child("Saved.")))
+            .child(this.button("tm-json", this.editing ? "Close JSON" : "Edit JSON", t, () => (this.editing ? this.closeEditor(cx) : this.openEditor(cx)))),
+        ),
+      )
+      .when(error, (el) => el.child(div().w_full().p(10).rounded(8).border_1().border_color(t.blocked).text_size(11).text_color(t.blocked).child(error)))
+      .when(!config && !error, (el) => el.child(div().p(16).text_size(12).text_color(t.muted).child("Waiting for the task runner…")))
+      .children(
+        tasks.length
+          ? tasks.map((task) => this.taskCard(task, t, cx))
+          : [div().p(16).rounded(8).border_1().border_color(t.border).border_dashed().text_size(12).text_color(t.muted).child("No tasks. New task adds a disabled template; Edit JSON writes the file directly.")],
+      )
+      .when(this.editing, (el) => el.child(this.editorCard(t, cx)));
   }
 
   // The reset instants the reset-ping schedules fire on.
@@ -400,7 +445,7 @@ export default class Tasks extends View {
             .min_w(0)
             .text_size(11)
             .text_color(at ? t.foreground : t.dim)
-            .child(exempt ? "no 5h limit on this plan" : at ? `${formatClock(at)} · ${formatCountdown(at - now)}` : "no window reported"),
+            .child(resetText(exempt, at, now)),
         );
     };
     return v_flex()
@@ -423,13 +468,6 @@ export default class Tasks extends View {
   taskCard(task, t, cx) {
     const live = this.state[task.id] ?? {};
     const disabled = this.exempt(task);
-    const last = live.last ?? null;
-    const mono = settings()?.font_family ?? "JetBrains Mono";
-    const next = live.nextAt ?? null;
-    const tone = !last ? t.dim : last.code === 0 ? t.done : t.blocked;
-    const lastText = !last
-      ? "Never ran."
-      : `Last ${formatClock(last.at)} · ${last.code === 0 ? "ok" : `exit ${last.code}`}${last.note ? ` · ${last.note}` : ""}${last.code !== 0 && (last.fails ?? 0) >= 1 ? ` · ${last.fails}×` : ""}`;
     return v_flex()
       .id(`tm-task-${task.id}`)
       .w_full()
@@ -446,34 +484,7 @@ export default class Tasks extends View {
           .items_center()
           .gap(8)
           .child(this.mark(task.agent, t))
-          .child(
-            v_flex()
-              .flex_1()
-              .min_w(0)
-              .gap(3)
-              .child(
-                h_flex()
-                  .items_center()
-                  .gap(6)
-                  .child(div().text_size(13).font_semibold().text_color(t.foreground).truncate().child(task.name))
-                  .when(disabled, (el) => el.child(this.disabledPill(t)))
-                  .when(!disabled, (el) => el.child(this.togglePill(`tm-on-${task.id}`, task.enabled, t, () => this.toggle(cx, task))))
-                  .when(live.running, (el) => el.child(div().text_size(10).text_color(t.accent).child("running…"))),
-              )
-              .child(
-                div()
-                  .text_size(11)
-                  .text_color(t.muted)
-                  .child(
-                    disabled
-                      ? `${describeTrigger(task)} · no 5h limit on this plan`
-                      : task.enabled
-                        ? `${describeTrigger(task)} · ${next ? formatCountdown(next - Date.now()) : "no next run"}`
-                        : `${describeTrigger(task)} · paused`,
-                  ),
-              )
-              .child(div().text_size(11).text_color(t.dim).font_family(mono).truncate().child(taskText(task))),
-          )
+          .child(this.taskSummary(task, t, cx, live, disabled))
           .child(
             this.button(`tm-run-${task.id}`, live.running ? "…" : "Run", t, () => this.runNow(cx, task), {
               label: disabled ? "Disabled: no 5h limit on this plan" : "Run now",
@@ -482,7 +493,27 @@ export default class Tasks extends View {
           )
           .child(this.button(`tm-del-${task.id}`, "Delete", t, () => this.remove(cx, task), { label: `Delete ${task.name}`, color: t.dim })),
       )
-      .child(div().text_size(11).text_color(tone).truncate().child(lastText));
+      .child(div().text_size(11).text_color(lastRunTone(live.last ?? null, t)).truncate().child(lastRunText(live.last ?? null)));
+  }
+
+  // The middle of a card: name with its switch, the schedule line and the command.
+  taskSummary(task, t, cx, live, disabled) {
+    const mono = settings()?.font_family ?? "JetBrains Mono";
+    return v_flex()
+      .flex_1()
+      .min_w(0)
+      .gap(3)
+      .child(
+        h_flex()
+          .items_center()
+          .gap(6)
+          .child(div().text_size(13).font_semibold().text_color(t.foreground).truncate().child(task.name))
+          .when(disabled, (el) => el.child(this.disabledPill(t)))
+          .when(!disabled, (el) => el.child(this.togglePill(`tm-on-${task.id}`, task.enabled, t, () => this.toggle(cx, task))))
+          .when(live.running, (el) => el.child(div().text_size(10).text_color(t.accent).child("running…"))),
+      )
+      .child(div().text_size(11).text_color(t.muted).child(scheduleText(task, disabled, live.nextAt ?? null)))
+      .child(div().text_size(11).text_color(t.dim).font_family(mono).truncate().child(taskText(task)));
   }
 
   editorCard(t, cx) {

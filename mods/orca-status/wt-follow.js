@@ -29,6 +29,52 @@ export function parseCheckout(out) {
 /** A checkout that is not the repository's main one. */
 export const isLinked = (checkout) => Boolean(checkout?.top) && checkout.gitdir !== checkout.common;
 
+/** The linked checkout an agent pane's own process is in now, or null. */
+function linkedCheckoutOf(pane, cwds, cwdCheckouts) {
+  if (!pane.terminal || !pane.program?.agent) return null;
+  const cwd = cwds[pane.terminal];
+  const there = cwd ? cwdCheckouts[cwd] : null;
+  return isLinked(there) ? there : null;
+}
+
+/** The space holding the pane's tab, unless it is another machine's folder (not ours to git). */
+function ownSpaceOf(pane, spaces) {
+  const space = spaces.find((s) => (s.tabs ?? []).some((t) => t.id === pane.tab));
+  return space && !space.machine ? space : null;
+}
+
+/** The record `planFollow` returns for one pane that should move to `there`. */
+function moveFor(pane, there, space, panes) {
+  const tab = (space.tabs ?? []).find((t) => t.id === pane.tab);
+  return {
+    terminal: pane.terminal,
+    app: pane.program.name || pane.app || "Agent",
+    to: there.top,
+    branch: there.branch,
+    from: {
+      space: space.id,
+      folder: space.folder,
+      tab: pane.tab,
+      active: Boolean(space.active),
+      tabName: tab?.named ? tab.name : null,
+      // Parking the last terminal closes its tab, and a space closes with its last tab.
+      onlyTerminal: panes.filter((p) => p.terminal && (space.tabs ?? []).some((t) => t.id === p.tab)).length === 1,
+    },
+  };
+}
+
+function planPane(pane, { spaces, panes, cwds, cwdCheckouts, moved }) {
+  const there = linkedCheckoutOf(pane, cwds, cwdCheckouts);
+  if (!there) return null;
+  const space = ownSpaceOf(pane, spaces);
+  if (!space) return null;
+  const from = space.checkout;
+  if (!from?.top || from.common !== there.common) return null; // another repository
+  if (there.top === from.top) return null; // already the checkout the space is on
+  if (moved[pane.terminal] === there.top) return null; // sent there once and came back
+  return moveFor(pane, there, space, panes);
+}
+
 /**
  * The first agent pane whose live folder is a linked worktree of the repo its space is on.
  * `spaces[i].checkout` and `cwdCheckouts[cwd]` are records from `parseCheckout` (or null);
@@ -37,32 +83,8 @@ export const isLinked = (checkout) => Boolean(checkout?.top) && checkout.gitdir 
  */
 export function planFollow({ spaces = [], panes = [], cwds = {}, cwdCheckouts = {}, moved = {} }) {
   for (const pane of panes) {
-    if (!pane.terminal || !pane.program?.agent) continue;
-    const cwd = cwds[pane.terminal];
-    const there = cwd ? cwdCheckouts[cwd] : null;
-    if (!isLinked(there)) continue;
-    const space = spaces.find((s) => (s.tabs ?? []).some((t) => t.id === pane.tab));
-    if (!space || space.machine) continue; // another machine's folder is not ours to git
-    const from = space.checkout;
-    if (!from?.top || from.common !== there.common) continue; // another repository
-    if (there.top === from.top) continue; // already the checkout the space is on
-    if (moved[pane.terminal] === there.top) continue; // sent there once and came back
-    const tab = (space.tabs ?? []).find((t) => t.id === pane.tab);
-    return {
-      terminal: pane.terminal,
-      app: pane.program.name || pane.app || "Agent",
-      to: there.top,
-      branch: there.branch,
-      from: {
-        space: space.id,
-        folder: space.folder,
-        tab: pane.tab,
-        active: Boolean(space.active),
-        tabName: tab?.named ? tab.name : null,
-        // Parking the last terminal closes its tab, and a space closes with its last tab.
-        onlyTerminal: panes.filter((p) => p.terminal && (space.tabs ?? []).some((t) => t.id === p.tab)).length === 1,
-      },
-    };
+    const move = planPane(pane, { spaces, panes, cwds, cwdCheckouts, moved });
+    if (move) return move;
   }
   return null;
 }
