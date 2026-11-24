@@ -8,6 +8,7 @@ import {
 
 const isMetadata = (f) => f === ".metadata.json" || f.endsWith("/.metadata.json");
 const lines = (r) => String(r.stdout ?? "").split("\n").map((s) => s.trim()).filter(Boolean);
+const MAX_CONFLICT_LINES = 120;
 const BOTH_WAYS = ["push", "--pull", "-m", "Update skills from Herdr"];
 const done = (text) => ({ kind: "done", text });
 const warn = (text) => ({ kind: "warn", text });
@@ -27,6 +28,18 @@ export async function operate(req, io) {
 }
 
 const at = (req, scope) => ({ on: req.on ?? null, cwd: scope === "project" ? req.project : null });
+
+const updateFailureReason = (item) => item.error ?? item.message ?? "see skillshare update";
+function updateResult(r) {
+  const report = parseJSON(r.stdout);
+  const items = report?.items ?? [], agents = report?.agents ?? [];
+  const blocked = items.filter((i) => i.status === "security_blocked").map((i) => i.name);
+  if (blocked.length) return error(`Audit blocked ${blocked.join(", ")}. Ask an agent to audit it before updating.`);
+  if (r.code !== 0 && !report) return error(failure(r, "skillshare update"));
+  const failed = [...items, ...agents].filter((i) => i.status === "failed");
+  if (failed.length) return error(`Could not update ${failed.map((i) => i.name).join(", ")}: ${updateFailureReason(failed[0])}`);
+  return { count: report?.updated ?? agents.filter((a) => a.status === "updated").length };
+}
 
 const OPS = {
   async sync(req, { job, step }) {
@@ -48,13 +61,9 @@ const OPS = {
       step(u.all ? `Updating all ${u.kind === "agents" ? "agents" : "skills"} (${u.scope})…` : `Updating ${u.label}…`);
       const args = ["update", ...(u.kind === "agents" ? ["agents"] : []), ...(u.all ? ["--all"] : [u.name]), "--json", flag(u.scope)];
       const r = await job(args, at(req, u.scope));
-      const j = parseJSON(r.stdout);
-      const blocked = (j?.items ?? []).filter((i) => i.status === "security_blocked").map((i) => i.name);
-      if (blocked.length) return error(`Audit blocked ${blocked.join(", ")}. Ask an agent to audit it before updating.`);
-      if (r.code !== 0 && !j) return error(failure(r, "skillshare update"));
-      const failed = [...(j?.items ?? []), ...(j?.agents ?? [])].filter((i) => i.status === "failed");
-      if (failed.length) return error(`Could not update ${failed.map((i) => i.name).join(", ")}: ${failed[0].error ?? failed[0].message ?? "see skillshare update"}`);
-      updated += j?.updated ?? (j?.agents ?? []).filter((a) => a.status === "updated").length ?? 0;
+      const result = updateResult(r);
+      if (result.kind) return result;
+      updated += result.count;
     }
     return done(updated ? `Updated ${updated}. Targets get it on the next sync.` : "Already up to date");
   },
@@ -197,7 +206,7 @@ async function stopOnConflict(r, repo, on, { sh, step }, push) {
   }
   await sh(ABORT, [repo], on);
   if (!files.length) return false;
-  const shown = (l) => l && { lines: l.slice(0, 120), cut: l.length > 120 };
+  const shown = (l) => l && { lines: l.slice(0, MAX_CONFLICT_LINES), cut: l.length > MAX_CONFLICT_LINES };
   const previews = Object.fromEntries(Object.entries(parsePreview((await sh(PREVIEW, [repo, ...files], on)).stdout)).map(([f, v]) => {
     const d = diffSides(v.local, v.remote);
     return [f, { differ: d.differ, local: shown(d.local), remote: shown(d.remote) }];

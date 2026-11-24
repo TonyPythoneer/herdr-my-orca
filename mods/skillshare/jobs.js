@@ -28,6 +28,10 @@ export function withShell(program) {
   };
 }
 
+function startFailure(started) {
+  return { code: started.code || 1, stdout: "", stderr: started.stderr || "Could not start skillshare" };
+}
+
 // createRunner({ exec, readText }):
 //   exec(script, args, on) runs `sh -c script` on machine `on` (null: this computer) and resolves
 //     to { code, stdout, stderr }; it must not reject. Herdr stops an exec after 30 s.
@@ -49,21 +53,25 @@ export function createRunner({ exec, readText, pollMs = 500, aliveEvery = 10, bu
 
   async function job(args, { on = null, cwd = null, script = null, sleep }) {
     if (!swept.has(on ?? "")) { swept.add(on ?? ""); sh(SWEEP, [], on); }
-    const s = script ? await sh(START_SCRIPT, [cwd ?? "", script, ...args], on) : await sh(START, [cwd ?? "", ...args], on);
-    const d = s.stdout.trim();
-    if (s.code !== 0 || !d) return { code: s.code || 1, stdout: "", stderr: s.stderr || "Could not start skillshare" };
-    const done = async (result) => { sh('rm -rf "$1"', [d], on); return result; };
+    const started = script ? await sh(START_SCRIPT, [cwd ?? "", script, ...args], on) : await sh(START, [cwd ?? "", ...args], on);
+    const directory = started.stdout.trim();
+    if (started.code !== 0 || !directory) return startFailure(started);
+    return poll(directory, on, sleep);
+  }
+
+  async function poll(directory, on, sleep) {
+    const done = async (result) => { sh('rm -rf "$1"', [directory], on); return result; };
     const polls = Math.ceil(budgetMs / pollMs);
     for (let i = 1; i <= polls; i++) {
       await sleep(pollMs);
-      const code = await read(`${d}/code`, on);
+      const code = await read(`${directory}/code`, on);
       if (code !== null && code.trim() !== "") {
-        const [stdout, stderr] = await Promise.all([read(`${d}/out`, on), read(`${d}/err`, on)]);
+        const [stdout, stderr] = await Promise.all([read(`${directory}/out`, on), read(`${directory}/err`, on)]);
         return done({ code: Number(code.trim()), stdout: stdout ?? "", stderr: stderr ?? "" });
       }
       // A job that was killed never writes its code, so check now and then that it still runs.
-      if (i % aliveEvery === 0 && (await sh(ALIVE, [d], on)).code === 1) {
-        const err = await read(`${d}/err`, on);
+      if (i % aliveEvery === 0 && (await sh(ALIVE, [directory], on)).code === 1) {
+        const err = await read(`${directory}/err`, on);
         return done({ code: 1, stdout: "", stderr: lastLine(err) || "skillshare stopped before it finished" });
       }
     }

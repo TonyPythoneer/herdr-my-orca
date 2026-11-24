@@ -58,8 +58,8 @@ export function createChannel({ get, set, now = Date.now, staleMs = 60 * 1000 })
       set(BUSY, l);
     },
     touch(on) {
-      const l = locks(), held = l[key(on)];
-      if (held && now() - held.at >= 10 * 1000) set(BUSY, { ...l, [key(on)]: { ...held, at: now() } });
+      const l = locks(), current = l[key(on)];
+      if (current && now() - current.at >= 10 * 1000) set(BUSY, { ...l, [key(on)]: { ...current, at: now() } });
     },
     say(kind, text) { set(NOTICE, { kind, text, at: now() }); },
     notice: () => get(NOTICE) ?? null,
