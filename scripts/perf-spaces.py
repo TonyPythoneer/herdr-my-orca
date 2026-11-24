@@ -77,7 +77,11 @@ const machines = () => [];
     replace_once(git_init[0], 'this.git = {};')
     replace_once('    this.refreshMachines(cx);\n    cx.timer.every(15000, cx => this.refreshMachines(cx));\n    cx.timer.every(15000, cx => { void this.checkSaved(cx); });', '    this.perfTicks = 0;\n    cx.timer.every(200, cx => { if (++this.perfTicks <= 150) { console.log("PERF interval", metrics.created); metrics.created = 0; cx.notify(); } });')
     replace_once('    cx.timer.every(250, (cx) => this.checkNew(cx));', '    cx.timer.every(250, cx => { if (this.syncRetained(cx)) cx.notify(); });' if 'syncRetained(cx)' in source else '')
-    replace_once('  render(cx) {\n    const t = theme();', '  render(cx) {\n    const countBefore = metrics.created;\n    const start = Date.now();\n    const t = theme();')
+    # Current Spaces wraps the actual list render in sidebarFrame(renderBody(cx)).
+    # Keep the historical render anchor for git-ref benchmarks of older revisions.
+    render_entry = re.search(r'^  (renderBody|render)\(cx\) \{\n    const t = theme\(\);', source, re.M)
+    assert render_entry, 'Probe needs updating: list render entry'
+    replace_once(render_entry[0], render_entry[0].replace('    const t = theme();', '    const countBefore = metrics.created;\n    const start = Date.now();\n    const t = theme();'))
     replace_once('    const saved = stored("projects.saved.v1", []);\n    const savedRows', '    const saved = [];\n    const savedRows')
     replace_once('    return focusRoot(this, v_flex().size_full()', '    const result = focusRoot(this, v_flex().size_full()')
     end = '        .child(Scrollbar.vertical("space-list").mode(this.listHover ? "always" : "hover").absolute().inset_0())));\n  }'
