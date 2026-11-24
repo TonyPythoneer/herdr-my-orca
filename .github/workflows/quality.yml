@@ -1,12 +1,18 @@
-# The full test suite, lint, coverage and drift check run here, so agents and the local machine
-# only run the tests of the mod they changed. Results: a PR comment (updated in place) and a
+# Full-repository quality baseline runs weekly, on demand, or when its gate changes.
+# Ordinary PRs use scoped coverage/lint in CI; never compare partial coverage to a full baseline. Results: a PR comment (updated in place) and a
 # report.json / report.md artifact meant to be read by an AI as well as a person.
 name: quality
 on:
-  pull_request:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '23 2 * * 1'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/metrics.mjs'
+      - 'scripts/metrics.test.js'
+      - 'metrics/baseline.json'
+      - 'eslint.config.mjs'
+      - '.github/workflows/quality.yml'
 permissions:
   contents: read
   pull-requests: write

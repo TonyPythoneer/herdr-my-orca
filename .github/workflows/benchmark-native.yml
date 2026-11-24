@@ -8,6 +8,8 @@ on:
       - 'scripts/benchmark-*.mjs'
       - 'scripts/benchmark-*.test.js'
       - 'mods/**'
+      - 'orca-ui/**'
+      - 'scripts/ci-impact*.py'
       - 'layouts/**'
       - 'themes/**'
       - 'shared/**'
@@ -25,15 +27,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    name: Select impacted validation
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.plan.outputs.tests }}
+      has_tests: ${{ steps.plan.outputs.has_tests }}
+      mods: ${{ steps.plan.outputs.mods }}
+      has_mods: ${{ steps.plan.outputs.has_mods }}
+      config: ${{ steps.plan.outputs.config }}
+      snapshot: ${{ steps.plan.outputs.snapshot }}
+      git_benchmark: ${{ steps.plan.outputs.git_benchmark }}
+      lint: ${{ steps.plan.outputs.lint }}
+      native: ${{ steps.plan.outputs.native }}
+      has_native: ${{ steps.plan.outputs.has_native }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify selector contracts
+        run: python3 scripts/ci-impact-test.py
+      - name: Resolve change scope
+        id: plan
+        run: python3 scripts/ci-impact.py --output impact-plan.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: impact-plan
+          path: impact-plan.json
+          retention-days: 14
+
   capture:
     name: Native ${{ matrix.layout }} / ${{ matrix.stack }}
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: plan
+    if: needs.plan.outputs.has_native == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
       fail-fast: false
       max-parallel: 4
-      matrix:
-        layout: [orca, orca-unified]
-        stack: [main, panel-body]
+      matrix: ${{ fromJSON(needs.plan.outputs.native) }}
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -52,16 +83,19 @@ jobs:
           python -m pip install Pillow
       - name: Collect same-session provisional page measurements
         id: capture
+        env:
+          BENCH_PAGES: ${{ toJSON(matrix.pages) }}
         run: |
           herdr-app --version
           hc --version
-          python scripts/benchmark-pages.py --candidate-baseline --layout "${{ matrix.layout }}" --stack "${{ matrix.stack }}" --samples 30 --settle 0.5 --idle-seconds 3 --output "$RUNNER_TEMP/native-benchmark"
+          python -c 'import json,os,subprocess,sys; pages=json.loads(os.environ["BENCH_PAGES"]); sys.exit(subprocess.call(["python","scripts/benchmark-pages.py","--candidate-baseline","--layout",sys.argv[1],"--stack",sys.argv[2],"--samples","30","--settle","0.5","--idle-seconds","3","--output",os.environ["RUNNER_TEMP"]+"/native-benchmark"]+[arg for p in pages for arg in ("--page",p)]))' "${{ matrix.layout }}" "${{ matrix.stack }}"
       - name: Validate provisional report and evidence
         id: validate
         if: always()
         env:
           BENCH_STACK: ${{ matrix.stack }}
           BENCH_LAYOUT: ${{ matrix.layout }}
+          BENCH_PAGES: ${{ toJSON(matrix.pages) }}
         run: |
           python - <<'PY'
           import json, os, runpy
@@ -84,7 +118,9 @@ jobs:
                   assert (p / (key + "--after.png")).is_file()
               print(key, row["status"], row.get("warm", {}).get("metrics", {}).get("reference_match_ms", {}))
           plan = runpy.run_path("scripts/benchmark-pages.py")["plan"]()
-          expected = {r["page"] for r in plan if r["layout"] == os.environ["BENCH_LAYOUT"] and r["stack"] == os.environ["BENCH_STACK"]}
+          selected = set(json.loads(os.environ["BENCH_PAGES"]))
+          expected = {r["page"] for r in plan if r["layout"] == os.environ["BENCH_LAYOUT"] and r["stack"] == os.environ["BENCH_STACK"] and r["page"] in selected}
+          assert expected == selected
           actual = [r["page"] for r in report["pages"]]
           assert len(actual) == len(expected) and set(actual) == expected, (actual, expected, report.get("fatal_error"))
           assert all(r["status"] == ("not_measured" if r["page"] == "ports" else "provisional_measured") for r in report["pages"]), [(r["page"],r["status"],r.get("reason")) for r in report["pages"]]
@@ -137,7 +173,7 @@ jobs:
 
   feedback:
     name: AI benchmark feedback
-    needs: capture
+    needs: [plan, capture]
     if: always() && !cancelled() && needs.capture.result != 'skipped'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -159,13 +195,14 @@ jobs:
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           MATRIX_RESULT: ${{ needs.capture.result }}
+          NATIVE_SELECTION: ${{ needs.plan.outputs.native }}
         run: |
           python3 scripts/benchmark-report.py \
             --input "$RUNNER_TEMP/benchmark-input" \
             --output "$RUNNER_TEMP/ai-benchmark-report" \
             --commit "$GITHUB_SHA" --head "$PR_HEAD" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            --matrix-result "$MATRIX_RESULT"
+            --matrix-result "$MATRIX_RESULT" --selection "$NATIVE_SELECTION"
           cat "$RUNNER_TEMP/ai-benchmark-report/report.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         id: report

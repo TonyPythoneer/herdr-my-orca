@@ -20,8 +20,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    name: Select impacted validation
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.plan.outputs.tests }}
+      has_tests: ${{ steps.plan.outputs.has_tests }}
+      mods: ${{ steps.plan.outputs.mods }}
+      has_mods: ${{ steps.plan.outputs.has_mods }}
+      config: ${{ steps.plan.outputs.config }}
+      snapshot: ${{ steps.plan.outputs.snapshot }}
+      git_benchmark: ${{ steps.plan.outputs.git_benchmark }}
+      lint: ${{ steps.plan.outputs.lint }}
+      native: ${{ steps.plan.outputs.native }}
+      has_native: ${{ steps.plan.outputs.has_native }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify selector contracts
+        run: python3 scripts/ci-impact-test.py
+      - name: Resolve change scope
+        id: plan
+        run: python3 scripts/ci-impact.py --output impact-plan.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: impact-plan
+          path: impact-plan.json
+          retention-days: 14
+
   validate:
     name: Config and syntax validation
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,11 +67,14 @@ jobs:
           python3 --version
           bash --version | head -n 1
       - name: Validate configuration and mod manifests
+        if: needs.plan.outputs.config == 'true'
         run: node scripts/check-config.mjs
       - name: Check JavaScript syntax
+        if: needs.plan.outputs.config == 'true'
         run: |
           git ls-files -z -- '*.js' '*.mjs' | xargs -0 -r -n 1 node --check
       - name: Check Python and shell syntax
+        if: needs.plan.outputs.config == 'true'
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -51,12 +85,22 @@ jobs:
           PY
           git ls-files -z -- '*.sh' | xargs -0 -r -n 1 bash -n
       - name: Check generated Orca UI and shared helpers
+        if: needs.plan.outputs.config == 'true'
         run: node scripts/build-orca-ui.mjs --check --out .
       - name: Run UI snapshot observer unit tests (no GUI)
+        if: needs.plan.outputs.snapshot == 'true'
         run: python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
+      - name: Lint impacted handwritten code
+        if: needs.plan.outputs.lint != '[]'
+        env:
+          LINT_PATHS: ${{ needs.plan.outputs.lint }}
+        run: |
+          mapfile -t paths < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["LINT_PATHS"])))')
+          npx --yes eslint@9 -c eslint.config.mjs --max-warnings 0 --no-error-on-unmatched-pattern "${paths[@]}"
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
       - name: Paired Git branch-header microbenchmark
+        if: needs.plan.outputs.git_benchmark == 'true'
         run: |
           python3 scripts/benchmark-git-status.py --output "$RUNNER_TEMP/git-status-benchmark.json"
           python3 - "$RUNNER_TEMP/git-status-benchmark.json" <<'PY'
@@ -69,6 +113,7 @@ jobs:
                   f.write(f"| {m} | {d['before'][m]} | {d['after'][m]} | {d[m + '_reduction_pct']}% |\n")
           PY
       - uses: actions/upload-artifact@v4
+        if: needs.plan.outputs.git_benchmark == 'true'
         with:
           name: git-status-benchmark
           path: ${{ runner.temp }}/git-status-benchmark.json
@@ -76,12 +121,13 @@ jobs:
 
   tests:
     name: Tests (${{ matrix.suite }})
+    needs: plan
+    if: needs.plan.outputs.has_tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
-      matrix:
-        suite: [unit, behavior]
+      matrix: ${{ fromJSON(needs.plan.outputs.tests) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,27 +144,25 @@ jobs:
       - name: Run assigned test suite
         shell: bash
         env:
-          TEST_SUITE: ${{ matrix.suite }}
+          SELECTED_TESTS: ${{ toJSON(matrix.files) }}
         run: |
           export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
-          mapfile -d '' tests < <(git ls-files -z -- 'mods/*.test.js' 'mods/*.test.mjs' 'mods/*.test.cjs' 'scripts/*.test.js' 'scripts/*.test.mjs' 'scripts/*.test.cjs' 'orca-ui/features/*.test.js' 'orca-ui/features/*.test.mjs' 'orca-ui/features/*.test.cjs')
-          selected=()
-          for file in "${tests[@]}"; do
-            case "$file" in
-              *flow.test.*|*golden.test.*|*/render.test.*|*/git-refresh.test.*|*/interactions.test.*) suite=behavior ;;
-              *) suite=unit ;;
-            esac
-            if [[ "$suite" == "$TEST_SUITE" ]]; then selected+=("$file"); fi
-          done
+          mapfile -t selected < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["SELECTED_TESTS"])))')
           test "${#selected[@]}" -gt 0
-          echo "Running ${#selected[@]} tracked test files ($TEST_SUITE)"
-          node --test --test-timeout=60000 "${selected[@]}"
+          set -o pipefail
+          node --test --test-timeout=60000 --experimental-test-coverage --test-coverage-exclude='**/*.test.*' "${selected[@]}" | tee "$RUNNER_TEMP/selected-tests.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selected-tests-${{ matrix.suite }}
+          path: ${{ runner.temp }}/selected-tests.log
+          retention-days: 14
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 
   checks:
     name: Tests and config validation
-    needs: [validate, tests]
+    needs: [plan, validate, tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -126,7 +170,11 @@ jobs:
         env:
           VALIDATION: ${{ needs.validate.result }}
           TESTS: ${{ needs.tests.result }}
-        run: test "$VALIDATION" = success && test "$TESTS" = success
+          PLAN: ${{ needs.plan.result }}
+          HAS_TESTS: ${{ needs.plan.outputs.has_tests }}
+        run: |
+          test "$PLAN" = success && test "$VALIDATION" = success
+          if [ "$HAS_TESTS" = true ]; then test "$TESTS" = success; else test "$TESTS" = skipped; fi
 
   package:
     name: Package validated config
@@ -153,8 +201,8 @@ jobs:
 
   native:
     name: Herdr native mod check (isolated)
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.native_check)
-    needs: checks
+    if: needs.plan.outputs.has_mods == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.native_check))
+    needs: [plan, checks]
     runs-on: macos-15
     timeout-minutes: 15
     steps:
@@ -167,8 +215,10 @@ jobs:
           curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
           sh "$RUNNER_TEMP/herdr-install.sh"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Validate all mods in an isolated Herdr app home
+      - name: Validate impacted mods in an isolated Herdr app home
         shell: bash
+        env:
+          SELECTED_MODS: ${{ needs.plan.outputs.mods }}
         run: |
           export HERDR_APP_HOME="$RUNNER_TEMP/herdr-ci-home"
           mkdir -p "$HERDR_APP_HOME"
@@ -176,13 +226,14 @@ jobs:
           cd "$HERDR_APP_HOME"
           test "$(find mods -mindepth 2 -maxdepth 2 -name mod.json | wc -l | tr -d ' ')" -gt 0
           failed=0
-          for manifest in "$HERDR_APP_HOME"/mods/*/mod.json; do
-            mod="${manifest%/mod.json}"
+          while IFS= read -r name; do
+            mod="$HERDR_APP_HOME/mods/$name"
+            test -f "$mod/mod.json" || exit 1
             echo "::group::${mod##*/}"
             if ! herdr-app check "$mod"; then
               echo "::error::Native check failed for ${mod##*/}"
               failed=1
             fi
             echo "::endgroup::"
-          done
+          done < <(python3 -c 'import os,json; print("\n".join(json.loads(os.environ["SELECTED_MODS"])))')
           exit "$failed"
