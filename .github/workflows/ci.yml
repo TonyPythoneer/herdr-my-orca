@@ -31,6 +31,7 @@ jobs:
       config: ${{ steps.plan.outputs.config }}
       snapshot: ${{ steps.plan.outputs.snapshot }}
       git_benchmark: ${{ steps.plan.outputs.git_benchmark }}
+      projection_benchmark: ${{ steps.plan.outputs.projection_benchmark }}
       lint: ${{ steps.plan.outputs.lint }}
       syntax: ${{ steps.plan.outputs.syntax }}
       native: ${{ steps.plan.outputs.native }}
@@ -119,6 +120,15 @@ jobs:
         with:
           name: git-status-benchmark
           path: ${{ runner.temp }}/git-status-benchmark.json
+          if-no-files-found: error
+      - name: Benchmark workspace projection at increasing sizes
+        if: needs.plan.outputs.projection_benchmark == 'true'
+        run: node scripts/benchmark-worktree-plan.mjs "$RUNNER_TEMP/worktree-projection.json"
+      - uses: actions/upload-artifact@v4
+        if: needs.plan.outputs.projection_benchmark == 'true'
+        with:
+          name: worktree-projection-benchmark
+          path: ${{ runner.temp }}/worktree-projection.json
           if-no-files-found: error
 
   tests:
@@ -210,6 +220,7 @@ jobs:
               '| Native mod checks | ' + p.native_mods.length + ' | — | separate job |',
               '| Config / syntax / lint | — | — | ' + process.env.VALIDATION_RESULT + ' |',
               '| Git benchmark | ' + (p.git_benchmark ? 'selected' : 'not selected') + ' | — | see validation |',
+              '| Workspace projection | ' + (p.projection_benchmark ? 'selected' : 'not selected') + ' | — | see validation |',
               '', 'Full fallback: ' + p.full + '. Unselected work is not a passing measurement.',
               '', '[Impact plan and scoped coverage artifacts](' + url + ')'
             ].join('\n');

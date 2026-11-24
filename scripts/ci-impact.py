@@ -4,6 +4,7 @@ import argparse
 from collections import defaultdict
 import json
 import os
+import posixpath
 from pathlib import Path
 import re
 import subprocess
@@ -62,6 +63,27 @@ def shared_outputs(root):
     return result
 
 
+def dependent_tests(root, files, changed, tests):
+    """Reverse transitive relative-path references, including imports and fixture URLs."""
+    tracked = set(files)
+    reverse = defaultdict(set)
+    for path in tracked:
+        if not path.startswith(("mods/", "scripts/", "orca-ui/")) or not path.endswith((".js", ".mjs", ".cjs", ".py")):
+            continue
+        source = (root / path).read_text(errors="replace")
+        for target in re.findall(r"""['"](\.{1,2}/[^'"\n]+)['"]""", source):
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), target))
+            if resolved in tracked:
+                reverse[resolved].add(path)
+    seen = set(changed)
+    queue = list(seen)
+    while queue:
+        for user in reverse[queue.pop()] - seen:
+            seen.add(user)
+            queue.append(user)
+    return seen.intersection(tests)
+
+
 def select(root, files, changed, force=False):
     tests = sorted(p for p in files if TEST.search(p) and p.startswith(("mods/", "scripts/", "orca-ui/features/")))
     mods = {module(p) for p in files if p.endswith("/mod.json") and module(p)}
@@ -71,6 +93,7 @@ def select(root, files, changed, force=False):
     full = force
     all_native = force
     git_bench = force
+    projection_bench = force
     snapshot = force
     config = force
     for path in sorted(set(changed)):
@@ -85,6 +108,9 @@ def select(root, files, changed, force=False):
         elif path.startswith("scripts/benchmark-"):
             if path == "scripts/benchmark-git-status.py":
                 git_bench = True
+            elif path == "scripts/benchmark-worktree-plan.mjs":
+                projection_bench = True
+                lint.add(path)
             else:
                 all_native = True
             selected.update(p for p in tests if p.startswith("scripts/benchmark-"))
@@ -103,6 +129,8 @@ def select(root, files, changed, force=False):
             config = True
             if path == "mods/orca-spaces/main.js":
                 git_bench = True
+            if path == "mods/orca-spaces/worktree-plan.js":
+                projection_bench = True
             reasons[path] = "mod implementation or fixture"
         elif path in ("layouts/orca.json", "layouts/orca-unified.json"):
             config = True
@@ -115,6 +143,7 @@ def select(root, files, changed, force=False):
             all_native = True
             reasons[path] = "global or unclassified: full fallback"
     affected.update(direct)
+    selected.update(dependent_tests(root, files, changed, tests))
     for mod in direct:
         affected.update(CONTRACTS.get(mod, set()) & mods)
     for mod in affected:
@@ -135,7 +164,7 @@ def select(root, files, changed, force=False):
     if full:
         selected.update(tests)
         affected.update(mods)
-        git_bench = snapshot = config = True
+        git_bench = projection_bench = snapshot = config = True
     if all_native:
         page_keys.update((l, s, p) for l, s, p, _ in layouts)
     # Lint every affected handwritten area, not unrelated modules. Global fallback uses all.
@@ -156,7 +185,7 @@ def select(root, files, changed, force=False):
             "direct_mods": sorted(direct), "native_mods": sorted(affected),
             "test_matrix": {"include": test_matrix}, "total_test_files": len(tests),
             "selected_test_files": len(selected), "lint_paths": sorted(lint),
-            "config": config, "snapshot": snapshot, "git_benchmark": git_bench, "syntax_paths": syntax,
+            "config": config, "snapshot": snapshot, "git_benchmark": git_bench, "projection_benchmark": projection_bench, "syntax_paths": syntax,
             "native_matrix": {"include": matrix}, "native_routes": len(page_keys),
             "total_native_routes": len(layouts)}
 
@@ -185,7 +214,7 @@ def main():
                "has_tests": bool(result["test_matrix"]["include"]), "has_native": bool(result["native_matrix"]["include"]),
                "mods": result["native_mods"], "has_mods": bool(result["native_mods"]),
                "lint": result["lint_paths"], "syntax": result["syntax_paths"], "config": result["config"], "snapshot": result["snapshot"],
-               "git_benchmark": result["git_benchmark"], "full": result["full"]}
+               "git_benchmark": result["git_benchmark"], "projection_benchmark": result["projection_benchmark"], "full": result["full"]}
         with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
             for key, value in out.items():
                 stream.write(key + "=" + json.dumps(value, separators=(",", ":")) + "\n")
@@ -196,6 +225,7 @@ def main():
             stream.write(f"- Native routes: {result['native_routes']}/{result['total_native_routes']}\n")
             stream.write(f"- Native mods: {len(result['native_mods'])}\n")
             stream.write(f"- Git benchmark: {result['git_benchmark']}\n")
+            stream.write(f"- Workspace projection benchmark: {result['projection_benchmark']}\n")
             stream.write(f"- Full fallback: {result['full']}\n")
             stream.write("\nSee the impact-plan artifact for selected paths and reasons.\n")
 

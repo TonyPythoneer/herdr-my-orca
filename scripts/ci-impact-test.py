@@ -32,6 +32,13 @@ class ImpactTest(unittest.TestCase):
         self.assertLess(p["selected_test_files"], p["total_test_files"])
         self.assertIn("scripts/perf-spaces-virtual.test.js", [f for row in p["test_matrix"]["include"] for f in row["files"]])
 
+    def test_projection(self):
+        p = self.plan("mods/orca-spaces/worktree-plan.js")
+        self.assertTrue(p["projection_benchmark"])
+        self.assertFalse(p["git_benchmark"])
+        self.assertEqual(p["native_routes"], 0)
+        self.assertIn("scripts/perf-spaces-virtual.test.js", [f for row in p["test_matrix"]["include"] for f in row["files"]])
+
     def test_files_page(self):
         p = self.plan("mods/orca-files/main.js")
         self.assertEqual(p["native_routes"], 2)
