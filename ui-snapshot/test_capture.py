@@ -54,3 +54,17 @@ class ModInventoryTests(unittest.TestCase):
         self.assertEqual(len(agents),2)
         self.assertTrue(all(c["control"]["mouse_only"] for c in agents))
         self.assertNotEqual(agents[0]["control"]["xy"],agents[1]["control"]["xy"])
+
+
+class NativeLogTests(unittest.TestCase):
+    def test_expired_context_is_a_click_failure(self):
+        from capture import click_errors
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/"app.log"
+            path.write_bytes(b"old ERROR quickjs\n")
+            offset=path.stat().st_size
+            with path.open("ab") as stream:
+                stream.write(b"\x1b[31mERROR\x1b[0m gpui_shell::engine::quickjs: error in click handler: cx is no longer valid\n")
+                stream.write(b"WARN unrelated startup warning\n")
+            self.assertEqual(len(click_errors(path,offset)),1)
+            self.assertIn("cx is no longer valid",click_errors(path,offset)[0])

@@ -49,6 +49,15 @@ def verify_delivery(target, config):
         raise RuntimeError("Incomplete Orca deployment")
     return records
 
+def click_errors(log_path, offset):
+    """Catch GPUI errors not reflected in native status(), including expired cx."""
+    with log_path.open("rb") as stream:
+        stream.seek(offset)
+        text = stream.read().decode("utf-8", errors="replace")
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    return [line.strip() for line in text.splitlines()
+            if re.search(r"\bERROR\b.*(?:error in .*handler|cx is no longer valid|render|quickjs)", line, re.I)]
+
 def blocking_overlays(status):
     return [o for o in status.get("overlays", []) if o != "toast"]
 
@@ -312,10 +321,15 @@ def main():
                     try:
                         setup(case)
                         shot(row,"before")
+                        log_offset = (out/"app.log").stat().st_size
                         interact(row,case["control"])
                         time.sleep(case.get("wait",1.0))
                         after = status()
                         row["status"] = after
+                        runtime_errors = click_errors(out/"app.log", log_offset)
+                        if runtime_errors:
+                            row["runtimeErrors"] = runtime_errors
+                            raise RuntimeError("Native click/render handler error: "+runtime_errors[0])
                         if after.get("layout") != case.get("layout","orca") or after.get("errors"):
                             raise RuntimeError("Unexpected layout or native runtime error")
                         expected = case.get("overlay")
@@ -346,6 +360,10 @@ def main():
                             shot(row,"closed")
                             if row["images"]["after"]["sha256"] == row["images"]["closed"]["sha256"]:
                                 raise RuntimeError("No visible change on popup dismissal")
+                        runtime_errors = click_errors(out/"app.log", log_offset)
+                        if runtime_errors:
+                            row["runtimeErrors"] = runtime_errors
+                            raise RuntimeError("Native click/render handler error: "+runtime_errors[0])
                         row["result"]="captured"
                     except Exception as e:
                         row["result"]="blocked" if isinstance(e,PermissionError) else "failed"
