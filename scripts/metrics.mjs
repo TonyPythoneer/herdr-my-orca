@@ -93,6 +93,8 @@ function againstBaseline(current, baseline) {
 export function judge(current, baseline) {
   const failures = [];
   if (current.tests.fail > GATES.failedTests) failures.push(`${current.tests.fail} test(s) fail`);
+  if (current.tests.executionError) failures.push(current.tests.executionError);
+  if (current.lint.total < 0 || current.lint.error) failures.push("eslint did not produce a valid report");
   if (current.drift.exitCode !== 0) failures.push("build-orca-ui --check reports drift");
   const compared = baseline ? againstBaseline(current, baseline) : { failures: [], warnings: [] };
   failures.push(...compared.failures);
@@ -154,21 +156,39 @@ function sizes() {
   return { sourceFiles, sourceLines, testLines };
 }
 
+export function trackedTestFiles(text) {
+  return text.split("\0").filter(path => /^(mods|scripts|orca-ui\/features)\//.test(path) && /\.test\.[cm]?js$/.test(path));
+}
+
+function collectTests() {
+  const listed = run("git", ["ls-files", "-z", "--", "mods", "scripts", "orca-ui/features"]);
+  if (listed.status !== 0) throw new Error("Cannot enumerate tracked tests: " + listed.stderr);
+  const files = trackedTestFiles(listed.stdout);
+  if (!files.length) throw new Error("No tracked tests found");
+  const out = run(process.execPath, ["--test", "--test-reporter=spec", "--test-timeout=60000", "--experimental-test-coverage", "--test-coverage-exclude=**/*.test.*", ...files], { env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" } });
+  const output = (out.stdout ?? "") + (out.stderr ?? "");
+  const tests = parseTestSummary(output);
+  const rows = parseCoverage(output);
+  if (out.status !== 0 || !tests.tests || !rows.length) {
+    tests.executionError = `Test/coverage execution failed (exit ${out.status}, ${tests.tests} tests, ${rows.length} coverage rows)`;
+    console.error(output);
+  }
+  return { tests, rows };
+}
+
 function collect({ skipTests }) {
   let tests = { tests: 0, pass: 0, fail: 0, skipped: 0, durationMs: 0 };
   let rows = [];
-  if (!skipTests) {
-    const out = run(process.execPath, ["--test", "--experimental-test-coverage", "--test-coverage-exclude=**/*.test.*", "mods", "scripts", "orca-ui/features"]);
-    const text = out.stdout + out.stderr;
-    tests = parseTestSummary(text);
-    rows = parseCoverage(text);
-  }
+  if (!skipTests) ({ tests, rows } = collectTests());
   const overallRow = rows.length ? { line: 0, branch: 0, funcs: 0 } : { line: 0, branch: 0, funcs: 0 };
   for (const k of ["line", "branch", "funcs"]) overallRow[k] = rows.length ? Math.round((rows.reduce((s, r) => s + r[k], 0) / rows.length) * 100) / 100 : 0;
   const eslint = process.env.ESLINT_BIN ? [process.env.ESLINT_BIN] : ["npx", "--yes", "eslint@9"];
   const lintRun = run(eslint[0], [...eslint.slice(1), "-c", "eslint.config.mjs", "--format", "json", "mods", "scripts", "orca-ui"]);
   let lint;
-  try { lint = summarizeLint(JSON.parse(lintRun.stdout)); } catch { lint = { total: -1, byRule: {}, byArea: {}, worstComplexity: [], error: (lintRun.stderr || "eslint produced no JSON").slice(0, 300) }; }
+  try {
+    if (lintRun.status !== 0 && lintRun.status !== 1) throw new Error("eslint execution failed");
+    lint = summarizeLint(JSON.parse(lintRun.stdout));
+  } catch { lint = { total: -1, byRule: {}, byArea: {}, worstComplexity: [], error: (lintRun.stderr || "eslint produced no JSON").slice(0, 300) }; }
   const drift = run(process.execPath, ["scripts/build-orca-ui.mjs", "--check", "--out", "."]);
   const commit = run("git", ["rev-parse", "--short", "HEAD"]).stdout.trim() || "unknown";
   return {
