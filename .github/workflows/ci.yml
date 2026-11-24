@@ -56,6 +56,23 @@ jobs:
         run: python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
+      - name: Paired Git branch-header microbenchmark
+        run: |
+          python3 scripts/benchmark-git-status.py --output "$RUNNER_TEMP/git-status-benchmark.json"
+          python3 - "$RUNNER_TEMP/git-status-benchmark.json" <<'PY'
+          import json, sys, os
+          d = json.load(open(sys.argv[1]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("## Git branch-header microbenchmark (synthetic, not app latency)\n")
+              f.write("| Metric | Before ms | After ms | Reduction |\n|---|---:|---:|---:|\n")
+              for m in ("p50_ms", "p95_ms"):
+                  f.write(f"| {m} | {d['before'][m]} | {d['after'][m]} | {d[m + '_reduction_pct']}% |\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: git-status-benchmark
+          path: ${{ runner.temp }}/git-status-benchmark.json
+          if-no-files-found: error
 
   tests:
     name: Tests (${{ matrix.suite }})

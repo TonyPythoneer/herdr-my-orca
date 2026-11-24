@@ -573,13 +573,13 @@ export default class Spaces extends View {
         this.pending.clear();
         await Promise.all(batch.map((key) => this.check(key, taskCx)));
       }
+      pruneGitCache(this.git, spaces(), this.checked);
       const used = new Set(Object.values(this.git).filter(Boolean).map((g) => readPair(g.repo)).filter(([on]) => !on).map(([, repo]) => repo));
       for (const repo of this.watching.keys()) if (!used.has(repo)) this.stopWatch(repo);
       this.refreshing = false;
       this.refreshingAll = false;
       this.loaded = true;
       // The refresh is the only writer, so one write per completed pass is enough.
-      pruneGitCache(this.git, spaces(), this.checked);
       localStorage.setItem("git.cache.v2", JSON.stringify(this.git));
       this.notify(taskCx);
     });
@@ -593,7 +593,7 @@ export default class Spaces extends View {
     this.unsure.delete(key);
     try {
       // No optional locks: a status that touched the index would wake the watch again.
-      // Writes nothing under .git (index lock, fsmonitor cookie): watch() would wake on it.
+      // Only branch headers are consumed; skip the untracked-file traversal.
       const r = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch", "--untracked-files=no"], { cwd, on });
       if (r.code !== 0) {
         await this.refreshCatalog(cached, on);

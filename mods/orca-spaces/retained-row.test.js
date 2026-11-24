@@ -15,7 +15,7 @@ function fixture() {
   vm.runInNewContext(source + '\nglobalThis.Spaces = Spaces;', scope);
   const owner = new scope.Spaces();
   Object.assign(owner, {
-    retainedRows: new Map(), retainedPending: new Map(), foldedRepos: new Set(),
+    retainedRows: new Map(), retainedPending: new Map(), foldedRepos: new Set(), watching: new Map(),
     expandedAgents: new Set(), unread: new Set(), fs: { keyboard: false },
     rowIndex: new Map(), reviewOf: () => null, direct: 0,
     rowElements(data) { this.direct++; return [data.r]; },
