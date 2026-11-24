@@ -93,8 +93,8 @@ jobs:
           retention-days: 14
 
   native:
-    name: Herdr native mod check (manual)
-    if: github.event_name == 'workflow_dispatch' && inputs.native_check
+    name: Herdr native mod check (isolated)
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.native_check)
     needs: checks
     runs-on: macos-15
     timeout-minutes: 15
@@ -113,7 +113,9 @@ jobs:
         run: |
           export HERDR_APP_HOME="$RUNNER_TEMP/herdr-ci-home"
           mkdir -p "$HERDR_APP_HOME"
-          cp -R layouts mods themes keys.json programs.json settings.json "$HERDR_APP_HOME/"
+          git archive HEAD | tar -x -C "$HERDR_APP_HOME"
+          cd "$HERDR_APP_HOME"
+          test "$(find mods -mindepth 2 -maxdepth 2 -name mod.json | wc -l | tr -d ' ')" -gt 0
           failed=0
           for manifest in "$HERDR_APP_HOME"/mods/*/mod.json; do
             mod="${manifest%/mod.json}"
