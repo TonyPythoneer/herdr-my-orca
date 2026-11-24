@@ -17,39 +17,43 @@ const list = items => (items.length ? items.join(", ") : "-");
 // lstat, so a symlink out of the mod is not offered as an in-place edit target.
 const isPlainFile = path => { try { return lstatSync(path).isFile(); } catch { return false; } };
 
-// `entries` is app.mjs's `features` and `inPlace` its map of mods edited in place; both only add hints.
-export function locate(text, table, entries = [], root = ROOT, inPlace = []) {
+const UNKNOWN = "unknown path: no such mod in this repo";
+const NOT_MAPPED = "not in app.mjs yet: edit this file in place";
+const nextHint = next => (next?.length ? `; next ${list(next)}` : "");
+const slotNames = layoutSlots => Object.entries(layoutSlots).flatMap(([layout, ids]) => ids.map(id => `${layout}#${id}`));
+// A frame whose path steps out of its mod (`..`, `.` or an empty segment) is never trusted.
+const escapes = (mod, file) => `${mod}/${file}`.split("/").some(part => part === ".." || part === "." || part === "");
+
+// A hit for a file a manifest produces: where to edit the source, plus its tests, layouts and next.
+function tableNote(row, mod, table, { features }) {
+  const entry = features.find(e => (row.kind === "feature" ? e.manifest?.feature === row.id : e.area === "shared"));
+  const detail = `; tests ${list(row.tests)}; layouts ${list(slotNames(row.layoutSlots))}`;
+  if (row.kind === "feature") return `feature "${row.id}"${detail}${nextHint(entry?.next)}`;
+  const modHasFeature = [...table].some(([dest, r]) => r.kind === "feature" && dest.startsWith(`mods/${mod}/`));
+  return `shared helper, copied into ${list(row.consumers)}${modHasFeature ? detail : ""}${nextHint(entry?.next)}`;
+}
+
+// A hit for a plain file in a mod no manifest generates.
+function inPlaceNote(mod, { inPlace }) {
+  const mapped = inPlace.find(e => e.mod === mod);
+  if (!mapped) return NOT_MAPPED;
+  return `edit this file in place; mod "${mod}" is in app.mjs; tests ${list(mapped.tests ?? [])}; layouts ${list(mapped.layouts ?? [])}${nextHint(mapped.next)}`;
+}
+
+// `hints` is what app.mjs exports: `features` and `inPlace` only add reading hints, and `root` is
+// the repo to check plain files against.
+export function locate(text, table, { features = [], inPlace = [], root = ROOT } = {}) {
+  const hints = { features, inPlace };
   const out = [];
   for (const [, mod, file, l, c] of text.matchAll(FRAME)) {
-    const line = Number(l);
-    if (line === 0) continue;
-    const at = path => `${path}:${line}${c ? `:${c}` : ""}`;
+    if (Number(l) === 0) continue;
+    const at = path => `${path}:${Number(l)}${c ? `:${c}` : ""}`;
     const frame = at(`mods/${mod}/${file}`);
-    const parts = `${mod}/${file}`.split("/");
-    if (parts.some(p => p === ".." || p === "." || p === "")) {
-      out.push({ frame, edit: frame, kind: "unknown", note: "unknown path: no such mod in this repo" });
-      continue;
-    }
-    const row = table.get(`mods/${mod}/${file}`);
-    if (row) {
-      const entry = entries.find(e => (row.kind === "feature" ? e.manifest?.feature === row.id : e.area === "shared"));
-      const next = entry?.next?.length ? `; next ${list(entry.next)}` : "";
-      const owned = [...table].some(([dest, r]) => r.kind === "feature" && dest.startsWith(`mods/${mod}/`));
-      const slots = Object.entries(row.layoutSlots).flatMap(([layout, ids]) => ids.map(id => `${layout}#${id}`));
-      const detail = `; tests ${list(row.tests)}; layouts ${list(slots)}`;
-      const note = row.kind === "feature"
-        ? `feature "${row.id}"${detail}${next}`
-        : `shared helper, copied into ${list(row.consumers)}${owned ? detail : ""}${next}`;
-      out.push({ frame, edit: at(row.source), kind: row.kind, note });
-    } else if (isPlainFile(join(root, "mods", mod, "mod.json")) && isPlainFile(join(root, "mods", mod, file))) {
-      const mapped = inPlace.find(e => e.mod === mod);
-      const note = mapped
-        ? `edit this file in place; mod "${mod}" is in app.mjs; tests ${list(mapped.tests ?? [])}; layouts ${list(mapped.layouts ?? [])}${mapped.next?.length ? `; next ${list(mapped.next)}` : ""}`
-        : "not in app.mjs yet: edit this file in place";
-      out.push({ frame, edit: frame, kind: "in-place", note });
-    } else {
-      out.push({ frame, edit: frame, kind: "unknown", note: "unknown path: no such mod in this repo" });
-    }
+    const row = escapes(mod, file) ? null : table.get(`mods/${mod}/${file}`);
+    const plain = !escapes(mod, file) && isPlainFile(join(root, "mods", mod, "mod.json")) && isPlainFile(join(root, "mods", mod, file));
+    if (row) out.push({ frame, edit: at(row.source), kind: row.kind, note: tableNote(row, mod, table, hints) });
+    else if (plain) out.push({ frame, edit: frame, kind: "in-place", note: inPlaceNote(mod, hints) });
+    else out.push({ frame, edit: frame, kind: "unknown", note: UNKNOWN });
   }
   return out;
 }
@@ -70,7 +74,7 @@ async function main() {
   }
   // app.mjs only adds `next`; a missing or broken one must not stop the lookup.
   const app = await import(pathToFileURL(join(ROOT, "orca-ui", "app.mjs")).href).catch(() => ({}));
-  const hits = locate(text, table, app.features ?? [], ROOT, app.inPlace ?? []);
+  const hits = locate(text, table, { features: app.features, inPlace: app.inPlace });
   if (!hits.length) { console.error("no mods/<mod>/<file>:<line> frame found in the input"); process.exit(1); }
   for (const h of hits) console.log(`${h.edit}\n  from ${h.frame}; ${h.note}`);
 }

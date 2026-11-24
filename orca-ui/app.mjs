@@ -62,7 +62,6 @@ export const inPlace = [
       "mods/agent-config/lists.test.js",
       "mods/agent-config/render.golden.test.js"
     ],
-    "exec": true,
     "next": [
       "mods/orca-files/main.js"
     ]
@@ -96,8 +95,7 @@ export const inPlace = [
       "mods/orca-agent-manager/render.test.js",
       "mods/orca-agent-manager/state.test.js",
       "mods/orca-agent-manager/util.test.js"
-    ],
-    "exec": true
+    ]
   },
   {
     "mod": "orca-agents",
@@ -111,8 +109,7 @@ export const inPlace = [
     "opens": [
       "terminal.open",
       "agent.focus"
-    ],
-    "exec": true
+    ]
   },
   {
     "mod": "orca-changes",
@@ -146,7 +143,6 @@ export const inPlace = [
       "mods/orca-changes/push-target.test.js",
       "mods/orca-changes/section-view.test.js"
     ],
-    "exec": true,
     "next": [
       "mods/orca-diff/main.js",
       "mods/orca-files/main.js"
@@ -176,7 +172,6 @@ export const inPlace = [
       "tasks.state",
       "tasks.resets"
     ],
-    "exec": true,
     "next": [
       "mods/orca-chrome/runner.js",
       "mods/orca-tasks/main.js"
@@ -194,8 +189,7 @@ export const inPlace = [
     ],
     "shared": [
       "props.confirmShared.key (dynamic set)"
-    ],
-    "exec": false
+    ]
   },
   {
     "mod": "orca-diff",
@@ -215,8 +209,7 @@ export const inPlace = [
       "mods/orca-diff/diff-data.test.js",
       "mods/orca-diff/diff-load.test.js",
       "mods/orca-diff/diff.test.js"
-    ],
-    "exec": true
+    ]
   },
   {
     "mod": "orca-files",
@@ -257,7 +250,6 @@ export const inPlace = [
       "mods/orca-files/tree-keys.test.js",
       "mods/orca-files/tree-nav.test.js"
     ],
-    "exec": true,
     "next": [
       "mods/orca-confirm/main.js"
     ]
@@ -286,7 +278,6 @@ export const inPlace = [
       "orca-float.open",
       "orca-float.attention"
     ],
-    "exec": false,
     "next": [
       "mods/orca-new-menu/main.js"
     ]
@@ -300,8 +291,7 @@ export const inPlace = [
     ],
     "reachedBy": [
       "overlay:dialog opened by orca-menu (handoff and fork items)"
-    ],
-    "exec": true
+    ]
   },
   {
     "mod": "orca-landing",
@@ -315,7 +305,6 @@ export const inPlace = [
       "space.new",
       "overlay:orca-new-menu"
     ],
-    "exec": false,
     "next": [
       "mods/orca-new-menu/main.js"
     ]
@@ -347,7 +336,6 @@ export const inPlace = [
       "mods/orca-menu/close-sides.test.js",
       "mods/orca-menu/close-space.test.js"
     ],
-    "exec": true,
     "next": [
       "mods/orca-tabs/main.js",
       "mods/orca-handoff/main.js",
@@ -382,7 +370,6 @@ export const inPlace = [
     "tests": [
       "mods/orca-nav/refresh.test.js"
     ],
-    "exec": false,
     "next": [
       "mods/orca-new-menu/main.js"
     ]
@@ -410,7 +397,6 @@ export const inPlace = [
       "mods/orca-new-menu/inventory.test.js",
       "mods/orca-new-menu/rows.test.js"
     ],
-    "exec": true,
     "next": [
       "mods/orca-worktree/main.js",
       "mods/agent-config/main.js"
@@ -442,7 +428,6 @@ export const inPlace = [
     "tests": [
       "mods/orca-pane/crew.test.js"
     ],
-    "exec": false,
     "next": [
       "mods/orca-menu/main.js"
     ]
@@ -464,8 +449,7 @@ export const inPlace = [
     "props": "tab: workspaces|pr-checks|checks|ports; unified:true (unified only)",
     "tests": [
       "mods/orca-panel-gap/panel-motion.test.js"
-    ],
-    "exec": false
+    ]
   },
   {
     "mod": "orca-spaces",
@@ -503,7 +487,6 @@ export const inPlace = [
       "mods/orca-spaces/storage.test.js",
       "mods/orca-spaces/worktree-plan.test.js"
     ],
-    "exec": true,
     "next": [
       "mods/orca-menu/main.js"
     ]
@@ -526,7 +509,6 @@ export const inPlace = [
     "reachedBy": [
       "mod.open:orca-split-menu (keys.json)"
     ],
-    "exec": false,
     "next": [
       "mods/orca-files/main.js",
       "mods/orca-changes/main.js"
@@ -562,7 +544,6 @@ export const inPlace = [
       "mods/orca-status/usage.test.js",
       "mods/orca-status/wt-follow.test.js"
     ],
-    "exec": true,
     "next": [
       "mods/orca-float/main.js"
     ]
@@ -615,7 +596,6 @@ export const inPlace = [
       "mods/orca-tabs/tab-title.test.js",
       "mods/orca-tabs/unofficial-apps.test.js"
     ],
-    "exec": false,
     "next": [
       "mods/orca-menu/main.js",
       "mods/orca-new-menu/main.js"
@@ -644,7 +624,6 @@ export const inPlace = [
     "tests": [
       "mods/orca-tasks/tasks.test.js"
     ],
-    "exec": false,
     "next": [
       "mods/orca-chrome/runner.js"
     ]
@@ -665,8 +644,7 @@ export const inPlace = [
       "mods/orca-worktree/helpers.test.js",
       "mods/orca-worktree/remove.test.js",
       "mods/orca-worktree/switch.test.js"
-    ],
-    "exec": true
+    ]
   },
   {
     "mod": "skillshare",
@@ -692,15 +670,10 @@ export const inPlace = [
       "skillshare.panelUpdate.v1",
       "skillshare.inSyncView.v1",
       "skillshare.recent.v1"
-    ],
-    "exec": true
+    ]
   }
 ];
 
-// Settings that belong to features rather than to the builder: seed-once, never regenerated.
-export const settings = ["keys.json", "settings.json", "programs.json"];
-
-// Build and verification, run from the repo root:
-//   node scripts/build-orca-ui.mjs --out <dir>          rebuild managed outputs into <dir>
-//   node scripts/build-orca-ui.mjs --check --out .      read-only drift check (0 clean, 1 drift)
-export const build = "scripts/build-orca-ui.mjs";
+// Not mapped here, on purpose: `keys.json`, `settings.json` and `programs.json` are seed-once user
+// settings that the builder never writes, and the builder itself is `scripts/build-orca-ui.mjs`
+// (`node scripts/build-orca-ui.mjs --check --out .` is the read-only drift check).

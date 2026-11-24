@@ -5,9 +5,16 @@ import { dirname, join, posix, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Where things live. Everything the scripts assume about the repo layout is named here.
+export const FEATURES_DIR = "orca-ui/features";
+export const SHARED = "orca-ui/shared";
+export const MANIFEST_FILE = "manifest.json";
 // Herdr writes these into a mod folder when it checks the mod; they are never builder output.
 export const RESERVED = ["gpui-kit.d.ts", "jsconfig.json"];
-const KEYS = new Set(["feature", "mod", "source", "output", "files", "handwritten", "tests", "layoutSlots", "keys"]);
+const FEATURE_FIELDS = ["feature", "mod", "source", "output", "files", "tests", "layoutSlots", "keys"];
+const OPTIONAL_FIELDS = ["handwritten"];
+export const MODE_MASK = 0o777;
+const MOD_NAME = /^[A-Za-z0-9][\w.-]*$/;
 
 export class ManifestError extends Error {
   constructor(message, path) {
@@ -17,35 +24,36 @@ export class ManifestError extends Error {
   }
 }
 
-// A normalized repo-relative path that stays inside `base`, or null.
-function inside(base, path) {
+const failer = path => message => { throw new ManifestError(message, path); };
+const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const strings = value => Array.isArray(value) && value.every(v => typeof v === "string");
+const modeOf = (root, rel) => statSync(join(root, rel)).mode & MODE_MASK;
+const modOf = dest => dest.split("/")[1];
+const inMod = (output, file) => posix.join(output, posix.normalize(file));
+
+// A normalized relative path that stays inside its base folder, or null.
+function relativeInside(path) {
   if (typeof path !== "string" || !path || path.startsWith("/") || path.includes("\\")) return null;
   const clean = posix.normalize(path);
-  if (clean === "." || clean === ".." || clean.startsWith("../") || clean.endsWith("/")) return null;
-  return base ? posix.join(base, clean) : clean;
+  return clean === "." || clean === ".." || clean.startsWith("../") || clean.endsWith("/") ? null : clean;
 }
 
-function walkFiles(dir, prefix = "") {
+export function walkFiles(dir, prefix = "") {
   const found = [];
   for (const name of readdirSync(dir).sort()) {
     if (name === ".DS_Store") continue;
-    const stat = lstatSync(join(dir, name));
-    if (stat.isDirectory()) found.push(...walkFiles(join(dir, name), `${prefix}${name}/`));
+    if (lstatSync(join(dir, name)).isDirectory()) found.push(...walkFiles(join(dir, name), `${prefix}${name}/`));
     else found.push(`${prefix}${name}`);
   }
   return found;
 }
 
-// Every feature manifest path, repo relative, sorted.
-function discover(root) {
-  const top = join(root, "orca-ui", "features");
-  if (!existsSync(top)) return [];
-  return walkFiles(top).filter(f => f === "manifest.json" || f.endsWith("/manifest.json"))
-    .map(f => `orca-ui/features/${f}`).sort();
+function walkObjects(node, visit) {
+  if (Array.isArray(node)) node.forEach(n => walkObjects(n, visit));
+  else if (isObject(node)) { visit(node); Object.values(node).forEach(n => walkObjects(n, visit)); }
 }
 
-const strings = value => Array.isArray(value) && value.every(v => typeof v === "string");
-
+// Reads JSON that must live inside the repo; a symlink out of it is refused.
 function readJson(root, rel, fail) {
   try {
     if (!realpathSync(join(root, rel)).startsWith(realpathSync(root) + sep)) throw new Error("resolves outside the repo");
@@ -53,147 +61,157 @@ function readJson(root, rel, fail) {
   } catch (error) { return fail(`cannot read ${rel}: ${error.message}`); }
 }
 
-function walkObjects(node, visit) {
-  if (Array.isArray(node)) node.forEach(n => walkObjects(n, visit));
-  else if (node && typeof node === "object") { visit(node); Object.values(node).forEach(n => walkObjects(n, visit)); }
+// A regular file at `rel` under `base` that really lives under `base`, or a failure.
+function requireSourceFile(root, base, rel, fail) {
+  const shown = `${base}/${rel}`;
+  let stat;
+  try { stat = lstatSync(join(root, shown)); } catch { fail(`missing source ${shown}`); }
+  if (!stat.isFile()) fail(`${shown} is not a regular file`);
+  if (!realpathSync(join(root, shown)).startsWith(realpathSync(join(root, base)) + sep)) fail(`${shown} resolves outside the source folder`);
 }
 
-function parseFeature(root, path) {
-  const fail = message => { throw new ManifestError(message, path); };
-  const m = readJson(root, path, fail);
-  if (!m || typeof m !== "object" || Array.isArray(m)) fail("manifest must be an object");
-  for (const key of Object.keys(m)) if (!KEYS.has(key)) fail(`unknown field "${key}"`);
-  for (const key of ["feature", "mod", "source", "output", "files", "tests", "layoutSlots", "keys"]) {
-    if (m[key] === undefined) fail(`missing "${key}"`);
-  }
+// Every feature manifest path, repo relative, sorted.
+function discover(root) {
+  if (!existsSync(join(root, FEATURES_DIR))) return [];
+  return walkFiles(join(root, FEATURES_DIR)).filter(f => posix.basename(f) === MANIFEST_FILE).map(f => `${FEATURES_DIR}/${f}`).sort();
+}
+
+function checkFeatureShape(m, path, fail) {
+  if (!isObject(m)) fail("manifest must be an object");
+  for (const key of Object.keys(m)) if (![...FEATURE_FIELDS, ...OPTIONAL_FIELDS].includes(key)) fail(`unknown field "${key}"`);
+  for (const key of FEATURE_FIELDS) if (m[key] === undefined) fail(`missing "${key}"`);
   if (typeof m.feature !== "string" || !m.feature) fail('"feature" must be a non-empty string');
-  if (typeof m.mod !== "string" || !/^[A-Za-z0-9][\w.-]*$/.test(m.mod)) fail('"mod" must be one folder name');
+  if (typeof m.mod !== "string" || !MOD_NAME.test(m.mod)) fail('"mod" must be one folder name');
   if (m.source !== posix.dirname(path)) fail(`"source" must be ${posix.dirname(path)}`);
   if (m.output !== `mods/${m.mod}`) fail(`"output" must be mods/${m.mod}`);
   if (m.handwritten === undefined) m.handwritten = [];
   for (const key of ["files", "handwritten", "tests", "keys"]) if (!strings(m[key])) fail(`"${key}" must be an array of strings`);
-  if (!m.layoutSlots || typeof m.layoutSlots !== "object" || Array.isArray(m.layoutSlots) ||
-      !Object.values(m.layoutSlots).every(strings)) fail('"layoutSlots" must map layout names to arrays of ids');
+  if (!isObject(m.layoutSlots) || !Object.values(m.layoutSlots).every(strings)) fail('"layoutSlots" must map layout names to arrays of ids');
+  for (const file of m.handwritten) if (!relativeInside(file)) fail(`handwritten entry "${file}" is not a path inside the mod`);
+}
 
-  const base = join(root, m.source);
-  const realBase = realpathSync(base);
-  if (!(realBase + sep).startsWith(realpathSync(root) + sep)) fail("source folder is outside the repo");
-  const declared = new Set();
+// `files` plus `tests` plus the manifest must be exactly what is in the source folder.
+function checkFeatureSources(root, m, fail) {
+  if (!(realpathSync(join(root, m.source)) + sep).startsWith(realpathSync(root) + sep)) fail("source folder is outside the repo");
+  const declared = new Set([MANIFEST_FILE]);
   for (const [label, list] of [["files", m.files], ["tests", m.tests]]) {
     for (const file of list) {
-      const rel = inside("", file) ?? fail(`${label} entry "${file}" is not a path inside the source folder`);
+      const rel = relativeInside(file) ?? fail(`${label} entry "${file}" is not a path inside the source folder`);
       if (declared.has(rel)) fail(`"${rel}" is declared twice`);
       declared.add(rel);
-      let stat;
-      try { stat = lstatSync(join(base, rel)); } catch { fail(`missing source ${m.source}/${rel}`); }
-      if (!stat.isFile()) fail(`${m.source}/${rel} is not a regular file`);
-      if (!realpathSync(join(base, rel)).startsWith(realBase + sep)) fail(`${m.source}/${rel} resolves outside the source folder`);
+      requireSourceFile(root, m.source, rel, fail);
     }
   }
-  declared.add("manifest.json");
-  for (const file of walkFiles(base)) if (!declared.has(file)) fail(`${m.source}/${file} is not listed in the manifest`);
+  for (const file of walkFiles(join(root, m.source))) if (!declared.has(file)) fail(`${m.source}/${file} is not listed in the manifest`);
+}
 
-  for (const file of m.handwritten) inside("", file) ?? fail(`handwritten entry "${file}" is not a path inside the mod`);
-  const layouts = new Map();
+// Each slot id must name exactly one layout node, and that node must mount this mod.
+function checkLayoutSlots(root, m, fail) {
   for (const [layout, ids] of Object.entries(m.layoutSlots)) {
-    if (!/^[\w.-]+$/.test(layout)) fail(`layout name "${layout}" is not a layout file name`);
-    if (!layouts.has(layout)) layouts.set(layout, readJson(root, `layouts/${layout}.json`, fail));
+    if (!MOD_NAME.test(layout)) fail(`layout name "${layout}" is not a layout file name`);
+    const tree = readJson(root, `layouts/${layout}.json`, fail);
     for (const id of ids) {
       const hits = [];
-      walkObjects(layouts.get(layout), node => { if (node.id === id) hits.push(node); });
+      walkObjects(tree, node => { if (node.id === id) hits.push(node); });
       if (hits.length !== 1) fail(`layouts/${layout}.json has ${hits.length} nodes with id "${id}", expected 1`);
       if (hits[0].content?.mod !== m.mod) fail(`layouts/${layout}.json node "${id}" does not mount mod ${m.mod}`);
     }
   }
-  if (m.keys.length) {
-    const sections = readJson(root, "keys.json", fail);
-    if (!sections || typeof sections !== "object" || Array.isArray(sections)) fail("keys.json must be an object");
-    for (const key of m.keys) if (!Object.hasOwn(sections, key)) fail(`keys.json has no section "${key}"`);
-  }
+}
+
+function checkKeySections(root, m, fail) {
+  if (!m.keys.length) return;
+  const sections = readJson(root, "keys.json", fail);
+  if (!isObject(sections)) fail("keys.json must be an object");
+  for (const key of m.keys) if (!Object.hasOwn(sections, key)) fail(`keys.json has no section "${key}"`);
+}
+
+function parseFeature(root, path) {
+  const fail = failer(path);
+  const m = readJson(root, path, fail);
+  checkFeatureShape(m, path, fail);
+  checkFeatureSources(root, m, fail);
+  checkLayoutSlots(root, m, fail);
+  checkKeySections(root, m, fail);
   return m;
 }
 
-export const SHARED = "orca-ui/shared";
+function checkSharedItem(root, item, seen, fail) {
+  if (!isObject(item) || Object.keys(item).some(k => k !== "source" && k !== "outputs")) fail("each file needs only source and outputs");
+  const name = typeof item.source === "string" && item.source.startsWith(`${SHARED}/`) ? item.source.slice(SHARED.length + 1) : null;
+  if (!name || !/^[\w.-]+\.js$/.test(name)) fail(`source "${item.source}" must be ${SHARED}/<name>.js`);
+  if (seen.sources.has(name)) fail(`source ${item.source} is declared twice`);
+  seen.sources.add(name);
+  requireSourceFile(root, SHARED, name, fail);
+  if (!strings(item.outputs) || !item.outputs.length) fail(`${item.source}: "outputs" must be a non-empty array of strings`);
+  const shape = new RegExp(`^mods/${MOD_NAME.source.slice(1, -1)}/${name.replace(/\./g, "\\.")}$`);
+  for (const out of item.outputs) {
+    if (!shape.test(out)) fail(`output "${out}" must be mods/<mod>/${name}`);
+    if (seen.outputs.has(out)) fail(`output ${out} is declared twice`);
+    if (!existsSync(join(root, "mods", modOf(out), "mod.json"))) fail(`output ${out}: mods/${modOf(out)} has no mod.json, check the mod name`);
+    seen.outputs.add(out);
+  }
+}
 
 // `orca-ui/shared/manifest.json`: `{ files: [{ source, outputs }] }`. Required, so a mistyped
 // --root or a deleted folder is an error rather than a silently empty build.
 function parseShared(root) {
-  const path = `${SHARED}/manifest.json`;
-  const fail = message => { throw new ManifestError(message, path); };
+  const path = `${SHARED}/${MANIFEST_FILE}`;
+  const fail = failer(path);
   let realDir;
   try { realDir = realpathSync(join(root, SHARED)); } catch { fail(`${SHARED} does not exist`); }
-  if (realDir !== join(realpathSync(root), "orca-ui", "shared")) fail(`${SHARED} is a symlink or leaves the repo`);
+  if (realDir !== join(realpathSync(root), ...SHARED.split("/"))) fail(`${SHARED} is a symlink or leaves the repo`);
   const m = readJson(root, path, fail);
-  if (!m || typeof m !== "object" || Array.isArray(m) || Object.keys(m).some(k => k !== "files") || !Array.isArray(m.files)) {
-    fail('manifest must be { "files": [...] }');
-  }
-  const listed = new Set(["manifest.json"]);
-  const outputs = new Set();
-  for (const item of m.files) {
-    if (!item || typeof item !== "object" || Object.keys(item).some(k => k !== "source" && k !== "outputs")) fail("each file needs only source and outputs");
-    const name = typeof item.source === "string" && item.source.startsWith(`${SHARED}/`) ? item.source.slice(SHARED.length + 1) : null;
-    if (!name || !/^[\w.-]+\.js$/.test(name)) fail(`source "${item.source}" must be ${SHARED}/<name>.js`);
-    if (listed.has(name)) fail(`source ${item.source} is declared twice`);
-    listed.add(name);
-    let stat;
-    try { stat = lstatSync(join(root, item.source)); } catch { fail(`missing source ${item.source}`); }
-    if (!stat.isFile()) fail(`${item.source} is not a regular file`);
-    if (!strings(item.outputs) || !item.outputs.length) fail(`${item.source}: "outputs" must be a non-empty array of strings`);
-    for (const out of item.outputs) {
-      if (!new RegExp(`^mods/[A-Za-z0-9][\\w.-]*/${name.replace(/\./g, "\\.")}$`).test(out)) fail(`output "${out}" must be mods/<mod>/${name}`);
-      if (outputs.has(out)) fail(`output ${out} is declared twice`);
-      if (!existsSync(join(root, "mods", out.split("/")[1], "mod.json"))) fail(`output ${out}: mods/${out.split("/")[1]} has no mod.json, check the mod name`);
-      outputs.add(out);
-    }
-  }
-  for (const file of walkFiles(join(root, SHARED))) if (!listed.has(file)) fail(`${SHARED}/${file} is not listed in the manifest`);
+  if (!isObject(m) || Object.keys(m).some(k => k !== "files") || !Array.isArray(m.files)) fail('manifest must be { "files": [...] }');
+  const seen = { sources: new Set([MANIFEST_FILE]), outputs: new Set() };
+  for (const item of m.files) checkSharedItem(root, item, seen, fail);
+  for (const file of walkFiles(join(root, SHARED))) if (!seen.sources.has(file)) fail(`${SHARED}/${file} is not listed in the manifest`);
   return m;
+}
+
+// The one table: destination -> who produces it. Rows say where to edit and what to run.
+function row(root, kind, id, source, consumers, owner) {
+  return { kind, id, source, mode: modeOf(root, source), consumers,
+    tests: owner ? owner.tests.map(t => `${owner.source}/${t}`) : [], layoutSlots: owner?.layoutSlots ?? {} };
 }
 
 export function loadManifests({ root = ROOT } = {}) {
   const features = new Map();
   const table = new Map();
   const owners = new Map(); // destination -> [who, manifest path]
-  const ids = new Map();
   const claim = (dest, who, path) => {
     const parts = dest.split("/");
-    if (parts.length === 3 && RESERVED.includes(parts[2])) throw new ManifestError(`${dest} is a Herdr reserved file (${who})`, path);
+    if (parts.length === 3 && RESERVED.includes(parts[2])) failer(path)(`${dest} is a Herdr reserved file (${who})`);
     if (owners.has(dest)) {
       const [first, firstPath] = owners.get(dest);
-      throw new ManifestError(`${dest} is claimed by both ${first} and ${who}`, path.endsWith("manifest.json") ? path : firstPath);
+      failer(path.endsWith(MANIFEST_FILE) ? path : firstPath)(`${dest} is claimed by both ${first} and ${who}`);
     }
     owners.set(dest, [who, path]);
   };
 
   for (const path of discover(root)) {
     const m = parseFeature(root, path);
-    if (ids.has(m.feature)) throw new ManifestError(`feature "${m.feature}" is already defined in ${ids.get(m.feature)}`, path);
-    ids.set(m.feature, path);
+    const twin = [...features].find(([, other]) => other.feature === m.feature);
+    if (twin) failer(path)(`feature "${m.feature}" is already defined in ${twin[0]}`);
     features.set(path, m);
     for (const file of m.files) {
-      const dest = posix.join(m.output, posix.normalize(file));
+      const dest = inMod(m.output, file);
       claim(dest, `feature "${m.feature}"`, path);
-      const source = `${m.source}/${posix.normalize(file)}`;
-      table.set(dest, { kind: "feature", id: m.feature, source, mode: statSync(join(root, source)).mode & 0o777,
-        consumers: [m.mod], tests: m.tests.map(t => `${m.source}/${t}`), layoutSlots: m.layoutSlots });
+      table.set(dest, row(root, "feature", m.feature, `${m.source}/${posix.normalize(file)}`, [m.mod], m));
     }
   }
 
   const shared = parseShared(root);
-  for (const item of shared?.files ?? []) {
+  for (const item of shared.files) {
     const name = posix.basename(item.source);
-    const mods = item.outputs.map(o => o.split("/")[1]);
     for (const dest of item.outputs) {
-      claim(dest, `shared ${name}`, `${SHARED}/manifest.json`);
-      const own = [...features.values()].find(f => f.mod === dest.split("/")[1]);
-      table.set(dest, { kind: "shared", id: name, source: item.source, mode: statSync(join(root, item.source)).mode & 0o777,
-        consumers: mods, tests: own ? own.tests.map(t => `${own.source}/${t}`) : [], layoutSlots: own?.layoutSlots ?? {} });
+      claim(dest, `shared ${name}`, `${SHARED}/${MANIFEST_FILE}`);
+      const owner = [...features.values()].find(f => f.mod === modOf(dest));
+      table.set(dest, row(root, "shared", name, item.source, item.outputs.map(modOf), owner));
     }
   }
 
-  for (const [path, m] of features) {
-    for (const file of m.handwritten) claim(posix.join(m.output, posix.normalize(file)), `handwritten in feature "${m.feature}"`, path);
-  }
+  for (const [path, m] of features) for (const file of m.handwritten) claim(inMod(m.output, file), `handwritten in feature "${m.feature}"`, path);
   return { table, features, shared };
 }
 
@@ -202,10 +220,8 @@ export function loadManifests({ root = ROOT } = {}) {
 export function allowedExtras({ features }) {
   const extras = new Set();
   for (const m of features.values()) {
-    for (const file of m.handwritten) extras.add(posix.join(m.output, posix.normalize(file)));
+    for (const file of m.handwritten) extras.add(inMod(m.output, file));
     for (const file of RESERVED) extras.add(`${m.output}/${file}`);
   }
   return extras;
 }
-
-export { walkFiles };

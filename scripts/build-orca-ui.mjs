@@ -10,7 +10,7 @@
 //   2 a usage or manifest error. --root reads another repo's sources and is meant for tests.
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, parse, resolve, sep } from "node:path";
-import { ROOT, ManifestError, allowedExtras, loadManifests, walkFiles } from "./orca-ui-manifests.mjs";
+import { ROOT, SHARED, ManifestError, MODE_MASK, allowedExtras, loadManifests, walkFiles } from "./orca-ui-manifests.mjs";
 
 const USAGE = "usage: node scripts/build-orca-ui.mjs --out <dir> [--check | --force] [--root <dir>]";
 
@@ -57,92 +57,107 @@ function pathProblem(path) {
 }
 
 // A shared copy ends with a generated-file line, last so Herdr error lines match the source.
+const GENERATED_PREFIX = `// Generated from ${SHARED}/`;
+const generatedLine = source => `// Generated from ${source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`;
+const TEMP_SUFFIX = ".orca-build-tmp";
+
 function deliverable(root, row) {
   const bytes = readFileSync(join(root, row.source));
   if (row.kind !== "shared") return bytes;
   const lf = bytes.length && bytes[bytes.length - 1] === 0x0a ? "" : "\n";
-  return Buffer.concat([bytes, Buffer.from(`${lf}// Generated from ${row.source} by scripts/build-orca-ui.mjs. Edit that file, not this copy.\n`)]);
+  return Buffer.concat([bytes, Buffer.from(lf + generatedLine(row.source))]);
 }
 
-function main() {
-  const { out, check, force, root } = parseArgs(process.argv.slice(2));
-  let loaded;
-  try { loaded = loadManifests({ root }); }
+function loadOrExit(root) {
+  try { return loadManifests({ root }); }
   catch (error) {
     if (!(error instanceof ManifestError)) throw error;
     console.error(`${error.path}: ${error.message}`);
     console.error(USAGE);
-    process.exit(2);
+    return process.exit(2);
   }
-  const rows = [...loaded.table];
+}
+
+// Compare every managed destination with what the build would write.
+function plan(loaded, root, out) {
   const problems = [];
   const pending = [];
-
-  for (const [dest, row] of rows) {
+  for (const [dest, row] of loaded.table) {
     const to = join(out, dest);
     const bad = pathProblem(to);
     if (bad) { problems.push(`${dest}: ${bad}`); continue; }
     const want = deliverable(root, row);
-    if (!existsSync(to)) pending.push({ dest, to, want, mode: row.mode, why: "missing" });
-    else if (!readFileSync(to).equals(want)) pending.push({ dest, to, want, mode: row.mode, why: "content differs" });
-    else if ((statSync(to).mode & 0o777) !== row.mode) pending.push({ dest, to, want, mode: row.mode, why: "mode differs" });
+    const why = !existsSync(to) ? "missing" : !readFileSync(to).equals(want) ? "content differs" : (statSync(to).mode & MODE_MASK) !== row.mode ? "mode differs" : null;
+    if (why) pending.push({ dest, to, want, mode: row.mode, why, source: join(root, row.source) });
   }
+  return { problems, pending };
+}
 
-  if (check) {
-    const managed = new Set(loaded.table.keys());
-    const extras = allowedExtras(loaded);
-    for (const m of loaded.features.values()) {
-      const dir = join(out, m.output);
-      if (!existsSync(dir) || !lstatSync(dir).isDirectory()) continue;
-      for (const file of walkFiles(dir)) {
-        const dest = `${m.output}/${file}`;
-        if (!managed.has(dest) && !extras.has(dest)) problems.push(`${dest}: not declared by any manifest`);
+// Files in a feature's mod folder that nothing declares, and generated shared copies no manifest
+// lists (a typo'd or retired target).
+function undeclared(loaded, out) {
+  const found = [];
+  const managed = new Set(loaded.table.keys());
+  const extras = allowedExtras(loaded);
+  for (const m of loaded.features.values()) {
+    const dir = join(out, m.output);
+    if (!existsSync(dir) || !lstatSync(dir).isDirectory()) continue;
+    for (const file of walkFiles(dir)) {
+      const dest = `${m.output}/${file}`;
+      if (!managed.has(dest) && !extras.has(dest)) found.push(`${dest}: not declared by any manifest`);
+    }
+  }
+  const mods = join(out, "mods");
+  for (const mod of existsSync(mods) ? readdirSync(mods) : []) {
+    const dir = join(mods, mod);
+    if (!lstatSync(dir).isDirectory()) continue;
+    for (const name of readdirSync(dir).filter(n => n.endsWith(".js"))) {
+      const dest = `mods/${mod}/${name}`;
+      if (!managed.has(dest) && readFileSync(join(dir, name), "utf8").split("\n").some(l => l.startsWith(GENERATED_PREFIX))) {
+        found.push(`${dest}: generated shared copy that no manifest lists`);
       }
     }
-    // A copy with the generated line that no manifest lists is an orphan: a typo'd or retired target.
-    const mods = join(out, "mods");
-    for (const mod of existsSync(mods) ? readdirSync(mods) : []) {
-      const dir = join(mods, mod);
-      if (!lstatSync(dir).isDirectory()) continue;
-      for (const name of readdirSync(dir).filter(n => n.endsWith(".js"))) {
-        const dest = `mods/${mod}/${name}`;
-        if (!managed.has(dest) && /^\/\/ Generated from orca-ui\/shared\//m.test(readFileSync(join(dir, name), "utf8"))) problems.push(`${dest}: generated shared copy that no manifest lists`);
-      }
-    }
-    const lines = [...problems, ...pending.map(p => `${p.dest}: ${p.why}`)];
-    for (const line of lines) console.log(line);
-    console.log(lines.length ? `${lines.length} managed file(s) drifted` : `${rows.length} managed file(s) match`);
-    process.exit(lines.length ? 1 : 0);
   }
+  return found;
+}
 
-  if (problems.length) {
-    for (const line of problems) console.error(line);
-    process.exit(1);
-  }
-  // Only an existing copy that must change can be a hand edit; missing files are always safe.
-  const blocked = force ? [] : pending.filter(p => p.why !== "missing" && statSync(p.to).mtimeMs > statSync(join(root, loaded.table.get(p.dest).source)).mtimeMs);
+// Only an existing copy that must change can be a hand edit; missing files are always safe.
+const looksHandEdited = p => p.why !== "missing" && statSync(p.to).mtimeMs > statSync(p.source).mtimeMs;
+
+// Write beside the target and rename: an interrupted build leaves no truncated file, and a hard
+// link to a file outside the tree is replaced instead of rewritten.
+function replaceFile(p) {
+  const tmp = `${p.to}${TEMP_SUFFIX}`;
+  mkdirSync(dirname(p.to), { recursive: true });
+  try {
+    writeFileSync(tmp, p.want);
+    chmodSync(tmp, p.mode);
+    renameSync(tmp, p.to);
+  } catch (error) { rmSync(tmp, { force: true }); throw error; }
+}
+
+function check(loaded, out, { problems, pending }) {
+  const lines = [...problems, ...undeclared(loaded, out), ...pending.map(p => `${p.dest}: ${p.why}`)];
+  for (const line of lines) console.log(line);
+  console.log(lines.length ? `${lines.length} managed file(s) drifted` : `${loaded.table.size} managed file(s) match`);
+  return lines.length ? 1 : 0;
+}
+
+function build(loaded, out, { problems, pending }, force) {
+  if (problems.length) { for (const line of problems) console.error(line); return 1; }
+  const blocked = force ? [] : pending.filter(looksHandEdited);
   if (blocked.length) {
     for (const p of blocked) console.error(p.dest);
     console.error("newer than their source and different: edit the source, or rerun with --force to overwrite");
-    process.exit(1);
+    return 1;
   }
-  try {
-    for (const p of pending) {
-      mkdirSync(dirname(p.to), { recursive: true });
-      // Write beside the target and rename: an interrupted build leaves no truncated file, and a
-      // hard link to a file outside the tree is replaced instead of rewritten.
-      const tmp = `${p.to}.orca-build-tmp`;
-      try {
-        writeFileSync(tmp, p.want);
-        chmodSync(tmp, p.mode);
-        renameSync(tmp, p.to);
-      } catch (error) { rmSync(tmp, { force: true }); throw error; }
-    }
-  } catch (error) {
-    console.error(`${error.path ?? out}: ${error.message}`);
-    process.exit(1);
-  }
-  console.log(`wrote ${pending.length} of ${rows.length} managed file(s) from ${loaded.features.size} feature(s) and ${loaded.shared?.files.length ?? 0} shared helper(s) to ${out}`);
+  try { pending.forEach(replaceFile); }
+  catch (error) { console.error(`${error.path ?? out}: ${error.message}`); return 1; }
+  console.log(`wrote ${pending.length} of ${loaded.table.size} managed file(s) from ${loaded.features.size} feature(s) and ${loaded.shared.files.length} shared helper(s) to ${out}`);
+  return 0;
 }
 
-main();
+const { out, check: checkOnly, force, root } = parseArgs(process.argv.slice(2));
+const loaded = loadOrExit(root);
+const result = plan(loaded, root, out);
+process.exit(checkOnly ? check(loaded, out, result) : build(loaded, out, result, force));
