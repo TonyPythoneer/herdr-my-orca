@@ -6,8 +6,8 @@
 // Usage: node scripts/where-error.mjs '<error text>'   or   herdr-app check mods/x | node scripts/where-error.mjs
 // Exit 0 when a frame was found (even an unknown one), 1 when none was, 2 when the manifests or the
 // input cannot be read.
-import { lstatSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ROOT, ManifestError, loadManifests } from "./orca-ui-manifests.mjs";
 
@@ -16,6 +16,11 @@ const FRAME = /(?:[^\s?:()]*\/)?mods\/([^/\s?:()]+)\/([^\s?:()]+)(?:\?v=\d+)?:(\
 const list = items => (items.length ? items.join(", ") : "-");
 // lstat, so a symlink out of the mod is not offered as an in-place edit target.
 const isPlainFile = path => { try { return lstatSync(path).isFile(); } catch { return false; } };
+// A file that really sits under mods/<mod>/, so a symlinked folder or file cannot lead outside.
+const isModFile = (root, mod, file) => {
+  const path = join(root, "mods", mod, file);
+  try { return isPlainFile(path) && realpathSync(path).startsWith(realpathSync(join(root, "mods", mod)) + sep); } catch { return false; }
+};
 
 const UNKNOWN = "unknown path: no such mod in this repo";
 const NOT_MAPPED = "not in app.mjs yet: edit this file in place";
@@ -50,7 +55,7 @@ export function locate(text, table, { features = [], inPlace = [], root = ROOT }
     const at = path => `${path}:${Number(l)}${c ? `:${c}` : ""}`;
     const frame = at(`mods/${mod}/${file}`);
     const row = escapes(mod, file) ? null : table.get(`mods/${mod}/${file}`);
-    const plain = !escapes(mod, file) && isPlainFile(join(root, "mods", mod, "mod.json")) && isPlainFile(join(root, "mods", mod, file));
+    const plain = !escapes(mod, file) && isModFile(root, mod, "mod.json") && isModFile(root, mod, file);
     if (row) out.push({ frame, edit: at(row.source), kind: row.kind, note: tableNote(row, mod, table, hints) });
     else if (plain) out.push({ frame, edit: frame, kind: "in-place", note: inPlaceNote(mod, hints) });
     else out.push({ frame, edit: frame, kind: "unknown", note: UNKNOWN });
@@ -62,8 +67,7 @@ async function main() {
   let table;
   try { table = loadManifests().table; }
   catch (error) {
-    if (!(error instanceof ManifestError)) throw error;
-    console.error(`${error.path}: ${error.message}`);
+    console.error(`${error instanceof ManifestError ? error.path : "orca-ui"}: ${error.message}`);
     process.exit(2);
   }
   let text;
