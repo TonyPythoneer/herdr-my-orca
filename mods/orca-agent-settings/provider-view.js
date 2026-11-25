@@ -58,7 +58,7 @@ export function modelProvidersView(owner, t) {
           .text_size(12)
           .line_height("18px")
           .text_color(t.muted)
-          .child("Codex can start against a model server you run, such as oMLX. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user."),
+          .child("Codex can use compatible model servers. Pi can use a saved Groq provider. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user."),
       ),
     )
     .children(cards.map((card) => owner.providerCard(card, t)))

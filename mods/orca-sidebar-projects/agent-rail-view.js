@@ -98,19 +98,26 @@ function railAction(owner, row, t, control, label) {
   return div().size(0);
 }
 
-// A group is a rounded box (Discord's folder) holding its title and its rows. The pills stay on the
-// rail's left edge, outside the box.
+// A group is a rounded folder holding its title and rows. The pills stay on the rail's left edge.
 function groupView(owner, title, rows, scroll, t) {
+  const key = title === "Official" ? "officialRailOpen" : "unofficialRailOpen";
+  const open = owner[key] !== false;
   const {height,scroll:overflow} = railViewport(rows.length);
   const id = "am-rail-list-" + title.toLowerCase();
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
     .child(v_flex().w(RAIL.width)
-      .child(div().h(23).w_full().flex().items_center().justify_center().text_size(10).text_color(t.muted).child(title))
-      .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
+      .child(div().id("am-rail-folder-" + title.toLowerCase()).h(32).w_full().flex().items_center().justify_center()
+        .gap(2).text_size(9).text_color(t.muted).cursor_pointer().role("button")
+        .accessibility_label(`${title} folder, ${open ? "collapse" : "expand"}`)
+        .tooltip(`${open ? "Collapse" : "Expand"} ${title}`)
+        .on_click((_e,cx) => { owner[key] = !open; cx.notify(); })
+        .child(div().child(title))
+        .child(svg(`mods/orca-sidebar-projects/chevron-${open ? "down" : "right"}.svg`).size(9).flex_none().text_color(t.muted)))
+      .when(open, el => el.child(div().relative().w(RAIL.width).h(height).overflow_hidden()
         .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
-          .when(overflow, el => el.absolute().inset_0().overflow_y_scroll())
-          .children(railRows(rows).map(row => railItem(owner,row,t,t.surface))))));
+          .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
+          .children(railRows(rows).map(row => railItem(owner,row,t,t.surface)))))));
 }
 
 export function railView(owner, official, unofficial, t) {

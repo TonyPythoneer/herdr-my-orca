@@ -10,7 +10,7 @@
 import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
-import { PROVIDER_FILE, launchArgv, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
+import { PROVIDER_FILE, launchArgv, launchPiArgv, parseProviderFile, serializeProviderFile, supportsPiProvider, validateHost } from "./codex-provider.js";
 import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
 
@@ -58,12 +58,15 @@ function formatJson(text) {
 
 // JSON.parse messages differ between engines. Try "line N" first, then
 // "position N" and count newlines. Fall back to line 1.
-function managerDisabled(text) {
+function parseManagerSettings(text) {
   try {
     const saved = JSON.parse(text ?? "{}");
-    return new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []);
+    return {
+      disabled: new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []),
+      herdrEnv: saved.herdrEnv !== false,
+    };
   } catch {
-    return new Set();
+    return { disabled: new Set(), herdrEnv: true };
   }
 }
 
@@ -295,7 +298,7 @@ class AgentConfigCore {
   async loadProviders() {
     const text = await readTextFile(`${appHome()}/${PROVIDER_FILE}`).catch(() => null);
     this.providers = parseProviderFile(text).providers ?? {};
-    if (this.providerId !== "none" && !this.providers[this.providerId]) this.providerId = "none";
+    if (this.providerId !== "none" && (!this.providers[this.providerId] || (this.key === "pi" && !supportsPiProvider(this.providers[this.providerId])))) this.providerId = "none";
     return this.providers;
   }
 
@@ -304,6 +307,7 @@ class AgentConfigCore {
   activeModels() {
     if (!this.spec.options.provider || this.providerId === "none") return this.models;
     const record = this.providers[this.providerId];
+    if (this.key === "pi" && !supportsPiProvider(record)) return this.models;
     return (record?.models ?? []).map((id) => ({ id, label: id, efforts: [] }));
   }
 
@@ -605,16 +609,19 @@ class AgentConfigCore {
       if (!preview) { this.providerId = "none"; this.open = null; }
       return { error: "Model provider is no longer set up." };
     }
-    // oMLX wraps the agent in sh so the key comes from the provider file, never from argv, and adds
-    // no effort flag; its model flag is placed by launchArgv.
     const provider = { ...record, id: providerId, configPath: file };
+    if (this.key === "pi") {
+      if (!supportsPiProvider(record)) return { error: "Pi currently supports the Groq provider only." };
+      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
+    }
+    // Codex adds no effort flag; its model flag is placed by launchArgv.
     return { argv: launchArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
   }
 
   // The flyout is sticky; availability may have changed while it was open. Local settings only.
-  async disabledInManager(p) {
+  async readManagerSettings() {
     const manager = await readTextFile(`${appHome()}/agent-manager.json`).catch(() => null);
-    return managerDisabled(manager).has(p.key);
+    return parseManagerSettings(manager);
   }
 
   // Stops a launch: shows the reason, if there is one, and lets the next click try again.
@@ -630,7 +637,8 @@ class AgentConfigCore {
     this.launching = true; // the mcp listing awaits; a second click must not launch twice
     const space = launchSpace(p);
     if (this.settingsContext && (!space || space.machine)) { this.failLaunch(null, cx); return; }
-    if (!space?.machine && await this.disabledInManager(p)) {
+    const manager = await this.readManagerSettings();
+    if (!space?.machine && manager.disabled.has(p.key)) {
       this.failLaunch(`${p.name ?? p.key} is disabled in Agent Settings.`, cx);
       return;
     }
@@ -641,7 +649,8 @@ class AgentConfigCore {
       return;
     }
 
-    await this.startTerminal(p, space, built.argv, cx);
+    const argv = manager.herdrEnv ? ["env", "HERDR_ENV=1", ...built.argv] : built.argv;
+    await this.startTerminal(p, space, argv, cx);
   }
 
   async startTerminal(p, space, argv, cx) {
@@ -837,7 +846,8 @@ class AgentConfigCore {
   // whose test passed. Greyed out when there is none to pick, and on another machine (the file and
   // the icon live on this one). The list opens inline below it.
   providerRow(t) {
-    const ids = Object.keys(this.providers ?? {});
+    const compatible = (record) => this.key !== "pi" || supportsPiProvider(record);
+    const ids = Object.entries(this.providers ?? {}).filter(([, record]) => compatible(record)).map(([id]) => id);
     const space = launchSpace(this.context());
     const remote = !this.settingsContext && Boolean(space?.machine);
     // With none saved the select still opens, for its "Add More" row.
@@ -875,7 +885,7 @@ class AgentConfigCore {
   providerList(t) {
     const options = [
       { id: "none", label: "None" },
-      ...Object.entries(this.providers ?? {}).map(([id, record]) => ({ id, label: record?.name ?? id })),
+      ...Object.entries(this.providers ?? {}).filter(([, record]) => this.key !== "pi" || supportsPiProvider(record)).map(([id, record]) => ({ id, label: record?.name ?? id })),
     ];
     return this.scrollList("provider-list",
       options.map((option) =>

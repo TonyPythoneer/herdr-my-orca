@@ -153,6 +153,7 @@ export const SPECS = {
     // (and still starts it when the list is empty, e.g. nothing is logged in yet).
     models: { shell: "pi --list-models", parser: "piTable", default: "Default" },
     options: {
+      provider: { type: "provider", label: "MODEL PROVIDER" },
       model: { type: "model", label: "MODEL", argv: ["--model", "{v}"] },
       effort: { type: "effort", label: "THINKING", argv: ["--thinking", "{v}"], omit: [""] },
       off: { type: "checklist", label: "TURN OFF", bulk: true, items: PI_ITEMS },

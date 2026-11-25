@@ -37,6 +37,39 @@ export function permissionsCardView(owner, rows, t, compact = false) {
     .when(owner.permissionNotice, (el) => el.child(permissionNoticeRow(owner, t)));
 }
 
+export function environmentCardView(owner, t) {
+  const on = owner.herdrEnv;
+  return v_flex()
+    .id("am-herdr-env-card")
+    .w_full()
+    .p(12)
+    .gap(10)
+    .rounded(10)
+    .border_1()
+    .border_color(t.border)
+    .bg(t.surface)
+    .child(
+      h_flex().w_full().items_center().gap(16)
+        .child(v_flex().flex_1().min_w(0).gap(3)
+          .child(div().text_size(13).font_semibold().text_color(t.foreground).child("Agent environment"))
+          .child(div().text_size(11).line_height("16px").text_color(t.muted)
+            .child("Set HERDR_ENV=1 for agents launched from the agent dropdown.")))
+        .child(
+          div().id("am-herdr-env-toggle").w(36).h(20).flex_none().flex().items_center().p(2).rounded_full()
+            .bg(on ? t.foreground : t.input)
+            .when(owner.herdrEnvSaving || owner.persisting || owner.managerError, el => el.opacity(0.45))
+            .when(!owner.herdrEnvSaving && !owner.persisting && !owner.managerError, el => el.cursor_pointer())
+            .role("switch").checked(on)
+            .accessibility_label("Set HERDR_ENV=1 for agents launched from the agent dropdown")
+            .tooltip(owner.herdrEnvSaving ? "Saving…" : "Set HERDR_ENV=1 for agents launched from the agent dropdown")
+            .when(!owner.herdrEnvSaving && !owner.persisting && !owner.managerError, el => el.on_click((_event, cx) => owner.setHerdrEnv(!on, cx)))
+            .child(h_flex().w_full().items_center().when(on, el => el.justify_end())
+              .when(!on, el => el.justify_start())
+              .child(div().size(16).rounded_full().bg(on ? t.background : t.muted))),
+        ),
+    );
+}
+
 function permissionTitleRow(owner, managed, permissions, t, compact) {
   // In the settings rail, the detail column may be only 280px wide.
   // Stack the trigger below the description rather than squeezing it to a word per line.
@@ -175,7 +208,7 @@ function addBanners(el, owner, rows, t) {
     .when(owner.managerError, (inner) =>
       inner.child(
         banner(`agent-manager.json is invalid: ${owner.managerError}`, t, {
-          actions: bannerNote("Availability toggles are paused until the file is fixed.", t),
+          actions: bannerNote("Agent settings switches are paused until the file is fixed.", t),
         }),
       ),
     )
@@ -364,7 +397,8 @@ export function settingsPageView(owner, t, cx) {
   const body = v_flex().w_full().max_w(760).mx_auto().px(pad).pb(20).gap(2)
     .when(loading, el => el.child(loadingRow(t)))
     .when(!loading && owner.railSelection === "global", el => el.child(div().text_size(18).font_semibold().text_color(t.foreground).child("Global Agent Settings"))
-      .when(rows.some(row => row.supports), inner => inner.child(permissionsCardView(owner, rows, t, true))))
+      .when(rows.some(row => row.supports), inner => inner.child(permissionsCardView(owner, rows, t, true)))
+      .child(environmentCardView(owner, t)))
     .when(!loading && owner.railSelection !== "global", el => el.child(selected ? owner.agentDetail(selected, t, cx) : empty("Agent unavailable on this computer. Refresh or select another agent.", t)))
     .child(div().pt(12).text_size(11).text_color(t.dim).child(timeLabel(owner.lastChecked)));
   return v_flex().id("am-root").size_full().min_h(0).overflow_hidden().bg(t.background).text_size(12)

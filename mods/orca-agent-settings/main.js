@@ -134,6 +134,8 @@ export default class AgentManager extends View {
     // Permission intent lives here; programs.json's `run` is what launchers read, so every change
     // is written into it. `overrides` is re-derived from the commands on every read (run wins).
     this.permissions = { default: "own", overrides: {} };
+    this.herdrEnv = true;
+    this.herdrEnvSaving = false;
     this.permissionOpen = null;
     this.permissionNotice = null;
     this.expanded = new Set();
@@ -227,6 +229,7 @@ export default class AgentManager extends View {
     if (!parsed.error) {
       this.disabled = parsed.disabled;
       this.permissions = parsed.permissions;
+      this.herdrEnv = parsed.herdrEnv;
     }
     this.writeError = null;
     return true;
@@ -429,7 +432,7 @@ export default class AgentManager extends View {
   // programs.json or agent-manager.json changed outside this page. Dirty drafts are never
   // replaced; they get a conflict banner and an explicit overwrite action instead.
   poll(cx) {
-    if (this.refreshing || this.persisting) return;
+    if (this.refreshing || this.persisting || this.herdrEnvSaving) return;
     cx.spawn((taskCx) => this.readOutsideChanges(taskCx));
   }
 
@@ -459,6 +462,7 @@ export default class AgentManager extends View {
         at: Date.now(),
         agents: this.allRows().all,
         disabled: [...this.disabled],
+        herdrEnv: this.herdrEnv,
         // The left sidebar's agent list (orca-sidebar-projects) draws these below the official rows.
         unofficial: this.unofficialRows(),
       });
@@ -859,7 +863,7 @@ export default class AgentManager extends View {
 
   toggleEnabled(row, cx) {
     // An uninstalled CLI has no availability to change; its switch is locked until it is installed.
-    if (!row.installed) return;
+    if (!row.installed || this.herdrEnvSaving) return;
     if (this.managerError) return;
     cx.spawn(async (taskCx) => {
       const latest = await readTextFile(MANAGER).catch(() => this.managerText);
@@ -873,7 +877,7 @@ export default class AgentManager extends View {
       const next = new Set(parsed.disabled);
       if (next.has(row.key)) next.delete(row.key);
       else next.add(row.key);
-      const text = serializeManagerConfig(next, this.permissions);
+      const text = serializeManagerConfig(next, parsed.permissions, parsed.herdrEnv);
       try {
         await writeTextFile(MANAGER, text, base ?? null);
       } catch (error) {
@@ -884,9 +888,41 @@ export default class AgentManager extends View {
       this.managerText = text;
       this.managerError = null;
       this.disabled = next;
+      this.permissions = parsed.permissions;
+      this.herdrEnv = parsed.herdrEnv;
       this.writeError = null;
       this.shareInventory();
       taskCx.notify();
+    });
+  }
+
+  setHerdrEnv(enabled, cx) {
+    if (this.herdrEnvSaving || this.persisting || this.managerError || this.herdrEnv === enabled) return;
+    this.herdrEnvSaving = true;
+    cx.spawn(async (taskCx) => {
+      try {
+        const latest = await readTextFile(MANAGER).catch(() => this.managerText);
+        const base = latest === undefined ? this.managerText : latest;
+        const parsed = parseManagerConfig(base);
+        if (parsed.error) {
+          this.managerError = parsed.error;
+          return;
+        }
+        const text = serializeManagerConfig(parsed.disabled, parsed.permissions, enabled);
+        await writeTextFile(MANAGER, text, base ?? null);
+        this.managerText = text;
+        this.disabled = parsed.disabled;
+        this.permissions = parsed.permissions;
+        this.herdrEnv = enabled;
+        this.managerError = null;
+        this.writeError = null;
+        this.shareInventory();
+      } catch (error) {
+        this.writeError = `Could not save agent-manager.json: ${errorText(error)}`;
+      } finally {
+        this.herdrEnvSaving = false;
+        taskCx.notify();
+      }
     });
   }
 
@@ -914,6 +950,10 @@ export default class AgentManager extends View {
 
   /** A permission change writes both files, so neither may be damaged when it starts. */
   permissionReady(cx) {
+    if (this.herdrEnvSaving) {
+      this.flashPermission("Wait for the agent environment setting to save first.", "blocked", cx);
+      return false;
+    }
     if (this.programsError) {
       this.flashPermission("programs.json is invalid; fix it before changing permissions.", "blocked", cx);
       return false;
@@ -985,7 +1025,12 @@ export default class AgentManager extends View {
   async writePermissions(next, cx) {
     const latest = await readTextFile(MANAGER).catch(() => this.managerText);
     const base = latest === undefined ? this.managerText : latest;
-    const text = serializeManagerConfig(this.disabled, next);
+    const parsed = parseManagerConfig(base);
+    if (parsed.error) {
+      this.writeError = `agent-manager.json is invalid: ${parsed.error}`;
+      return false;
+    }
+    const text = serializeManagerConfig(parsed.disabled, next, parsed.herdrEnv);
     try {
       await writeTextFile(MANAGER, text, base ?? null);
     } catch (error) {
@@ -994,6 +1039,8 @@ export default class AgentManager extends View {
     }
     this.managerText = text;
     this.managerError = null;
+    this.disabled = parsed.disabled;
+    this.herdrEnv = parsed.herdrEnv;
     if (!this.pendingPermissions) this.permissions = next;
     this.writeError = null;
     return true;

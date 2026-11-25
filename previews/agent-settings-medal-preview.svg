@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="840" viewBox="0 0 840 840">
+<defs>
+  <radialGradient id="gold" cx="35%" cy="28%"><stop offset="0" stop-color="#fff3ae"/><stop offset=".48" stop-color="#f3c84e"/><stop offset="1" stop-color="#be8618"/></radialGradient>
+  <radialGradient id="bronze" cx="35%" cy="28%"><stop offset="0" stop-color="#f5d1ad"/><stop offset=".5" stop-color="#bd7744"/><stop offset="1" stop-color="#754022"/></radialGradient>
+</defs>
+<rect width="840" height="840" rx="22" fill="#171819"/>
+<g font-family="Arial,sans-serif">
+<text x="34" y="48" fill="#f2f2f3" font-size="23" font-weight="700">Agent Settings · medal folder buttons</text>
+<text x="34" y="76" fill="#a4a6aa" font-size="13">Discord-style rounded groups, vertical agent stack, medals open / close each group</text>
+<!-- main sidebar rail -->
+<rect x="263" y="101" width="314" height="677" rx="42" fill="#202123" stroke="#343639"/>
+<!-- Official group -->
+<rect x="278" y="116" width="284" height="458" rx="34" fill="#2a2c2f"/>
+<rect x="385" y="129" width="70" height="67" rx="21" fill="#35383e"/>
+<!-- gold medal -->
+<path d="M405 139h12l7 17-10 11-12-11z" fill="#9b641b"/><path d="M423 139h12l-3 17-10 11-8-11z" fill="#d2a23a"/>
+<circle cx="420" cy="157" r="18" fill="url(#gold)" stroke="#f8dd88" stroke-width="2"/><circle cx="420" cy="157" r="13" fill="none" stroke="#d6a22f" stroke-width="1.5"/><path d="M420 148l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" fill="#fff0ad"/>
+<path d="M526 151l5 5 5-5" fill="none" stroke="#979ba3" stroke-width="2"/>
+<!-- official agent tiles -->
+<rect x="375" y="207" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="215" width="50" height="50" rx="14" fill="#d9845e"/><path d="M406 232h7v13h-7zm17 0h7v13h-7z" fill="#251e1b"/><rect x="433" y="254" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="265" r="8" fill="#eee"/>
+<rect x="375" y="293" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="301" width="50" height="50" rx="14" fill="#fafafa"/><circle cx="420" cy="326" r="16" fill="#7774ec"/><rect x="433" y="340" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="351" r="8" fill="#eee"/>
+<rect x="375" y="379" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="387" width="50" height="50" rx="14" fill="#151a2d"/><path d="M405 412q14-22 29 0-14 19-29 0z" fill="#b4a4ff"/><rect x="433" y="426" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="437" r="8" fill="#eee"/>
+<rect x="375" y="465" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="473" width="50" height="50" rx="14" fill="#25272a"/><path d="M406 510l14-24 14 24z" fill="#a4a6aa"/><rect x="433" y="512" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="523" r="8" fill="#eee"/>
+<!-- Unofficial group -->
+<rect x="278" y="591" width="284" height="171" rx="34" fill="#2a2c2f"/>
+<rect x="385" y="602" width="70" height="67" rx="21" fill="#35383e"/>
+<!-- bronze medal -->
+<path d="M405 612h12l7 17-10 11-12-11z" fill="#713e26"/><path d="M423 612h12l-3 17-10 11-8-11z" fill="#9a5833"/>
+<circle cx="420" cy="630" r="18" fill="url(#bronze)" stroke="#e0ae80" stroke-width="2"/><circle cx="420" cy="630" r="13" fill="none" stroke="#985b37" stroke-width="1.5"/><path d="M420 621l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" fill="#f4d4b7"/>
+<path d="M526 624l5 5 5-5" fill="none" stroke="#979ba3" stroke-width="2"/>
+<rect x="375" y="680" width="90" height="66" rx="20" fill="#151617"/><rect x="395" y="686" width="50" height="50" rx="14" fill="#fafafa"/><path d="M407 727v-27h27v27m-20 0v-18h27v18" fill="none" stroke="#111" stroke-width="3"/>
+<text x="75" y="810" fill="#a4a6aa" font-size="12">Hover medal: Official (gold) / Unofficial (bronze)</text>
+<text x="75" y="832" fill="#a4a6aa" font-size="12">Click medal to collapse or reopen its group.</text>
+</g></svg>

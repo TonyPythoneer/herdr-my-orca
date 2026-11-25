@@ -23,12 +23,15 @@ const INVENTORY_KEY = "agent-manager.inventory";
 let disabledAgents = new Set();
 const MANAGER_FILE = `${appHome()}/agent-manager.json`;
 
-function parseDisabled(text) {
+function parseManager(text) {
   try {
     const saved = JSON.parse(text ?? "{}");
-    return new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []);
+    return {
+      disabled: new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []),
+      herdrEnv: saved.herdrEnv !== false,
+    };
   } catch {
-    return new Set();
+    return { disabled: new Set(), herdrEnv: true };
   }
 }
 
@@ -139,7 +142,7 @@ export default class NewMenu extends View {
     const cached = agentsByMachine.get(key);
     this.restoreFirstPaint(machine, key, inventory, cached);
 
-    if (!machine) cx.spawn((taskCx) => this.loadDisabled(taskCx));
+    cx.spawn((taskCx) => this.loadManager(taskCx));
 
     // The one unofficial integration: probe the same login shell its launch command uses.
     if (!checking()) {
@@ -158,15 +161,20 @@ export default class NewMenu extends View {
     this.agents = cached?.length ? mergeInventory(cached, inventory?.agents) : inventory?.agents ?? cached ?? null;
     this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
     this.disabled = firstPaintDisabled(machine, inventory);
-    this.disabledReady = Boolean(machine);
+    this.disabledReady = Array.isArray(inventory?.disabled) || Boolean(machine);
+    this.herdrEnv = typeof inventory?.herdrEnv === "boolean" ? inventory.herdrEnv : true;
+    this.herdrEnvReady = typeof inventory?.herdrEnv === "boolean";
     this.freebuff = typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
   }
 
-  async loadDisabled(taskCx) {
+  async loadManager(taskCx) {
     const text = await readTextFile(MANAGER_FILE).catch(() => null);
-    this.disabled = parseDisabled(text);
-    disabledAgents = new Set(this.disabled);
+    const manager = parseManager(text);
+    this.disabled = this.machine ? new Set() : manager.disabled;
+    this.herdrEnv = manager.herdrEnv;
+    if (!this.machine) disabledAgents = new Set(this.disabled);
     this.disabledReady = true;
+    this.herdrEnvReady = true;
     taskCx.notify();
   }
 
@@ -225,7 +233,8 @@ export default class NewMenu extends View {
       ? mergeInventory(this.agents ?? [], inventory.agents)
       : this.agents;
     const disabled = new Set(Array.isArray(inventory?.disabled) ? inventory.disabled : this.disabled);
-    return { agents, disabled, freebuff: resolveFreebuff(this.freebuff, inventory, disabled), ready: this.disabledReady && Boolean(agents) };
+    const herdrEnv = typeof inventory?.herdrEnv === "boolean" ? inventory.herdrEnv : this.herdrEnv;
+    return { agents, disabled, herdrEnv, freebuff: resolveFreebuff(this.freebuff, inventory, disabled), ready: this.disabledReady && this.herdrEnvReady && Boolean(agents) };
   }
 
   createRows() {
@@ -397,10 +406,11 @@ export default class NewMenu extends View {
     if (!target) return;
     const space = spaces().find((s) => s.active);
     const seed = MODELS[target.key];
+    const argv = seed && model ? [...target.run, seed.flag, model] : target.run;
     run("tab.new", {
       space: space?.id,
       ...(space?.folder ? { folder: space.folder } : {}),
-      argv: seed && model ? [...target.run, seed.flag, model] : target.run,
+      argv: state.herdrEnv ? ["env", "HERDR_ENV=1", ...argv] : argv,
     });
   }
 

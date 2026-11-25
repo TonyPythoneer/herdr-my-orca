@@ -102,6 +102,9 @@ function sidebarPlan(drawer, node) {
 // that paints the quadrant and takes the release.
 const STATUS_BAR_HEIGHT = 24; // `orca-status-bar` draws this (`layouts/orca.json` node `status`).
 const TAB_STRIP_FALLBACK = 32; // `TAB_GROUP_TAB_STRIP_HEIGHT_PX` (tab-drop-zone.ts:4), the fallback.
+const SETTINGS_HEADER_HEIGHT = 32;
+const SETTINGS_BUTTON_INSET = 4;
+const SETTINGS_BUTTON_HEIGHT = SETTINGS_HEADER_HEIGHT - SETTINGS_BUTTON_INSET * 2;
 // The reference design's sidebar collapse is 300ms.
 const SIDEBAR_STEP_MS = 16; // one step per frame (60fps); steps that would not change the width are skipped
 const SIDEBAR_RESIZE_SETTLE_MS = 80; // after sizing a hidden sidebar to 1px, before `show`
@@ -503,7 +506,8 @@ export default class Tabs extends View {
           continue;
         }
         if (command === "agent-settings") {
-          this.requestSettingsPage("main-agents", taskCx);
+          if (find(layout(), "main")?.active === "main-agents") this.returnToApp(taskCx);
+          else this.requestSettingsPage("main-agents", taskCx);
           continue;
         }
         if (command === "toggle-sidebar") this.wantToggle = (this.wantToggle ?? 0) + 1;
@@ -1117,6 +1121,8 @@ export default class Tabs extends View {
     const currentPage = find(layout(), "main")?.active;
     if (this.settingsPageRequest?.page === currentPage) this.settingsPageRequest = null;
     const requestedPage = this.settingsPageRequest?.page ?? currentPage;
+    const tabs = find(layout(), "tabs");
+    if (tabs?.size?.px !== SETTINGS_HEADER_HEIGHT) run("layout.resize", { id: "tabs", px: SETTINGS_HEADER_HEIGHT });
     this.syncSettingsSidebar(cx, requestedPage === "main-agents");
     if (requestedPage === "main-agents") this.closePanelForSettings(cx);
     let frame;
@@ -1236,7 +1242,7 @@ export default class Tabs extends View {
     const back = this.settingsBack(t);
     const w = appWindow() ?? this.windowState ?? {};
     return header.relative().items_center().justify_center().bg(t.surface)
-      .child(desiredLeft == null ? back : div().absolute().left(desiredLeft).top(3).child(back))
+      .child(desiredLeft == null ? back : div().absolute().left(desiredLeft).top(SETTINGS_BUTTON_INSET).child(back))
       .when(w.platform && w.platform !== "macos", el => el.child(this.settingsWindowControls(w, t)));
   }
 
@@ -1257,18 +1263,21 @@ export default class Tabs extends View {
   }
 
   settingsBack(t) {
-    const previous = this.lastAppPage;
-    return h_flex().id("agent-settings-back").h(26).w(112).flex_none().items_center().justify_center().gap(5)
+    return h_flex().id("agent-settings-back").h(SETTINGS_BUTTON_HEIGHT).w(112).flex_none().items_center().justify_center().gap(5)
       .rounded_full().border_1().border_color(t.border).bg(t.raised).text_color(t.foreground)
       .cursor_pointer().hover(s => s.bg(t.hover)).role("button").accessibility_label("Back to app")
       .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation()).on_click((_e, eventCx) => {
-        const active = (spaces() ?? []).find(s => s.active);
-        const target = settingsReturnPage(previous, find(layout(), "main")?.children, active);
-        this.landing = active?.tabs?.length ? "main-terminals" : "main-landing";
-        this.requestSettingsPage(target, eventCx);
+        this.returnToApp(eventCx);
       })
       .child(svg("mods/orca-header/chevron-left.svg").size(13))
       .child(div().text_size(12).child("Back to app"));
+  }
+
+  returnToApp(cx) {
+    const active = (spaces() ?? []).find(s => s.active);
+    const target = settingsReturnPage(this.lastAppPage, find(layout(), "main")?.children, active);
+    this.landing = active?.tabs?.length ? "main-terminals" : "main-landing";
+    this.requestSettingsPage(target, cx);
   }
 
   settingsWindowControls(w, t) {

@@ -1,11 +1,11 @@
-// The oMLX model provider for Codex: the one place that decides what a host is, what a `/models`
-// answer means, and how a provider launch is spelled. Used by orca-agent-settings (setup and test)
-// and orca-agent-flyout (the Codex flyout and the launch).
+// Shared model-provider helpers: Codex can use compatible model servers, while Pi uses its built-in
+// Groq provider. Used by orca-agent-settings (setup and test) and orca-agent-flyout (selection/launch).
 //
 // Pure: no herdr or gpui imports, so `node --test` runs it directly. Edit this file, then
 // `node scripts/build-orca-ui.mjs --out .` writes the copies the two mods import.
 
 export const OMLX = "omlx";
+export const GROQ = "groq";
 /** In appHome(): holds the provider record, mode 0600. */
 export const PROVIDER_FILE = "model-providers.json";
 
@@ -24,6 +24,7 @@ export const TEST_ERRORS = {
  * list, and it always comes from the same record as the host.
  */
 export const WRAPPER = `export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
+export const PI_GROQ_WRAPPER = `export GROQ_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
 
 const HOST_ERROR = "Enter a host like http://127.0.0.1:8000/v1";
 
@@ -37,6 +38,19 @@ export function validateHost(text) {
     return { error: HOST_ERROR }; // the shape matched but the URL parser still refuses it
   }
   return { host };
+}
+
+/** Pi has a built-in Groq provider; its custom provider catalog is not managed by Herdr. */
+export function supportsPiProvider(provider) {
+  return validateHost(provider?.host).host === "https://api.groq.com/openai/v1";
+}
+
+/** Launch Pi through its native Groq provider, keeping the saved key out of argv. */
+export function launchPiArgv(baseArgv, provider, model) {
+  const argv = [...(baseArgv ?? [])];
+  if (!provider || !supportsPiProvider(provider)) return argv;
+  const [command, ...rest] = argv;
+  return ["/bin/sh", "-c", PI_GROQ_WRAPPER, "--", provider.configPath, provider.id ?? GROQ, command, ...rest, "--provider", GROQ, "--model", model];
 }
 
 const GITHUB_OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
