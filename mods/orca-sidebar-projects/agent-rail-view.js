@@ -56,15 +56,18 @@ function controlHover(owner, key, hovered, cx) {
 }
 
 function railAction(owner, row, t, control, label) {
+  const avatarRight = (RAIL.width + RAIL.avatar) / 2;
   if (row.key === "global") {
-    return div().absolute().left(48).top(39).size(20).rounded_full().bg(t.raised)
+    return div().absolute().left(avatarRight - 20).top(39).size(20).rounded_full().bg(t.raised)
       .border_1().border_color(t.border).flex().items_center().justify_center()
       .cursor_pointer().tooltip(label).on_click((_e,cx) => owner.selectRail(row.key,cx))
       .child(svg("mods/orca-sidebar-projects/settings.svg").size(12).text_color(t.muted));
   }
   if (control?.kind === "switch") {
     // t.input is translucent in the dark theme; the off track must stay opaque.
-    return div().id("am-rail-toggle-" + row.key).absolute().left(40).top(33)
+    // Center the visible switch in its hit area, then align its right edge with the avatar.
+    const hitLeft = avatarRight - (RAIL.hitWidth + RAIL.switchWidth) / 2;
+    return div().id("am-rail-toggle-" + row.key).absolute().left(hitLeft).top(33)
       .w(RAIL.hitWidth).h(RAIL.hitHeight).flex().items_center().justify_center()
       .role("switch").checked(control.checked).accessibility_label("Enable " + row.name)
       .on_hover((hovered, cx) => controlHover(owner, row.key, hovered, cx))
@@ -88,7 +91,8 @@ function railAction(owner, row, t, control, label) {
         .tooltip("Install " + row.name).cursor_pointer().on_click((_e,cx) => {
           cx.stop_propagation(); owner.selectRail(row.key,cx);
         }).child(hit);
-    return div().absolute().left(43).top(33).w(30).h(27).flex().items_center().justify_center()
+    // The 22px install glyph is centered in this 30px hit target.
+    return div().absolute().left(avatarRight - 26).top(33).w(30).h(27).flex().items_center().justify_center()
       .on_hover((hovered, cx) => controlHover(owner, row.key, hovered, cx)).child(action);
   }
   return div().size(0);

@@ -7,7 +7,7 @@ export const RAIL = Object.freeze({
   width: 76, row: 60, avatar: 46, avatarRadius: 13, indicatorWidth: 5,
   idleHeight: 10, selectedHeight: 40, hoverHeight: 20, switchWidth: 27, switchHeight: 17,
   hitWidth: 34, hitHeight: 27,
-  groupLeft: 13, groupWidth: 58, groupRadius: 16, groupGap: 8,
+  groupLeft: 9, groupWidth: 58, groupRadius: 16, groupGap: 8,
 });
 
 // Global and agent rows use identical local geometry. Never center relative to a group.
