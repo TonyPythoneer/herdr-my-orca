@@ -32,7 +32,7 @@ if [ -n "$(find "$s" -mmin -${LIVE_FRESH_MINUTES} 2>/dev/null)" ]; then
 fi
 if [ "$live" = "null" ] && [ -z "$(find "$c" -mmin -${OAUTH_FRESH_MINUTES} 2>/dev/null)" ]; then
   tok=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-  [ -n "$tok" ] && curl -sSf -m 10 https://api.anthropic.com/api/oauth/usage -H "Authorization: Bearer $tok" -H "anthropic-beta: oauth-2025-04-20" > "$c.tmp" 2>/dev/null && mv "$c.tmp" "$c" || rm -f "$c.tmp" "$c"
+  [ -n "$tok" ] && printf 'Authorization: Bearer %s\\n' "$tok" | curl -q -sSf -m 10 https://api.anthropic.com/api/oauth/usage -H @- -H "anthropic-beta: oauth-2025-04-20" > "$c.tmp" 2>/dev/null && mv "$c.tmp" "$c" || rm -f "$c.tmp" "$c"
 fi
 api=$(cat "$c" 2>/dev/null)
 printf '{"live":%s,"api":%s}' "$live" "\${api:-null}"`;

@@ -79,6 +79,7 @@ test("oMLX launches through the wrapper, without the key in argv and without an 
     "--",
     PROVIDERS,
     "omlx",
+    "http://127.0.0.1:8000/v1",
     "codex",
     "--disable",
     "shell_snapshot",
@@ -118,6 +119,7 @@ test("a record chosen by its own id gets its own host and its own key", async ()
   const argv = argvOf(runs);
   // The wrapper reads the key of this record, so oMLX's key never goes to the other host.
   assert.equal(argv[5], "myllm");
+  assert.equal(argv[6], other.host);
   assert.ok(argv.includes('model_providers.omlx.base_url="http://127.0.0.1:9000/v1"'));
   assert.equal(argv.some((part) => part.includes("other-key") || part.includes("test-key-value")), false);
 });

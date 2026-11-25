@@ -10,7 +10,7 @@
 import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
-import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
+import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, serializeProviderFile, validateHost, writeProviderFile } from "./codex-provider.js";
 import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
 
@@ -338,8 +338,7 @@ class AgentConfigCore {
       if (!record) return; // deleted while this flyout was open
       record.selectedModel = { ...(record.selectedModel ?? {}), [key]: model };
       try {
-        await writeTextFile(file, serializeProviderFile(parsed.providers), text);
-        await exec("chmod", ["600", file]); // the key is in this file
+        await writeProviderFile(file, serializeProviderFile(parsed.providers), text, { appHome, exec, writeTextFile });
       } catch { /* the provider file could not be saved: the choice is kept in memory only */ }
     });
   }
@@ -621,7 +620,12 @@ class AgentConfigCore {
     }
     const provider = { ...record, id: providerId, configPath: file };
     if (this.key === "pi") {
-      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
+      const model = preview ? values.model : this.model;
+      const info = record.modelInfo?.[model];
+      if (!Number.isSafeInteger(info?.contextWindow) || info.contextWindow < 1 || !Number.isSafeInteger(info?.maxTokens) || info.maxTokens < 1) {
+        return { error: "Pi needs context and output limits from this provider's /models list. Re-test the provider to refresh its model details." };
+      }
+      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
     }
     if (this.key === "claude") {
       return { argv: launchClaudeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };

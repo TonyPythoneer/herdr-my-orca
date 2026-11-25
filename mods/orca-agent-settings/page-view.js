@@ -385,22 +385,28 @@ function sidebarNode(node) {
 export function settingsPageView(owner, t, cx) {
   const rows = railRows(owner.allRows().all);
   const unofficial = owner.unofficialRows();
+  const providersSelected = owner.railSelection === "providers";
   const anchor = shared("left-sidebar.settingsAnchor");
   const zoom = settings()?.zoom || 1;
   const sidebar = anchor ? sidebarNode(layout()) : null;
   const currentLeft = sidebar?.hidden ? 0 : (sidebar?.size?.px ?? anchor?.left);
   const pad = (anchor ? anchor.width / zoom : owner.width || 800) < NARROW_WIDTH ? 12 : 24;
   const header = addBanners(v_flex().w_full().max_w(760).mx_auto().px(pad).pt(20).gap(2)
-    .child(h_flex().w_full().items_center().gap(8).child(div().flex_1()).child(badge("This computer", t, { border: true })).child(refreshButton(owner, t))), owner, rows, t);
-  const loading = owner.loading && !owner.agents;
+    .child(h_flex().w_full().items_center().gap(8).child(div().flex_1()).child(badge("This computer", t, { border: true }))
+      .when(!providersSelected, el => el.child(refreshButton(owner, t)))), owner, rows, t);
+  const loading = !providersSelected && owner.loading && !owner.agents;
   const selected = [...rows, ...unofficial].find(row => row.key === owner.railSelection);
   const body = v_flex().w_full().max_w(760).mx_auto().px(pad).pb(20).gap(2)
     .when(loading, el => el.child(loadingRow(t)))
+    .when(!loading && providersSelected, el => el
+      .child(div().text_size(18).font_semibold().text_color(t.foreground).child("Model providers"))
+      .child(div().mt(4).text_size(12).line_height("18px").text_color(t.muted).child("Configure the model sources shared by supported agents."))
+      .child(owner.modelProvidersCard(t)))
     .when(!loading && owner.railSelection === "global", el => el.child(div().text_size(18).font_semibold().text_color(t.foreground).child("Global Agent Settings"))
       .when(rows.some(row => row.supports), inner => inner.child(permissionsCardView(owner, rows, t, true)))
       .child(environmentCardView(owner, t)))
-    .when(!loading && owner.railSelection !== "global", el => el.child(selected ? owner.agentDetail(selected, t, cx) : empty("Agent unavailable on this computer. Refresh or select another agent.", t)))
-    .child(div().pt(12).text_size(11).text_color(t.dim).child(timeLabel(owner.lastChecked)));
+    .when(!loading && !providersSelected && owner.railSelection !== "global", el => el.child(selected ? owner.agentDetail(selected, t, cx) : empty("Agent unavailable on this computer. Refresh or select another agent.", t)))
+    .when(!providersSelected, el => el.child(div().pt(12).text_size(11).text_color(t.dim).child(timeLabel(owner.lastChecked))));
   return v_flex().id("am-root").size_full().min_h(0).overflow_hidden().bg(t.background).text_size(12)
     .on_key_down((event, keyCx) => { if (owner.permissionOpen && owner.onPermissionKey(String(event.key ?? ""), keyCx)) keyCx.stop_propagation(); })
     .on_size_change((size, sizeCx) => {

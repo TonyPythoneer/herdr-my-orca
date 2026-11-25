@@ -46,7 +46,6 @@ export default class WorkspaceChrome extends View {
         // The Agent Settings is part of this layout's navigation: Settings is Herdr's native pane,
         // while the Agents page lives in the `main` stack (`main-agents`).
         .child(row("agents", "bot", "Agents", () => run("orca-header.agent-settings"), onAgents))
-        .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
         // Schedules: the reset ping and anything else the person adds (orca-tasks).
         .child(row("tasks", "clock", "Tasks", () => run("layout.select", { stack: "main", child: "main-tasks" })))
         .child(row("settings", "settings", "Settings", () => run("app.settings")))

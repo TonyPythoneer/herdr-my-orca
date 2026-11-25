@@ -5,6 +5,8 @@
 // `node scripts/build-orca-ui.mjs --out .` writes the copies the two mods import.
 
 export const OMLX = "omlx";
+const PI_COMPACTION_RESERVE = 16384;
+const UNKNOWN_OUTPUT_CAP = 8192;
 /** In appHome(): holds the provider record, mode 0600. */
 export const PROVIDER_FILE = "model-providers.json";
 
@@ -18,13 +20,13 @@ export const TEST_ERRORS = {
 };
 
 /**
- * Runs as `sh -c <WRAPPER> -- <file> <id> <command> ...`: reads the key of the `<id>` record out of
- * the provider file into OMLX_API_KEY, then becomes the agent. The key never appears in an argument
- * list, and it always comes from the same record as the host.
+ * Reads the key only when the provider file still has the host selected in the UI, then becomes the
+ * agent. A failed lookup or a changed record stops the launch; the key never appears in argv.
  */
-export const WRAPPER = `export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
-export const PROVIDER_KEY_WRAPPER = `export HERDR_PROVIDER_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
-export const CLAUDE_PROVIDER_WRAPPER = `export ANTHROPIC_AUTH_TOKEN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
+const KEY_FROM_PROVIDER = `key="$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))[sys.argv[2]]; sys.exit(1) if r.get("host") != sys.argv[3] else None; print(r.get("apiKey", ""))' "$1" "$2" "$3")" || exit 1; [ -n "$key" ] || exit 1;`;
+export const WRAPPER = `${KEY_FROM_PROVIDER} export OMLX_API_KEY="$key"; unset key; shift 3; exec "$@"`;
+export const PROVIDER_KEY_WRAPPER = `${KEY_FROM_PROVIDER} export HERDR_PROVIDER_API_KEY="$key"; unset key; shift 3; exec "$@"`;
+export const CLAUDE_PROVIDER_WRAPPER = `${KEY_FROM_PROVIDER} export ANTHROPIC_AUTH_TOKEN="$key"; unset key; shift 3; exec "$@"`;
 
 const HOST_ERROR = "Enter a host like http://127.0.0.1:8000/v1";
 
@@ -40,15 +42,32 @@ export function validateHost(text) {
   return { host };
 }
 
+/** Drop only models whose catalog explicitly rules out text chat or tool calls. */
+export function supportsCodingModel(info) {
+  if (!info || typeof info !== "object") return true;
+  if (Array.isArray(info.inputModalities) && !info.inputModalities.includes("text")) return false;
+  if (Array.isArray(info.outputModalities) && !info.outputModalities.includes("text")) return false;
+  if (Array.isArray(info.supportedFeatures) && !info.supportedFeatures.some((feature) => feature === "tools" || feature === "tool_use")) return false;
+  return true;
+}
+
 /** Launch Pi through a one-run provider extension, keeping the saved key out of argv/config files. */
 export function launchPiArgv(baseArgv, provider, model, extensionPath) {
   const argv = [...(baseArgv ?? [])];
   if (!provider) return argv;
   const [command, ...rest] = argv;
-  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id))];
+  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id && supportsCodingModel(provider.modelInfo?.[id])))];
+  const modelInfo = Object.fromEntries(models.flatMap((id) => {
+    const info = provider.modelInfo && Object.hasOwn(provider.modelInfo, id) ? provider.modelInfo[id] : null;
+    const context = Number.isSafeInteger(info?.contextWindow) && info.contextWindow > PI_COMPACTION_RESERVE ? info.contextWindow : null;
+    if (!context) return [];
+    // shortcut: when /models omits an output cap, bound it to 8K or the known context, until the provider publishes one.
+    const output = Number.isSafeInteger(info.maxTokens) && info.maxTokens > 0 ? info.maxTokens : Math.min(UNKNOWN_OUTPUT_CAP, context);
+    return [[id, { ...info, contextWindow: context, maxTokens: output }]];
+  }));
   return [
-    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id,
-    "env", `HERDR_PI_BASE_URL=${provider.host}`, `HERDR_PI_MODELS=${JSON.stringify(models)}`,
+    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
+    "env", `HERDR_PI_BASE_URL=${provider.host}`, `HERDR_PI_MODELS=${JSON.stringify(models)}`, `HERDR_PI_MODEL_INFO=${JSON.stringify(modelInfo)}`,
     command, ...rest, "--provider", "herdr", "--model", model, "--extension", extensionPath,
   ];
 }
@@ -59,7 +78,7 @@ export function launchClaudeArgv(baseArgv, provider, model) {
   if (!provider) return argv;
   const [command, ...rest] = argv;
   return [
-    "/bin/sh", "-c", CLAUDE_PROVIDER_WRAPPER, "--", provider.configPath, provider.id,
+    "/bin/sh", "-c", CLAUDE_PROVIDER_WRAPPER, "--", provider.configPath, provider.id, provider.host,
     "env", `ANTHROPIC_BASE_URL=${provider.host}`, command, ...rest, "--model", model,
   ];
 }
@@ -68,13 +87,20 @@ export function launchClaudeArgv(baseArgv, provider, model) {
 export function launchOpenCodeArgv(baseArgv, provider, model) {
   const argv = [...(baseArgv ?? [])];
   if (!provider) return argv;
-  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id))];
+  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id && supportsCodingModel(provider.modelInfo?.[id])))];
   const selected = models.indexOf(model);
-  const entries = Object.fromEntries(models.map((id, index) => [`model-${index + 1}`, {
-    name: id,
-    modelID: id,
-    capabilities: { tools: true, input: ["text"], output: ["text"] },
-  }]));
+  const entries = Object.fromEntries(models.map((id, index) => {
+    const info = provider.modelInfo && Object.hasOwn(provider.modelInfo, id) ? provider.modelInfo[id] : {};
+    const context = Number.isSafeInteger(info?.contextWindow) && info.contextWindow > 0 ? info.contextWindow : undefined;
+    // shortcut: OpenCode needs both limits; cap unknown output at 8K or the known context until /models reports it.
+    const output = context ? (Number.isSafeInteger(info?.maxTokens) && info.maxTokens > 0 ? Math.min(info.maxTokens, context) : Math.min(UNKNOWN_OUTPUT_CAP, context)) : undefined;
+    return [`model-${index + 1}`, {
+      name: id,
+      modelID: id,
+      capabilities: { tools: true, input: ["text"], output: ["text"] },
+      ...(context && output ? { limit: { context, output } } : {}),
+    }];
+  }));
   const config = {
     "$schema": "https://opencode.ai/config.json",
     model: `herdr/model-${selected + 1}`,
@@ -91,7 +117,7 @@ export function launchOpenCodeArgv(baseArgv, provider, model) {
   // The normal OpenCode wrapper is `env OPENCODE_CONFIG_CONTENT=... opencode ...`; replace only
   // that default config while keeping the command and standalone suffix from the spec.
   return [
-    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id,
+    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
     "env", `OPENCODE_CONFIG_CONTENT=${JSON.stringify(config)}`, ...argv.slice(2),
   ];
 }
@@ -193,9 +219,30 @@ export function judgeModels(status, body) {
     }
     const data = answer?.data;
     if (!Array.isArray(data)) return { ok: false, error: TEST_ERRORS.notModelServer };
-    const models = data.map((entry) => (typeof entry === "string" ? entry : entry?.id)).filter((id) => typeof id === "string" && id !== "");
+    const entries = data.filter((entry) => typeof entry === "string" || (entry && typeof entry === "object" && !Array.isArray(entry)));
+    const models = entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== "");
     if (models.length === 0) return { ok: false, error: TEST_ERRORS.empty };
-    return { ok: true, models };
+    const modelInfo = {};
+    for (const entry of entries) {
+      if (typeof entry === "string" || !models.includes(entry.id)) continue;
+      const positive = (...values) => values.find((value) => typeof value === "number" && Number.isSafeInteger(value) && value > 0);
+      const contextWindow = positive(entry.context_window, entry.contextWindow, entry.max_model_len);
+      const maxTokens = positive(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens);
+      const inputModalities = Array.isArray(entry.input_modalities) ? entry.input_modalities.filter((value) => typeof value === "string") : undefined;
+      const outputModalities = Array.isArray(entry.output_modalities) ? entry.output_modalities.filter((value) => typeof value === "string") : undefined;
+      const supportedFeatures = Array.isArray(entry.supported_features) ? entry.supported_features.filter((value) => typeof value === "string") : undefined;
+      if (contextWindow || maxTokens || inputModalities || outputModalities || supportedFeatures) Object.defineProperty(modelInfo, entry.id, {
+        value: {
+          ...(contextWindow ? { contextWindow } : {}),
+          ...(maxTokens ? { maxTokens } : {}),
+          ...(inputModalities ? { inputModalities } : {}),
+          ...(outputModalities ? { outputModalities } : {}),
+          ...(supportedFeatures ? { supportedFeatures } : {}),
+        },
+        enumerable: true,
+      });
+    }
+    return { ok: true, models, ...(Object.keys(modelInfo).length ? { modelInfo } : {}) };
   }
   if (code === 401 || code === 403) return { ok: false, error: TEST_ERRORS.key };
   if (code === 404) return { ok: false, error: TEST_ERRORS.models };
@@ -217,6 +264,7 @@ export function launchArgv(baseArgv, provider, model) {
     "--",
     provider.configPath,
     provider.id ?? OMLX,
+    provider.host,
     command,
     // Without this Codex writes the environment, key included, to ~/.codex/shell_snapshots/.
     "--disable",
@@ -255,3 +303,9 @@ export function parseProviderFile(text) {
 export function serializeProviderFile(providers) {
   return `${JSON.stringify(providers ?? {}, null, 2)}\n`;
 }
+
+/**
+ * Replace the provider file atomically while preserving its expected-content check. The key is
+ * staged only inside a mode-0700 directory, and the installed file is mode 0600 before it appears
+ * at its destination. A shared flock serializes writes from Settings and the agent flyout.
+ */

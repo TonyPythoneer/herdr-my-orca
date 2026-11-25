@@ -10,7 +10,7 @@
 import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
-import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
+import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, serializeProviderFile, supportsCodingModel, validateHost, writeProviderFile } from "./codex-provider.js";
 import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
 
@@ -338,8 +338,7 @@ class AgentConfigCore {
       if (!record) return; // deleted while this flyout was open
       record.selectedModel = { ...(record.selectedModel ?? {}), [key]: model };
       try {
-        await writeTextFile(file, serializeProviderFile(parsed.providers), text);
-        await exec("chmod", ["600", file]); // the key is in this file
+        await writeProviderFile(file, serializeProviderFile(parsed.providers), text, { appHome, exec, writeTextFile });
       } catch { /* the provider file could not be saved: the choice is kept in memory only */ }
     });
   }
@@ -621,13 +620,23 @@ class AgentConfigCore {
     }
     const provider = { ...record, id: providerId, configPath: file };
     if (this.key === "pi") {
-      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
+      const model = preview ? values.model : this.model;
+      const info = record.modelInfo?.[model];
+      if (!supportsCodingModel(info)) return { error: "Pi needs a text model with tool support." };
+      const context = info?.contextWindow;
+      const output = Number.isSafeInteger(info?.maxTokens) && info.maxTokens > 0 ? info.maxTokens : (Number.isSafeInteger(context) && context > 16384 ? Math.min(8192, context) : null);
+      if (!Number.isSafeInteger(context) || context <= 16384 || !output || output > context) {
+        return { error: "Pi needs a known context limit above 16,384 tokens and an output limit that fits it." };
+      }
+      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
     }
     if (this.key === "claude") {
       return { argv: launchClaudeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
     }
     if (this.key === "opencode") {
-      return { argv: launchOpenCodeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
+      const model = preview ? values.model : this.model;
+      if (!supportsCodingModel(record.modelInfo?.[model])) return { error: "OpenCode needs a text model with tool support." };
+      return { argv: launchOpenCodeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model) };
     }
     // Codex adds no effort flag; its model flag is placed by launchArgv.
     return { argv: launchArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };

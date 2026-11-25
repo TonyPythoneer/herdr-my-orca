@@ -1,6 +1,5 @@
-// Flow test: runs the real model-provider handlers of main.js with answer-controlled curl, chmod,
-// stat and sips (scripts/gpui-stub-loader.mjs), so the save order, the file mode, the icon work and
-// the delete are checked without the app or a live model server.
+// Flow test: runs the real model-provider handlers of main.js with answer-controlled curl, mktemp,
+// chmod, Python, and sips (scripts/gpui-stub-loader.mjs), without the app or a live model server.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -11,7 +10,7 @@ const { default: AgentManager } = await import("./main.js");
 const PROVIDERS = "/home/model-providers.json";
 const ICON_DIR = "/home/provider-icons/";
 const KEY = "test-key-ab12";
-const MODELS = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM2-VL-450M-4bit" }, { id: "b" }] });
+const MODELS = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM2-VL-450M-4bit", context_window: 65536, max_completion_tokens: 8192 }, { id: "b" }] });
 const PNG = "89504e470d0a1a0a";
 const OMLX_LINK = "https://github.com/jundot/omlx";
 
@@ -20,22 +19,25 @@ const field = (value) => {
   return state;
 };
 
-// The programs this page runs: the /models curl, the icon curl, chmod, stat, xxd, sips and the file
-// moves. `answers` decides what the server and the icon host say.
-function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, magic = PNG, mode = "600" } = {}) {
+// `answers` controls the /models and icon responses; file and process APIs use an in-memory harness.
+function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, magic = PNG, writeStatus = 0 } = {}) {
   const files = new Map();
   if (file !== null) files.set(PROVIDERS, file);
   globalThis.__herdrFiles = files;
   const calls = [];
   globalThis.__herdrExec = async (command, args) => {
     calls.push([command, ...args]);
+    if (command === "mktemp") return { code: 0, stdout: `${args.at(-1).replace(/XXXXXX$/, "fixture")}\n`, stderr: "" };
     if (command === "curl" && args.includes("-o")) {
       if (iconStatus === 200) files.set(args[args.indexOf("-o") + 1], "image");
       return { code: 0, stdout: `\n${iconStatus}`, stderr: "" };
     }
     if (command === "curl") return { code: 0, stdout: body ? `${body}\n${status}` : `\n${status}`, stderr: "" };
+    if (command === "python3" && args[1]?.includes("fcntl.flock")) {
+      if (writeStatus === 0) files.set(args[2], files.get(args[3]));
+      return { code: writeStatus, stdout: "", stderr: "" };
+    }
     if (command === "xxd") return { code: 0, stdout: `${magic}\n`, stderr: "" };
-    if (command === "stat") return { code: 0, stdout: `${mode}\n`, stderr: "" };
     if (command === "sips") {
       files.set(args[args.indexOf("--out") + 1], "converted");
       return { code: 0, stdout: "", stderr: "" };
@@ -44,7 +46,12 @@ function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, m
       files.set(args.at(-1), files.get(args.at(-2)));
       files.delete(args.at(-2));
     }
-    if (command === "rm") for (const path of args.slice(1)) files.delete(path);
+    if (command === "rm") {
+      for (const path of args.slice(1).filter((part) => !part.startsWith("-"))) {
+        files.delete(path);
+        for (const saved of files.keys()) if (saved.startsWith(`${path}/`)) files.delete(saved);
+      }
+    }
     return { code: 0, stdout: "", stderr: "" };
   };
   const cx = { notify() {} };
@@ -105,12 +112,21 @@ test("a passing test writes the record, fixes the mode and saves the icon under 
   assert.equal(record.apiKey, KEY);
   assert.equal(record.link, OMLX_LINK);
   assert.deepEqual(record.models, ["mlx-community--LFM2-VL-450M-4bit", "b"]);
+  assert.deepEqual(record.modelInfo, { "mlx-community--LFM2-VL-450M-4bit": { contextWindow: 65536, maxTokens: 8192 } });
+  const testRequest = calls.find((call) => call[0] === "curl" && call.includes("-H"));
+  assert.ok(testRequest);
+  assert.equal(testRequest[1], "-q");
+  assert.equal(testRequest.some((arg) => arg.includes(KEY)), false, "the API key is not a process argument");
+  const testRequest = calls.find((call) => call[0] === "curl" && call.includes("--config"));
+  assert.ok(testRequest);
+  assert.equal(testRequest[1], "-q");
+  assert.equal(testRequest.some((arg) => arg.includes(KEY)), false, "the API key is not a process argument");
   assert.match(record.iconPath, /^\/home\/provider-icons\/icon-[a-z0-9]+\.png$/);
   assert.ok(files.has(record.iconPath));
   assert.equal(card.status.tone, "done");
   assert.equal(card.id, "omlx");
   assert.ok(calls.some((call) => call[0] === "chmod" && call[1] === "600"));
-  assert.ok(calls.some((call) => call[0] === "stat"));
+  assert.ok(calls.some((call) => call[0] === "python3"), "the provider file is installed by the private atomic writer");
   assert.ok(calls.some((call) => call[0] === "curl" && call.at(-1) === "https://github.com/jundot.png?size=64"));
 });
 
@@ -122,7 +138,8 @@ test("a failed test writes nothing", async () => {
     assert.equal(files.get(PROVIDERS), "{}\n", `status ${status} must not write`);
     assert.equal(card.status.tone, "blocked");
     assert.ok(["Key rejected", "No /models at this host", "Cannot connect"].includes(card.status.text));
-    assert.equal(calls.some((call) => call[0] === "chmod"), false);
+    assert.ok(calls.some((call) => call[0] === "chmod" && call[2]?.endsWith("/headers")), "the temporary curl headers are private");
+    assert.equal(calls.some((call) => call[0] === "chmod" && call[2] === PROVIDERS), false, "a failed test never writes the provider file");
     assert.equal(calls.some((call) => call[0] === "xxd"), false, "no icon is fetched for a server that failed");
   }
 });
@@ -174,11 +191,12 @@ test("a site link takes the site's favicon", async () => {
   assert.equal(stored(files).example.link, "https://models.example.com");
 });
 
-test("a mode that did not take is reported", async () => {
-  const { page, cx } = harness({ mode: "644" });
+test("an atomic provider-file write failure leaves the provider unsaved", async () => {
+  const { page, files, cx } = harness({ writeStatus: 1 });
   const card = cardOf();
   await page.saveCard(card, cx);
-  assert.equal(card.status.text, "model-providers.json is not private to your user.");
+  assert.equal(files.has(PROVIDERS), false);
+  assert.equal(card.status.text, "Could not write model-providers.json.");
 });
 
 test("two providers save on their own and a re-test keeps the chosen model", async () => {

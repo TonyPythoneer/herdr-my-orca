@@ -61,7 +61,7 @@ import { settingsPageView, permissionsCardView } from "./page-view.js";
 import { modelProvidersView, providerCardView, providersPageView } from "./provider-view.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
 import { agentPermissionItems, defaultPermissionItems, permissionRow } from "./permission-menu.js";
-import { PROVIDER_FILE, judgeModels, linkInfo, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost } from "./codex-provider.js";
+import { PROVIDER_FILE, judgeModels, linkInfo, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost, writeProviderFile } from "./codex-provider.js";
 
 import { railRows } from "./agent-rail.js";
 import { createAgentConfigClass } from "./agent-config-view.js";
@@ -159,10 +159,14 @@ export default class AgentManager extends View {
     this.refreshGen = 0;
     this.action = null; // { key, kind, phase, message }
     this.uninstall = null; // { key, phase, status, message }
-    // Model providers (their own page): the saved records and one card for each, see makeCard.
+    // Model providers share this page's rail and workspace with the agent catalog.
     this.providers = {};
     this.providersError = null;
     this.cards = new Map();
+    this.selectedProviderId = null;
+    this.selectedProviderBeforeAdd = null;
+    this.providerHealth = new Map();
+    this.providerChecks = new Set();
     this.adding = null; // the card for a provider being added
     this.providerText = undefined; // model-providers.json as read, so a write can replace it safely
     this.providerWrittenAt = 0; // when this page last wrote it, so a slower refresh cannot roll it back
@@ -172,19 +176,21 @@ export default class AgentManager extends View {
     const expand = props()?.expand;
     if (typeof expand === "string") { this.railSelection = expand; this.focusKey = expand; }
 
-    // The Model providers page is the same mod with `props.page`: only the provider card, no detection.
+    // Keep the old route as a shortcut into the integrated Agent Settings provider section.
     this.providersPage = props()?.page === "providers";
     if (this.providersPage) {
       if (!checking()) {
-        cx.spawn(async (taskCx) => {
-          this.applyProviders(await readFile(PROVIDERS));
-          taskCx.notify();
-        });
+        setShared("agent-manager.open-agent", { key: "providers" });
+        run("layout.select", { stack: "main", child: "main-agents" });
       }
       return;
     }
     this.restoreCache();
     if (checking()) return;
+    cx.spawn(async (taskCx) => {
+      this.applyProviders(await readFile(PROVIDERS));
+      taskCx.notify();
+    });
     this.refresh(cx);
     cx.timer.every(POLL_MS, (tickCx) => this.poll(tickCx));
   }
@@ -1221,13 +1227,48 @@ export default class AgentManager extends View {
     const parsed = parseProviderFile(text);
     this.providers = parsed.providers ?? {};
     this.providersError = parsed.error ?? null;
-    for (const id of [...this.cards.keys()]) if (!Object.hasOwn(this.providers, id)) this.cards.delete(id);
+    for (const id of [...this.cards.keys()]) {
+      if (!Object.hasOwn(this.providers, id)) {
+        this.cards.delete(id);
+        this.providerHealth.delete(id);
+      }
+    }
+    if (this.selectedProviderId && !Object.hasOwn(this.providers, this.selectedProviderId)) this.selectedProviderId = null;
     for (const [id, record] of Object.entries(this.providers)) {
       const card = this.cards.get(id);
       if (!card) this.cards.set(id, this.makeCard(id, record));
       else if (!card.touched) this.fillCard(card, record);
     }
+    if (!this.selectedProviderId && this.railSelection === "providers" && !this.adding) this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
     return true;
+  }
+
+  providerHealthState(id) {
+    return this.providerHealth.get(id) ?? (this.providers[id]?.verifiedAt
+      ? { state: "healthy", checkedAt: this.providers[id].verifiedAt, models: this.providers[id].models }
+      : { state: "unknown", models: this.providers[id]?.models ?? [] });
+  }
+
+  selectProvider(id, cx) {
+    this.selectedProviderId = id;
+    this.refreshProviderHealth(id, cx);
+    cx?.notify();
+  }
+
+  async refreshProviderHealth(id, cx) {
+    const record = this.providers[id];
+    if (!record || this.providerChecks.has(id)) return;
+    this.providerChecks.add(id);
+    const previous = this.providerHealthState(id);
+    this.providerHealth.set(id, { ...previous, state: "checking" });
+    cx?.notify();
+    const result = await this.testProvider(record.host, record.apiKey);
+    this.providerChecks.delete(id);
+    if (this.providers[id] !== record) return;
+    this.providerHealth.set(id, result.ok
+      ? { state: "healthy", checkedAt: new Date().toISOString(), models: result.models }
+      : { state: "unhealthy", checkedAt: new Date().toISOString(), models: previous.models ?? record.models ?? [], error: result.error });
+    cx?.notify();
   }
 
   showCardStatus(card, cx, tone, text) {
@@ -1278,7 +1319,7 @@ export default class AgentManager extends View {
     const verdict = await this.testProvider(input.host, input.key);
     if (!verdict.ok) return this.showCardStatus(card, cx, "blocked", verdict.error);
     await this.refreshIcon(card, input.info);
-    const saved = await this.saveProvider(card, { name: input.name, host: input.host, key: input.key, link: input.info.link, models: verdict.models });
+    const saved = await this.saveProvider(card, { name: input.name, host: input.host, key: input.key, link: input.info.link, models: verdict.models, modelInfo: verdict.modelInfo ?? {} });
     card.testing = false;
     if (saved) this.adoptSavedCard(card, saved);
     cx?.notify();
@@ -1290,7 +1331,10 @@ export default class AgentManager extends View {
       this.adding = null;
       this.cards.set(saved.id, card);
       card.id = saved.id;
+      this.selectedProviderId = saved.id;
+      this.selectedProviderBeforeAdd = null;
     }
+    this.providerHealth.set(card.id, { state: "healthy", checkedAt: saved.record.verifiedAt, models: saved.record.models });
     card.touched = false;
     card.replacing = false;
     card.reveal = false;
@@ -1299,13 +1343,20 @@ export default class AgentManager extends View {
     card.status = saved.error ? { tone: "blocked", text: saved.error } : { tone: "done", text: `Saved · ${saved.record.models.length} models` };
   }
 
-  // `GET <host>/models` with the key in the header; the answer is judged into a fixed message.
-  // The key is an argument of this one call, for five seconds (see the design's risks).
+  // `GET <host>/models`; curl reads the key from a private header file, not process arguments.
   async testProvider(host, key) {
+    if (/[\r\n]/.test(key)) return judgeModels(0, "");
+    const made = await exec("mktemp", ["-d", `${appHome()}/.provider-test.XXXXXX`], { timeout: CURL_TIMEOUT_MS }).catch(() => null);
+    const dir = String(made?.stdout ?? "").trim();
+    if (made?.code !== 0 || !dir.startsWith(`${appHome()}/.provider-test.`)) return judgeModels(0, "");
+    const headers = `${dir}/headers`;
     try {
+      await writeTextFile(headers, `Authorization: Bearer ${key}\n`, null);
+      const privateFile = await exec("chmod", ["600", headers], { timeout: CURL_TIMEOUT_MS });
+      if (privateFile.code !== 0) return judgeModels(0, "");
       const result = await exec(
         "curl",
-        ["-sS", "--max-time", String(CURL_MAX_SECONDS), "-w", "\n%{http_code}", "-H", `Authorization: Bearer ${key}`, `${host}/models`],
+        ["-q", "-sS", "--max-time", String(CURL_MAX_SECONDS), "-w", "\n%{http_code}", "-H", `@${headers}`, `${host}/models`],
         { timeout: CURL_TIMEOUT_MS },
       );
       const text = result.stdout ?? "";
@@ -1314,10 +1365,12 @@ export default class AgentManager extends View {
       return judgeModels(Number.isFinite(status) ? status : 0, text.slice(0, cut));
     } catch {
       return judgeModels(0, "");
+    } finally {
+      await exec("rm", ["-rf", dir]).catch(() => {});
     }
   }
 
-  async saveProvider(card, { name, host, key, link, models }) {
+  async saveProvider(card, { name, host, key, link, models, modelInfo }) {
     const text = await readTextFile(PROVIDERS).catch(() => null);
     const parsed = parseProviderFile(text);
     if (parsed.error) return this.showCardStatus(card, null, "blocked", parsed.error);
@@ -1333,25 +1386,24 @@ export default class AgentManager extends View {
       iconPath,
       verifiedAt: new Date().toISOString(),
       models,
+      modelInfo,
       // The model Codex had chosen for this provider survives a re-test.
       selectedModel: previous?.selectedModel ?? {},
     };
     parsed.providers[id] = record;
     const next = serializeProviderFile(parsed.providers);
     try {
-      await writeTextFile(PROVIDERS, next, text);
+      await writeProviderFile(PROVIDERS, next, text, { appHome, exec, writeTextFile });
     } catch {
       return this.showCardStatus(card, null, "blocked", "Could not write model-providers.json.");
     }
     this.providerText = next;
     this.providerWrittenAt = Date.now();
     this.providers = parsed.providers;
-    // The record is written by now, so a mode that did not take is reported but the card still owns it.
-    const error = (await this.secureProviderFile()) ? null : "model-providers.json is not private to your user.";
     // The replaced icon is deleted too, but only when it is one of ours.
     const stale = ownedIcon(previous?.iconPath);
     if (stale && stale !== iconPath) await removeFile(stale);
-    return { id, record, error };
+    return { id, record, error: null };
   }
 
   async deleteProvider(card, cx) {
@@ -1364,14 +1416,15 @@ export default class AgentManager extends View {
     delete parsed.providers[card.id];
     const next = serializeProviderFile(parsed.providers);
     try {
-      await writeTextFile(PROVIDERS, next, text);
+      await writeProviderFile(PROVIDERS, next, text, { appHome, exec, writeTextFile });
     } catch {
       return this.showCardStatus(card, cx, "blocked", "Could not write model-providers.json.");
     }
     this.providerText = next;
     this.providerWrittenAt = Date.now();
     this.providers = parsed.providers;
-    await this.secureProviderFile();
+    this.providerHealth.delete(card.id);
+    if (this.selectedProviderId === card.id) this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
     // Only a file this page could have written is removed, and an unsaved preview goes with it.
     for (const path of new Set([record.iconPath, card.fetched.path])) {
       const stale = ownedIcon(path);
@@ -1379,17 +1432,6 @@ export default class AgentManager extends View {
     }
     this.cards.delete(card.id);
     cx?.notify();
-  }
-
-  // writeTextFile replaces the file, which can reset the mode, and the key is in it.
-  async secureProviderFile() {
-    try {
-      await exec("chmod", ["600", PROVIDERS]);
-      const mode = await exec("stat", ["-f", "%Lp", PROVIDERS]);
-      return mode.stdout.trim() === "600";
-    } catch {
-      return false;
-    }
   }
 
   // Looks for the icon of `info.link` unless that is the one already on the card. Work on one card
@@ -1445,7 +1487,7 @@ export default class AgentManager extends View {
     if (this.typing) return false;
     const key = String(event.key ?? "");
     if (this.permissionOpen && this.onPermissionKey(key, cx)) return true;
-    const rows = [{ key: "global" }, ...railRows(this.allRows().all), ...this.unofficialRows()];
+    const rows = [{ key: "global" }, ...railRows(this.allRows().all), ...this.unofficialRows(), { key: "providers" }];
     const at = Math.max(0, rows.findIndex(row => row.key === this.railSelection));
     const move = Object.hasOwn(ROW_MOVES, key) ? ROW_MOVES[key] : null;
     if (move) this.selectRail(rows[move(at, rows.length)].key, cx);
@@ -1630,6 +1672,8 @@ export default class AgentManager extends View {
     const path = ownedIcon(card.fetched.path);
     if (path) removeFile(path);
     this.adding = null;
+    this.selectedProviderId = this.selectedProviderBeforeAdd;
+    this.selectedProviderBeforeAdd = null;
     cx.notify();
   }
 
@@ -1763,11 +1807,28 @@ export default class AgentManager extends View {
     if (this.providersPage) return this.providersView();
     const requestedAgent = shared("agent-manager.open-agent");
     if (requestedAgent && typeof requestedAgent.key === "string") {
-      this.railSelection = requestedAgent.key;
-      this.focusKey = requestedAgent.key === "global" ? null : requestedAgent.key;
+      const key = requestedAgent.key;
+      if (key !== "provider:add" && this.adding) this.cancelNewCard(this.adding, cx);
+      if (key === "provider:add") {
+        this.railSelection = "providers";
+        if (!this.adding) this.selectedProviderBeforeAdd = this.selectedProviderId;
+        this.selectedProviderId = null;
+        this.adding ??= this.makeCard(null, null);
+        this.adding.open = true;
+      } else if (key.startsWith("provider:")) {
+        const id = key.slice("provider:".length);
+        this.railSelection = "providers";
+        this.selectedProviderId = Object.hasOwn(this.providers, id) ? id : Object.keys(this.providers)[0] ?? null;
+        this.adding = null;
+        this.selectedProviderBeforeAdd = null;
+      } else {
+        this.railSelection = key;
+        if (key === "providers") this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
+      }
+      this.focusKey = this.railSelection === "global" || this.railSelection === "providers" ? null : this.railSelection;
       this.permissionOpen = null;
       // Reload saved options on a new entry unless the page owns an unsaved draft.
-      const prior = this.harnesses.get(requestedAgent.key);
+      const prior = this.harnesses.get(this.railSelection);
       if (prior && !Object.values(prior.editors ?? {}).some(editor => editor.dirty)) this.harnesses.delete(requestedAgent.key);
       setShared("agent-manager.open-agent", null);
     }
@@ -1779,7 +1840,14 @@ export default class AgentManager extends View {
       if (row) this.toggleEnabled(row, cx);
     }
     // The left sidebar highlights this row; write only on change, because setShared re-renders every mod.
-    if (shared("agent-manager.selected")?.key !== this.railSelection) setShared("agent-manager.selected", { key: this.railSelection });
+    const selectedKey = this.railSelection === "providers"
+      ? this.adding ? "provider:add" : this.selectedProviderId ? `provider:${this.selectedProviderId}` : "provider:add"
+      : this.railSelection;
+    if (shared("agent-manager.selected")?.key !== selectedKey) setShared("agent-manager.selected", { key: selectedKey });
+    const providerRail = Object.entries(this.providers).map(([id, record]) => ({
+      id, name: record.name, iconPath: record.iconPath, health: this.providerHealthState(id).state,
+    }));
+    if (JSON.stringify(shared("agent-manager.providers") ?? []) !== JSON.stringify(providerRail)) setShared("agent-manager.providers", providerRail);
     return settingsPageView(this, theme(), cx);
   }
 }

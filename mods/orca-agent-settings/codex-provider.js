@@ -18,13 +18,13 @@ export const TEST_ERRORS = {
 };
 
 /**
- * Runs as `sh -c <WRAPPER> -- <file> <id> <command> ...`: reads the key of the `<id>` record out of
- * the provider file into OMLX_API_KEY, then becomes the agent. The key never appears in an argument
- * list, and it always comes from the same record as the host.
+ * Reads the key only when the provider file still has the host selected in the UI, then becomes the
+ * agent. A failed lookup or a changed record stops the launch; the key never appears in argv.
  */
-export const WRAPPER = `export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
-export const PROVIDER_KEY_WRAPPER = `export HERDR_PROVIDER_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
-export const CLAUDE_PROVIDER_WRAPPER = `export ANTHROPIC_AUTH_TOKEN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
+const KEY_FROM_PROVIDER = `key="$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1]))[sys.argv[2]]; sys.exit(1) if r.get("host") != sys.argv[3] else None; print(r.get("apiKey", ""))' "$1" "$2" "$3")" || exit 1; [ -n "$key" ] || exit 1;`;
+export const WRAPPER = `${KEY_FROM_PROVIDER} export OMLX_API_KEY="$key"; unset key; shift 3; exec "$@"`;
+export const PROVIDER_KEY_WRAPPER = `${KEY_FROM_PROVIDER} export HERDR_PROVIDER_API_KEY="$key"; unset key; shift 3; exec "$@"`;
+export const CLAUDE_PROVIDER_WRAPPER = `${KEY_FROM_PROVIDER} export ANTHROPIC_AUTH_TOKEN="$key"; unset key; shift 3; exec "$@"`;
 
 const HOST_ERROR = "Enter a host like http://127.0.0.1:8000/v1";
 
@@ -46,9 +46,10 @@ export function launchPiArgv(baseArgv, provider, model, extensionPath) {
   if (!provider) return argv;
   const [command, ...rest] = argv;
   const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id))];
+  const modelInfo = Object.fromEntries(models.filter((id) => provider.modelInfo?.[id]).map((id) => [id, provider.modelInfo[id]]));
   return [
-    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id,
-    "env", `HERDR_PI_BASE_URL=${provider.host}`, `HERDR_PI_MODELS=${JSON.stringify(models)}`,
+    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
+    "env", `HERDR_PI_BASE_URL=${provider.host}`, `HERDR_PI_MODELS=${JSON.stringify(models)}`, `HERDR_PI_MODEL_INFO=${JSON.stringify(modelInfo)}`,
     command, ...rest, "--provider", "herdr", "--model", model, "--extension", extensionPath,
   ];
 }
@@ -59,7 +60,7 @@ export function launchClaudeArgv(baseArgv, provider, model) {
   if (!provider) return argv;
   const [command, ...rest] = argv;
   return [
-    "/bin/sh", "-c", CLAUDE_PROVIDER_WRAPPER, "--", provider.configPath, provider.id,
+    "/bin/sh", "-c", CLAUDE_PROVIDER_WRAPPER, "--", provider.configPath, provider.id, provider.host,
     "env", `ANTHROPIC_BASE_URL=${provider.host}`, command, ...rest, "--model", model,
   ];
 }
@@ -74,6 +75,12 @@ export function launchOpenCodeArgv(baseArgv, provider, model) {
     name: id,
     modelID: id,
     capabilities: { tools: true, input: ["text"], output: ["text"] },
+    ...((provider.modelInfo?.[id]?.contextWindow || provider.modelInfo?.[id]?.maxTokens) ? {
+      limit: {
+        ...(provider.modelInfo[id].contextWindow ? { context: provider.modelInfo[id].contextWindow } : {}),
+        ...(provider.modelInfo[id].maxTokens ? { output: provider.modelInfo[id].maxTokens } : {}),
+      },
+    } : {}),
   }]));
   const config = {
     "$schema": "https://opencode.ai/config.json",
@@ -91,7 +98,7 @@ export function launchOpenCodeArgv(baseArgv, provider, model) {
   // The normal OpenCode wrapper is `env OPENCODE_CONFIG_CONTENT=... opencode ...`; replace only
   // that default config while keeping the command and standalone suffix from the spec.
   return [
-    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id,
+    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
     "env", `OPENCODE_CONFIG_CONTENT=${JSON.stringify(config)}`, ...argv.slice(2),
   ];
 }
@@ -193,9 +200,21 @@ export function judgeModels(status, body) {
     }
     const data = answer?.data;
     if (!Array.isArray(data)) return { ok: false, error: TEST_ERRORS.notModelServer };
-    const models = data.map((entry) => (typeof entry === "string" ? entry : entry?.id)).filter((id) => typeof id === "string" && id !== "");
+    const entries = data.filter((entry) => typeof entry === "string" || (entry && typeof entry === "object" && !Array.isArray(entry)));
+    const models = entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== "");
     if (models.length === 0) return { ok: false, error: TEST_ERRORS.empty };
-    return { ok: true, models };
+    const modelInfo = {};
+    for (const entry of entries) {
+      if (typeof entry === "string" || !models.includes(entry.id)) continue;
+      const positive = (...values) => values.find((value) => typeof value === "number" && Number.isSafeInteger(value) && value > 0);
+      const contextWindow = positive(entry.context_window, entry.contextWindow, entry.max_model_len);
+      const maxTokens = positive(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens);
+      if (contextWindow || maxTokens) modelInfo[entry.id] = {
+        ...(contextWindow ? { contextWindow } : {}),
+        ...(maxTokens ? { maxTokens } : {}),
+      };
+    }
+    return { ok: true, models, ...(Object.keys(modelInfo).length ? { modelInfo } : {}) };
   }
   if (code === 401 || code === 403) return { ok: false, error: TEST_ERRORS.key };
   if (code === 404) return { ok: false, error: TEST_ERRORS.models };
@@ -217,6 +236,7 @@ export function launchArgv(baseArgv, provider, model) {
     "--",
     provider.configPath,
     provider.id ?? OMLX,
+    provider.host,
     command,
     // Without this Codex writes the environment, key included, to ~/.codex/shell_snapshots/.
     "--disable",
@@ -254,5 +274,55 @@ export function parseProviderFile(text) {
 
 export function serializeProviderFile(providers) {
   return `${JSON.stringify(providers ?? {}, null, 2)}\n`;
+}
+
+/**
+ * Replace the provider file atomically while preserving its expected-content check. The key is
+ * staged only inside a mode-0700 directory, and the installed file is mode 0600 before it appears
+ * at its destination. A shared flock serializes writes from Settings and the agent flyout.
+ */
+export async function writeProviderFile(file, text, expected, { appHome, exec, writeTextFile }) {
+  const home = appHome();
+  if (file !== `${home}/${PROVIDER_FILE}`) throw new Error("Unexpected provider-file path.");
+  const made = await exec("mktemp", ["-d", `${home}/.provider-write.XXXXXX`], { timeout: 5000 });
+  const dir = String(made.stdout ?? "").trim();
+  if (made.code !== 0 || !dir.startsWith(`${home}/.provider-write.`)) {
+    throw new Error("Could not create a private provider-file directory.");
+  }
+
+  try {
+    const staged = `${dir}/next.json`;
+    const snapshot = `${dir}/expected.json`;
+    await writeTextFile(staged, text, null);
+    if (expected !== null) await writeTextFile(snapshot, expected, null);
+    const script = [
+      "import fcntl, os, stat, sys",
+      "target, staged, snapshot, absent = sys.argv[1:]",
+      "lock = target + '.lock'",
+      "flags = os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0)",
+      "fd = os.open(lock, flags, 0o600)",
+      "try:",
+      " os.fchmod(fd, 0o600)",
+      " fcntl.flock(fd, fcntl.LOCK_EX)",
+      " try:",
+      "  try:",
+      "   current = os.lstat(target)",
+      "   if not stat.S_ISREG(current.st_mode): sys.exit(3)",
+      "   current_bytes = open(target, 'rb').read()",
+      "  except FileNotFoundError:",
+      "   current_bytes = None",
+      "  if absent == '1':",
+      "   if current_bytes is not None: sys.exit(4)",
+      "  elif current_bytes != open(snapshot, 'rb').read(): sys.exit(4)",
+      "  os.chmod(staged, 0o600)",
+      "  with open(staged, 'rb') as f: os.fsync(f.fileno())",
+      "  os.replace(staged, target)",
+      " finally: os.close(fd)",
+    ].join("\n");
+    const result = await exec("python3", ["-c", script, file, staged, snapshot, expected === null ? "1" : "0"], { timeout: 5000 });
+    if (result.code !== 0) throw new Error("Provider file changed or could not be written safely.");
+  } finally {
+    await exec("rm", ["-rf", dir], { timeout: 5000 }).catch(() => {});
+  }
 }
 // Generated from orca-ui/shared/codex-provider.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.
