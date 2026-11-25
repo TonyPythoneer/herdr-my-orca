@@ -351,7 +351,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/files.svg"
+                 "mods/orca-assets/files--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -480,7 +480,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/agent-session-history.svg"
+                 "mods/orca-assets/agent-session-history.svg"
                 ],
                 "c": [
                  [
@@ -609,7 +609,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/workflow.svg"
+                 "mods/orca-assets/workflow--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -738,7 +738,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/list-checks.svg"
+                 "mods/orca-assets/list-checks--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -867,7 +867,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/plug.svg"
+                 "mods/orca-assets/plug--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -1092,7 +1092,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/files.svg"
+                 "mods/orca-assets/files--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -1221,7 +1221,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/agent-session-history.svg"
+                 "mods/orca-assets/agent-session-history.svg"
                 ],
                 "c": [
                  [
@@ -1335,7 +1335,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/workflow.svg"
+                 "mods/orca-assets/workflow--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -1464,7 +1464,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/list-checks.svg"
+                 "mods/orca-assets/list-checks--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -1593,7 +1593,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/plug.svg"
+                 "mods/orca-assets/plug--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -1818,7 +1818,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/files.svg"
+                 "mods/orca-assets/files--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -1947,7 +1947,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/agent-session-history.svg"
+                 "mods/orca-assets/agent-session-history.svg"
                 ],
                 "c": [
                  [
@@ -2061,7 +2061,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/git-branch.svg"
+                 "mods/orca-assets/git-branch--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -2190,7 +2190,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/list-checks.svg"
+                 "mods/orca-assets/list-checks--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [
@@ -2319,7 +2319,7 @@
                {
                 "n": "svg",
                 "a": [
-                 "mods/orca-right-sidebar-header/plug.svg"
+                 "mods/orca-assets/plug--orca-right-sidebar-header.svg"
                 ],
                 "c": [
                  [

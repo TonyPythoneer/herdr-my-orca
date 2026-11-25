@@ -10,7 +10,7 @@
 import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
-import { PROVIDER_FILE, launchArgv, launchPiArgv, parseProviderFile, serializeProviderFile, supportsPiProvider, validateHost } from "./codex-provider.js";
+import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
 import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
 
@@ -91,11 +91,11 @@ function normalizeJson(text, fallback) {
 }
 
 function providerGlyph(record, t) {
-  if (!record) return svg("mods/orca-agent-flyout/circle.svg").size(13).text_color(t.muted);
+  if (!record) return svg("mods/orca-assets/circle.svg").size(13).text_color(t.muted);
   const appDir = `${appHome()}/`;
   const path = String(record.iconPath ?? "");
   if (path.startsWith(appDir)) return image(path.slice(appDir.length)).w(20).h(20).rounded(4);
-  return svg("mods/orca-agent-flyout/hard-drive.svg").size(14).text_color(t.muted);
+  return svg("mods/orca-assets/hard-drive.svg").size(14).text_color(t.muted);
 }
 
 function providerTooltip(remote, providerCount) {
@@ -257,7 +257,7 @@ class AgentConfigCore {
   // The option of a type the spec has once: its groups option is the model's.
   groupOption() {
     const model = this.spec.options.model;
-    return model?.groups ? model : null;
+    return this.providerId === "none" && model?.groups ? model : null;
   }
 
   hasSource(source) {
@@ -300,7 +300,7 @@ class AgentConfigCore {
   async loadProviders() {
     const text = await readTextFile(`${appHome()}/${PROVIDER_FILE}`).catch(() => null);
     this.providers = parseProviderFile(text).providers ?? {};
-    if (this.providerId !== "none" && (!this.providers[this.providerId] || (this.key === "pi" && !supportsPiProvider(this.providers[this.providerId])))) this.providerId = "none";
+    if (this.providerId !== "none" && !this.providers[this.providerId]) this.providerId = "none";
     return this.providers;
   }
 
@@ -309,7 +309,6 @@ class AgentConfigCore {
   activeModels() {
     if (!this.spec.options.provider || this.providerId === "none") return this.models;
     const record = this.providers[this.providerId];
-    if (this.key === "pi" && !supportsPiProvider(record)) return this.models;
     return (record?.models ?? []).map((id) => ({ id, label: id, efforts: [] }));
   }
 
@@ -622,8 +621,13 @@ class AgentConfigCore {
     }
     const provider = { ...record, id: providerId, configPath: file };
     if (this.key === "pi") {
-      if (!supportsPiProvider(record)) return { error: "Pi currently supports the Groq provider only." };
-      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
+      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
+    }
+    if (this.key === "claude") {
+      return { argv: launchClaudeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
+    }
+    if (this.key === "opencode") {
+      return { argv: launchOpenCodeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
     }
     // Codex adds no effort flag; its model flag is placed by launchArgv.
     return { argv: launchArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
@@ -728,7 +732,7 @@ class AgentConfigCore {
             this.toggleHidden(m.id);
             cx.notify();
           })
-          .child(svg(hidden ? "mods/orca-agent-flyout/eye-off.svg" : "mods/orca-agent-flyout/eye.svg").size(14).text_color(t.muted)),
+          .child(svg(hidden ? "mods/orca-assets/eye-off.svg" : "mods/orca-assets/eye--orca-agent-flyout.svg").size(14).text_color(t.muted)),
       );
   }
 
@@ -857,8 +861,7 @@ class AgentConfigCore {
   // whose test passed. Greyed out when there is none to pick, and on another machine (the file and
   // the icon live on this one). The list opens inline below it.
   providerRow(t) {
-    const compatible = (record) => this.key !== "pi" || supportsPiProvider(record);
-    const ids = Object.entries(this.providers ?? {}).filter(([, record]) => compatible(record)).map(([id]) => id);
+    const ids = Object.keys(this.providers ?? {});
     const space = launchSpace(this.context());
     const remote = !this.settingsContext && Boolean(space?.machine);
     // With none saved the select still opens, for its "Add More" row.
@@ -901,7 +904,7 @@ class AgentConfigCore {
   providerList(t) {
     const options = [
       { id: "none", label: "None" },
-      ...Object.entries(this.providers ?? {}).filter(([, record]) => this.key !== "pi" || supportsPiProvider(record)).map(([id, record]) => ({ id, label: record?.name ?? id })),
+      ...Object.entries(this.providers ?? {}).map(([id, record]) => ({ id, label: record?.name ?? id })),
     ];
     return this.scrollList("provider-list",
       options.map((option) =>
@@ -914,7 +917,7 @@ class AgentConfigCore {
         // The way to a new provider: the Model providers page, with this menu and flyout closed.
         this.listRow("provider-add", t)
           .on_click(() => this.openProviders())
-          .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/orca-agent-flyout/plus.svg").size(13).text_color(t.muted)))
+          .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/orca-assets/plus--orca-agent-flyout.svg").size(13).text_color(t.muted)))
           .child(div().flex_1().min_w(0).truncate().child("Add More")),
       ));
   }
@@ -1135,7 +1138,7 @@ class AgentConfigCore {
       .tooltip("Save")
       .accessibility_label("Save")
       .on_click((_e, cx) => this.saveEditor(id, cx))
-      .child(svg("mods/orca-agent-flyout/save.svg").size(14));
+      .child(svg("mods/orca-assets/save.svg").size(14));
     const head = h_flex()
       .mx(6)
       .mt(2)
@@ -1226,26 +1229,28 @@ class AgentConfigCore {
           .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => this.resetPreset(cx))
           .child(div().text_size(10).text_color(t.muted).child("Reset defaults"))
-          .child(svg("mods/orca-agent-flyout/rotate-ccw.svg").size(14).text_color(t.muted)),
+          .child(svg("mods/orca-assets/rotate-ccw--orca-agent-flyout.svg").size(14).text_color(t.muted)),
       ))
       .when(this.showSettingsShortcut(), el => el.child(div().id("agent-full-settings").size(26).flex().items_center().justify_center()
         .role("button").accessibility_label("Open " + this.spec.label + " settings")
         .tooltip("Open agent settings on this computer")
         .text_color(t.muted).cursor_pointer().hover(s => s.text_color(t.foreground))
         .on_click((_e,cx) => { cx.stop_propagation(); this.openAgentSettings(); })
-        .child(svg("mods/orca-new-menu/bot.svg").size(19))));
+        .child(svg("mods/orca-assets/bot.svg").size(19))));
   }
 
   // Page preview is strictly read-only. Rebuild with the same argv path as launch, including
   // provider wrappers and async expansions. A stale completion must not overwrite a newer draft.
   previewSignature(argv) {
     return JSON.stringify([argv, this.values, this.providerId, Boolean(this.current()),
+      this.settingsContext?.herdrEnv !== false,
       Object.entries(this.editors ?? {}).map(([id, editor]) => [id, editor.input.value()])]);
   }
 
   async buildPreview(argv) {
     if (!this.settingsLoaded || !this.current()) return { error: "Choose an available model before previewing the command." };
     const result = await this.buildLaunch({ argv }, { preview: true });
+    if (result.argv && this.settingsContext?.herdrEnv !== false) result.argv = ["env", "HERDR_ENV=1", ...result.argv];
     return result.argv ? result : { error: result.error ?? "Fix invalid JSON to preview the command." };
   }
 
@@ -1295,6 +1300,8 @@ class AgentConfigCore {
       .child(div().w_full().p(10).rounded(8).bg(t.surface).border_1().border_color(t.border)
         .font_family(settings()?.font_family ?? "JetBrains Mono").text_size(11).text_color(command ? t.foreground : t.muted)
         .child(command ?? this.previewResult?.error ?? unavailable))
+      .when(Boolean(command), el => el.child(div().text_size(10).text_color(this.settingsContext?.herdrEnv === false ? t.dim : t.done)
+        .child(this.settingsContext?.herdrEnv === false ? "HERDR_ENV: not set" : "HERDR_ENV=1")))
       .when(this.spec.wrap?.after === "opencodeVariant" && Boolean(command), el => el.child(div().text_size(11).text_color(t.muted)
         .child("OpenCode effort is stored separately as its model variant; it is not an argv flag.")));
   }
@@ -1352,7 +1359,7 @@ class AgentConfigCore {
           .bg(t.accent)
           .text_color(t.background)
           .on_click((_e, cx) => this.launch(cx))
-          .child(svg("mods/orca-agent-flyout/square-terminal.svg").size(16).flex_none())
+          .child(svg("mods/orca-assets/square-terminal--orca-agent-flyout.svg").size(16).flex_none())
           .child(div().flex_1().child("Launch terminal"))
           .child(div().flex_none().text_size(13).child("↵")),
       );

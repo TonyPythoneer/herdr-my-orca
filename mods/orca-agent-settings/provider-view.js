@@ -6,7 +6,7 @@ import { appHome, theme } from "herdr";
 import { keyHint, linkInfo, presetFor } from "./codex-provider.js";
 import { backButton, icon } from "./parts.js";
 
-const HARD_DRIVE = "mods/orca-agent-settings/hard-drive.svg";
+const HARD_DRIVE = "mods/orca-assets/hard-drive.svg";
 // An icon is drawn from its path inside this app's folder.
 const iconSrc = (path) => (String(path).startsWith(`${appHome()}/`) ? String(path).slice(appHome().length + 1) : path);
 // A saved provider's picture, or the generic drive when it has none.
@@ -58,7 +58,7 @@ export function modelProvidersView(owner, t) {
           .text_size(12)
           .line_height("18px")
           .text_color(t.muted)
-          .child("Codex can use compatible model servers. Pi can use a saved Groq provider. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user."),
+          .child("Codex, Pi, and OpenCode use OpenAI-compatible providers. Claude requires an Anthropic-compatible endpoint. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user."),
       ),
     )
     .children(cards.map((card) => owner.providerCard(card, t)))
@@ -197,7 +197,7 @@ function revealButton(card, t) {
       card.key.set_masked(!card.reveal);
       cx.notify();
     })
-    .child(svg(card.reveal ? "mods/orca-agent-settings/eye-off.svg" : "mods/orca-agent-settings/eye.svg").size(14).text_color(t.muted));
+    .child(svg(card.reveal ? "mods/orca-assets/eye-off.svg" : "mods/orca-assets/eye--orca-agent-flyout.svg").size(14).text_color(t.muted));
 }
 
 // "Looks like <preset>" when the host is a known server and the name or link is still empty.

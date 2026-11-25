@@ -42,13 +42,13 @@ const title = (a) => a.title?.trim() || a.app || a.program?.name || "Agent";
 function stateDot(status, t) {
   const box = div().size(10).flex_none().flex().items_center().justify_center();
   if (status === "working") {
-    return box.child(svg("mods/orca-right-sidebar-agents/agent-working-spinner.svg").size(10).flex_none().text_color(t.working).spin(1000));
+    return box.child(svg("mods/orca-assets/agent-working-spinner.svg").size(10).flex_none().text_color(t.working).spin(1000));
   }
   if (status === "blocked") {
-    return box.child(svg("mods/orca-right-sidebar-agents/message-circle-question.svg").size(10).flex_none().text_color(t.blocked));
+    return box.child(svg("mods/orca-assets/message-circle-question.svg").size(10).flex_none().text_color(t.blocked));
   }
   if (status === "done") {
-    return box.child(svg("mods/orca-right-sidebar-agents/circle-check.svg").size(10).flex_none().text_color(t.done));
+    return box.child(svg("mods/orca-assets/circle-check.svg").size(10).flex_none().text_color(t.done));
   }
   return box.child(div().size(6).rounded_full().flex_none().bg(t.idle + "66"));
 }
@@ -503,7 +503,7 @@ export default class AgentsPanel extends View {
     const q = this.search.value();
     return h_flex().w_full().h(30).px(8).gap(6).items_center().rounded(6)
       .border_1().border_color(t.border).bg(fade(t.input, 0.4))
-      .child(svg("mods/orca-right-sidebar-agents/search.svg").size(13).flex_none().text_color(t.muted))
+      .child(svg("mods/orca-assets/search--orca-right-sidebar-agents.svg").size(13).flex_none().text_color(t.muted))
       .child(Input.new(this.search).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"))
       .when(Boolean(q), (e) => e.child(
         div().id("agents-search-clear").size(18).flex_none().flex().items_center().justify_center()
@@ -512,7 +512,7 @@ export default class AgentsPanel extends View {
             this.search.set_value("");
             clickCx.notify();
           })
-          .child(svg("mods/orca-right-sidebar-agents/x.svg").size(12))
+          .child(svg("mods/orca-assets/x--orca-files.svg").size(12))
       ));
   }
 
@@ -578,14 +578,14 @@ export default class AgentsPanel extends View {
       // rows are pure decoration and are not drawn.
       .when(this.historyLoading && !this.history.length, (el) =>
         el.child(h_flex().px(12).py(12).gap(6).items_center().text_size(11).text_color(t.muted)
-          .child(svg("mods/orca-right-sidebar-agents/agent-working-spinner.svg").size(14).flex_none().text_color(t.working).spin(1000))
+          .child(svg("mods/orca-assets/agent-working-spinner.svg").size(14).flex_none().text_color(t.working).spin(1000))
           .child("Scanning sessions"))
       )
       .children(history.map((s) => this.historyRow(s, t)))
       // `AiVaultSessionVirtualList.tsx:260-286`: the empty titles.
       .when(!this.historyLoading && !history.length, (el) =>
         el.child(v_flex().size_full().items_center().justify_center().px(16).text_color(t.muted)
-          .child(div().mb(12).opacity(0.5).child(svg("mods/orca-right-sidebar-agents/archive-restore.svg").size(28)))
+          .child(div().mb(12).opacity(0.5).child(svg("mods/orca-assets/archive-restore.svg").size(28)))
           .child(div().text_size(14).font_medium().text_center()
             .child(this.history.length ? "No sessions match the current filters" : "No agent sessions found")))
       );

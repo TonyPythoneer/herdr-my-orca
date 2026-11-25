@@ -190,7 +190,7 @@ const isDeleteKey = (e, mods) => mods.platform && e.key === "backspace" && !mods
 
 const centeredBox = () => div().flex_1().flex().items_center().justify_center();
 const statusMessage = (t, text) => centeredBox().px(16).text_center().text_size(11).text_color(t.muted).child(text);
-const spinner = (t) => svg("mods/orca-files/loader-circle.svg").size(16).flex_none().text_color(t.muted).spin(SPIN_PERIOD_MS);
+const spinner = (t) => svg("mods/orca-assets/loader-circle.svg").size(16).flex_none().text_color(t.muted).spin(SPIN_PERIOD_MS);
 
 function previewPath(path, root) {
   if (path.startsWith("/")) return path;
@@ -957,7 +957,7 @@ export default class Files extends View {
   // FileExplorerRow.tsx:204-226,242-248 — Loader2 while the folder loads, CircleAlert on a
   // read error, Link for a symlink, FileTypeIcon per extension.
   rowIcon({ path, name, dir, link, open }, failed, t) {
-    const glyph = (file) => svg(`mods/orca-files/${file}.svg`).size(12).flex_none();
+    const glyph = (file) => svg(sharedAsset(`mods/orca-files/${file}.svg`)).size(12).flex_none();
     if (!dir) return (link ? glyph("link") : glyph(fileIcon(name))).text_color(t.muted);
     if (this.pending.has(path)) return glyph("loader-circle").text_color(t.muted).spin(SPIN_PERIOD_MS);
     if (failed) return glyph("circle-alert").text_color(t.blocked);
@@ -983,7 +983,7 @@ export default class Files extends View {
       .when(this.file !== path, el => el.hover(s => s.bg(t.accent)))
       // Keyboard selection is a lighter fill than the previewed file's (Orca keeps both).
       .when(this.selected === path && this.file !== path, el => el.bg(fade(t.accent, 0.55)))
-      .child(dir ? svg(`mods/orca-files/chevron-${open ? "down" : "right"}.svg`).size(12).flex_none().text_color(t.dim) : div().w(12).flex_none())
+      .child(dir ? svg(sharedAsset(`mods/orca-files/chevron-${open ? "down" : "right"}.svg`)).size(12).flex_none().text_color(t.dim) : div().w(12).flex_none())
       .child(icon)
       .child(div().flex_1().min_w(0).truncate().when(Boolean(mark), el => el.text_color(gitTone(mark, t))).child(name))
       // FileExplorerRow.tsx:242-248 — the read error rides the row as a destructive truncation.
@@ -991,7 +991,7 @@ export default class Files extends View {
       // FileExplorerRow.tsx:251-267 — status `text-[10px] font-semibold tracking-wide mr-2`;
       // ignored rows swap the label for CircleSlash size-3. `tracking-wide` has no gpui-kit
       // method, so only the size and weight are ported.
-      .when(mark === "!", el => el.child(div().mr(8).flex_none().child(svg("mods/orca-files/circle-slash.svg").size(12).flex_none().text_color(gitTone(mark, t)))))
+      .when(mark === "!", el => el.child(div().mr(8).flex_none().child(svg("mods/orca-assets/circle-slash.svg").size(12).flex_none().text_color(gitTone(mark, t)))))
       .when(Boolean(mark) && mark !== "!", el => el.child(div().mr(8).flex_none().text_size(10).font_semibold().text_color(gitTone(mark, t)).child(mark)));
   }
 
@@ -1026,10 +1026,10 @@ export default class Files extends View {
         // Dropdown behaviour: the flyout opens while the pointer is on "Open in" and folds back as soon
         // as it moves onto any other row of this menu; moving onto the flyout itself keeps it open.
         .on_mouse_move((e) => { if (track) { track(e); if (!shared("orca-files.openIn")) this.openIn(); } else this.closeOpenIn(); })
-        .child(svg(`mods/orca-files/${icon}.svg`).size(14).flex_none().text_color(destructive ? "#ff6568" : t.muted))
+        .child(svg(sharedAsset(`mods/orca-files/${icon}.svg`)).size(14).flex_none().text_color(destructive ? "#ff6568" : t.muted))
         .child(div().flex_1().text_color(destructive ? "#ff6568" : t.foreground).child(label))
         .when(Boolean(shortcut), el => el.child(div().flex_none().text_size(12).text_color(t.muted).child(shortcut)))
-        .when(chevron, el => el.child(svg("mods/orca-files/chevron-right.svg").size(14).flex_none().text_color(t.muted)));
+        .when(chevron, el => el.child(svg("mods/orca-assets/chevron-right--orca-files.svg").size(14).flex_none().text_color(t.muted)));
     const sep = () => div().h(1).my(3).mx(4).bg(t.border);
 
     return v_flex().id("orca-files-menu").w_full().min_h(0).p(4).bg(t.popover).text_size(12.8).text_color(t.foreground)
@@ -1095,7 +1095,7 @@ export default class Files extends View {
     const close = () => { closeOverlay(props().overlay); if (menu) closeOverlay(menu); setShared("orca-files.openIn", null); };
     const row = (i, label, onClick, icon) => h_flex().id(`oi-${i}`).h(26).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
       .hover(s => s.bg(t.hover)).on_click(onClick)
-      .child(svg(`mods/orca-files/${icon ?? "folder-open"}.svg`).size(14).flex_none().text_color(t.muted))
+      .child(svg(sharedAsset(`mods/orca-files/${icon ?? "folder-open"}.svg`)).size(14).flex_none().text_color(t.muted))
       .child(div().flex_1().text_color(t.foreground).child(label));
     // shortcut: no per-app icon (Orca shows a favicon); a generic one stands in until Herdr can load remote images.
     return v_flex().id("orca-files-open-in").w_full().min_h(0).p(4).bg(t.popover).text_size(12.8).text_color(t.foreground)
@@ -1130,7 +1130,7 @@ export default class Files extends View {
       .child(div().flex_1().min_w(0).truncate().text_size(12).font_medium().text_color(t.foreground)
         .when(Boolean(name), s => s.tooltip(name)).child(name))
       // :73-106 — Collapse All; `aria-disabled` + `opacity-50` when nothing is expanded.
-      .child(btn("files-collapse", "Collapse All", svg("mods/orca-files/list-collapse.svg").size(12).flex_none(),
+      .child(btn("files-collapse", "Collapse All", svg("mods/orca-assets/list-collapse.svg").size(12).flex_none(),
         (_e, cx) => this.collapseAll(cx), collapse))
       // :107-144 — Refresh Explorer; Loader2-style spinner while `refresh.isRefreshing`,
       // disabled outside the files view (`aria-disabled={!canRefresh || refresh.isRefreshing}`).
@@ -1138,7 +1138,7 @@ export default class Files extends View {
         this.loading ? svg("mods/orca-assets/refresh-cw.svg").size(12).flex_none().spin(SPIN_PERIOD_MS) : svg("mods/orca-assets/refresh-cw.svg").size(12).flex_none(),
         (_e, cx) => this.refresh(cx), files && !this.loading))
       // :145-198 — More Explorer Actions; the dropdown opens at the pointer.
-      .child(btn("files-more", "More Explorer Actions", svg("mods/orca-files/ellipsis.svg").size(12).flex_none(),
+      .child(btn("files-more", "More Explorer Actions", svg("mods/orca-assets/ellipsis--orca-files.svg").size(12).flex_none(),
         () => openOverlay({ mod: "orca-files", kind: "popup", width: 192, height: this.git ? 140 : 112,
           props: { tab: "more", root: this.root, git: this.git } }), true));
   }
@@ -1154,7 +1154,7 @@ export default class Files extends View {
       .child(div().child(label));
     const item = (i, label, icon, action) => h_flex().id(`fx-${i}`).h(30).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
       .hover(s => s.bg(t.hover)).on_click(action)
-      .child(svg(`mods/orca-files/${icon}.svg`).size(14).flex_none().text_color(t.muted))
+      .child(svg(sharedAsset(`mods/orca-files/${icon}.svg`)).size(14).flex_none().text_color(t.muted))
       .child(div().child(label));
     const fm = byPlatform({ windows: "File Explorer", macos: "Finder" }, "File Manager");
     return v_flex().id("orca-files-more").w_full().min_h(0).p(5).bg(t.popover).text_size(12.8).text_color(t.foreground)
@@ -1208,9 +1208,9 @@ export default class Files extends View {
   queryRow({ state, id, active, busy, controls }, t) {
     return h_flex().w_full().h(32).min_h(0).px(8).gap(4).items_center().rounded(8).overflow_hidden().border_1().border_color(this.qFocused ? t.ring : t.border).bg(fade(t.input, 0.5))
       .when(!active, el => el.hidden())
-      .child(svg("mods/orca-files/list-filter.svg").size(14).flex_none().text_color(t.muted))
+      .child(svg("mods/orca-assets/list-filter.svg").size(14).flex_none().text_color(t.muted))
       .child(Input.new(state).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"))
-      .when(busy, el => el.child(svg("mods/orca-files/loader-circle.svg").size(12).flex_none().text_color(t.muted).spin(SPIN_PERIOD_MS)))
+      .when(busy, el => el.child(svg("mods/orca-assets/loader-circle.svg").size(12).flex_none().text_color(t.muted).spin(SPIN_PERIOD_MS)))
       .when(Boolean(state.value().trim()), el => el.child(div().id(`files-clear-${id}`).p(2).flex_none().rounded(6).cursor_pointer().text_color(t.muted).hover(s => s.text_color(t.foreground))
         .on_click((_e, cx) => {
           state.set_value("");
@@ -1218,7 +1218,7 @@ export default class Files extends View {
           else { this.nfMap = null; this.nfCollapsed = new Set(); this.nfLoading = false; }
           cx.notify();
         })
-        .child(svg("mods/orca-files/x.svg").size(12))))
+        .child(svg("mods/orca-assets/x--orca-files.svg").size(12))))
       .children(controls ?? []);
   }
 
@@ -1232,7 +1232,7 @@ export default class Files extends View {
       .when(active, s => s.bg(t.accent).text_color(t.accent_foreground))
       .when(!active, s => s.text_color(t.muted).hover(h => h.bg(t.hover).text_color(t.foreground)))
       .on_click((_e, cx) => { flip(); this.rerun(cx); })
-      .child(svg(`mods/orca-files/${icon}.svg`).size(14).flex_none());
+      .child(svg(sharedAsset(`mods/orca-files/${icon}.svg`)).size(14).flex_none());
     return [
       toggle("files-case", this.caseSensitive, () => { this.caseSensitive = !this.caseSensitive; }, "Match Case", "case-sensitive"),
       toggle("files-word", this.wholeWord, () => { this.wholeWord = !this.wholeWord; }, "Match Whole Word", "whole-word"),
@@ -1260,7 +1260,7 @@ export default class Files extends View {
           .role("button").accessibility_label("Toggle search details").tooltip("Toggle search details")
           .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
           .on_click((_e, cx) => { this.filtersOpen = !this.filtersOpen; cx.notify(); })
-          .child(svg("mods/orca-files/ellipsis.svg").size(14))))
+          .child(svg("mods/orca-assets/ellipsis--orca-files.svg").size(14))))
       .when(this.filtersOpen, el => el.child(v_flex().gap(6).pb(2)
         .child(field("files-include", "files to include", this.include))
         .child(field("files-exclude", "files to exclude", this.exclude))));
@@ -1303,8 +1303,8 @@ export default class Files extends View {
         else this.collapsedSearch.add(file.path);
         cx.notify();
       })
-      .child(svg(`mods/orca-files/chevron-${collapsed ? "right" : "down"}.svg`).size(12).flex_none().text_color(t.muted))
-      .child(svg(`mods/orca-files/${fileIcon(name)}.svg`).size(14).flex_none().text_color(t.muted))
+      .child(svg(sharedAsset(`mods/orca-files/chevron-${collapsed ? "right" : "down"}.svg`)).size(12).flex_none().text_color(t.muted))
+      .child(svg(sharedAsset(`mods/orca-files/${fileIcon(name)}.svg`)).size(14).flex_none().text_color(t.muted))
       .child(h_flex().flex_1().min_w(0).items_center().gap(6)
         .child(div().min_w(0).truncate().text_size(12).text_color(t.foreground).child(name))
         .when(Boolean(dir), el => el.child(div().min_w(0).truncate().text_size(11).text_color(t.muted).child(dir))))
@@ -1444,4 +1444,23 @@ export default class Files extends View {
     if (this.loading) return centeredBox().child(spinner(t));
     return statusMessage(t, this.root ? "No files in this workspace" : "Select a workspace to browse files");
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-files/chevron-down.svg": "mods/orca-assets/chevron-down--orca-files.svg",
+  "mods/orca-files/chevron-right.svg": "mods/orca-assets/chevron-right--orca-files.svg",
+  "mods/orca-files/ellipsis.svg": "mods/orca-assets/ellipsis--orca-files.svg",
+  "mods/orca-files/eye.svg": "mods/orca-assets/eye--orca-changes.svg",
+  "mods/orca-files/file-json.svg": "mods/orca-assets/file-braces.svg",
+  "mods/orca-files/file-text.svg": "mods/orca-assets/file-text--orca-files.svg",
+  "mods/orca-files/files.svg": "mods/orca-assets/files--orca-files.svg",
+  "mods/orca-files/folder-plus.svg": "mods/orca-assets/folder-plus--orca-files.svg",
+  "mods/orca-files/folder.svg": "mods/orca-assets/folder--orca-files.svg",
+  "mods/orca-files/pencil.svg": "mods/orca-assets/pencil--orca-files.svg",
+  "mods/orca-files/plus.svg": "mods/orca-assets/plus--orca-changes.svg",
+  "mods/orca-files/square-pen.svg": "mods/orca-assets/square-pen--orca-files.svg",
+  "mods/orca-files/x.svg": "mods/orca-assets/x--orca-files.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

@@ -60,7 +60,7 @@ export function statusMark(status, size = 12, colors = STATUS_COLORS) {
   if (status === "blocked") {
     // `permission`: the one branch that fills the box (`size-3`).
     return box(size).child(
-      svg("mods/orca-sidebar-projects/message-circle-question.svg").size(size).flex_none().text_color(c.blocked ?? STATUS_COLORS.blocked),
+      svg("mods/orca-assets/message-circle-question.svg").size(size).flex_none().text_color(c.blocked ?? STATUS_COLORS.blocked),
     );
   }
   if (status === "working") {
@@ -72,7 +72,7 @@ export function statusMark(status, size = 12, colors = STATUS_COLORS) {
     // arc"). Orca runs `rotate(86400turn)` over `86400s` (main.css:1830-1837) — exactly 1
     // revolution per second, so 1000ms here.
     return box(size).child(
-      svg("mods/orca-sidebar-projects/agent-working-spinner.svg").size(12).flex_none()
+      svg("mods/orca-assets/agent-working-spinner.svg").size(12).flex_none()
         .text_color(c.working ?? STATUS_COLORS.working).spin(1000),
     );
   }
@@ -91,19 +91,19 @@ export function agentStateMark(status, colors = STATUS_COLORS) {
   if (status === "blocked") {
     // `permission`/`waiting` (`:168-176`): the question glyph, `size-2.5` at this size.
     return box(size).child(
-      svg("mods/orca-sidebar-projects/message-circle-question.svg").size(size).flex_none().text_color(c.blocked ?? STATUS_COLORS.blocked),
+      svg("mods/orca-assets/message-circle-question.svg").size(size).flex_none().text_color(c.blocked ?? STATUS_COLORS.blocked),
     );
   }
   if (status === "working") {
     // `src/renderer/src/components/AgentStateDot.tsx:130-138` -> `AgentWorkingSpinner className="size-1.5"`.
     return box(size).child(
-      svg("mods/orca-sidebar-projects/agent-working-spinner.svg").size(inner).flex_none()
+      svg("mods/orca-assets/agent-working-spinner.svg").size(inner).flex_none()
         .text_color(c.working ?? STATUS_COLORS.working).spin(1000),
     );
   }
   if (status === "done") {
     return box(size).child(
-      svg("mods/orca-sidebar-projects/circle-check.svg").size(size).flex_none().text_color(c.done ?? STATUS_COLORS.done),
+      svg("mods/orca-assets/circle-check.svg").size(size).flex_none().text_color(c.done ?? STATUS_COLORS.done),
     );
   }
   return dot(size, inner, c[status] ?? c.idle ?? STATUS_COLORS[status] ?? STATUS_COLORS.idle);

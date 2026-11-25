@@ -114,7 +114,7 @@ function toolButton(t, { id, icon, title }, isActive) {
     .role("button").accessibility_label(title).tooltip(title)
     .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation())
     .on_click(() => run("layout.select", { stack: "panel-body", child: id }))
-    .child(svg(`mods/orca-right-sidebar-header/${icon}.svg`).size(16));
+    .child(svg(sharedAsset(`mods/orca-right-sidebar-header/${icon}.svg`)).size(16));
 }
 
 // Stretch one segmented track across the panel; its buttons divide the row equally.
@@ -158,4 +158,16 @@ export default class PanelHead extends View {
     return h_flex().w_full().h_full().items_center().pl(8).pr(4)
       .child(toolGroup(t, tools, active));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-right-sidebar-header/files.svg": "mods/orca-assets/files--orca-right-sidebar-header.svg",
+  "mods/orca-right-sidebar-header/git-branch.svg": "mods/orca-assets/git-branch--orca-right-sidebar-header.svg",
+  "mods/orca-right-sidebar-header/list-checks.svg": "mods/orca-assets/list-checks--orca-right-sidebar-header.svg",
+  "mods/orca-right-sidebar-header/panel-right-close.svg": "mods/orca-assets/panel-right-close--orca-right-sidebar-header.svg",
+  "mods/orca-right-sidebar-header/plug.svg": "mods/orca-assets/plug--orca-right-sidebar-header.svg",
+  "mods/orca-right-sidebar-header/workflow.svg": "mods/orca-assets/workflow--orca-right-sidebar-header.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

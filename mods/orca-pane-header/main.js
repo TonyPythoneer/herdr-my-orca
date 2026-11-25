@@ -202,7 +202,7 @@ export default class Pane extends View {
         if (typeof action === "function") action(cx);
         else run(action, args);
       })
-      .child(svg(`mods/orca-pane-header/${icon}.svg`).size(12));
+      .child(svg(sharedAsset(`mods/orca-pane-header/${icon}.svg`)).size(12));
   }
 
   // Orca's collapsed pill (`OrchestrationCrewPanel.tsx:344-380`): `Workflow` + the managing count,
@@ -233,7 +233,7 @@ export default class Pane extends View {
         cx.stop_propagation();
         openOverlay({ mod: "orca-pane-header", kind: "popup", width: 300, props: { pane } });
       })
-      .child(svg("mods/orca-pane-header/workflow.svg").size(12).flex_none())
+      .child(svg("mods/orca-assets/workflow--orca-pane-header.svg").size(12).flex_none())
       // OrchestrationCrewPanel.tsx:363-365: the count exists only when something is managed.
       .when(this.crew.managing.length > 0, (el) =>
         el.child(div().text_size(11).child(String(this.crew.managing.length))))
@@ -371,7 +371,7 @@ export default class Pane extends View {
         clickCx.stop_propagation();
         run(paneCount > 1 ? "pane.close" : "tab.close", paneCount > 1 ? { pane: p.pane } : { id: p.tab });
       })
-      .child(svg("mods/orca-pane-header/x.svg").size(glyph));
+      .child(svg("mods/orca-assets/x--orca-pane-header.svg").size(glyph));
   }
 
   titleCluster(p, tabTitle, isFocused, paneCount) {
@@ -407,7 +407,7 @@ export default class Pane extends View {
             clickCx.stop_propagation();
             run("pane.split", { direction: "right", pane: p.pane });
           })
-          .child(svg("mods/orca-pane-header/plus.svg").size(12))
+          .child(svg("mods/orca-assets/plus--orca-pane-header.svg").size(12))
       );
   }
 
@@ -500,4 +500,15 @@ export default class Pane extends View {
       // TerminalPaneHeaderOverlay.tsx:125-131: Close split pane or tab when alone
       .child(this.closeButton(p, paneCount, { id: `ph-x-${pane}`, size: 24, radius: 6, glyph: 12 }));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-pane-header/close.svg": "mods/orca-assets/close--orca-pane-header.svg",
+  "mods/orca-pane-header/ellipsis.svg": "mods/orca-assets/ellipsis--orca-pane-header.svg",
+  "mods/orca-pane-header/plus.svg": "mods/orca-assets/plus--orca-pane-header.svg",
+  "mods/orca-pane-header/workflow.svg": "mods/orca-assets/workflow--orca-pane-header.svg",
+  "mods/orca-pane-header/x.svg": "mods/orca-assets/x--orca-pane-header.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

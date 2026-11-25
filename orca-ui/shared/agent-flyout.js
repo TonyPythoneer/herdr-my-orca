@@ -85,6 +85,7 @@ export const SPECS = {
       parser: "claudeInitialize",
     },
     options: {
+      provider: { type: "provider", label: "MODEL PROVIDER" },
       model: { type: "model", label: "MODEL", argv: ["--model", "{v}"] },
       effort: { type: "effort", label: "EFFORT", argv: ["--effort", "{v}"], omit: [""] },
       advisorModel: { type: "select", label: "ADVISOR", choices: ["none", "opus", "haiku", "fable", "sonnet"], default: "opus", argv: ["--advisor", "{v}"], omit: ["none"] },
@@ -93,7 +94,15 @@ export const SPECS = {
       systemPrompt: { type: "editor", label: "Append system prompt", default: DEFAULT_PROMPT, argv: ["--append-system-prompt", "{v}"] },
     },
     launch: ["model", "effort", "advisorModel", "outputStyle", "agents", "systemPrompt"],
-    ui: { rows: [["model", "effort"], ["advisorModel", "outputStyle"]], reset: true },
+    ui: {
+      sections: [
+        { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+        { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["advisorModel", "outputStyle", "agents", "systemPrompt"] },
+      ],
+      rows: [["model", "effort"], ["advisorModel", "outputStyle"]],
+      reset: true,
+    },
   },
   codex: {
     label: "Codex",
@@ -124,6 +133,7 @@ export const SPECS = {
     // catalog does not reflect payment, so an unpaid account still sees paid models.
     models: { shell: "opencode api GET /api/model", parser: "opencodeCatalog" },
     options: {
+      provider: { type: "provider", label: "MODEL PROVIDER" },
       model: {
         type: "model",
         label: "MODEL",
@@ -143,7 +153,13 @@ export const SPECS = {
     // its own server (--standalone), since the background service keeps its own config and a TUI
     // that connects to it ignores OPENCODE_CONFIG_CONTENT. Its effort is its own state file.
     wrap: { env: { OPENCODE_CONFIG_CONTENT: { json: { model: "{model}" } } }, suffix: ["--standalone"], after: "opencodeVariant" },
-    ui: { rows: [["model", "effort"]] },
+    ui: {
+      sections: [
+        { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+      ],
+      rows: [["model", "effort"]],
+    },
   },
   pi: {
     label: "Pi",
@@ -160,7 +176,14 @@ export const SPECS = {
       systemPrompt: { type: "editor", label: "Append system prompt", default: "", argv: ["--append-system-prompt", "{v}"] },
     },
     launch: ["model", "effort", "off", "systemPrompt"],
-    ui: { rows: [["model", "effort"]] },
+    ui: {
+      sections: [
+        { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+        { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["off", "systemPrompt"] },
+      ],
+      rows: [["model", "effort"]],
+    },
   },
 };
 

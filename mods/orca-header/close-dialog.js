@@ -48,7 +48,7 @@ function confirmCheckbox(view, t, isPinned) {
         .bg(view.dontAskAgain ? t.solid : "#00000000")
         .flex().items_center().justify_center()
         .when(view.dontAskAgain, checkEl =>
-          checkEl.child(svg("mods/orca-header/check.svg").size(12).text_color(t.solid_foreground))
+          checkEl.child(svg("mods/orca-assets/check.svg").size(12).text_color(t.solid_foreground))
         )
     )
     .child(div().text_size(12).text_color(t.muted).child(checkboxLabel));

@@ -42,7 +42,7 @@ export function railItem(owner, row, t, tile = t.raised) {
     .on_click((_e,cx) => owner.selectRail(row.key,cx))
     .child(div().id("am-rail-tile-" + row.key).absolute().inset_0().rounded(RAIL.avatarRadius)
       .bg(t.hover).opacity(selected || tileHovered ? 1 : 0).transition("opacity", MOTION))
-    .child(div().relative().child(global ? svg("mods/orca-new-menu/bot.svg").size(25).text_color(t.foreground)
+    .child(div().relative().child(global ? svg("mods/orca-assets/bot.svg").size(25).text_color(t.foreground)
       : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))));
   return item.child(railAction(owner, row, t, control, label));
 }
@@ -61,7 +61,7 @@ function railAction(owner, row, t, control, label) {
     return div().absolute().left(avatarRight - 20).top(39).size(20).rounded_full().bg(t.raised)
       .border_1().border_color(t.border).flex().items_center().justify_center()
       .cursor_pointer().tooltip(label).on_click((_e,cx) => owner.selectRail(row.key,cx))
-      .child(svg("mods/orca-sidebar-projects/settings.svg").size(12).text_color(t.muted));
+      .child(svg("mods/orca-assets/settings.svg").size(12).text_color(t.muted));
   }
   if (control?.kind === "switch") {
     // t.input is translucent in the dark theme; the off track must stay opaque.
@@ -81,7 +81,7 @@ function railAction(owner, row, t, control, label) {
   if (control?.kind === "install") {
     const glyph = div().size(22).rounded_full().bg(t.raised).border_1().border_color(t.border).hover((s) => s.border_color(t.foreground))
       .flex().items_center().justify_center().text_color(t.accent)
-      .child(svg("mods/orca-agent-settings/download.svg").size(14));
+      .child(svg("mods/orca-assets/download.svg").size(14));
     // Keep the install affordance visible even if a community CLI has no known guide.
     // A missing guide opens that agent's details, never a guessed shell command.
     const hit = h_flex().w(30).h(27).items_center().justify_center().child(glyph);
@@ -114,7 +114,7 @@ function groupView(owner, title, rows, scroll, t) {
         .accessibility_label(action).tooltip(action)
         .on_click((_e,cx) => { owner[key] = !open; cx.notify(); })
         .child(div().relative().size(32).flex().items_center().justify_center()
-          .child(svg("mods/orca-sidebar-projects/folder.svg").size(25).text_color(t.accent))
+          .child(svg("mods/orca-assets/folder--orca-sidebar-projects.svg").size(25).text_color(t.accent))
           .child(div().absolute().right(-7).bottom(-6).text_size(14).child(medal))))
       .child(div().relative().w(RAIL.width).h(open ? height : 0).overflow_hidden().transition("height", MOTION)
         .opacity(open ? 1 : 0).transition("opacity", MOTION)

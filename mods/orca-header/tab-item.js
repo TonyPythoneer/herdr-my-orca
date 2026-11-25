@@ -28,18 +28,18 @@ export const stop = (_e, cx) => cx.stop_propagation();
 // a mod cannot reach another's files, so each carries its own copies.
 const OWN_FILLS = new Set(["omp", "droid", "kilo"]);
 const AGENT_MARKS = {
-  codex: "mods/orca-header/agent-icons/codex.svg",
-  omp: "mods/orca-header/agent-icons/omp.svg",
-  gemini: "mods/orca-header/agent-icons/gemini.png",
-  cursor: "mods/orca-header/agent-icons/cursor.png",
-  grok: "mods/orca-header/agent-icons/grok.png",
-  qoder: "mods/orca-header/agent-icons/qoder.png",
-  hermes: "mods/orca-header/agent-icons/hermes.png",
-  "dsh-tui": "mods/orca-header/agent-icons/dsh.png",
-  droid: "mods/orca-header/agent-icons/droid.svg",
-  kilo: "mods/orca-header/agent-icons/kilo.svg",
-  aider: "mods/orca-header/agent-icons/aider.svg",
-  freebuff: "mods/orca-header/agent-icons/freebuff.png",
+  codex: "mods/orca-assets/codex--orca-header.svg",
+  omp: "mods/orca-assets/omp.svg",
+  gemini: "mods/orca-assets/gemini.png",
+  cursor: "mods/orca-assets/cursor.png",
+  grok: "mods/orca-assets/grok.png",
+  qoder: "mods/orca-assets/qoder.png",
+  hermes: "mods/orca-assets/hermes.png",
+  "dsh-tui": "mods/orca-assets/dsh.png",
+  droid: "mods/orca-assets/droid.svg",
+  kilo: "mods/orca-assets/kilo.svg",
+  aider: "mods/orca-assets/aider.svg",
+  freebuff: "mods/orca-assets/freebuff--orca-header.png",
 };
 
 function agentIcon(app, program, t) {
@@ -163,16 +163,16 @@ function tabContent(pill, view, t, { tab, copyId, identity, label }) {
     // (:44-50). working = the agent-working spinner, done = CircleCheck in emerald-500,
     // blocked — Herdr's word for a waiting agent — = AgentQuestionIcon, a
     // MessageCircleQuestion in --agent-question. A bare dot is Orca's idle mark only.
-    .when(tab.status === "working", el => el.child(svg("mods/orca-header/spinner.svg").size(12).flex_none().text_color("#eab308").spin(1000)))
-    .when(tab.status === "done", el => el.child(svg("mods/orca-header/circle-check.svg").size(12).flex_none().text_color("#10b981")))
-    .when(tab.status === "blocked", el => el.child(svg("mods/orca-header/message-circle-question.svg").size(12).flex_none().text_color("#ea580c")))
+    .when(tab.status === "working", el => el.child(svg("mods/orca-assets/spinner.svg").size(12).flex_none().text_color("#eab308").spin(1000)))
+    .when(tab.status === "done", el => el.child(svg("mods/orca-assets/circle-check.svg").size(12).flex_none().text_color("#10b981")))
+    .when(tab.status === "blocked", el => el.child(svg("mods/orca-assets/message-circle-question.svg").size(12).flex_none().text_color("#ea580c")))
     // `src/renderer/src/components/AgentStateDot.tsx:186-195` — idle is a plain dot, not a glyph: `size-2` (8px)
     // `rounded-full` in `bg-neutral-500/40` inside the md `h-3 w-3` (12px) box.
     .when(tab.status === "idle", el => el.child(div().size(12).flex_none().flex().items_center().justify_center()
       .child(div().size(8).rounded(4).bg("#73737366"))))
     .when(Boolean(identity), el => el.child(tab.active ? identity : identity.opacity(0.7)))
     // Pin — SortableTab.tsx:258-259: size-3 (12px), mr-1 (4px), shrink-0, text-muted-foreground.
-    .when(Boolean(tab.settled), el => el.child(svg("mods/orca-header/pin.svg").size(12).flex_none().mr(4).text_color(t.muted)))
+    .when(Boolean(tab.settled), el => el.child(svg("mods/orca-assets/pin.svg").size(12).flex_none().mr(4).text_color(t.muted)))
     // `TAB_LABEL_WIDTH_CLASSES` (tab-width-rules.ts:4) — `tab-label min-w-0 flex-1 truncate`.
     // Orca never marks an expanded pane in the title (SortableTab.tsx:130-131); the
     // Minimize2 button below is the only indicator.
@@ -191,7 +191,7 @@ function tabContent(pill, view, t, { tab, copyId, identity, label }) {
         const z = (panes() ?? []).find(p => p.tab === tab.id && p.zoomed);
         if (z) run("pane.zoom", { pane: z.pane });
       })
-      .child(svg("mods/orca-header/minimize-2.svg").size(12))))
+      .child(svg("mods/orca-assets/minimize-2--orca-header.svg").size(12))))
     // Close — SortableTab.tsx:317-349: only when `!isPinned` (Orca's pinned tab has no close
     // button; Herdr's pin analogue is `settled`, TabInfo.settled). The box is `w-4 h-4`
     // (16px), the glyph `w-3` (12px); inactive is `text-transparent` and becomes muted on
@@ -201,7 +201,7 @@ function tabContent(pill, view, t, { tab, copyId, identity, label }) {
       .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
       .on_mouse_down("left", stop).accessibility_label("Close").tooltip("Close")
       .on_click((_e, cx) => { cx.stop_propagation(); view.requestCloseTab(tab); })
-      .child(svg("mods/orca-header/close.svg").size(12))));
+      .child(svg("mods/orca-assets/close--orca-header.svg").size(12))));
 }
 
 // Between two neighbouring inactive tabs, unless the pointer is on either one.

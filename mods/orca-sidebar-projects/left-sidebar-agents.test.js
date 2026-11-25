@@ -11,7 +11,7 @@ const t = new Proxy({}, { get: (_t, k) => String(k) });
 const inventory = { agents: [
   { key: 'codex', name: 'Codex', installed: false },
   { key: 'claude', name: 'Claude', installed: true, enabled: true },
-], unofficial: [{ key: 'freebuff', name: 'FreeBuff CLI', icon: 'mods/orca-new-menu/freebuff.png', installed: true, enabled: false }] };
+], unofficial: [{ key: 'freebuff', name: 'FreeBuff CLI', icon: 'mods/orca-assets/freebuff--orca-new-menu.png', installed: true, enabled: false }] };
 const draw = (shared) => {
   globalThis.__herdrShared = (key) => shared[key];
   return JSON.stringify(leftSidebarAgentRail({ agentRail: agentRailOwner() }, t).__node);
@@ -69,8 +69,8 @@ test('the tile keeps the same rounded square while its hover colour fades', () =
 test('Global uses robot and gear, and FreeBuff keeps its brand icon', () => {
   const render = (row, selected = row.key) => JSON.stringify(railItem({ railSelection: selected }, row, t).__node);
   const global = render({ key: 'global' });
-  assert.ok(global.includes('mods/orca-new-menu/bot.svg'));
-  assert.ok(global.includes('mods/orca-sidebar-projects/settings.svg'));
+  assert.ok(global.includes('mods/orca-assets/bot.svg'));
+  assert.ok(global.includes('mods/orca-assets/settings.svg'));
   assert.ok(global.includes('Global Agent Settings'));
   const [freebuff] = inventory.unofficial;
   assert.ok(render(freebuff).includes('freebuff.png'));

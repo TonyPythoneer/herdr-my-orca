@@ -44,8 +44,17 @@ export default class PanelGap extends View {
     const gap = GAPS[props()?.tab] ?? GAPS.checks;
     return v_flex().id(`gap-${props()?.tab ?? "checks"}`).size_full().items_center().justify_center().px(16)
       .text_color(t.muted)
-      .child(div().mb(12).opacity(0.5).child(svg(`mods/orca-right-sidebar-placeholders/${gap.icon}.svg`).size(32)))
+      .child(div().mb(12).opacity(0.5).child(svg(sharedAsset(`mods/orca-right-sidebar-placeholders/${gap.icon}.svg`)).size(32)))
       .child(div().text_size(14).font_medium().text_color(t.foreground).child(gap.title))
       .child(div().mt(4).max_w(260).text_size(14).text_center().child(gap.body));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-right-sidebar-placeholders/list-checks.svg": "mods/orca-assets/list-checks--orca-right-sidebar-placeholders.svg",
+  "mods/orca-right-sidebar-placeholders/plug.svg": "mods/orca-assets/plug--orca-right-sidebar-placeholders.svg",
+  "mods/orca-right-sidebar-placeholders/workflow.svg": "mods/orca-assets/workflow--orca-right-sidebar-placeholders.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

@@ -1,7 +1,694 @@
 {
+  "mods/orca-assets/agent-session-history.svg": [
+    "orca-right-sidebar-header"
+  ],
+  "mods/orca-assets/agent-working-spinner.svg": [
+    "orca-float-workspace",
+    "orca-pane-header",
+    "orca-right-sidebar-agents",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/aider.svg": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/alert-circle.svg": [
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/antigravity.png": [
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/archive-restore.svg": [
+    "orca-right-sidebar-agents"
+  ],
+  "mods/orca-assets/arrow-down.svg": [
+    "orca-context-menu",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/arrow-left.svg": [
+    "orca-context-menu",
+    "orca-sidebar-top",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/arrow-right.svg": [
+    "orca-context-menu",
+    "orca-sidebar-top",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/arrow-up.svg": [
+    "orca-context-menu",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/bell--orca-context-menu.svg": [
+    "orca-context-menu",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/bell--orca-sidebar-top.svg": [
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/bell-filled.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/bell-off.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/bot.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings",
+    "orca-new-menu",
+    "orca-sidebar-projects",
+    "orca-status-footer"
+  ],
+  "mods/orca-assets/calendar-clock.svg": [
+    "orca-right-sidebar-placeholders",
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/case-sensitive.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/changes.svg": [
+    "orca-changes"
+  ],
+  "mods/orca-assets/check.svg": [
+    "orca-changes",
+    "orca-header"
+  ],
+  "mods/orca-assets/chevron-down--orca-agent-settings.svg": [
+    "orca-agent-settings",
+    "orca-changes"
+  ],
+  "mods/orca-assets/chevron-down--orca-files.svg": [
+    "orca-files",
+    "orca-sidebar-projects",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/chevron-left--orca-agent-settings.svg": [
+    "orca-agent-settings",
+    "orca-new-menu",
+    "orca-tasks"
+  ],
+  "mods/orca-assets/chevron-left--orca-header.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/chevron-right--orca-agent-settings.svg": [
+    "orca-agent-settings",
+    "orca-new-menu"
+  ],
+  "mods/orca-assets/chevron-right--orca-changes.svg": [
+    "orca-changes"
+  ],
+  "mods/orca-assets/chevron-right--orca-files.svg": [
+    "orca-files",
+    "orca-sidebar-projects",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/chevron-right--orca-header.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/chevrons-down-up.svg": [
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/chevrons-up-down.svg": [
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/circle-alert.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/circle-check.svg": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-right-sidebar-agents",
+    "orca-sidebar-projects",
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/circle-help.svg": [
+    "orca-status-footer"
+  ],
+  "mods/orca-assets/circle-slash.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/circle.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/claude.svg": [
+    "orca-status-bar",
+    "orca-tasks"
+  ],
+  "mods/orca-assets/clipboard.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/clock.svg": [
+    "orca-status-footer",
+    "orca-tasks"
+  ],
+  "mods/orca-assets/close--orca-header.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/close--orca-pane-header.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/codex--orca-header.svg": [
+    "orca-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/codex--orca-status-bar.svg": [
+    "orca-status-bar",
+    "orca-tasks"
+  ],
+  "mods/orca-assets/command-code.svg": [
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/copilot.svg": [
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/copy.svg": [
+    "orca-changes",
+    "orca-context-menu",
+    "orca-files",
+    "orca-handoff",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/cursor.png": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects",
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/database.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/download.svg": [
+    "orca-agent-settings",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/droid.svg": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/dsh.png": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/ellipsis--orca-files.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/ellipsis--orca-pane-header.svg": [
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/eraser.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/external-link.svg": [
+    "orca-changes",
+    "orca-files",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/eye--orca-agent-flyout.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/eye--orca-changes.svg": [
+    "orca-changes",
+    "orca-files"
+  ],
+  "mods/orca-assets/eye-off.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/file-archive.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-axis-3d.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-box.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-braces.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-chart-column.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-check.svg": [
+    "orca-changes"
+  ],
+  "mods/orca-assets/file-code.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-cog.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-diff.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-image.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-key.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-lock.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-music.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-plus.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-sliders.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-spreadsheet.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-terminal.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-text--orca-files.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-text--orca-split-menu.svg": [
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/file-type.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-video.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/file-x.svg": [
+    "orca-changes"
+  ],
+  "mods/orca-assets/file.svg": [
+    "orca-changes",
+    "orca-files",
+    "orca-header"
+  ],
+  "mods/orca-assets/files--orca-files.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/files--orca-right-sidebar-header.svg": [
+    "orca-right-sidebar-header"
+  ],
+  "mods/orca-assets/folder--orca-files.svg": [
+    "orca-files",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/folder--orca-sidebar-projects.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/folder-open.svg": [
+    "orca-changes",
+    "orca-context-menu",
+    "orca-files",
+    "orca-new-menu",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/folder-plus--orca-files.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/folder-plus--orca-landing.svg": [
+    "orca-landing"
+  ],
+  "mods/orca-assets/folder-plus--orca-sidebar-projects.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/folder-plus--orca-sidebar-top.svg": [
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/freebuff--orca-header.png": [
+    "orca-header"
+  ],
+  "mods/orca-assets/freebuff--orca-new-menu.png": [
+    "orca-agent-settings",
+    "orca-new-menu",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/gemini.png": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/git-branch--orca-header.svg": [
+    "orca-header",
+    "orca-sidebar-projects",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/git-branch--orca-right-sidebar-header.svg": [
+    "orca-right-sidebar-header"
+  ],
+  "mods/orca-assets/git-branch-plus--orca-context-menu.svg": [
+    "orca-context-menu",
+    "orca-new-menu"
+  ],
+  "mods/orca-assets/git-branch-plus--orca-landing.svg": [
+    "orca-landing"
+  ],
+  "mods/orca-assets/git-fork.svg": [
+    "orca-context-menu",
+    "orca-handoff"
+  ],
+  "mods/orca-assets/git-merge.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/git-pull-request-closed.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/git-pull-request-draft.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/git-pull-request.svg": [
+    "orca-changes",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/grok.png": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/hand.svg": [
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/hard-drive.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings",
+    "orca-status-footer"
+  ],
+  "mods/orca-assets/hermes.png": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/kilo.svg": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/link.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/list-checks--orca-right-sidebar-header.svg": [
+    "orca-right-sidebar-header"
+  ],
+  "mods/orca-assets/list-checks--orca-right-sidebar-placeholders.svg": [
+    "orca-right-sidebar-placeholders"
+  ],
+  "mods/orca-assets/list-checks--orca-sidebar-top.svg": [
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/list-collapse.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/list-filter.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/list.svg": [
+    "orca-right-sidebar-placeholders",
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/loader-circle.svg": [
+    "orca-files",
+    "orca-sidebar-projects",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/maximize-2.svg": [
+    "orca-context-menu",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/message-circle-question.svg": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-right-sidebar-agents",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/message-square-plus.svg": [
+    "orca-context-menu",
+    "orca-handoff",
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/minimize-2--orca-context-menu.svg": [
+    "orca-context-menu",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/minimize-2--orca-header.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/minus--orca-changes.svg": [
+    "orca-changes"
+  ],
+  "mods/orca-assets/minus--orca-float-workspace.svg": [
+    "orca-float-workspace"
+  ],
+  "mods/orca-assets/monitor.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/omp.svg": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects",
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/opencode.svg": [
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/panel-bottom-close.svg": [
+    "orca-context-menu",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/panel-left-close.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/panel-left-open.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/panel-right-close--orca-context-menu.svg": [
+    "orca-context-menu",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/panel-right-close--orca-right-sidebar-header.svg": [
+    "orca-header",
+    "orca-right-sidebar-header"
+  ],
+  "mods/orca-assets/panel-right-open.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/panels-top-left.svg": [
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/pencil--orca-context-menu.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/pencil--orca-files.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/pin-off.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/pin.svg": [
+    "orca-context-menu",
+    "orca-header"
+  ],
+  "mods/orca-assets/plug--orca-right-sidebar-header.svg": [
+    "orca-right-sidebar-header"
+  ],
+  "mods/orca-assets/plug--orca-right-sidebar-placeholders.svg": [
+    "orca-right-sidebar-placeholders",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/plus--orca-agent-flyout.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings",
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/plus--orca-changes.svg": [
+    "orca-changes",
+    "orca-files"
+  ],
+  "mods/orca-assets/plus--orca-float-workspace.svg": [
+    "orca-float-workspace",
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/plus--orca-header.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/plus--orca-pane-header.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/plus--orca-sidebar-top.svg": [
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/qoder.png": [
+    "orca-float-workspace",
+    "orca-header",
+    "orca-pane-header",
+    "orca-sidebar-projects"
+  ],
   "mods/orca-assets/refresh-cw.svg": [
     "orca-agent-settings",
+    "orca-assets",
     "orca-files",
     "orca-status-bar"
+  ],
+  "mods/orca-assets/regex.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/rotate-ccw--orca-agent-flyout.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/rotate-ccw--orca-context-menu.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/save.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/search--orca-new-menu.svg": [
+    "orca-new-menu"
+  ],
+  "mods/orca-assets/search--orca-right-sidebar-agents.svg": [
+    "orca-right-sidebar-agents",
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/server.svg": [
+    "orca-sidebar-projects",
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/settings.svg": [
+    "orca-context-menu",
+    "orca-sidebar-projects",
+    "orca-status-footer"
+  ],
+  "mods/orca-assets/shield-alert.svg": [
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/shield-check.svg": [
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/sidebar.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/sliders-horizontal.svg": [
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/smartphone.svg": [
+    "orca-right-sidebar-placeholders",
+    "orca-sidebar-top"
+  ],
+  "mods/orca-assets/spinner.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/split-down.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/split-right.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/square-pen--orca-files.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/square-pen--orca-sidebar-projects.svg": [
+    "orca-sidebar-projects"
+  ],
+  "mods/orca-assets/square-split-vertical.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/square-terminal--orca-agent-flyout.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings",
+    "orca-new-menu"
+  ],
+  "mods/orca-assets/square-terminal--orca-agent-settings.svg": [
+    "orca-agent-settings"
+  ],
+  "mods/orca-assets/terminal-square.svg": [
+    "orca-float-workspace"
+  ],
+  "mods/orca-assets/terminal.svg": [
+    "orca-context-menu",
+    "orca-files"
+  ],
+  "mods/orca-assets/text-select.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/trash.svg": [
+    "orca-changes",
+    "orca-context-menu",
+    "orca-files",
+    "orca-sidebar-projects",
+    "orca-status-ports"
+  ],
+  "mods/orca-assets/triangle-alert.svg": [
+    "orca-changes",
+    "orca-status-bar"
+  ],
+  "mods/orca-assets/undo.svg": [
+    "orca-changes"
+  ],
+  "mods/orca-assets/unlink.svg": [
+    "orca-context-menu"
+  ],
+  "mods/orca-assets/unzoom.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/whole-word.svg": [
+    "orca-files"
+  ],
+  "mods/orca-assets/win-close.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/win-max.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/win-min.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/win-restore.svg": [
+    "orca-header"
+  ],
+  "mods/orca-assets/workflow--orca-context-menu.svg": [
+    "orca-context-menu",
+    "orca-new-menu"
+  ],
+  "mods/orca-assets/workflow--orca-pane-header.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/workflow--orca-right-sidebar-header.svg": [
+    "orca-right-sidebar-header"
+  ],
+  "mods/orca-assets/workflow--orca-right-sidebar-placeholders.svg": [
+    "orca-right-sidebar-placeholders"
+  ],
+  "mods/orca-assets/x--orca-context-menu.svg": [
+    "orca-context-menu",
+    "orca-handoff",
+    "orca-split-menu"
+  ],
+  "mods/orca-assets/x--orca-files.svg": [
+    "orca-files",
+    "orca-right-sidebar-agents"
+  ],
+  "mods/orca-assets/x--orca-pane-header.svg": [
+    "orca-pane-header"
+  ],
+  "mods/orca-assets/zoom.svg": [
+    "orca-pane-header"
   ]
 }

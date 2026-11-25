@@ -24,17 +24,17 @@ const AGENT_ICON_SIZE = 13;
 // colored marks as images because svg() is a one-color mask (gpui-kit.d.ts:20273-20281).
 const OWN_FILLS = new Set(["omp", "droid", "kilo"]);
 const AGENT_ICON_OVERRIDES = {
-  codex: "mods/orca-sidebar-projects/agent-icons/codex.svg",
-  omp: "mods/orca-sidebar-projects/omp.svg",
-  gemini: "mods/orca-sidebar-projects/agent-icons/gemini.png",
-  cursor: "mods/orca-sidebar-projects/agent-icons/cursor.png",
-  grok: "mods/orca-sidebar-projects/agent-icons/grok.png",
-  qoder: "mods/orca-sidebar-projects/agent-icons/qoder.png",
-  hermes: "mods/orca-sidebar-projects/agent-icons/hermes.png",
-  "dsh-tui": "mods/orca-sidebar-projects/agent-icons/dsh.png",
-  droid: "mods/orca-sidebar-projects/agent-icons/droid.svg",
-  kilo: "mods/orca-sidebar-projects/agent-icons/kilo.svg",
-  aider: "mods/orca-sidebar-projects/agent-icons/aider.svg",
+  codex: "mods/orca-assets/codex--orca-header.svg",
+  omp: "mods/orca-assets/omp.svg",
+  gemini: "mods/orca-assets/gemini.png",
+  cursor: "mods/orca-assets/cursor.png",
+  grok: "mods/orca-assets/grok.png",
+  qoder: "mods/orca-assets/qoder.png",
+  hermes: "mods/orca-assets/hermes.png",
+  "dsh-tui": "mods/orca-assets/dsh.png",
+  droid: "mods/orca-assets/droid.svg",
+  kilo: "mods/orca-assets/kilo.svg",
+  aider: "mods/orca-assets/aider.svg",
 };
 
 // An agent row shows the agent, not the folder it shares with the space.
@@ -149,7 +149,7 @@ function agentBlock(owner, { w, also }, mine, t) {
         .children(visible.map((group) => cluster(group, mine, t)))
         .when(hiddenCount > 0, (s) => s.child(div().flex_none().text_size(10).text_color(t.dim).child(`+${hiddenCount}`)))))
       .when(others.length > 0, el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(otherLabel)))
-      .child(svg(`mods/orca-sidebar-projects/chevron-${expanded ? "down" : "right"}.svg`).size(12).flex_none()))
+      .child(svg(sharedAsset(`mods/orca-sidebar-projects/chevron-${expanded ? "down" : "right"}.svg`)).size(12).flex_none()))
     .when(expanded, el => el.child(v_flex().min_w(0).gap(2).pt(2).children(mine.map((a) => agentRow(a, t, w)))));
 }
 
@@ -288,8 +288,8 @@ function statusLane(owner, w, t, dot) {
       .on_mouse_up("left", (_e, cx) => cx.stop_propagation())
       // `isUnread` draws the filled amber bell; otherwise the status mark, which the muted
       // bell replaces on hover (`WorktreeCardStatusSlot.tsx:275-285`).
-      .when(unread, el => el.child(svg("mods/orca-sidebar-projects/bell-filled.svg").size(13).flex_none().text_color("#f59e0b")))
-      .when(!unread && hot, el => el.child(svg("mods/orca-sidebar-projects/bell.svg").size(12).flex_none().text_color(t.muted)))
+      .when(unread, el => el.child(svg("mods/orca-assets/bell-filled.svg").size(13).flex_none().text_color("#f59e0b")))
+      .when(!unread && hot, el => el.child(svg("mods/orca-assets/bell--orca-context-menu.svg").size(12).flex_none().text_color(t.muted)))
       .when(!unread && !hot, el => el.child(statusMark(dot, 12))));
 }
 
@@ -404,3 +404,18 @@ export function cardView(owner, row, t, ps, mine) {
 
 // A repo is a project group: a SectionHeader, then its worktree cards (SectionHeader.tsx:185-195).
 // A bare folder workspace renders its folder row above its session card.
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-sidebar-projects/bell.svg": "mods/orca-assets/bell--orca-context-menu.svg",
+  "mods/orca-sidebar-projects/chevron-down.svg": "mods/orca-assets/chevron-down--orca-files.svg",
+  "mods/orca-sidebar-projects/chevron-right.svg": "mods/orca-assets/chevron-right--orca-files.svg",
+  "mods/orca-sidebar-projects/ellipsis.svg": "mods/orca-assets/ellipsis--orca-pane-header.svg",
+  "mods/orca-sidebar-projects/folder-plus.svg": "mods/orca-assets/folder-plus--orca-sidebar-projects.svg",
+  "mods/orca-sidebar-projects/folder.svg": "mods/orca-assets/folder--orca-sidebar-projects.svg",
+  "mods/orca-sidebar-projects/git-branch.svg": "mods/orca-assets/git-branch--orca-header.svg",
+  "mods/orca-sidebar-projects/plus.svg": "mods/orca-assets/plus--orca-float-workspace.svg",
+  "mods/orca-sidebar-projects/square-pen.svg": "mods/orca-assets/square-pen--orca-sidebar-projects.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
+}

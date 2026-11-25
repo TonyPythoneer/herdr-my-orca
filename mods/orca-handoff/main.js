@@ -261,7 +261,7 @@ export default class HandoffDialog extends View {
             h_flex()
               .gap(8)
               .items_center()
-              .child(svg(`mods/orca-handoff/${iconName}.svg`).size(16).text_color(t.foreground))
+              .child(svg(sharedAsset(`mods/orca-handoff/${iconName}.svg`)).size(16).text_color(t.foreground))
               .child(div().font_semibold().text_size(14).text_color(t.foreground).child(title))
           )
           .child(div().text_size(11).text_color(t.muted).child(description))
@@ -277,7 +277,7 @@ export default class HandoffDialog extends View {
           .cursor_pointer()
           .hover((s) => s.bg(t.hover))
           .on_click(() => closeOverlay(props()?.overlay))
-          .child(svg("mods/orca-handoff/x.svg").size(12).text_color(t.muted))
+          .child(svg("mods/orca-assets/x--orca-context-menu.svg").size(12).text_color(t.muted))
       );
   }
 
@@ -389,7 +389,7 @@ export default class HandoffDialog extends View {
           .cursor_pointer()
           .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => void this.copyCurrentPrompt(cx))
-          .child(svg("mods/orca-handoff/copy.svg").size(12).text_color(t.foreground))
+          .child(svg("mods/orca-assets/copy.svg").size(12).text_color(t.foreground))
           .child(div().text_size(12).text_color(t.foreground).child(this.copied ? "Copied!" : "Copy Prompt")),
 
         div()
@@ -413,4 +413,11 @@ export default class HandoffDialog extends View {
           )
       ]);
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-handoff/x.svg": "mods/orca-assets/x--orca-context-menu.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

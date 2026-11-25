@@ -23,10 +23,10 @@ const dot = (size, inner, color) => box(size).child(div().size(inner).rounded_fu
 export function statusMark(status, size = 12, colors = STATUS_COLORS) {
   const c = colors ?? STATUS_COLORS;
   if (status === "blocked") {
-    return box(size).child(svg("mods/orca-pane-header/message-circle-question.svg").size(size).flex_none().text_color(c.blocked));
+    return box(size).child(svg("mods/orca-assets/message-circle-question.svg").size(size).flex_none().text_color(c.blocked));
   }
   if (status === "working") {
-    return box(size).child(svg("mods/orca-pane-header/agent-working-spinner.svg").size(8).flex_none().text_color(c.working).spin(1000));
+    return box(size).child(svg("mods/orca-assets/agent-working-spinner.svg").size(8).flex_none().text_color(c.working).spin(1000));
   }
   return dot(size, 8, status === "done" ? c.done : c.idle);
 }
@@ -36,16 +36,16 @@ export function statusMark(status, size = 12, colors = STATUS_COLORS) {
 const OWN_FILLS = new Set(["omp", "droid", "kilo"]);
 const AGENT_MARKS = {
   codex: "mono",
-  omp: "mods/orca-pane-header/agent-icons/omp.svg",
-  gemini: "mods/orca-pane-header/agent-icons/gemini.png",
-  cursor: "mods/orca-pane-header/agent-icons/cursor.png",
-  grok: "mods/orca-pane-header/agent-icons/grok.png",
-  qoder: "mods/orca-pane-header/agent-icons/qoder.png",
-  hermes: "mods/orca-pane-header/agent-icons/hermes.png",
-  "dsh-tui": "mods/orca-pane-header/agent-icons/dsh.png",
-  droid: "mods/orca-pane-header/agent-icons/droid.svg",
-  kilo: "mods/orca-pane-header/agent-icons/kilo.svg",
-  aider: "mods/orca-pane-header/agent-icons/aider.svg",
+  omp: "mods/orca-assets/omp.svg",
+  gemini: "mods/orca-assets/gemini.png",
+  cursor: "mods/orca-assets/cursor.png",
+  grok: "mods/orca-assets/grok.png",
+  qoder: "mods/orca-assets/qoder.png",
+  hermes: "mods/orca-assets/hermes.png",
+  "dsh-tui": "mods/orca-assets/dsh.png",
+  droid: "mods/orca-assets/droid.svg",
+  kilo: "mods/orca-assets/kilo.svg",
+  aider: "mods/orca-assets/aider.svg",
 };
 
 const maskMark = (path, size, theme) => svg(path).size(size).flex_none().text_color(theme.muted);

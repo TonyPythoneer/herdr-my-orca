@@ -443,8 +443,8 @@ export default class NewMenu extends View {
     if (p?.icon) return p.tint
       ? svg(p.icon).size(size).flex_none().text_color(t.muted)
       : image(p.icon).size(size).flex_none();
-    if (row.image) return image(`mods/orca-new-menu/${row.image}`).size(size).flex_none().rounded(4);
-    if (row.icon) return svg(`mods/orca-new-menu/${row.icon}.svg`).size(size).flex_none().text_color(t.muted);
+    if (row.image) return image(sharedAsset(`mods/orca-new-menu/${row.image}`)).size(size).flex_none().rounded(4);
+    if (row.icon) return svg(sharedAsset(`mods/orca-new-menu/${row.icon}.svg`)).size(size).flex_none().text_color(t.muted);
     return div().w(size).flex_none();
   }
 
@@ -457,7 +457,7 @@ export default class NewMenu extends View {
   filterRow(t) {
     return h_flex().w_full().h(32).min_h(0).px(8).gap(6).items_center().rounded(8).mb(4)
       .border_1().border_color(t.ring).bg(t.input)
-      .child(svg("mods/orca-new-menu/search.svg").size(14).flex_none().text_color(t.muted))
+      .child(svg("mods/orca-assets/search--orca-new-menu.svg").size(14).flex_none().text_color(t.muted))
       .child(Input.new(this.input).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"));
   }
 
@@ -538,7 +538,7 @@ export default class NewMenu extends View {
       .border_l(1)
       .border_color(t.border)
       .hover((s) => s.bg(t.hover))
-      .child(svg("mods/orca-new-menu/chevron-right.svg").size(14).text_color(t.muted));
+      .child(svg("mods/orca-assets/chevron-right--orca-agent-settings.svg").size(14).text_color(t.muted));
   }
 
   row(row, i, t, onClick) {
@@ -630,4 +630,17 @@ export default class NewMenu extends View {
       .when(picking, (el) => el.child(this.row({ label: "Back", icon: "chevron-left", sep: true }, -1, t,
         (clickCx) => { this.back(); clickCx.notify(); })));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-new-menu/chevron-left.svg": "mods/orca-assets/chevron-left--orca-agent-settings.svg",
+  "mods/orca-new-menu/chevron-right.svg": "mods/orca-assets/chevron-right--orca-agent-settings.svg",
+  "mods/orca-new-menu/freebuff.png": "mods/orca-assets/freebuff--orca-new-menu.png",
+  "mods/orca-new-menu/git-branch-plus.svg": "mods/orca-assets/git-branch-plus--orca-context-menu.svg",
+  "mods/orca-new-menu/search.svg": "mods/orca-assets/search--orca-new-menu.svg",
+  "mods/orca-new-menu/square-terminal.svg": "mods/orca-assets/square-terminal--orca-agent-flyout.svg",
+  "mods/orca-new-menu/workflow.svg": "mods/orca-assets/workflow--orca-context-menu.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

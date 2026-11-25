@@ -115,5 +115,5 @@ export function backButton(t, onClick) {
     .accessibility_label("Back to terminals")
     .tooltip("Back to terminals")
     .on_click(onClick)
-    .child(svg("mods/orca-agent-settings/chevron-left.svg").size(16));
+    .child(svg("mods/orca-assets/chevron-left--orca-agent-settings.svg").size(16));
 }

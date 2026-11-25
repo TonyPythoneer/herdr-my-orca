@@ -7,14 +7,7 @@
     "mod.json",
     "main.js",
     "panel-gating.js",
-    "panel-views.js",
-    "agent-session-history.svg",
-    "files.svg",
-    "git-branch.svg",
-    "list-checks.svg",
-    "panel-right-close.svg",
-    "plug.svg",
-    "workflow.svg"
+    "panel-views.js"
   ],
   "tests": [
     "panel-gating.test.js",

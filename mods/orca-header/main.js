@@ -1269,7 +1269,7 @@ export default class Tabs extends View {
       .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation()).on_click((_e, eventCx) => {
         this.returnToApp(eventCx);
       })
-      .child(svg("mods/orca-header/chevron-left.svg").size(13))
+      .child(svg("mods/orca-assets/chevron-left--orca-header.svg").size(13))
       .child(div().text_size(12).child("Back to app"));
   }
 
@@ -1285,9 +1285,9 @@ export default class Tabs extends View {
       .text_color(t.muted).hover(s => s.bg(t.hover)).role("button").accessibility_label(label).tooltip(label)
       .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation()).on_click(action).child(svg(glyph).size(10));
     return h_flex().absolute().right(0).top(0).bottom(0).items_center()
-      .child(winControl("minimize","Minimize","mods/orca-header/win-min.svg",()=>run("window.minimize")))
-      .child(winControl("maximize","Maximize",w.maximized ? "mods/orca-header/win-restore.svg" : "mods/orca-header/win-max.svg",()=>run("window.maximize")))
-      .child(winControl("close-window","Close window","mods/orca-header/win-close.svg",()=>run("window.close")));
+      .child(winControl("minimize","Minimize","mods/orca-assets/win-min.svg",()=>run("window.minimize")))
+      .child(winControl("maximize","Maximize",w.maximized ? "mods/orca-assets/win-restore.svg" : "mods/orca-assets/win-max.svg",()=>run("window.maximize")))
+      .child(winControl("close-window","Close window","mods/orca-assets/win-close.svg",()=>run("window.close")));
   }
 
   // Live read keeps maximize/restore current (Orca subscribes to onMaximizeChanged,

@@ -41,13 +41,13 @@ const LIST_BAR_ALPHA = "99";
 function stateDot(status, t) {
   const box = div().size(10).flex_none().flex().items_center().justify_center();
   if (status === "working") {
-    return box.child(svg("mods/orca-float-workspace/agent-working-spinner.svg").size(6).flex_none().text_color(t.working).spin(1000));
+    return box.child(svg("mods/orca-assets/agent-working-spinner.svg").size(6).flex_none().text_color(t.working).spin(1000));
   }
   if (status === "blocked") {
-    return box.child(svg("mods/orca-float-workspace/message-circle-question.svg").size(10).flex_none().text_color(t.blocked));
+    return box.child(svg("mods/orca-assets/message-circle-question.svg").size(10).flex_none().text_color(t.blocked));
   }
   if (status === "done") {
-    return box.child(svg("mods/orca-float-workspace/circle-check.svg").size(10).flex_none().text_color(t.done));
+    return box.child(svg("mods/orca-assets/circle-check.svg").size(10).flex_none().text_color(t.done));
   }
   return box.child(div().size(6).rounded_full().flex_none().bg(t.idle + IDLE_ALPHA));
 }
@@ -59,16 +59,16 @@ function stateDot(status, t) {
 const OWN_FILLS = new Set(["omp", "droid", "kilo"]);
 const AGENT_MARKS = {
   codex: "mono",
-  omp: "mods/orca-float-workspace/agent-icons/omp.svg",
-  gemini: "mods/orca-float-workspace/agent-icons/gemini.png",
-  cursor: "mods/orca-float-workspace/agent-icons/cursor.png",
-  grok: "mods/orca-float-workspace/agent-icons/grok.png",
-  qoder: "mods/orca-float-workspace/agent-icons/qoder.png",
-  hermes: "mods/orca-float-workspace/agent-icons/hermes.png",
-  "dsh-tui": "mods/orca-float-workspace/agent-icons/dsh.png",
-  droid: "mods/orca-float-workspace/agent-icons/droid.svg",
-  kilo: "mods/orca-float-workspace/agent-icons/kilo.svg",
-  aider: "mods/orca-float-workspace/agent-icons/aider.svg",
+  omp: "mods/orca-assets/omp.svg",
+  gemini: "mods/orca-assets/gemini.png",
+  cursor: "mods/orca-assets/cursor.png",
+  grok: "mods/orca-assets/grok.png",
+  qoder: "mods/orca-assets/qoder.png",
+  hermes: "mods/orca-assets/hermes.png",
+  "dsh-tui": "mods/orca-assets/dsh.png",
+  droid: "mods/orca-assets/droid.svg",
+  kilo: "mods/orca-assets/kilo.svg",
+  aider: "mods/orca-assets/aider.svg",
 };
 // `mono` is Orca's one-color Codex glyph; the program table supplies it.
 function agentMark(a, t) {
@@ -186,9 +186,9 @@ export default class FloatWorkspace extends View {
     const empty = v_flex().size_full().items_center().justify_center()
       .child(v_flex().w(360).items_center().gap(6)
         .child(h_flex().h(32).w_full().px(12).gap(10).rounded(6).items_center()
-          .child(div().flex_none().opacity(0.9).text_color(t.foreground).child(svg("mods/orca-float-workspace/terminal-square.svg").size(14)))
+          .child(div().flex_none().opacity(0.9).text_color(t.foreground).child(svg("mods/orca-assets/terminal-square.svg").size(14)))
           .child(div().min_w(0).truncate().text_size(14).line_height("14px").text_color(t.foreground).child("No live agent sessions")))
-        .child(emptyRow(t, { id: "orca-float-new", icon: "mods/orca-float-workspace/terminal-square.svg", label: "New Terminal", a11y: "New terminal", chord: newTabChord,
+        .child(emptyRow(t, { id: "orca-float-new", icon: "mods/orca-assets/terminal-square.svg", label: "New Terminal", a11y: "New terminal", chord: newTabChord,
           onClick: (_e, cx) => {
             // Same pinned working directory as ⌘T and the "+" menu (docs/plan-tab-cwd.md).
             const space = spaces().find((s) => s.active);
@@ -197,7 +197,7 @@ export default class FloatWorkspace extends View {
           } }))
         // `ShortcutKeyCombo` (`:135-152`) draws the chord as keycaps; the chord text alone
         // carries the same hint without a second chrome component.
-        .child(emptyRow(t, { id: "orca-float-minimize", icon: "mods/orca-float-workspace/minus.svg", label: "Minimize", a11y: "Minimize floating workspace", chord: toggleChord,
+        .child(emptyRow(t, { id: "orca-float-minimize", icon: "mods/orca-assets/minus--orca-float-workspace.svg", label: "Minimize", a11y: "Minimize floating workspace", chord: toggleChord,
           onClick: (_e, cx) => this.setOpen(false, cx) })));
     return v_flex().id("orca-float-workspace").w(w).h(h).min_h(0).overflow_hidden().text_color(t.foreground)
       // Orca's floating title bar (`FloatingTerminalPanelSurface.tsx:116-117`): `h-9`
@@ -218,7 +218,7 @@ export default class FloatWorkspace extends View {
           .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
           .role("button").accessibility_label("Start an agent")
           .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }))
-          .child(svg("mods/orca-float-workspace/plus.svg").size(14).flex_none()))
+          .child(svg("mods/orca-assets/plus--orca-float-workspace.svg").size(14).flex_none()))
         // Minimize's `icon-xs` outline button: `size-6 rounded-md` (`button.tsx:41`),
         // `border-border bg-secondary hover:bg-accent` (`FloatingTerminalWindowControls.tsx:25-26`).
         .child(div().id("orca-float-close").size(24).flex_none().flex().items_center().justify_center().rounded(6)

@@ -3342,7 +3342,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -4038,7 +4038,7 @@
                                 {
                                  "n": "svg",
                                  "a": [
-                                  "mods/orca-agent-flyout/circle.svg"
+                                  "mods/orca-assets/circle.svg"
                                  ],
                                  "c": [
                                   [
@@ -4243,7 +4243,7 @@
                                 {
                                  "n": "svg",
                                  "a": [
-                                  "mods/orca-agent-flyout/hard-drive.svg"
+                                  "mods/orca-assets/hard-drive.svg"
                                  ],
                                  "c": [
                                   [
@@ -4421,7 +4421,7 @@
                                 {
                                  "n": "svg",
                                  "a": [
-                                  "mods/orca-agent-flyout/plus.svg"
+                                  "mods/orca-assets/plus--orca-agent-flyout.svg"
                                  ],
                                  "c": [
                                   [
@@ -7390,7 +7390,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -8683,7 +8683,7 @@
                                 {
                                  "n": "svg",
                                  "a": [
-                                  "mods/orca-agent-flyout/eye.svg"
+                                  "mods/orca-assets/eye--orca-agent-flyout.svg"
                                  ],
                                  "c": [
                                   [
@@ -11236,7 +11236,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -11529,7 +11529,7 @@
              {
               "n": "svg",
               "a": [
-               "mods/orca-agent-flyout/rotate-ccw.svg"
+               "mods/orca-assets/rotate-ccw--orca-agent-flyout.svg"
               ],
               "c": [
                [
@@ -12759,7 +12759,7 @@
                    {
                     "n": "svg",
                     "a": [
-                     "mods/orca-agent-flyout/save.svg"
+                     "mods/orca-assets/save.svg"
                     ],
                     "c": [
                      [
@@ -13089,7 +13089,7 @@
                    {
                     "n": "svg",
                     "a": [
-                     "mods/orca-agent-flyout/save.svg"
+                     "mods/orca-assets/save.svg"
                     ],
                     "c": [
                      [
@@ -13291,7 +13291,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -13584,7 +13584,7 @@
              {
               "n": "svg",
               "a": [
-               "mods/orca-agent-flyout/rotate-ccw.svg"
+               "mods/orca-assets/rotate-ccw--orca-agent-flyout.svg"
               ],
               "c": [
                [
@@ -15101,7 +15101,7 @@
                    {
                     "n": "svg",
                     "a": [
-                     "mods/orca-agent-flyout/save.svg"
+                     "mods/orca-assets/save.svg"
                     ],
                     "c": [
                      [
@@ -15431,7 +15431,7 @@
                    {
                     "n": "svg",
                     "a": [
-                     "mods/orca-agent-flyout/save.svg"
+                     "mods/orca-assets/save.svg"
                     ],
                     "c": [
                      [
@@ -15633,7 +15633,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -18190,7 +18190,7 @@
                    {
                     "n": "svg",
                     "a": [
-                     "mods/orca-agent-flyout/save.svg"
+                     "mods/orca-assets/save.svg"
                     ],
                     "c": [
                      [
@@ -18392,7 +18392,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -21236,7 +21236,7 @@
                    {
                     "n": "svg",
                     "a": [
-                     "mods/orca-agent-flyout/save.svg"
+                     "mods/orca-assets/save.svg"
                     ],
                     "c": [
                      [
@@ -21438,7 +21438,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -22200,7 +22200,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -23361,7 +23361,7 @@
                                 {
                                  "n": "svg",
                                  "a": [
-                                  "mods/orca-agent-flyout/eye.svg"
+                                  "mods/orca-assets/eye--orca-agent-flyout.svg"
                                  ],
                                  "c": [
                                   [
@@ -23559,7 +23559,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [
@@ -25262,7 +25262,7 @@
                                 {
                                  "n": "svg",
                                  "a": [
-                                  "mods/orca-agent-flyout/eye.svg"
+                                  "mods/orca-assets/eye--orca-agent-flyout.svg"
                                  ],
                                  "c": [
                                   [
@@ -25460,7 +25460,7 @@
          {
           "n": "svg",
           "a": [
-           "mods/orca-agent-flyout/square-terminal.svg"
+           "mods/orca-assets/square-terminal--orca-agent-flyout.svg"
           ],
           "c": [
            [

@@ -5,7 +5,6 @@
 // `node scripts/build-orca-ui.mjs --out .` writes the copies the two mods import.
 
 export const OMLX = "omlx";
-export const GROQ = "groq";
 /** In appHome(): holds the provider record, mode 0600. */
 export const PROVIDER_FILE = "model-providers.json";
 
@@ -24,7 +23,8 @@ export const TEST_ERRORS = {
  * list, and it always comes from the same record as the host.
  */
 export const WRAPPER = `export OMLX_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
-export const PI_GROQ_WRAPPER = `export GROQ_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
+export const PROVIDER_KEY_WRAPPER = `export HERDR_PROVIDER_API_KEY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
+export const CLAUDE_PROVIDER_WRAPPER = `export ANTHROPIC_AUTH_TOKEN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["apiKey"])' "$1" "$2")"; shift 2; exec "$@"`;
 
 const HOST_ERROR = "Enter a host like http://127.0.0.1:8000/v1";
 
@@ -40,17 +40,60 @@ export function validateHost(text) {
   return { host };
 }
 
-/** Pi has a built-in Groq provider; its custom provider catalog is not managed by Herdr. */
-export function supportsPiProvider(provider) {
-  return validateHost(provider?.host).host === "https://api.groq.com/openai/v1";
+/** Launch Pi through a one-run provider extension, keeping the saved key out of argv/config files. */
+export function launchPiArgv(baseArgv, provider, model, extensionPath) {
+  const argv = [...(baseArgv ?? [])];
+  if (!provider) return argv;
+  const [command, ...rest] = argv;
+  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id))];
+  return [
+    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id,
+    "env", `HERDR_PI_BASE_URL=${provider.host}`, `HERDR_PI_MODELS=${JSON.stringify(models)}`,
+    command, ...rest, "--provider", "herdr", "--model", model, "--extension", extensionPath,
+  ];
 }
 
-/** Launch Pi through its native Groq provider, keeping the saved key out of argv. */
-export function launchPiArgv(baseArgv, provider, model) {
+/** Claude Code expects an Anthropic-compatible endpoint and bearer token for the selected provider. */
+export function launchClaudeArgv(baseArgv, provider, model) {
   const argv = [...(baseArgv ?? [])];
-  if (!provider || !supportsPiProvider(provider)) return argv;
+  if (!provider) return argv;
   const [command, ...rest] = argv;
-  return ["/bin/sh", "-c", PI_GROQ_WRAPPER, "--", provider.configPath, provider.id ?? GROQ, command, ...rest, "--provider", GROQ, "--model", model];
+  return [
+    "/bin/sh", "-c", CLAUDE_PROVIDER_WRAPPER, "--", provider.configPath, provider.id,
+    "env", `ANTHROPIC_BASE_URL=${provider.host}`, command, ...rest, "--model", model,
+  ];
+}
+
+/** Build OpenCode's per-run custom OpenAI-compatible provider without persisting credentials. */
+export function launchOpenCodeArgv(baseArgv, provider, model) {
+  const argv = [...(baseArgv ?? [])];
+  if (!provider) return argv;
+  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id))];
+  const selected = models.indexOf(model);
+  const entries = Object.fromEntries(models.map((id, index) => [`model-${index + 1}`, {
+    name: id,
+    modelID: id,
+    capabilities: { tools: true, input: ["text"], output: ["text"] },
+  }]));
+  const config = {
+    "$schema": "https://opencode.ai/config.json",
+    model: `herdr/model-${selected + 1}`,
+    providers: {
+      herdr: {
+        name: provider.name,
+        env: ["HERDR_PROVIDER_API_KEY"],
+        package: "@opencode/ai/providers/openai-compatible",
+        settings: { baseURL: provider.host },
+        models: entries,
+      },
+    },
+  };
+  // The normal OpenCode wrapper is `env OPENCODE_CONFIG_CONTENT=... opencode ...`; replace only
+  // that default config while keeping the command and standalone suffix from the spec.
+  return [
+    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id,
+    "env", `OPENCODE_CONFIG_CONTENT=${JSON.stringify(config)}`, ...argv.slice(2),
+  ];
 }
 
 const GITHUB_OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;

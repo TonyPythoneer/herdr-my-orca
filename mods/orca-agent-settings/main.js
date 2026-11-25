@@ -1576,7 +1576,7 @@ export default class AgentManager extends View {
     return div().w_full().flex_none().rounded(10).border_1().border_color(t.border).bg(t.surface).child(
       h_flex().w_full().h(LIST_ROW_HEIGHT - 12).my(6).px(18).gap(12).items_center()
         .child(h_flex().w(32).h(32).flex_none().items_center().justify_center().rounded(8).border_1().border_color(t.border)
-          .child(icon({ name: "freebuff", icon: "mods/orca-new-menu/freebuff.png" }, 18, t)))
+          .child(icon({ name: "freebuff", icon: "mods/orca-assets/freebuff--orca-new-menu.png" }, 18, t)))
         .child(v_flex().flex_1().min_w(0).gap(3)
           .child(div().text_size(13).font_medium().text_color(t.foreground).child("freebuff"))
           .child(div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted).child("freebuff")))
@@ -1656,7 +1656,7 @@ export default class AgentManager extends View {
     const configured = this.programsText === undefined ? null : readRunOverride(this.programsText, "freebuff").run;
     const installed = typeof this.freebuffInstalled === "boolean" ? this.freebuffInstalled : agent?.installed;
     return [{
-      key: "freebuff", name: "FreeBuff CLI", icon: "mods/orca-new-menu/freebuff.png",
+      key: "freebuff", name: "FreeBuff CLI", icon: "mods/orca-assets/freebuff--orca-new-menu.png",
       homepage: "https://github.com/CodebuffAI/freebuff#quick-start",
       // Match the existing Start an agent integration, including a configured command.
       run: configured ?? agent?.run ?? ["zsh", "-lic", "exec freebuff"],
@@ -1695,13 +1695,15 @@ export default class AgentManager extends View {
   }
 
   readonlyCommand(argv, t) {
-    const command = formatArgv(argv);
+    const previewArgv = this.herdrEnv ? ["env", "HERDR_ENV=1", ...argv] : argv;
+    const command = formatArgv(previewArgv);
     return v_flex().w_full().gap(6)
       .child(h_flex().items_center().gap(8)
         .child(div().flex_1().font_semibold().text_color(t.foreground).child("Preview command"))
         .child(this.button("am-copy-command", "Copy", t, (_e,cx) => copyText(command,cx), { height: 24, px: 8 })))
       .child(div().w_full().p(10).rounded(8).border_1().border_color(t.border).bg(t.surface)
-        .font_family(settings()?.font_family ?? "JetBrains Mono").text_size(11).text_color(t.foreground).child(command));
+        .font_family(settings()?.font_family ?? "JetBrains Mono").text_size(11).text_color(t.foreground).child(command))
+      .child(div().text_size(10).text_color(this.herdrEnv ? t.done : t.dim).child(this.herdrEnv ? "HERDR_ENV=1" : "HERDR_ENV: not set"));
   }
 
   installationStatus(row) {
@@ -1752,6 +1754,7 @@ export default class AgentManager extends View {
     const harness = this.harnessFor(row, cx);
     if (!harness) return empty("Loading harness settings…", t);
     if (harness.initError) return empty(harness.initError, t);
+    harness.settingsContext.herdrEnv = this.herdrEnv;
     return harness.renderSettings(t, cx, { argv: row.run, format: formatArgv, copy: copyText, enabled: row.enabled });
   }
 
