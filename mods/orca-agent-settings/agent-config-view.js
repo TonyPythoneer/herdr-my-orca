@@ -10,7 +10,7 @@
 import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
-import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, serializeProviderFile, validateHost, writeProviderFile } from "./codex-provider.js";
+import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, piModelLimits, serializeProviderFile, supportsCodingModel, validateHost, writeProviderFile } from "./codex-provider.js";
 import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
 
@@ -309,7 +309,9 @@ class AgentConfigCore {
   activeModels() {
     if (!this.spec.options.provider || this.providerId === "none") return this.models;
     const record = this.providers[this.providerId];
-    return (record?.models ?? []).map((id) => ({ id, label: id, efforts: [] }));
+    return (record?.models ?? [])
+      .filter((id) => this.key === "pi" ? supportsCodingModel(record.modelInfo?.[id]) && piModelLimits(record.modelInfo?.[id]) !== null : this.key !== "opencode" || supportsCodingModel(record.modelInfo?.[id]))
+      .map((id) => ({ id, label: id, efforts: [] }));
   }
 
   // None keeps the agent's model; a provider keeps its model in the provider's own record.
@@ -338,7 +340,7 @@ class AgentConfigCore {
       if (!record) return; // deleted while this flyout was open
       record.selectedModel = { ...(record.selectedModel ?? {}), [key]: model };
       try {
-        await writeProviderFile(file, serializeProviderFile(parsed.providers), text, { appHome, exec, writeTextFile });
+        await writeProviderFile({ appHome, exec, readTextFile, writeTextFile }, serializeProviderFile(parsed.providers), text);
       } catch { /* the provider file could not be saved: the choice is kept in memory only */ }
     });
   }
@@ -622,8 +624,9 @@ class AgentConfigCore {
     if (this.key === "pi") {
       const model = preview ? values.model : this.model;
       const info = record.modelInfo?.[model];
-      if (!Number.isSafeInteger(info?.contextWindow) || info.contextWindow < 1 || !Number.isSafeInteger(info?.maxTokens) || info.maxTokens < 1) {
-        return { error: "Pi needs context and output limits from this provider's /models list. Re-test the provider to refresh its model details." };
+      if (!supportsCodingModel(info)) return { error: "Pi needs a text model with tool support." };
+      if (!piModelLimits(info)) {
+        return { error: "Pi needs a known context limit above 16,384 tokens and an output limit that fits it." };
       }
       return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
     }
@@ -631,7 +634,9 @@ class AgentConfigCore {
       return { argv: launchClaudeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
     }
     if (this.key === "opencode") {
-      return { argv: launchOpenCodeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
+      const model = preview ? values.model : this.model;
+      if (!supportsCodingModel(record.modelInfo?.[model])) return { error: "OpenCode needs a text model with tool support." };
+      return { argv: launchOpenCodeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model) };
     }
     // Codex adds no effort flag; its model flag is placed by launchArgv.
     return { argv: launchArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };

@@ -41,7 +41,6 @@ export function validateHost(text) {
   }
   return { host };
 }
-
 /** Drop only models whose catalog explicitly rules out text chat or tool calls. */
 export function supportsCodingModel(info) {
   if (!info || typeof info !== "object") return true;
@@ -49,6 +48,14 @@ export function supportsCodingModel(info) {
   if (Array.isArray(info.outputModalities) && !info.outputModalities.includes("text")) return false;
   if (Array.isArray(info.supportedFeatures) && !info.supportedFeatures.some((feature) => feature === "tools" || feature === "tool_use")) return false;
   return true;
+}
+
+export function piModelLimits(info) {
+  const contextWindow = info?.contextWindow;
+  if (!Number.isSafeInteger(contextWindow) || contextWindow <= PI_COMPACTION_RESERVE) return null;
+  // shortcut: when /models omits an output cap, bound it to 8K or the known context, until the provider publishes one.
+  const maxTokens = Number.isSafeInteger(info.maxTokens) && info.maxTokens > 0 ? info.maxTokens : Math.min(UNKNOWN_OUTPUT_CAP, contextWindow);
+  return maxTokens <= contextWindow ? { contextWindow, maxTokens } : null;
 }
 
 /** Launch Pi through a one-run provider extension, keeping the saved key out of argv/config files. */
@@ -59,11 +66,9 @@ export function launchPiArgv(baseArgv, provider, model, extensionPath) {
   const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id && supportsCodingModel(provider.modelInfo?.[id])))];
   const modelInfo = Object.fromEntries(models.flatMap((id) => {
     const info = provider.modelInfo && Object.hasOwn(provider.modelInfo, id) ? provider.modelInfo[id] : null;
-    const context = Number.isSafeInteger(info?.contextWindow) && info.contextWindow > PI_COMPACTION_RESERVE ? info.contextWindow : null;
-    if (!context) return [];
-    // shortcut: when /models omits an output cap, bound it to 8K or the known context, until the provider publishes one.
-    const output = Number.isSafeInteger(info.maxTokens) && info.maxTokens > 0 ? info.maxTokens : Math.min(UNKNOWN_OUTPUT_CAP, context);
-    return [[id, { ...info, contextWindow: context, maxTokens: output }]];
+    const limits = piModelLimits(info);
+    if (!limits) return [];
+    return [[id, { ...info, ...limits }]];
   }));
   return [
     "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
@@ -92,7 +97,7 @@ export function launchOpenCodeArgv(baseArgv, provider, model) {
   const entries = Object.fromEntries(models.map((id, index) => {
     const info = provider.modelInfo && Object.hasOwn(provider.modelInfo, id) ? provider.modelInfo[id] : {};
     const context = Number.isSafeInteger(info?.contextWindow) && info.contextWindow > 0 ? info.contextWindow : undefined;
-    // shortcut: OpenCode needs both limits; cap unknown output at 8K or the known context until /models reports it.
+    // shortcut: OpenCode requires both limits; cap unknown output at 8K or the known context until /models reports it.
     const output = context ? (Number.isSafeInteger(info?.maxTokens) && info.maxTokens > 0 ? Math.min(info.maxTokens, context) : Math.min(UNKNOWN_OUTPUT_CAP, context)) : undefined;
     return [`model-${index + 1}`, {
       name: id,
@@ -220,27 +225,29 @@ export function judgeModels(status, body) {
     const data = answer?.data;
     if (!Array.isArray(data)) return { ok: false, error: TEST_ERRORS.notModelServer };
     const entries = data.filter((entry) => typeof entry === "string" || (entry && typeof entry === "object" && !Array.isArray(entry)));
-    const models = entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== "");
+    const models = [...new Set(entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== ""))];
     if (models.length === 0) return { ok: false, error: TEST_ERRORS.empty };
-    const modelInfo = {};
+    const modelInfo = Object.create(null);
     for (const entry of entries) {
       if (typeof entry === "string" || !models.includes(entry.id)) continue;
       const positive = (...values) => values.find((value) => typeof value === "number" && Number.isSafeInteger(value) && value > 0);
-      const contextWindow = positive(entry.context_window, entry.contextWindow, entry.max_model_len);
-      const maxTokens = positive(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens);
-      const inputModalities = Array.isArray(entry.input_modalities) ? entry.input_modalities.filter((value) => typeof value === "string") : undefined;
-      const outputModalities = Array.isArray(entry.output_modalities) ? entry.output_modalities.filter((value) => typeof value === "string") : undefined;
-      const supportedFeatures = Array.isArray(entry.supported_features) ? entry.supported_features.filter((value) => typeof value === "string") : undefined;
-      if (contextWindow || maxTokens || inputModalities || outputModalities || supportedFeatures) Object.defineProperty(modelInfo, entry.id, {
-        value: {
-          ...(contextWindow ? { contextWindow } : {}),
-          ...(maxTokens ? { maxTokens } : {}),
-          ...(inputModalities ? { inputModalities } : {}),
-          ...(outputModalities ? { outputModalities } : {}),
-          ...(supportedFeatures ? { supportedFeatures } : {}),
-        },
-        enumerable: true,
-      });
+      const topProvider = entry.top_provider && typeof entry.top_provider === "object" ? entry.top_provider : {};
+      const architecture = entry.architecture && typeof entry.architecture === "object" ? entry.architecture : {};
+      const contextWindow = positive(entry.context_window, entry.contextWindow, entry.max_model_len, entry.context_length, topProvider.context_length);
+      const maxTokens = positive(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens, entry.max_output_length, topProvider.max_completion_tokens);
+      const inputValues = entry.input_modalities ?? architecture.input_modalities;
+      const outputValues = entry.output_modalities ?? architecture.output_modalities;
+      const inputModalities = Array.isArray(inputValues) ? inputValues.filter((value) => typeof value === "string") : undefined;
+      const outputModalities = Array.isArray(outputValues) ? outputValues.filter((value) => typeof value === "string") : undefined;
+      const features = Array.isArray(entry.supported_features) ? entry.supported_features.filter((value) => typeof value === "string")
+        : Array.isArray(entry.supported_parameters) ? (entry.supported_parameters.includes("tools") ? ["tools"] : []) : undefined;
+      if (contextWindow || maxTokens || inputModalities || outputModalities || features) modelInfo[entry.id] = {
+        ...(contextWindow ? { contextWindow } : {}),
+        ...(maxTokens ? { maxTokens } : {}),
+        ...(inputModalities ? { inputModalities } : {}),
+        ...(outputModalities ? { outputModalities } : {}),
+        ...(features ? { supportedFeatures: features } : {}),
+      };
     }
     return { ok: true, models, ...(Object.keys(modelInfo).length ? { modelInfo } : {}) };
   }
@@ -257,6 +264,8 @@ export function launchArgv(baseArgv, provider, model) {
   const argv = [...(baseArgv ?? [])];
   if (!provider) return argv;
   const [command, ...rest] = argv;
+  const contextWindow = provider.modelInfo?.[model]?.contextWindow;
+  const contextOverride = Number.isSafeInteger(contextWindow) && contextWindow > 0 ? ["-c", `model_context_window=${contextWindow}`] : [];
   return [
     "/bin/sh",
     "-c",
@@ -276,6 +285,7 @@ export function launchArgv(baseArgv, provider, model) {
     // config string. Only the wrapper's argument (data) carries the id.
     "-c",
     'model_provider="omlx"',
+    ...contextOverride,
     "-c",
     'model_providers.omlx.name="oMLX"',
     "-c",
@@ -304,8 +314,47 @@ export function serializeProviderFile(providers) {
   return `${JSON.stringify(providers ?? {}, null, 2)}\n`;
 }
 
-/**
- * Replace the provider file atomically while preserving its expected-content check. The key is
- * staged only inside a mode-0700 directory, and the installed file is mode 0600 before it appears
- * at its destination. A shared flock serializes writes from Settings and the agent flyout.
- */
+/** Compare and replace the key file under one persistent lock inode. */
+export async function writeProviderFile({ appHome, exec, writeTextFile }, text, expected) {
+  const home = typeof appHome === "function" ? appHome() : appHome;
+  const file = `${home}/${PROVIDER_FILE}`;
+  const lock = `${file}.lock`;
+  const made = await exec("mktemp", ["-d", `${home}/.provider-write.XXXXXX`]);
+  const dir = String(made?.stdout ?? "").trim();
+  if (made?.code !== 0 || !dir.startsWith(`${home}/.provider-write.`)) throw new Error("Could not create private provider staging directory.");
+  const staged = `${dir}/${PROVIDER_FILE}`;
+  const expectedFile = `${dir}/expected`;
+  try {
+    const privateDir = await exec("chmod", ["700", dir]);
+    if (privateDir?.code !== 0) throw new Error("Could not secure provider staging directory.");
+    await writeTextFile(staged, text, null);
+    const privateFile = await exec("chmod", ["600", staged]);
+    if (privateFile?.code !== 0) throw new Error("Could not secure staged provider file.");
+    if (expected !== null) {
+      await writeTextFile(expectedFile, expected, null);
+      const privateExpected = await exec("chmod", ["600", expectedFile]);
+      if (privateExpected?.code !== 0) throw new Error("Could not secure provider snapshot.");
+    }
+    const python = [
+      "import fcntl, os, sys",
+      "lock_path, target, staged, expected_path, absent = sys.argv[1:]",
+      "fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)",
+      "os.fchmod(fd, 0o600)",
+      "with os.fdopen(fd, 'r+b') as lock_file:",
+      "    fcntl.flock(lock_file, fcntl.LOCK_EX)",
+      "    if absent == '1':",
+      "        try: os.stat(target)",
+      "        except FileNotFoundError: pass",
+      "        else: raise SystemExit('provider file already exists')",
+      "    else:",
+      "        with open(target, 'rb') as current_file: current = current_file.read()",
+      "        with open(expected_path, 'rb') as expected_file: previous = expected_file.read()",
+      "        if current != previous: raise SystemExit('provider file changed')",
+      "    os.replace(staged, target)",
+    ].join("\n");
+    const replaced = await exec("python3", ["-c", python, lock, file, staged, expected === null ? "" : expectedFile, expected === null ? "1" : "0"]);
+    if (replaced?.code !== 0) throw new Error("Provider file changed or could not be installed.");
+  } finally {
+    await exec("rm", ["-rf", dir]).catch(() => {});
+  }
+}

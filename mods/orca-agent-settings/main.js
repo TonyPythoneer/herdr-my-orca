@@ -1393,7 +1393,7 @@ export default class AgentManager extends View {
     parsed.providers[id] = record;
     const next = serializeProviderFile(parsed.providers);
     try {
-      await writeProviderFile(PROVIDERS, next, text, { appHome, exec, writeTextFile });
+      await writeProviderFile({ appHome, exec, readTextFile, writeTextFile }, next, text);
     } catch {
       return this.showCardStatus(card, null, "blocked", "Could not write model-providers.json.");
     }
@@ -1416,7 +1416,7 @@ export default class AgentManager extends View {
     delete parsed.providers[card.id];
     const next = serializeProviderFile(parsed.providers);
     try {
-      await writeProviderFile(PROVIDERS, next, text, { appHome, exec, writeTextFile });
+      await writeProviderFile({ appHome, exec, readTextFile, writeTextFile }, next, text);
     } catch {
       return this.showCardStatus(card, cx, "blocked", "Could not write model-providers.json.");
     }

@@ -64,6 +64,15 @@ test("launchArgv keeps today's argv when no provider is chosen", () => {
   assert.notEqual(launchArgv(baseArgv, null, "gpt-5"), baseArgv);
 });
 
+test("launchArgv passes a known model context limit and leaves unknown limits alone", () => {
+  const known = launchArgv(baseArgv, { ...provider, modelInfo: { m: { contextWindow: 131072 } } }, "m");
+  assert.ok(known.includes("model_context_window=131072"));
+  for (const contextWindow of [undefined, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    const argv = launchArgv(baseArgv, { ...provider, modelInfo: { m: { contextWindow } } }, "m");
+    assert.equal(argv.some((part) => part.startsWith("model_context_window=")), false);
+  }
+});
+
 test("launchArgv wraps Codex for oMLX and keeps the flag order from the design", () => {
   const argv = launchArgv(baseArgv, provider, "mlx-community--LFM2-VL-450M-4bit");
   assert.deepEqual(argv, [

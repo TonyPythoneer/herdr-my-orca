@@ -5,6 +5,8 @@
 // `node scripts/build-orca-ui.mjs --out .` writes the copies the two mods import.
 
 export const OMLX = "omlx";
+const PI_COMPACTION_RESERVE = 16384;
+const UNKNOWN_OUTPUT_CAP = 8192;
 /** In appHome(): holds the provider record, mode 0600. */
 export const PROVIDER_FILE = "model-providers.json";
 
@@ -39,14 +41,35 @@ export function validateHost(text) {
   }
   return { host };
 }
+/** Drop only models whose catalog explicitly rules out text chat or tool calls. */
+export function supportsCodingModel(info) {
+  if (!info || typeof info !== "object") return true;
+  if (Array.isArray(info.inputModalities) && !info.inputModalities.includes("text")) return false;
+  if (Array.isArray(info.outputModalities) && !info.outputModalities.includes("text")) return false;
+  if (Array.isArray(info.supportedFeatures) && !info.supportedFeatures.some((feature) => feature === "tools" || feature === "tool_use")) return false;
+  return true;
+}
+
+export function piModelLimits(info) {
+  const contextWindow = info?.contextWindow;
+  if (!Number.isSafeInteger(contextWindow) || contextWindow <= PI_COMPACTION_RESERVE) return null;
+  // shortcut: when /models omits an output cap, bound it to 8K or the known context, until the provider publishes one.
+  const maxTokens = Number.isSafeInteger(info.maxTokens) && info.maxTokens > 0 ? info.maxTokens : Math.min(UNKNOWN_OUTPUT_CAP, contextWindow);
+  return maxTokens <= contextWindow ? { contextWindow, maxTokens } : null;
+}
 
 /** Launch Pi through a one-run provider extension, keeping the saved key out of argv/config files. */
 export function launchPiArgv(baseArgv, provider, model, extensionPath) {
   const argv = [...(baseArgv ?? [])];
   if (!provider) return argv;
   const [command, ...rest] = argv;
-  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id))];
-  const modelInfo = Object.fromEntries(models.filter((id) => provider.modelInfo?.[id]).map((id) => [id, provider.modelInfo[id]]));
+  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id && supportsCodingModel(provider.modelInfo?.[id])))];
+  const modelInfo = Object.fromEntries(models.flatMap((id) => {
+    const info = provider.modelInfo && Object.hasOwn(provider.modelInfo, id) ? provider.modelInfo[id] : null;
+    const limits = piModelLimits(info);
+    if (!limits) return [];
+    return [[id, { ...info, ...limits }]];
+  }));
   return [
     "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
     "env", `HERDR_PI_BASE_URL=${provider.host}`, `HERDR_PI_MODELS=${JSON.stringify(models)}`, `HERDR_PI_MODEL_INFO=${JSON.stringify(modelInfo)}`,
@@ -69,19 +92,20 @@ export function launchClaudeArgv(baseArgv, provider, model) {
 export function launchOpenCodeArgv(baseArgv, provider, model) {
   const argv = [...(baseArgv ?? [])];
   if (!provider) return argv;
-  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id))];
+  const models = [...new Set([...(provider.models ?? []), model].filter((id) => typeof id === "string" && id && supportsCodingModel(provider.modelInfo?.[id])))];
   const selected = models.indexOf(model);
-  const entries = Object.fromEntries(models.map((id, index) => [`model-${index + 1}`, {
-    name: id,
-    modelID: id,
-    capabilities: { tools: true, input: ["text"], output: ["text"] },
-    ...((provider.modelInfo?.[id]?.contextWindow || provider.modelInfo?.[id]?.maxTokens) ? {
-      limit: {
-        ...(provider.modelInfo[id].contextWindow ? { context: provider.modelInfo[id].contextWindow } : {}),
-        ...(provider.modelInfo[id].maxTokens ? { output: provider.modelInfo[id].maxTokens } : {}),
-      },
-    } : {}),
-  }]));
+  const entries = Object.fromEntries(models.map((id, index) => {
+    const info = provider.modelInfo && Object.hasOwn(provider.modelInfo, id) ? provider.modelInfo[id] : {};
+    const context = Number.isSafeInteger(info?.contextWindow) && info.contextWindow > 0 ? info.contextWindow : undefined;
+    // shortcut: OpenCode requires both limits; cap unknown output at 8K or the known context until /models reports it.
+    const output = context ? (Number.isSafeInteger(info?.maxTokens) && info.maxTokens > 0 ? Math.min(info.maxTokens, context) : Math.min(UNKNOWN_OUTPUT_CAP, context)) : undefined;
+    return [`model-${index + 1}`, {
+      name: id,
+      modelID: id,
+      capabilities: { tools: true, input: ["text"], output: ["text"] },
+      ...(context && output ? { limit: { context, output } } : {}),
+    }];
+  }));
   const config = {
     "$schema": "https://opencode.ai/config.json",
     model: `herdr/model-${selected + 1}`,
@@ -201,17 +225,28 @@ export function judgeModels(status, body) {
     const data = answer?.data;
     if (!Array.isArray(data)) return { ok: false, error: TEST_ERRORS.notModelServer };
     const entries = data.filter((entry) => typeof entry === "string" || (entry && typeof entry === "object" && !Array.isArray(entry)));
-    const models = entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== "");
+    const models = [...new Set(entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== ""))];
     if (models.length === 0) return { ok: false, error: TEST_ERRORS.empty };
-    const modelInfo = {};
+    const modelInfo = Object.create(null);
     for (const entry of entries) {
       if (typeof entry === "string" || !models.includes(entry.id)) continue;
       const positive = (...values) => values.find((value) => typeof value === "number" && Number.isSafeInteger(value) && value > 0);
-      const contextWindow = positive(entry.context_window, entry.contextWindow, entry.max_model_len);
-      const maxTokens = positive(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens);
-      if (contextWindow || maxTokens) modelInfo[entry.id] = {
+      const topProvider = entry.top_provider && typeof entry.top_provider === "object" ? entry.top_provider : {};
+      const architecture = entry.architecture && typeof entry.architecture === "object" ? entry.architecture : {};
+      const contextWindow = positive(entry.context_window, entry.contextWindow, entry.max_model_len, entry.context_length, topProvider.context_length);
+      const maxTokens = positive(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens, entry.max_output_length, topProvider.max_completion_tokens);
+      const inputValues = entry.input_modalities ?? architecture.input_modalities;
+      const outputValues = entry.output_modalities ?? architecture.output_modalities;
+      const inputModalities = Array.isArray(inputValues) ? inputValues.filter((value) => typeof value === "string") : undefined;
+      const outputModalities = Array.isArray(outputValues) ? outputValues.filter((value) => typeof value === "string") : undefined;
+      const features = Array.isArray(entry.supported_features) ? entry.supported_features.filter((value) => typeof value === "string")
+        : Array.isArray(entry.supported_parameters) ? (entry.supported_parameters.includes("tools") ? ["tools"] : []) : undefined;
+      if (contextWindow || maxTokens || inputModalities || outputModalities || features) modelInfo[entry.id] = {
         ...(contextWindow ? { contextWindow } : {}),
         ...(maxTokens ? { maxTokens } : {}),
+        ...(inputModalities ? { inputModalities } : {}),
+        ...(outputModalities ? { outputModalities } : {}),
+        ...(features ? { supportedFeatures: features } : {}),
       };
     }
     return { ok: true, models, ...(Object.keys(modelInfo).length ? { modelInfo } : {}) };
@@ -229,6 +264,8 @@ export function launchArgv(baseArgv, provider, model) {
   const argv = [...(baseArgv ?? [])];
   if (!provider) return argv;
   const [command, ...rest] = argv;
+  const contextWindow = provider.modelInfo?.[model]?.contextWindow;
+  const contextOverride = Number.isSafeInteger(contextWindow) && contextWindow > 0 ? ["-c", `model_context_window=${contextWindow}`] : [];
   return [
     "/bin/sh",
     "-c",
@@ -248,6 +285,7 @@ export function launchArgv(baseArgv, provider, model) {
     // config string. Only the wrapper's argument (data) carries the id.
     "-c",
     'model_provider="omlx"',
+    ...contextOverride,
     "-c",
     'model_providers.omlx.name="oMLX"',
     "-c",
@@ -276,53 +314,48 @@ export function serializeProviderFile(providers) {
   return `${JSON.stringify(providers ?? {}, null, 2)}\n`;
 }
 
-/**
- * Replace the provider file atomically while preserving its expected-content check. The key is
- * staged only inside a mode-0700 directory, and the installed file is mode 0600 before it appears
- * at its destination. A shared flock serializes writes from Settings and the agent flyout.
- */
-export async function writeProviderFile(file, text, expected, { appHome, exec, writeTextFile }) {
-  const home = appHome();
-  if (file !== `${home}/${PROVIDER_FILE}`) throw new Error("Unexpected provider-file path.");
-  const made = await exec("mktemp", ["-d", `${home}/.provider-write.XXXXXX`], { timeout: 5000 });
-  const dir = String(made.stdout ?? "").trim();
-  if (made.code !== 0 || !dir.startsWith(`${home}/.provider-write.`)) {
-    throw new Error("Could not create a private provider-file directory.");
-  }
-
+/** Compare and replace the key file under one persistent lock inode. */
+export async function writeProviderFile({ appHome, exec, writeTextFile }, text, expected) {
+  const home = typeof appHome === "function" ? appHome() : appHome;
+  const file = `${home}/${PROVIDER_FILE}`;
+  const lock = `${file}.lock`;
+  const made = await exec("mktemp", ["-d", `${home}/.provider-write.XXXXXX`]);
+  const dir = String(made?.stdout ?? "").trim();
+  if (made?.code !== 0 || !dir.startsWith(`${home}/.provider-write.`)) throw new Error("Could not create private provider staging directory.");
+  const staged = `${dir}/${PROVIDER_FILE}`;
+  const expectedFile = `${dir}/expected`;
   try {
-    const staged = `${dir}/next.json`;
-    const snapshot = `${dir}/expected.json`;
+    const privateDir = await exec("chmod", ["700", dir]);
+    if (privateDir?.code !== 0) throw new Error("Could not secure provider staging directory.");
     await writeTextFile(staged, text, null);
-    if (expected !== null) await writeTextFile(snapshot, expected, null);
-    const script = [
-      "import fcntl, os, stat, sys",
-      "target, staged, snapshot, absent = sys.argv[1:]",
-      "lock = target + '.lock'",
-      "flags = os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0)",
-      "fd = os.open(lock, flags, 0o600)",
-      "try:",
-      " os.fchmod(fd, 0o600)",
-      " fcntl.flock(fd, fcntl.LOCK_EX)",
-      " try:",
-      "  try:",
-      "   current = os.lstat(target)",
-      "   if not stat.S_ISREG(current.st_mode): sys.exit(3)",
-      "   current_bytes = open(target, 'rb').read()",
-      "  except FileNotFoundError:",
-      "   current_bytes = None",
-      "  if absent == '1':",
-      "   if current_bytes is not None: sys.exit(4)",
-      "  elif current_bytes != open(snapshot, 'rb').read(): sys.exit(4)",
-      "  os.chmod(staged, 0o600)",
-      "  with open(staged, 'rb') as f: os.fsync(f.fileno())",
-      "  os.replace(staged, target)",
-      " finally: os.close(fd)",
+    const privateFile = await exec("chmod", ["600", staged]);
+    if (privateFile?.code !== 0) throw new Error("Could not secure staged provider file.");
+    if (expected !== null) {
+      await writeTextFile(expectedFile, expected, null);
+      const privateExpected = await exec("chmod", ["600", expectedFile]);
+      if (privateExpected?.code !== 0) throw new Error("Could not secure provider snapshot.");
+    }
+    const python = [
+      "import fcntl, os, sys",
+      "lock_path, target, staged, expected_path, absent = sys.argv[1:]",
+      "fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)",
+      "os.fchmod(fd, 0o600)",
+      "with os.fdopen(fd, 'r+b') as lock_file:",
+      "    fcntl.flock(lock_file, fcntl.LOCK_EX)",
+      "    if absent == '1':",
+      "        try: os.stat(target)",
+      "        except FileNotFoundError: pass",
+      "        else: raise SystemExit('provider file already exists')",
+      "    else:",
+      "        with open(target, 'rb') as current_file: current = current_file.read()",
+      "        with open(expected_path, 'rb') as expected_file: previous = expected_file.read()",
+      "        if current != previous: raise SystemExit('provider file changed')",
+      "    os.replace(staged, target)",
     ].join("\n");
-    const result = await exec("python3", ["-c", script, file, staged, snapshot, expected === null ? "1" : "0"], { timeout: 5000 });
-    if (result.code !== 0) throw new Error("Provider file changed or could not be written safely.");
+    const replaced = await exec("python3", ["-c", python, lock, file, staged, expected === null ? "" : expectedFile, expected === null ? "1" : "0"]);
+    if (replaced?.code !== 0) throw new Error("Provider file changed or could not be installed.");
   } finally {
-    await exec("rm", ["-rf", dir], { timeout: 5000 }).catch(() => {});
+    await exec("rm", ["-rf", dir]).catch(() => {});
   }
 }
 // Generated from orca-ui/shared/codex-provider.js by scripts/build-orca-ui.mjs. Edit that file, not this copy.
