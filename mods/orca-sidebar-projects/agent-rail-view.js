@@ -98,23 +98,27 @@ function railAction(owner, row, t, control, label) {
   return div().size(0);
 }
 
-// A group is a rounded folder holding its title and rows. The pills stay on the rail's left edge.
+// A Discord-style rounded group has a folder toggle at the top and agent tiles beneath it.
 function groupView(owner, title, rows, scroll, t) {
   const key = title === "Official" ? "officialRailOpen" : "unofficialRailOpen";
   const open = owner[key] !== false;
+  const action = `${open ? "Collapse" : "Expand"} ${title}`;
+  const medal = title === "Official" ? "🥇" : "🥉";
   const {height,scroll:overflow} = railViewport(rows.length);
   const id = "am-rail-list-" + title.toLowerCase();
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
     .child(v_flex().w(RAIL.width)
-      .child(div().id("am-rail-folder-" + title.toLowerCase()).h(32).w_full().flex().items_center().justify_center()
-        .gap(2).text_size(9).text_color(t.muted).cursor_pointer().role("button")
-        .accessibility_label(`${title} folder, ${open ? "collapse" : "expand"}`)
-        .tooltip(`${open ? "Collapse" : "Expand"} ${title}`)
+      .child(div().id("am-rail-folder-" + title.toLowerCase()).relative().w(RAIL.width).h(RAIL.row).flex_none()
+        .flex().items_center().justify_center().cursor_pointer().role("button")
+        .accessibility_label(action).tooltip(action)
         .on_click((_e,cx) => { owner[key] = !open; cx.notify(); })
-        .child(div().child(title))
-        .child(svg(`mods/orca-sidebar-projects/chevron-${open ? "down" : "right"}.svg`).size(9).flex_none().text_color(t.muted)))
-      .when(open, el => el.child(div().relative().w(RAIL.width).h(height).overflow_hidden()
+        .child(div().relative().size(32).flex().items_center().justify_center()
+          .child(svg("mods/orca-sidebar-projects/folder.svg").size(25).text_color(t.accent))
+          .child(div().absolute().right(-7).bottom(-6).text_size(14).child(medal))))
+      .child(div().relative().w(RAIL.width).h(open ? height : 0).overflow_hidden().transition("height", MOTION)
+        .opacity(open ? 1 : 0).transition("opacity", MOTION)
+        .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
         .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
           .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
           .children(railRows(rows).map(row => railItem(owner,row,t,t.surface)))))));

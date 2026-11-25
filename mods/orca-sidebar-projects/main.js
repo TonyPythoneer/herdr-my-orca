@@ -1016,8 +1016,8 @@ export default class Spaces extends View {
     return div().flex_none().flex().items_center().justify_center().pr(6)
       .child(tip({
         hot: this.hot, t, id: `pr-${id}`, label: `Open PR #${pr.number}`,
-        trigger: stop(this, t, `pr-${id}`, div().id(`pr-${id}`)
-          .cursor_pointer()
+        trigger: stop(this, t, `pr-${id}`, div().id(`pr-${id}`).size(20).flex_none().flex().items_center().justify_center().rounded(6)
+          .cursor_pointer().hover(s => s.bg("#404040b3"))
           // The badge is an action, not decoration: it opens the pull request's own page.
           // The card under it switches spaces, so the click must not reach that handler.
           .on_click((_e, cx) => { cx.stop_propagation(); this.openPR(pr, info); })
