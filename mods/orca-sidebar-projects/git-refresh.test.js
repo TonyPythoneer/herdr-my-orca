@@ -322,10 +322,15 @@ async function lookup(name, { list, code = 0, stdout, cache = {}, asking = [], b
   golden(`pr-${name}`, result);
   return result;
 }
-const pr = (over = {}) => ({ number: 7, title: 'T', state: 'open', head: { repo: { owner: { login: 'me' } } }, ...over });
+const pr = (over = {}) => {
+  const number = over.number ?? 7;
+  return { number, title: 'T', state: 'open', html_url: `https://github.com/me/proj/pull/${number}`, head: { repo: { owner: { login: 'me' } } }, ...over };
+};
 
 test('a branch review is read from REST, filtered to the origin owner and mapped to a state', async () => {
-  assert.equal((await lookup('open', { list: [pr()] })).cache.k.data.state, 'open');
+  const open = await lookup('open', { list: [pr()] });
+  assert.equal(open.cache.k.data.state, 'open');
+  assert.equal(open.cache.k.data.url, 'https://github.com/me/proj/pull/7');
   assert.equal((await lookup('prefers-open', { list: [pr({ state: 'closed', number: 9 }), pr()] })).cache.k.data.number, 7);
   assert.equal((await lookup('first-when-none-open', { list: [pr({ state: 'closed', number: 9 }), pr({ state: 'closed', number: 8 })] })).cache.k.data.number, 9);
   assert.equal((await lookup('merged', { list: [pr({ state: 'closed', merged_at: '2020' })] })).cache.k.data.state, 'merged');
@@ -516,6 +521,30 @@ test('a card selects, renames, drags, opens, toggles unread and expands its agen
   enterKey({ keystroke: 'enter' }, keyboard.cx);
   keyboard.view.card({ w: { ...w }, g, unopened: true, pos: 0 }, palette, [], []);
   golden('card-keyboard', keyboard.calls);
+});
+
+test('a review badge opens its pull request page without switching the card', () => {
+  const w = { id: 'pr1', name: 'card', folder: '/r', machine: null, tabs: [], status: 'idle' };
+  const repo = JSON.stringify([null, '/r/.git']);
+  const g = { branch: 'feat', top: '/r', linked: false, repo, base: 'me/proj' };
+  const seen = [];
+  const exec = (program, args) => { seen.push([program, args]); return Promise.resolve({ code: 0, stdout: '', stderr: '' }); };
+  const { view, cx, calls } = live({ spaces: [w], exec });
+  const cache = (data) => { view.prCache = { '/r/.git::feat': { data, at: Date.now() } }; };
+  const badge = () => handlers(view.card({ w, g, pos: 0 }, palette, [], []).__node).get('pr-pr1');
+  cache({ number: 7, title: 'T', state: 'open', url: 'https://github.com/me/proj/pull/7' });
+  fire(badge(), 'on_click', {}, cx);
+  assert.deepEqual([calls, seen], [[['stop']], [['xdg-open', ['https://github.com/me/proj/pull/7']]]]);
+  // An entry cached before `html_url` was recorded still opens the base repo's pull page.
+  cache({ number: 8, title: 'T', state: 'open' });
+  fire(badge(), 'on_click', {}, cx);
+  assert.deepEqual(seen.at(-1), ['xdg-open', ['https://github.com/me/proj/pull/8']]);
+  // Nothing to open (no URL and no base repo): no command, and no error.
+  cache({ number: 9, title: 'T', state: 'open' });
+  seen.length = 0;
+  const noBase = handlers(view.card({ w, g: { ...g, base: null }, pos: 0 }, palette, [], []).__node).get('pr-pr1');
+  fire(noBase, 'on_click', {}, cx);
+  assert.deepEqual(seen, []);
 });
 
 test('a project header opens its menus and folds, and a machine header folds, reconnects and adds', () => {

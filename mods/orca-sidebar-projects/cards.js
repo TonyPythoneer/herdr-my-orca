@@ -321,7 +321,7 @@ function cardText(owner, { w, g }, t, { title, metaText, metaMono, others, mine,
     .when(Boolean(metaText), el => el.child(h_flex().w_full().min_w(0).items_center()
       .child(div().min_w(0).truncate().text_size(11).line_height("11px").text_color(t.muted).when(metaMono, m => m.font_family("JetBrains Mono")).child(metaText))
       .child(div().flex_1())
-      .when(Boolean(owner.reviewOf(g)), row => row.child(owner.prBadge(owner.reviewOf(g), t, w.id)))))
+      .when(Boolean(owner.reviewOf(g)), row => row.child(owner.prBadge(owner.reviewOf(g), t, w.id, g)))))
     // Orca's compact agent summary (worktree-card-compact-agents.tsx): h-6, px-1, 11px
     // muted; the collapsed pill draws state clusters and the rows carry AgentStateDot.
     .when(mine.length > 0, el => el.child(agentBlockOf()))

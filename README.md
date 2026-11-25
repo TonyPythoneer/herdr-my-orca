@@ -39,6 +39,10 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   changes stop the switch with the reason shown (Git is re-checked on every attempt). The card's
   branch follows the switch, so returning the main checkout to `main` after a merge needs no
   terminal.
+- **Open the review**: a card's PR badge (the state-coloured pull-request, merge or closed
+  glyph) is a button: it opens that pull request's page in the system browser. The cached `gh`
+  lookup keeps REST's `html_url`; an entry cached before that field falls back to the base repo's
+  `pull/<number>` address.
 - **Agent Settings**: the sidebar's bottom Agents button opens a Settings-style page with separately scrollable Installed and Available to install groups, each showing up to
   5.5 rows. It lists the Agent CLIs Herdr detects,
   turns availability on/off for installed CLIs, and edits each CLI's executable and launch

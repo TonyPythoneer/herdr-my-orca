@@ -7,7 +7,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar } from "gpui-base";
-import { spaces, machines, panes, agents, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, nextCommand, layout } from "herdr";
+import { spaces, machines, panes, agents, run, openOverlay, exec, hc, notify, theme, shared, setShared, watchFolder, window, nextCommand, layout } from "herdr";
 import { repoMark, tint, parseRemote, avatarUrlFor, ensureAvatar, avatarFile } from "./project.js";
 
 import { getProjectGroupHeaderPaddingLeft } from "./indentation.js";
@@ -158,7 +158,12 @@ function reviewFromPullRequests(list, head) {
     return o === String(head).toLowerCase();
   });
   const first = mine.find((p) => String(p.state ?? "").toLowerCase() === "open") ?? mine[0];
-  return first?.number ? { number: first.number, title: first.title, state: pullRequestState(first) } : null;
+  if (!first?.number) return null;
+  const review = { number: first.number, title: first.title, state: pullRequestState(first) };
+  // `html_url` is the page the badge opens; REST gives the base repo's own URL even for a fork.
+  // Older cached entries have none, so the badge falls back to the base repo's pull page.
+  if (first.html_url) review.url = first.html_url;
+  return review;
 }
 
 // What a row says about its checkout: where, which branch, which host, and whether it is a linked worktree.
@@ -993,7 +998,7 @@ export default class Spaces extends View {
   // PullRequestIcon — and the tone is `getStateTone` (:54-70): merged purple-400/70, open
   // emerald-500/80, closed muted-foreground/60, draft muted-foreground/50. `size-3` is the
   // MetaIconBadge glyph size.
-  prBadge(pr, t, id) {
+  prBadge(pr, t, id, info) {
     const icon = PR_ICONS[pr.state] ?? "git-pull-request";
     // `getStateTone` (worktree-review-presentation.tsx:58-72), dark-mode values:
     //   merged  text-purple-400/70           -> #c084fcb3
@@ -1009,8 +1014,32 @@ export default class Spaces extends View {
     // box whose glyph is also 14px, 12 was too small. `text-muted-foreground/70` is its default
     // colour; `getStateTone` overrides it per state.
     return div().flex_none().flex().items_center().justify_center().pr(6)
-      .child(tip({ hot: this.hot, t, id: `pr-${id}`, label: `PR #${pr.number}`, trigger: stop(this, t, `pr-${id}`, div().id(`pr-${id}`)
-        .child(svg(`mods/orca-sidebar-projects/${icon}.svg`).size(14).flex_none().text_color(tone))) }));
+      .child(tip({
+        hot: this.hot, t, id: `pr-${id}`, label: `Open PR #${pr.number}`,
+        trigger: stop(this, t, `pr-${id}`, div().id(`pr-${id}`)
+          .cursor_pointer()
+          // The badge is an action, not decoration: it opens the pull request's own page.
+          // The card under it switches spaces, so the click must not reach that handler.
+          .on_click((_e, cx) => { cx.stop_propagation(); this.openPR(pr, info); })
+          .child(svg(`mods/orca-sidebar-projects/${icon}.svg`).size(14).flex_none().text_color(tone)),
+          { enter: () => this.openPR(pr, info) }),
+      }));
+  }
+
+  // REST's `html_url` is canonical; an entry cached before that field, or a hand edit, falls
+  // back to the base repo's pull page, which is the same address on GitHub.
+  prURL(pr, info) {
+    if (pr?.url) return pr.url;
+    return pr?.number && info?.base ? `https://github.com/${info.base}/pull/${pr.number}` : null;
+  }
+
+  openPR(pr, info) {
+    const url = this.prURL(pr, info);
+    if (!url) return;
+    const opener = window()?.platform === "macos" ? "open" : "xdg-open";
+    exec(opener, [url]).catch((error) =>
+      notify({ title: `Failed to open PR #${pr.number}`, body: String(error?.message ?? error), level: "error" })
+    );
   }
 
   // `gitTail` used to draw `↑N`/`↓N` at the end of the title row. That was ours, not

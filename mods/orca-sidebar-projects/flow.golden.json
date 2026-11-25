@@ -1385,7 +1385,8 @@
     "data": {
      "number": 7,
      "title": "T",
-     "state": "open"
+     "state": "open",
+     "url": "https://github.com/me/proj/pull/7"
     },
     "timed": "number"
    }
@@ -1413,7 +1414,8 @@
     "data": {
      "number": 7,
      "title": "T",
-     "state": "open"
+     "state": "open",
+     "url": "https://github.com/me/proj/pull/7"
     },
     "timed": "number"
    }
@@ -1441,7 +1443,8 @@
     "data": {
      "number": 9,
      "title": "T",
-     "state": "closed"
+     "state": "closed",
+     "url": "https://github.com/me/proj/pull/9"
     },
     "timed": "number"
    }
@@ -1469,7 +1472,8 @@
     "data": {
      "number": 7,
      "title": "T",
-     "state": "merged"
+     "state": "merged",
+     "url": "https://github.com/me/proj/pull/7"
     },
     "timed": "number"
    }
@@ -1497,7 +1501,8 @@
     "data": {
      "number": 7,
      "title": "T",
-     "state": "draft"
+     "state": "draft",
+     "url": "https://github.com/me/proj/pull/7"
     },
     "timed": "number"
    }
@@ -1549,7 +1554,8 @@
     "data": {
      "number": 7,
      "title": "T",
-     "state": "open"
+     "state": "open",
+     "url": "https://github.com/me/proj/pull/7"
     },
     "timed": "number"
    }
@@ -1577,7 +1583,8 @@
     "data": {
      "number": 7,
      "title": "T",
-     "state": "open"
+     "state": "open",
+     "url": "https://github.com/me/proj/pull/7"
     },
     "timed": "number"
    }
@@ -1605,7 +1612,8 @@
     "data": {
      "number": 7,
      "title": "T",
-     "state": ""
+     "state": "",
+     "url": "https://github.com/me/proj/pull/7"
     },
     "timed": "number"
    }

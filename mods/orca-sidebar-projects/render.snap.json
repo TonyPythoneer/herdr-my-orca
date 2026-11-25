@@ -3312,6 +3312,16 @@
                             ]
                            ],
                            [
+                            "cursor_pointer",
+                            []
+                           ],
+                           [
+                            "on_click",
+                            [
+                             "fn"
+                            ]
+                           ],
+                           [
                             "child",
                             [
                              {
