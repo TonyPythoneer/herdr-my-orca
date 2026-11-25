@@ -127,6 +127,7 @@ class AgentConfigCore {
     this.modelGroup = this.groupOption()?.group ?? null; // a model list filter, when the spec has groups
     this.groupOpen = false;
     this.showHidden = false; // the "-- hidden --" section stays collapsed until clicked
+    this.collapsedAdvanced = true;
     this.snapshot = null; // the settings file as read, for a safe write
     this.open = null; // the option whose select list is open: one at a time, inline below its row
 
@@ -196,6 +197,7 @@ class AgentConfigCore {
   // The values, hidden models, providers and group this agent saved last time.
   async applySaved(saved, cx) {
     this.values = { ...this.values, ...readValues(this.spec, saved) };
+    this.collapsedAdvanced = saved.advancedArgumentsCollapsed !== false;
     for (const [id, editor] of Object.entries(this.editors)) {
       if (this.spec.options[id].language === "json") this.values[id] = normalizeJson(this.values[id], this.spec.options[id].default);
       editor.input.set_value(this.values[id]);
@@ -388,6 +390,15 @@ class AgentConfigCore {
       all[key] = { ...all[key], hidden, ...(viaProvider ? {} : { model, effort }) };
     });
     if (viaProvider) this.rememberProviderModel();
+  }
+
+  toggleAdvanced(cx) {
+    this.collapsedAdvanced = !this.collapsedAdvanced;
+    const collapsed = this.collapsedAdvanced;
+    this.persist((all) => {
+      all[this.key] = { ...all[this.key], advancedArgumentsCollapsed: collapsed };
+    });
+    cx.notify();
   }
 
   // The model list filter (opencode's group) is a list preference, saved with the model and effort.
@@ -875,7 +886,12 @@ class AgentConfigCore {
   // The flyout's rhythm: a block is a label, 8px of air, then its controls. Blocks are 14px apart
   // with a hairline between, and the label sits 12px under it (6px under the title for the first).
   sectionHead(title, t, first = false) {
-    return div().mx(8).mt(first ? 6 : 12).mb(8).text_size(10).font_medium().text_color(t.dim).child(title);
+    const advanced = title === "HARNESS CLI ADVANCED ARGUMENTS";
+    return h_flex().mx(8).mt(first ? 6 : 12).mb(8).items_center().gap(6).text_size(10).font_medium().text_color(t.dim)
+      .when(advanced, el => el.role("button").accessibility_label(`${title}, ${this.collapsedAdvanced ? "collapsed" : "expanded"}`).cursor_pointer()
+        .on_click((_e, cx) => this.toggleAdvanced(cx)))
+      .child(div().flex_1().child(title))
+      .when(advanced, el => el.child(div().flex_none().text_size(12).child(this.collapsedAdvanced ? "›" : "⌄")));
   }
 
   divider(t) {
@@ -1259,7 +1275,8 @@ class AgentConfigCore {
       .when(Boolean(this.error), el => el.child(div().px(8).py(6).text_color(t.blocked).child(this.error)))
       .when(Boolean(this.settingsSaveError), el => el.child(div().px(8).text_color(t.blocked).child("Could not save: " + this.settingsSaveError)))
       .when(this.settingsLoaded, el => el.children(sectionsOf(this.spec).flatMap((section, at) => [
-        ...(at ? [this.divider(t)] : []), this.sectionHead(section.title,t,at===0), this.sectionBody(section,t),
+        ...(at ? [this.divider(t)] : []), this.sectionHead(section.title,t,at===0),
+        ...(section.title === "HARNESS CLI ADVANCED ARGUMENTS" && this.collapsedAdvanced ? [] : [this.sectionBody(section,t)]),
       ])))
       .child(this.divider(t))
       .child(this.settingsPreview(t, { command, argv, copy }))
@@ -1318,7 +1335,7 @@ class AgentConfigCore {
         el.children(sections.flatMap((section, at) => [
           ...(at > 0 ? [this.divider(t)] : []),
           this.sectionHead(section.title, t, at === 0),
-          this.sectionBody(section, t),
+          ...(section.title === "HARNESS CLI ADVANCED ARGUMENTS" && this.collapsedAdvanced ? [] : [this.sectionBody(section, t)]),
         ])),
       )
       .child(
