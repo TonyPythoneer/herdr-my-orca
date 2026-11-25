@@ -15,10 +15,6 @@
     14,
     12
   ],
-  "divider": {
-    "width": 1,
-    "color": "border"
-  },
   "preview": "layouts/orca.svg",
   "theme": "orca-dark",
   "terminal_menu": "orca-context-menu",

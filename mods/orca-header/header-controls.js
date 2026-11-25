@@ -36,14 +36,14 @@ export function addSidebarToggle(row, view, { t, sidebar, w, leftPad }) {
 
 export function addTabTrack(row, view, frame) {
   const { t, geometry, shown } = frame;
-  // Orca's chevrons (`tab-bar-surface.tsx:124-146`, `:189-211`): a ghost `icon-xs` button, so
-  // `mx-0.5 my-auto h-6 w-5` (2px sides, 24x20) around a 14px `ChevronLeft/Right`, shown only
-  // while the track overflows and disabled only at that end of it. They live outside the
-  // viewport, so the active tab is never behind them (§5).
+  // Orca's chevrons (`tab-bar-surface.tsx:124-146`, `:189-211`): a ghost 20x24 button around a
+  // 14px `ChevronLeft/Right`, shown only while the track overflows and disabled only at that end.
+  // The 14px gutter beside each arrow lets an active edge fillet clear the clipped viewport.
   const tabScrollButton = (direction, disabled) => {
     const label = direction === "start" ? "Scroll tabs left" : "Scroll tabs right";
     const glyph = `mods/orca-header/chevron-${direction === "start" ? "left" : "right"}.svg`;
-    return div().id(`tab-scroll-${direction}`).mx(2).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+    return div().id(`tab-scroll-${direction}`).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+      .when(direction === "start", el => el.ml(2).mr(16)).when(direction === "end", el => el.ml(16).mr(2))
       .text_color(disabled ? t.dim : t.muted)
       .when(!disabled, el => el.hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground)).on_mouse_down("left", stop))
       .role("button").accessibility_label(label).tooltip(label)
@@ -51,6 +51,11 @@ export function addTabTrack(row, view, frame) {
       .child(svg(glyph).size(14).flex_none());
   };
   const item = (tab, index, mode) => renderTabItem(view, frame, tab, index, mode);
+  const edgeFillet = (side, tab) => div().id(`tab-active-${side}-${tab.id}`).w(14).h_full().flex_none().relative()
+    .when(side === "left", el => el.ml(-14)).when(side === "right", el => el.mr(-14))
+    .child(div().absolute().bottom(0).size(14).overflow_hidden()
+      .child(div().absolute().top(-28).when(side === "left", el => el.left(-28)).when(side === "right", el => el.left(-14))
+        .size(56).rounded_full().border(14).border_color(t.background)));
   return row
     // Orca hides the strip's native scrollbar (`tab-bar-surface.tsx:164-175`) and paints only
     // its 3px hover thumb (`TabStripScrollIndicator.tsx:196-215`), which Herdr has no
@@ -66,6 +71,7 @@ export function addTabTrack(row, view, frame) {
     // the clamped left — which is what keeps `contentWidth` and the scroll limits independent of
     // the dock (§4). The arrows sit outside this box, so the pinned tab can never slide under them.
     .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("start", geometry.arrows.leftDisabled).id("tab-scroll-start").relative()))
+    .when(geometry.arrows.hasOverflow && geometry.activeTab && geometry.slot.visualLeft <= 1, el => el.child(edgeFillet("left", geometry.activeTab)))
     .child(div().id("tab-viewport").relative().flex_shrink(1).min_w(0).h_full().overflow_hidden()
       .on_size_change((size, cx) => {
         if (Math.abs(size.width - view.viewportWidth) < 0.5) return;
@@ -77,6 +83,8 @@ export function addTabTrack(row, view, frame) {
         .when(view.sliding(), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
         .children(shown.map((c, i) => item(c, i, { hidden: geometry.docked && i === geometry.activeIndex }))))
       .when(geometry.docked, el => el.child(item(geometry.activeTab, geometry.activeIndex, { overlay: { ...geometry.slot, width: geometry.activeWidth }, sliding: view.sliding() }))))
+    .when(geometry.activeTab && geometry.slot.visualLeft + geometry.activeWidth >= geometry.slot.viewportWidth - 1, el =>
+      el.child(edgeFillet("right", geometry.activeTab)))
     .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("end", geometry.arrows.rightDisabled).id("tab-scroll-end").relative()));
 }
 
