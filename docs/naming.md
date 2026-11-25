@@ -9,7 +9,7 @@ Mod names follow `orca-<screen area>-<what it draws>`. Layout node ids are older
 | Left sidebar: search, Tasks row, Projects header | `orca-sidebar-top` | `nav-top` | |
 | Left sidebar: the project / workspace list and the agent rail | `orca-sidebar-projects` | `projects` | "workspace", "space" and "worktree" are Herdr/Orca words for the rows in it |
 | Terminal pane title bar (split and close buttons) | `orca-pane-header` | pane `header` of `main-terminals` | A **pane** is one terminal; not the right sidebar |
-| Right sidebar (the whole column) | `orca-right-sidebar-header` draws its header and tab switcher | `panel`, `panel-head`, `panel-body` | The UI says "right sidebar"; the node ids still say `panel` |
+| Right sidebar (the whole column) | `orca-right-sidebar-header` draws the view switcher; `orca-header` owns its toggle | `panel`, `panel-head`, `panel-body` | The UI says "right sidebar"; the node ids still say `panel` |
 | Right sidebar › Explorer | `orca-files` | `files` | |
 | Right sidebar › Agents (live agents and session history) | `orca-right-sidebar-agents` | `agent-sessions` | Not the Agent Settings page |
 | Right sidebar › Source Control | `orca-changes` | `changes` | |

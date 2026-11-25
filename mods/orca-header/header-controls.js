@@ -95,16 +95,14 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
     .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : tint(t.foreground, 0.1)).text_color(close ? "#ffffff" : t.foreground))
     .role("button").accessibility_label(label).tooltip(label)
     .on_mouse_down("left", stop).on_click(action).child(glyph);
-  // TitlebarMainStrip.tsx:12-33,76 — `RightSidebarToggle`: `.sidebar-toggle mr-2`
-  // (main.css:1213-1230 = 4px/8px padding around the 16px `PanelRight`, so 32x24, radius 4,
-  // muted, hover --accent + foreground). `orca-header` runs the panel drawer when it is pressed.
-  // The panel's own icon state: this copy only ever draws while the panel is hidden, so it always
-  // offers `PanelRightOpen` (the arrow points back in), and `orca-right-sidebar-header` offers the close one.
+  // Keep the right-sidebar toggle in the tab header in both states, like the left-sidebar toggle.
+  // The glyph names the action: open when hidden, close when visible.
+  const panelHidden = Boolean(find(layout(), "panel")?.hidden);
   const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
     .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-    .role("button").accessibility_label("Expand right sidebar").tooltip("Expand right sidebar")
+    .role("button").accessibility_label(panelHidden ? "Expand right sidebar" : "Collapse right sidebar").tooltip(panelHidden ? "Expand right sidebar" : "Collapse right sidebar")
     .on_mouse_down("left", stop).on_click(action)
-    .child(svg("mods/orca-header/panel-right-open.svg").size(16));
+    .child(svg(panelHidden ? "mods/orca-header/panel-right-open.svg" : "mods/orca-right-sidebar-header/panel-right-close.svg").size(16));
   return row
     // Orca terminal-tab-strip-drop-target.ts:39-52 — visual drop indicator when a pane is dragged to the tab strip.
     .when(Boolean(paneDrag?.inTabStrip), el =>
@@ -139,10 +137,8 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
         if (z) run("pane.zoom", { pane: z.pane });
       })
       .child(svg("mods/orca-header/minimize-2.svg").size(14))))
-    // TitlebarMainStrip.tsx:76 — Orca's `RightSidebarToggle` moves into the panel header
-    // while the panel is open (`right-sidebar/index.tsx:124-144`); `orca-right-sidebar-header` draws it
-    // there, so this copy shows only while the panel is hidden (a hidden node draws nothing).
-    .when(find(layout(), "panel")?.hidden, el => el.child(panelToggle((_e, cx) => { view.wantPanelToggle = (view.wantPanelToggle ?? 0) + 1; cx.notify(); })))
+    // Keep one right-sidebar toggle in the tab header for both open and closed states.
+    .child(panelToggle((_e, cx) => { view.wantPanelToggle = (view.wantPanelToggle ?? 0) + 1; cx.notify(); }))
     // WindowControls.tsx:27-30,42-49,60-67 — Orca replaces native chrome on Linux and Windows
     // with the same 10x10 SVG paths; only macOS keeps its traffic lights. Herdr reports
     // `buttons: false` here (the compositor owns decorations) but draws none of its own, so

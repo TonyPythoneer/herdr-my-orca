@@ -105,11 +105,9 @@ function selectFallback(cx, tools, active) {
   }
 }
 
-// Glass chip per icon, the same capsule language as the tab pills: 24px tall, 8px radius,
-// frosted foreground-tinted fill when active and a fainter one on hover. This replaces
-// `activity-bar-buttons.tsx:175-177`'s 2px bottom bar, which the capsule supersedes.
+// Each segment takes an equal share of the available row width; the centered glyph remains 16px.
 function toolButton(t, { id, icon, title }, isActive) {
-  return Button.new(`panel-${id}`).selected(isActive).w(32).h(24).flex_none().flex().items_center().justify_center().relative().rounded(8)
+  return Button.new(`panel-${id}`).selected(isActive).h(24).flex_1().min_w(0).flex().items_center().justify_center().relative().rounded(6)
     .text_color(isActive ? t.foreground : INACTIVE_ICON)
     .when(isActive, el => el.bg(tint(t.foreground, TINT_ACTIVE)))
     .when(!isActive, el => el.hover(s => s.bg(tint(t.foreground, TINT_HOVER)).text_color(t.muted)))
@@ -119,16 +117,11 @@ function toolButton(t, { id, icon, title }, isActive) {
     .child(svg(`mods/orca-right-sidebar-header/${icon}.svg`).size(16));
 }
 
-// This header is the panel's own row, so it is only ever drawn while the panel is open: the
-// toggle carries `PanelRightClose` (arrow out of the panel) for that state, and `orca-header`
-// carries the matching open glyph for the hidden one.
-function collapseButton(t) {
-  return Button.new("panel-toggle").mr(3).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
-    .text_color(t.muted).hover(s => s.bg(tint(t.foreground, TINT_ACTIVE)).text_color(t.foreground))
-    .role("button").accessibility_label("Collapse right sidebar").tooltip("Collapse right sidebar")
-    .on_mouse_down("left", (_e, eventCx) => eventCx.stop_propagation())
-    .on_click(() => run("orca-header.toggle-panel"))
-    .child(svg("mods/orca-right-sidebar-header/panel-right-close.svg").size(16));
+// Stretch one segmented track across the panel; its buttons divide the row equally.
+function toolGroup(t, tools, active) {
+  return div().id("panel-tools").flex_1().min_w(0).flex().items_center().gap(1).p(1).rounded(8)
+    .bg(tint(t.foreground, 0.05))
+    .children(tools.map(tool => toolButton(t, tool, active === tool.id)));
 }
 
 export default class PanelHead extends View {
@@ -160,18 +153,9 @@ export default class PanelHead extends View {
     const onSshHost = Boolean(on || activeSpace()?.machine);
     const tools = visibleTools(ITEMS, { isFolder, onSshHost });
     selectFallback(cx, tools, active);
-    // `right-sidebar-top-activity-bar.tsx:40` is a bare `h-[36px] border-b border-border`
-    // wrapper with NO background; it shows the panel surface #171717
-    // (`right-sidebar/index.tsx:158` -> `--sidebar`, main.css:392). The strip starts at pl-2 = 8
-    // (`right-sidebar-titlebar-drag-regions.ts:5`). Each button is 32px wide here with a
-    // 16px glyph; inactive is text-muted-foreground/60 and hover text-muted-foreground
-    // (`activity-bar-buttons.tsx:156-157`) — a colour change, not element opacity.
-    // The panel spans the full window height, so this header sits in the titlebar row. Orca moves the
-    // `.sidebar-toggle` into it while the panel is open (`right-sidebar/index.tsx:124-144`); `orca-header`
-    // draws its copy only while the panel is hidden, so one toggle is ever on screen.
-    return h_flex().w_full().h_full().items_center().pl(8).pr(4).border_b(1).border_color(t.border)
-      .children(tools.map(tool => toolButton(t, tool, active === tool.id)))
-      .child(div().flex_1())
-      .child(collapseButton(t));
+    // The equal-width segments keep the glyph centered as the sidebar resizes.
+    // The right-sidebar toggle stays in the tab header in both states, beside the left-sidebar toggle.
+    return h_flex().w_full().h_full().items_center().pl(8).pr(4)
+      .child(toolGroup(t, tools, active));
   }
 }

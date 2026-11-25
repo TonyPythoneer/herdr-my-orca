@@ -24,6 +24,21 @@
   "terminal_menu": "orca-context-menu",
   "children": [
     {
+      "id": "tabs",
+      "type": "block",
+      "size": {
+        "px": 32
+      },
+      "window_drag": true,
+      "content": {
+        "mod": "orca-header",
+        "props": {
+          "motion": "native",
+          "pinSidebarTerminal": true
+        }
+      }
+    },
+    {
       "id": "body",
       "type": "row",
       "floating": [
@@ -42,21 +57,6 @@
           "type": "column",
           "resizable": false,
           "children": [
-            {
-              "id": "tabs",
-              "type": "block",
-              "size": {
-                "px": 32
-              },
-              "window_drag": true,
-              "content": {
-                "mod": "orca-header",
-                "props": {
-                  "motion": "native",
-                  "pinSidebarTerminal": true
-                }
-              }
-            },
             {
               "id": "under",
               "type": "row",
@@ -187,8 +187,7 @@
               },
               "content": {
                 "mod": "orca-right-sidebar-header"
-              },
-              "window_drag": true
+              }
             },
             {
               "id": "panel-body",
@@ -262,11 +261,7 @@
               }
             }
           ],
-          "background": "surface",
-          "border": {
-            "width": 1,
-            "color": "border"
-          }
+          "background": "surface"
         }
       ]
     },
