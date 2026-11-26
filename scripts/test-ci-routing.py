@@ -13,6 +13,8 @@ class Routing(unittest.TestCase):
         self.assertIn("pull_request:\n    types: [opened, synchronize, reopened, edited]", ci)
         self.assertEqual(ci.count("if: " + GUARD), 5)
         self.assertIn("Run UI snapshot observer unit tests (no GUI)", ci)
+        self.assertIn("FULL_PROCESS: ${{ " + GUARD + " }}", ci)
+        self.assertIn("args+=(--force-full)", ci)
 
     def test_native_workflows(self):
         for name in ("benchmark-native.yml", "performance-retention.yml", "native-ui-candidate.yml"):
