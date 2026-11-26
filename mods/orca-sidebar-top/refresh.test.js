@@ -47,15 +47,16 @@ test('Refresh branches is the first row a keyboard lands on, after the title', (
   assert.equal(navRows[0], rows.find((r) => r.kind === 'action'));
 });
 
-function fixture() {
+function fixture(sharedValues = new Map()) {
   globalThis.flowHost = { window: () => ({ active: true }) };
   const store = new Map();
   globalThis.localStorage = { getItem: key => store.get(key), setItem: (key, value) => store.set(key, value) };
   globalThis.__herdrSpaces = () => [{ machine: null }, { machine: 'remote' }];
   globalThis.__herdrProps = () => ({});
-  globalThis.__herdrShared = key => key === 'projects.count' ? 2 : undefined;
+  globalThis.__herdrShared = key => key === 'projects.count' ? 2 : sharedValues.get(key);
+  globalThis.__herdrSetShared = (key, value) => sharedValues.set(key, value);
   const cx = { calls: 0, notify() { this.calls++; } };
-  return { nav: new Nav(), cx, saved: () => JSON.parse(store.get('workspace.options.v1')) };
+  return { nav: new Nav(), cx, saved: () => JSON.parse(store.get('workspace.options.v1')), sharedValues };
 }
 
 function children(node) {
@@ -85,15 +86,19 @@ test('menu actions persist options, preserve the final host and notify only on a
   assert.equal(cx.calls, 9);
 });
 
-test('changing workspace options pings orca-sidebar-projects so the sidebar re-sorts', () => {
-  const { nav, cx, saved } = fixture();
+test('workspace options publish across popup props and update the shared sidebar state', () => {
+  const sharedValues = new Map();
+  const { nav, cx, saved } = fixture(sharedValues);
   const ran = [];
   globalThis.__herdrRun = (command) => ran.push(command);
   nav.act({ kind: 'radio', key: 'sortBy', value: 'name' }, cx);
   assert.deepEqual(saved().sortBy, 'name');
-  assert.ok(ran.includes('orca-sidebar-projects.options-changed'), ran);
+  assert.equal(sharedValues.get('workspace.options.v1').sortBy, 'name');
+  assert.deepEqual(ran, []);
+  const reopened = fixture(sharedValues);
+  assert.equal(reopened.nav.pageRows('sort').find(row => row.value === 'name').checked, true);
   nav.act({ kind: 'groupby', value: 'none' }, cx);
-  assert.ok(ran.includes('orca-sidebar-projects.options-changed'), ran);
+  assert.equal(sharedValues.get('workspace.options.v1').groupBy, 'none');
 });
 
 test('click, hover and keyboard operate on the same popup pages', () => {
@@ -197,8 +202,9 @@ test('every page lists its rows with the stored choices marked', () => {
   assert.deepEqual(pick('hosts'), [['back', 'Back'], ['hostAll', 'All hosts', false], ['host', 'This computer', true], ['host', 'remote', false]].map(r => [r[0], r[1], r[2], undefined]));
   assert.deepEqual(pick('projects'), [['back', 'Back'], ['projectClear', 'Clear', undefined, false], ['project', 'One', false], ['project', 'r2', true]].map(r => [r[0], r[1], r[2], r[3]]));
   assert.deepEqual(pick('sort').filter(r => r[2]), [['radio', 'Manual', true, undefined]]);
-  assert.deepEqual(nav.rootRows().filter(r => r.kind === 'page').map(r => [r.page, r.value]),
-    [['hosts', '1 hosts'], ['projects', '1 projects'], ['sort', 'Manual'], ['projectOrder', 'Manual']]);
+  assert.deepEqual(nav.rootRows().filter(r => r.kind === 'page').map(r => [r.page, r.label, r.value]),
+    [['hosts', 'Hosts', '1 hosts'], ['projects', 'Projects', '1 projects'], ['sort', 'Worktree sort', 'Manual'], ['projectOrder', 'Project sort', 'Manual']]);
+  assert.deepEqual(nav.pageRows('projectOrder').map(r => r.label), ['Back', 'Manual', 'Name', 'Recent']);
 });
 
 // Every view is recorded once from the code as first written, then compared byte for byte.
@@ -242,7 +248,7 @@ function views() {
   const nav = new Nav();
   for (const [page, at, options] of [
     [null, -1, {}], [null, 3, { groupBy: 'none' }], ['hosts', 1, { visibleWorkspaceHostIds: [null] }], ['projects', 2, { filterRepoIds: ['r1'] }],
-    ['sort', 0, { sortBy: 'name' }], ['projectOrder', -1, { projectOrderBy: 'recent' }],
+    ['sort', 0, { sortBy: 'name' }], ['projectOrder', -1, { projectOrderBy: 'name' }],
   ]) {
     store.set('workspace.options.v1', JSON.stringify(options));
     globalThis.__herdrProps = () => ({ navMenu: 'workspace-options' });

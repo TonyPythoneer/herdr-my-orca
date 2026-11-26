@@ -1,7 +1,16 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
-import { parseWorktreeList, projectWorktreePlan, where, groupSpaceIds, forgetProject } from './worktree-plan.js';
+import { applyWorkspaceOptions, parseWorktreeList, projectWorktreePlan, where, groupSpaceIds, forgetProject } from './worktree-plan.js';
+
+test('project sort by name orders project groups by their display name', () => {
+  const rows = [
+    { w: { id: 'z', tabs: [] }, g: { repo: 'z', name: 'Zulu', linked: false } },
+    { w: { id: 'a', tabs: [] }, g: { repo: 'a', name: 'Alpha', linked: false } },
+  ];
+  const sorted = applyWorkspaceOptions(rows, { groupBy: 'repo', projectOrderBy: 'name' });
+  assert.deepEqual(sorted.map(row => row.w.id), ['a', 'z']);
+});
 
 test('deleted worktrees disappear from the sidebar without closing their tabs', () => {
   const repo = JSON.stringify([null, '/repo/.git']);

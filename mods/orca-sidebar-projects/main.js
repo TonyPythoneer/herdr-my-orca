@@ -227,8 +227,8 @@ export default class Spaces extends View {
           localStorage.setItem("repos.folded", JSON.stringify([...this.foldedRepos]));
           this.notify(taskCx);
         }
-        // The options menu writes "workspace.options.v1" and pings this loop; ordered() re-reads
-        // the key on the next render. setShared alone does not wake another mod (AGENTS.md rule 10).
+        // Explicit callers can still request a repaint; normal workspace-option writes publish
+        // through Herdr's shared store, which already re-renders every mod.
         else if (cmd === "options-changed") this.notify(taskCx);
         // Workspace options' Refresh (orca-sidebar-top): re-read git now, not on the 60s fallback or a
         // filesystem wake. Orca reads a repo's worktrees when a dialog asks; a person who just
