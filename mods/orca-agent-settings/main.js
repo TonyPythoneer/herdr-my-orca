@@ -1820,7 +1820,7 @@ export default class AgentManager extends View {
     const host = this.litellmHost.value().trim();
     const apiKey = this.litellmApiKey.value();
     if (!host || (this.litellmReplaceKey && !apiKey) || (!this.litellmHasApiKey && !apiKey)) {
-      this.litellmError = "Enter the remote LiteLLM host and API key.";
+      this.litellmError = "Enter the existing LiteLLM host and API key.";
       cx.notify();
       return;
     }
@@ -1839,7 +1839,7 @@ export default class AgentManager extends View {
       const saved = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`, appHome(), "save-remote", staged], { timeout: 15000 });
       let status;
       try { status = JSON.parse(saved?.stdout ?? "{}"); } catch { status = null; }
-      if (saved?.code !== 0 || !status) throw new Error(status?.error ?? "Could not save remote LiteLLM settings.");
+      if (saved?.code !== 0 || !status) throw new Error(status?.error ?? "Could not save existing LiteLLM settings.");
       this.litellmMode = "remote";
       this.litellmEnabled = status.enabled === true;
       this.litellmStatus = status;
@@ -1848,7 +1848,7 @@ export default class AgentManager extends View {
       this.litellmApiKey.set_value("");
       this.litellmRemoteDirty = false;
     } catch (error) {
-      this.litellmError = error?.message || "Could not save remote LiteLLM settings.";
+      this.litellmError = error?.message || "Could not save existing LiteLLM settings.";
     } finally {
       if (dir) await exec("rm", ["-rf", dir]).catch(() => {});
       this.litellmBusy = false;
@@ -1859,7 +1859,7 @@ export default class AgentManager extends View {
   async toggleLiteLLM(cx) {
     if (this.litellmBusy) return;
     if (!this.litellmEnabled && this.litellmMode === "remote" && this.litellmRemoteDirty) {
-      this.litellmError = "Save and check the remote connection before enabling LiteLLM.";
+      this.litellmError = "Save and check the existing server before enabling LiteLLM.";
       cx.notify();
       return;
     }
@@ -1869,7 +1869,13 @@ export default class AgentManager extends View {
       return;
     }
     if (!this.litellmEnabled && this.litellmMode === "remote" && !this.litellmStatus?.remote?.healthy) {
-      this.litellmError = "Save and check a healthy remote LiteLLM connection before enabling it.";
+      this.litellmError = "Save and check a reachable existing server before enabling it.";
+      cx.notify();
+      return;
+    }
+    if (!this.litellmEnabled && this.litellmMode === "remote" && this.litellmStatus?.remote?.healthy
+        && this.litellmStatus.remote.models.length === 0) {
+      this.litellmError = "The existing server advertises no models. Add one before enabling it.";
       cx.notify();
       return;
     }

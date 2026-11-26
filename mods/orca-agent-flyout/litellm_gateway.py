@@ -105,7 +105,7 @@ def remote_root(host):
             or parsed.query or parsed.fragment):
         raise RuntimeError("Enter a valid LiteLLM API host, such as https://litellm.example.com.")
     if parsed.scheme != "https" and parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
-        raise RuntimeError("Remote LiteLLM hosts must use HTTPS.")
+        raise RuntimeError("Existing LiteLLM hosts must use HTTPS.")
     path = parsed.path.rstrip("/")
     if path.endswith("/v1"):
         path = path[:-3]
@@ -130,8 +130,7 @@ def remote_health(config):
             return {"healthy": False, "error": "LiteLLM returned an invalid model list."}
         models = sorted({item["id"] for item in payload.get("data", [])
                          if isinstance(item, dict) and isinstance(item.get("id"), str)})
-        if not models:
-            return {"healthy": False, "error": "LiteLLM connected, but returned no models."}
+        # Liveness is not readiness: an empty catalog still proves the server is alive.
         return {"healthy": True, "models": models}
     except urllib.error.HTTPError as error:
         return {"healthy": False, "error": f"LiteLLM returned HTTP {error.code}. Check the host and API key."}
@@ -184,7 +183,7 @@ def status(app):
 def save_remote(app, staged):
     incoming = read(staged)
     if not isinstance(incoming, dict):
-        raise RuntimeError("Remote LiteLLM settings are invalid.")
+        raise RuntimeError("Existing LiteLLM settings are invalid.")
     host = remote_root(incoming.get("host", ""))
     key = incoming.get("apiKey")
     previous = settings(app)
@@ -197,7 +196,7 @@ def save_remote(app, staged):
     candidate = {"enabled": previous.get("enabled") is True, "mode": "remote", "host": host, "apiKey": key}
     remote = remote_health(candidate)
     if not remote.get("healthy"):
-        raise RuntimeError(remote.get("error", "Could not connect to remote LiteLLM."))
+        raise RuntimeError(remote.get("error", "Could not connect to the existing LiteLLM server."))
     private_write(app / "model-gateway.json", candidate)
     return {"enabled": candidate["enabled"], "mode": "remote", "host": host,
             "hasApiKey": True, "remote": remote}
@@ -242,9 +241,9 @@ def prepare(app, provider, model, expected_host, kind):
     if config.get("mode") == "remote":
         remote = remote_health(config)
         if not remote.get("healthy"):
-            raise RuntimeError(remote.get("error", "Remote LiteLLM is unavailable."))
+            raise RuntimeError(remote.get("error", "The existing LiteLLM server is unavailable."))
         if model not in remote["models"]:
-            raise RuntimeError("Selected model is not available on the remote LiteLLM service.")
+            raise RuntimeError("Selected model is not available on the existing LiteLLM server.")
         root = remote_root(config["host"])
         credentials = app / "litellm-gateway/credentials.json"
         credentials.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -378,7 +377,9 @@ def main():
                 if ns.action == "enable" and config.get("mode") == "remote":
                     remote = remote_health(config)
                     if not remote.get("healthy"):
-                        raise RuntimeError(remote.get("error", "Remote LiteLLM is unavailable."))
+                        raise RuntimeError(remote.get("error", "The existing LiteLLM server is unavailable."))
+                    if not remote.get("models"):
+                        raise RuntimeError("The existing LiteLLM server advertises no models; add one before enabling it.")
                 if ns.action == "enable" and config.get("mode") != "remote":
                     if not local_status(ns.app).get("installed"):
                         raise RuntimeError("Install the pinned local LiteLLM version before enabling it.")

@@ -16,6 +16,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = Path(__file__).resolve().parents[1]
 MANAGER = ROOT / "mods/orca-agent-flyout/litellm_gateway.py"
 READER = ROOT / "mods/orca-status-bar/gateway-usage.js"
+sys.path.insert(0, str(MANAGER.parent))
+from litellm_gateway import remote_health
 SENTINEL = "fixture-private-content-never-persist"
 API_KEY = "fixture-upstream-secret"
 MODEL = "fixture/free"
@@ -60,7 +62,42 @@ class Upstream(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+
+class EmptyCatalog(BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = json.dumps({"data": []}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_):
+        pass
+
 class GatewayE2E(unittest.TestCase):
+    def test_existing_server_with_empty_catalog_is_alive_but_not_enabled(self):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), EmptyCatalog)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        host = "http://127.0.0.1:%s" % server.server_port
+        self.assertEqual(remote_health({"host": host, "apiKey": "test-key"}), {"healthy": True, "models": []})
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp)
+            staged = app / "remote.json"
+            staged.write_text(json.dumps({"host": host, "apiKey": "test-key"}))
+            staged.chmod(0o600)
+            saved = subprocess.run([sys.executable, str(MANAGER), str(app), "save-remote", str(staged)],
+                                   capture_output=True, text=True, timeout=30)
+            self.assertEqual(saved.returncode, 0, saved.stdout)
+            self.assertEqual(json.loads(saved.stdout)["remote"], {"healthy": True, "models": []})
+            enabled = subprocess.run([sys.executable, str(MANAGER), str(app), "enable"],
+                                     capture_output=True, text=True, timeout=30)
+            self.assertEqual(enabled.returncode, 1, enabled.stdout)
+            self.assertIn("no models", json.loads(enabled.stdout)["error"])
+
     def test_local_flow(self):
         upstream = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
         thread = threading.Thread(target=upstream.serve_forever, daemon=True)

@@ -10,10 +10,10 @@ Use the maintained official [LiteLLM project](https://github.com/BerriAI/litellm
 
 ## Product contract
 
-- A single global LiteLLM setting in Global Agent Settings; default off for existing and new installations. Choose a local gateway or a remote LiteLLM endpoint. No per-provider switch or standalone dashboard.
+- A single global LiteLLM setting in Global Agent Settings; default off for existing and new installations. Choose a Herdr-managed local gateway or an existing LiteLLM server (including Docker, LAN or hosted). No per-provider switch or standalone dashboard.
 - OFF: existing Model Provider launch behavior and upstream endpoints are unchanged.
 - ON: a launch through the **Model Providers** flow uses the exact selected provider and model through the chosen LiteLLM endpoint. The picker continues to show the real provider/model, never LiteLLM as a selectable provider, model or agent. No change to native Official Agents or Unofficial Agents flows, even when the same executable (e.g. Codex or Claude) is selected.
-- Local mode starts a pinned gateway on demand and records local usage. Remote mode requires an HTTPS API host and LiteLLM API key, verifies authenticated `/v1/models`, and requires the selected model ID to exist there. Remote mode shows connection health; it does not claim local usage counts.
+- Managed mode starts a pinned gateway on demand and records local usage. Existing mode requires an HTTPS API host (HTTP is allowed only for loopback) and LiteLLM API key, verifies authenticated `/v1/models` for liveness, and shows the advertised catalog. An empty catalog proves liveness but is not ready to enable; at least one advertised model is required to turn it on, and launches require the selected model ID to exist there. Existing mode checks health only and does not claim local usage counts.
 - Both modes accept the OpenAI Chat Completions upstream protocol. LiteLLM translates the managed clients' Chat Completions, Responses and Anthropic Messages requests to it; upstreams that only support another protocol are not supported by this implementation.
 - Logging is metadata only. No prompt, response text, tool inputs, credentials, raw headers or unredacted errors in persistent logs. Do not export telemetry externally.
 - Fail closed: when logging is enabled, an unavailable/incompatible gateway prevents the affected new launch with an actionable error. Never silently bypass it or choose another provider/model.
@@ -27,14 +27,14 @@ Use the maintained official [LiteLLM project](https://github.com/BerriAI/litellm
 flowchart TD
   A[Model Providers: select real provider and model] --> B{Global LiteLLM enabled?}
   B -->|No| C[Existing direct launch]
-  B -->|Yes| D{Local or remote LiteLLM?}
-  D -->|Local| E[Ensure one local service and route]
-  D -->|Remote| R[Check remote host, key and model]
+  B -->|Yes| D{Managed or existing LiteLLM?}
+  D -->|Managed| E[Ensure one local service and route]
+  D -->|Existing| R[Check host, key and catalog]
   E -->|Ready| G[Launch agent with local endpoint and credential]
-  R -->|Healthy| H[Launch agent with remote endpoint and credential]
+  R -->|Reachable| H[Launch agent with existing endpoint and credential]
   E -->|Unavailable| F[Actionable error; no direct fallback]
   R -->|Unavailable| F
-  H --> V[Remote LiteLLM endpoint]
+  H --> V[Existing LiteLLM server]
   G --> I[Metadata-only local event log]
   G --> J[Exact selected model route]
   V --> J
@@ -57,12 +57,12 @@ Keep the service/lifecycle and route mapping separate from provider usage polici
 
 - Pin a tested official stable LiteLLM release; do not require a pure-Rust build. Validate its supported installation mode locally without Docker, Redis or PostgreSQL. Use a dedicated environment, no mutation of system Python; explicit actionable setup if the dependency is missing.
 - Start lazily on the first managed launch; ensure a single instance with a process/ownership lock, localhost-only binding, authenticated requests and health/readiness checks. Use an app-owned loopback endpoint and private configuration directory. Reject unexpected listener ownership. Do not expose a general arbitrary upstream proxy.
-- In Local mode, show the pinned CLI version/path and whether the gateway is running and healthy. In Remote mode, keep the host and API key in a private settings file, probe authenticated `/v1/models`, show returned models, and fail launches when the selected model is unavailable.
+- In Managed mode, show the pinned CLI version/path and whether the gateway is running and healthy. In Existing mode, keep the host and API key in a private settings file, probe authenticated `/v1/models`, show the advertised models, and fail launches when the selected model is unavailable. Liveness and launch readiness are separate states.
 - Use LiteLLM's supported custom-auth hook for an inference-only key; do not give managed agents the proxy master key. Pass only the gateway's required environment to its process, never inherited database URLs.
 - Keep the gateway independent of page navigation and mod reloads; avoid terminating active agent sessions when logging is toggled or routes change. If safe in-place config updates are unavailable, explicitly handle pending changes instead of restarting active sessions.
 - Derive routes from saved provider IDs and model IDs, not display labels; map collision-free internal aliases back to the original IDs. Preserve user selections, custom base URLs, exact upstream model names and supported authentication including anonymous Kilo if possible. Avoid placing upstream secrets in CLI argv, logs or repository; keep existing credential storage as source of truth.
 - Route only the explicit Model Providers launch branch. Verify Pi OpenAI chat completions, Codex Responses-to-chat translation, and Claude Messages-to-chat translation against the pinned release and a chat-only mock upstream. Do not imply that non-OpenAI-chat upstreams are supported.
-- Add the persisted global switch and Local/Remote selection to Global Agent Settings. Remote mode needs host/key fields and connection health; keep the UI on this page.
+- Add the persisted global switch and Managed/Existing selection to Global Agent Settings. Existing mode needs host/key fields and connection health; keep the UI on this page.
 
 ### 2. Metadata collection, provider policy and bottom line
 
@@ -82,8 +82,8 @@ Acceptance criteria:
 - [ ] ON routes managed Pi/Codex/Claude requests through the same local service to the exact selected OpenAI Chat Completions upstream/model; prove the three client protocol translations, streaming and tool calls.
 - [ ] Native Official/Unofficial launch paths are unchanged, including when executable names match managed launches; LiteLLM is absent from provider/model pickers.
 - [ ] Multiple sessions and provider IDs remain isolated and share one gateway; settings reload does not duplicate processes or interrupt active sessions.
-- [ ] Local readiness/auth failures and unsupported combinations fail visibly with no direct fallback; reject unauthenticated requests.
-- [ ] Remote host/key checks authenticated `/v1/models`, reports health and available models, and refuses launches whose selected model is absent.
+- [ ] Managed readiness/auth failures and unsupported combinations fail visibly with no direct fallback; reject unauthenticated requests.
+- [ ] Existing host/key checks authenticated `/v1/models`, reports liveness and the available models (zero models is still reachable), and refuses launches whose selected model is absent.
 - [ ] Mock upstream verifies exactly one upstream attempt per normal request; controlled retries/fallbacks disabled; 429 and failures propagated/recorded without misclassifying local failures.
 - [ ] Metadata-only files contain no fixture prompts, responses, credentials, tool arguments or sensitive headers/errors.
 - [ ] Kilo free/paid distinction, duplicate callbacks, expiry at the 60-minute boundary, concurrent sessions and app/service restart produce correct observed counts; unknown limit/coverage not misrepresented.
@@ -110,7 +110,7 @@ python3 -m venv "$APP_HOME/litellm-gateway/venv"
 "$APP_HOME/litellm-gateway/venv/bin/pip" install 'litellm[proxy]==1.111.0'
 ```
 
-Enable Logging under Model Providers, then launch a managed agent. The gateway starts on demand. When provider routes change while the service is alive, a new launch reports an error rather than interrupting existing sessions. After closing managed agents, explicitly stop it with:
+Enable LiteLLM under Global Agent Settings, then launch a managed agent. The gateway starts on demand. When provider routes change while the service is alive, a new launch reports an error rather than interrupting existing sessions. After closing managed agents, explicitly stop it with:
 
 ```sh
 python3 "$APP_HOME/mods/orca-agent-flyout/litellm_gateway.py" "$APP_HOME" stop

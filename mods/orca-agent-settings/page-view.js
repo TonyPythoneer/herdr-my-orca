@@ -83,9 +83,11 @@ export function gatewayCardView(owner, t) {
     else if (local?.cli) health = { text: `CLI found at ${local.cli}${local.version ? ` · ${local.version}` : ""}; gateway not installed`, color: t.blocked };
     else health = { text: "No managed LiteLLM CLI found", color: t.blocked };
   } else if (remote?.healthy) {
-    health = { text: `Healthy · ${remote.models.length} models available`, color: t.done };
+    health = remote.models.length
+      ? { text: `Reachable · ${remote.models.length} models available`, color: t.done }
+      : { text: "Reachable · no models advertised", color: t.done };
   } else {
-    health = { text: remote?.error ?? "Remote connection has not been checked", color: remote ? t.blocked : t.muted };
+    health = { text: remote?.error ?? "Existing connection has not been checked", color: remote ? t.blocked : t.muted };
   }
   const field = (id, label, state) => v_flex().w_full().gap(4)
     .child(div().text_size(10).font_semibold().text_color(t.dim).child(label))
@@ -113,7 +115,7 @@ export function gatewayCardView(owner, t) {
         .child(v_flex().flex_1().min_w(0).gap(3)
           .child(div().text_size(13).font_semibold().text_color(t.foreground).child("LiteLLM"))
           .child(div().text_size(11).line_height("16px").text_color(t.muted)
-            .child("Local records usage; remote checks health. Running sessions keep their current route.")))
+            .child("Managed records usage; existing checks health. Running sessions keep their current route.")))
         .child(div().id("am-litellm-toggle").w(36).h(20).flex_none().flex().items_center().p(2).rounded_full()
           .bg(on ? t.foreground : t.input)
           .when(owner.litellmBusy, el => el.opacity(0.45))
@@ -127,16 +129,16 @@ export function gatewayCardView(owner, t) {
             .child(div().size(16).rounded_full().bg(on ? t.background : t.muted)))),
     )
     .child(h_flex().gap(6)
-      .child(owner.button("am-litellm-local", "Local", t, (_event, cx) => owner.setLiteLLMMode("local", cx), { primary: owner.litellmMode === "local", disabled: owner.litellmBusy || owner.litellmEnabled }))
-      .child(owner.button("am-litellm-remote", "Remote", t, (_event, cx) => owner.setLiteLLMMode("remote", cx), { primary: owner.litellmMode === "remote", disabled: owner.litellmBusy || owner.litellmEnabled })))
+      .child(owner.button("am-litellm-local", "Managed", t, (_event, cx) => owner.setLiteLLMMode("local", cx), { primary: owner.litellmMode === "local", disabled: owner.litellmBusy || owner.litellmEnabled }))
+      .child(owner.button("am-litellm-remote", "Existing", t, (_event, cx) => owner.setLiteLLMMode("remote", cx), { primary: owner.litellmMode === "remote", disabled: owner.litellmBusy || owner.litellmEnabled })))
     .when(on, el => el.child(div().text_size(11).text_color(t.muted).child("Turn off LiteLLM to change mode.")))
     .when(on && owner.litellmMode === "local" && Boolean(local) && !local.installed, el => el.child(div().text_size(11).line_height("16px").text_color(t.blocked)
-      .child("LiteLLM is on, but the managed local gateway is not ready. New Model Provider launches will fail.")))
+      .child("LiteLLM is on, but the managed gateway is not ready. New Model Provider launches will fail.")))
     .when(owner.litellmMode === "local", el => el.child(v_flex().gap(6)
       .child(div().text_size(11).text_color(health.color).child(health.text))
       .when(Boolean(local?.cli), inner => inner.child(div().min_w(0).truncate().text_size(10).text_color(t.dim).child(local.cli)))
       .when(Boolean(local) && !local.cli, inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
-        .child("Local mode uses Herdr's managed CLI, not Docker. Choose Remote to connect a running server.")))
+        .child("Managed mode uses Herdr's managed CLI, not Docker. Choose Existing to connect a running server.")))
       .child(Link.new("am-litellm-repo").href("https://github.com/BerriAI/litellm")
         .text_size(11).text_color(t.accent).underline()
         .tooltip("Open the LiteLLM repository on GitHub")
@@ -150,14 +152,18 @@ export function gatewayCardView(owner, t) {
       .child(keyField)
       .child(div().text_size(10).text_color(t.dim).child("Use an inference-only LiteLLM API key where available."))
       .child(div().text_size(11).text_color(health.color).child(health.text))
+      .when(remote?.healthy && remote.models.length === 0, inner => inner.child(div().text_size(11).line_height("16px").text_color(t.blocked)
+        .child(on ? "The server is reachable, but advertises no models. New Model Provider launches will fail until it returns one."
+          : "The server is reachable, but advertises no models. Add one before enabling LiteLLM.")))
       .when(Boolean(remote?.models?.length), inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
         .child(`Models: ${remote.models.slice(0, 5).join(", ")}${remote.models.length > 5 ? ", …" : ""}`)))
       .when(owner.litellmRemoteDirty, inner => inner.child(div().text_size(10).text_color(t.dim).child("Connection status is for the saved settings.")))
-      .child(h_flex().gap(8)
+      .child(h_flex().items_center().gap(8)
         .child(owner.button("am-litellm-save-remote", owner.litellmBusy ? "Checking…" : "Save & check", t,
           (_event, cx) => owner.saveRemoteLiteLLM(cx), { height: 24, px: 8, primary: true, disabled: owner.litellmBusy }))
-        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check saved connection", t,
-          (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy })))))
+        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check server", t,
+          (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
+        .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))))))
     .when(Boolean(owner.litellmError), el => el.child(div().text_size(11).text_color(t.blocked).child(owner.litellmError)));
 }
 
