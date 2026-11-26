@@ -1,5 +1,5 @@
 // Flow test: runs the real model-provider handlers of main.js with answer-controlled curl, mktemp,
-// chmod, stat and sips (scripts/gpui-stub-loader.mjs), without the app or a live model server.
+// chmod and sips (scripts/gpui-stub-loader.mjs), without the app or a live model server.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -20,7 +20,7 @@ const field = (value) => {
 };
 
 // `answers` controls the /models and icon responses; file and process APIs use an in-memory harness.
-function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, magic = PNG, mode = "600" } = {}) {
+function harness({ file = null, status = 200, body = MODELS, siteHtml = null, iconStatus = 200, magic = PNG, failStagedFileChmod = false } = {}) {
   const files = new Map();
   if (file !== null) files.set(PROVIDERS, file);
   globalThis.__herdrFiles = files;
@@ -32,9 +32,23 @@ function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, m
       if (iconStatus === 200) files.set(args[args.indexOf("-o") + 1], "image");
       return { code: 0, stdout: `\n${iconStatus}`, stderr: "" };
     }
-    if (command === "curl") return { code: 0, stdout: body ? `${body}\n${status}` : `\n${status}`, stderr: "" };
+    if (command === "curl") {
+      // /models carries the bearer header; an icon HTML hunt does not.
+      if (args.includes("-H")) return { code: 0, stdout: body ? `${body}\n${status}` : `\n${status}`, stderr: "" };
+      return { code: 0, stdout: siteHtml ?? `\n${status}`, stderr: "" };
+    }
     if (command === "xxd") return { code: 0, stdout: `${magic}\n`, stderr: "" };
-    if (command === "stat") return { code: 0, stdout: `${mode}\n`, stderr: "" };
+    if (command === "chmod" && failStagedFileChmod && args[0] === "600" && args[1]?.endsWith("/model-providers.json")) {
+      return { code: 1, stdout: "", stderr: "permission denied" };
+    }
+    if (command === "python3" && args[0] === "-c") {
+      const [, , _lock, target, staged, expectedFile, absent] = args;
+      if (absent === "1" ? files.has(target) : files.get(target) !== files.get(expectedFile)) {
+        return { code: 1, stdout: "provider file changed", stderr: "" };
+      }
+      files.set(target, files.get(staged));
+      return { code: 0, stdout: "", stderr: "" };
+    }
     if (command === "sips") {
       files.set(args[args.indexOf("--out") + 1], "converted");
       return { code: 0, stdout: "", stderr: "" };
@@ -57,6 +71,8 @@ function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, m
     providers: {},
     providersError: null,
     cards: new Map(),
+    providerHealth: new Map(),
+    providerChecks: new Set(),
     adding: null,
     providerText: undefined,
     providerWrittenAt: 0,
@@ -119,7 +135,7 @@ test("a passing test writes the record, fixes the mode and saves the icon under 
   assert.equal(card.status.tone, "done");
   assert.equal(card.id, "omlx");
   assert.ok(calls.some((call) => call[0] === "chmod" && call[1] === "600"));
-  assert.ok(calls.some((call) => call[0] === "stat"));
+  assert.ok(calls.some((call) => call[0] === "chmod" && call[1] === "600" && call[2]?.endsWith("/model-providers.json")));
   assert.ok(calls.some((call) => call[0] === "curl" && call.at(-1) === "https://github.com/jundot.png?size=64"));
 });
 
@@ -184,11 +200,58 @@ test("a site link takes the site's favicon", async () => {
   assert.equal(stored(files).example.link, "https://models.example.com");
 });
 
-test("a mode that did not take is reported", async () => {
-  const { page, cx } = harness({ mode: "644" });
-  const card = cardOf();
+test("a site link takes an SVG link icon in preference to favicon", async () => {
+  const siteHtml = '<html><head><link rel="icon" type="image/svg+xml" href="/logo.svg" sizes="any"></head></html>';
+  const { page, files, calls, cx } = harness({ siteHtml });
+  const card = cardOf({ name: field(""), link: field("https://omlx.ai/") });
   await page.saveCard(card, cx);
-  assert.equal(card.status.text, "model-providers.json is not private to your user.");
+  assert.ok(calls.some((call) => call[0] === "curl" && call.at(-1) === "https://omlx.ai/logo.svg"), "fetched the SVG icon URL");
+  assert.match(stored(files).omlx.iconPath, /^\/home\/provider-icons\/icon-[a-z0-9]+\.png$/);
+  assert.ok(files.has(stored(files).omlx.iconPath));
+});
+
+test("a site link takes the first rel=icon link when there is no SVG", async () => {
+  const siteHtml = '<html><head><link rel="icon" href="/a.ico"><link rel="icon" href="/b.ico"></head></html>';
+  const { page, files, calls, cx } = harness({ siteHtml });
+  const card = cardOf({ name: field(""), link: field("https://example.com/") });
+  await page.saveCard(card, cx);
+  assert.ok(calls.some((call) => call[0] === "curl" && call.at(-1) === "https://example.com/a.ico"), "fetched the first icon URL");
+  assert.match(stored(files).example.iconPath, /^\/home\/provider-icons\/icon-[a-z0-9]+\.png$/);
+});
+
+test("an unsupported preferred icon falls back to the site's favicon", async () => {
+  const { page } = harness();
+  const card = cardOf({ name: field(""), link: field("https://omlx.ai/") });
+  const attempted = [];
+  page.resolveIconUrl = async () => "https://omlx.ai/logo.svg";
+  page.fetchProviderIcon = async (url) => {
+    attempted.push(url);
+    return url.endsWith(".svg") ? null : "/home/provider-icons/favicon.png";
+  };
+  await page.refreshIcon(card, { link: "https://omlx.ai", iconUrl: "https://omlx.ai/favicon.ico" });
+  assert.deepEqual(attempted, ["https://omlx.ai/logo.svg", "https://omlx.ai/favicon.ico"]);
+  assert.equal(card.fetched.path, "/home/provider-icons/favicon.png");
+});
+
+test("a GitHub repo link takes the page's avatar image", async () => {
+  const siteHtml = '<html><body><img data-component="Avatar" data-testid="github-avatar" src="https://avatars.githubusercontent.com/u/123?v=4"></body></html>';
+  const { page, files, calls, cx } = harness({ siteHtml });
+  const card = cardOf({ name: field(""), link: field(OMLX_LINK) });
+  await page.saveCard(card, cx);
+  assert.ok(calls.some((call) => call[0] === "curl" && call.at(-1) === OMLX_LINK), "fetched the repo page");
+  assert.ok(calls.some((call) => call[0] === "curl" && call.at(-1) === "https://avatars.githubusercontent.com/u/123?v=4"), "fetched the avatar");
+  assert.match(stored(files).omlx.iconPath, /^\/home\/provider-icons\/icon-[a-z0-9]+\.png$/);
+});
+
+test("a failed staging permission check preserves the existing provider file", async () => {
+  const providers = { omlx: savedRecord() };
+  const original = fileOf(providers);
+  const { page, files, cx } = harness({ file: original, failStagedFileChmod: true });
+  page.providers = providers;
+  const card = cardOf({ id: "omlx", key: field(""), fetched: { link: OMLX_LINK, path: providers.omlx.iconPath } });
+  await page.saveCard(card, cx);
+  assert.equal(files.get(PROVIDERS), original);
+  assert.equal(card.status.text, "Could not write model-providers.json.");
 });
 
 test("two providers save on their own and a re-test keeps the chosen model", async () => {
@@ -238,7 +301,7 @@ test("a changed link finds a new icon, saves it under a new name and deletes the
   const record = stored(files).omlx;
   assert.equal(record.iconPath, card.fetched.path);
   assert.equal(files.has(providers.omlx.iconPath), false);
-  assert.equal(calls.filter((call) => call[0] === "curl" && call.at(-1).includes("someone")).length, 1, "fetched once, not again on save");
+  assert.equal(calls.filter((call) => call[0] === "curl" && call.includes("-o")).length, 1, "downloaded the icon once, not again on save");
 });
 
 test("the same link is not fetched again", async () => {
@@ -291,7 +354,7 @@ test("delete and a re-test never remove a file outside the provider icon folder"
   const record = savedRecord({ iconPath: "/home/important.txt" });
   const gone = harness({ file: fileOf({ omlx: record }) });
   await gone.page.deleteProvider(cardOf({ id: "omlx", fetched: { link: "", path: "" } }), gone.cx);
-  assert.equal(gone.calls.some((call) => call[0] === "rm"), false);
+  assert.equal(gone.calls.some((call) => call[0] === "rm" && call.includes("/home/important.txt")), false);
   const retest = harness({ file: fileOf({ omlx: record }) });
   retest.page.providers = { omlx: record };
   await retest.page.saveCard(cardOf({ id: "omlx", key: field(""), fetched: { link: OMLX_LINK, path: "/home/important.txt" } }), retest.cx);
@@ -328,10 +391,12 @@ test("the Model providers page draws a card for each provider and a way to add o
   page.providersPage = true;
   page.providers = { omlx: savedRecord() };
   page.cards.set("omlx", cardOf({ id: "omlx", open: false, fetched: { link: OMLX_LINK, path: "" } }));
+  page.selectedProviderId = "omlx";
   const text = JSON.stringify(page.render()?.__node ?? page.render());
   assert.ok(text.includes("Model providers"));
-  assert.ok(text.includes("Add provider"));
   assert.ok(text.includes("oMLX"));
+  assert.ok(text.includes("Check health"));
+  assert.ok(text.includes("Edit provider"));
   assert.equal(text.includes("Official support"), false);
 });
 
@@ -340,7 +405,7 @@ test("an icon path that climbs out of the icon folder is never removed", async (
     const record = savedRecord({ iconPath });
     const { page, calls, cx } = harness({ file: fileOf({ omlx: record }) });
     await page.deleteProvider(cardOf({ id: "omlx", fetched: { link: "", path: "" } }), cx);
-    assert.equal(calls.some((call) => call[0] === "rm"), false, iconPath);
+    assert.equal(calls.some((call) => call[0] === "rm" && call.includes(iconPath)), false, iconPath);
   }
 });
 
@@ -352,14 +417,15 @@ test("delete does nothing while that card is saving", async () => {
   assert.deepEqual(Object.keys(stored(files)), ["omlx"]);
 });
 
-test("a mode that did not take still leaves the saved provider with its card", async () => {
-  const { page, files, cx } = harness({ mode: "644" });
+test("a failed staging permission check keeps the new provider draft for retry", async () => {
+  const { page, files, cx } = harness({ failStagedFileChmod: true });
   page.adding = cardOf();
   const card = page.adding;
   await page.saveCard(card, cx);
-  assert.equal(card.id, "omlx");
-  assert.equal(page.cards.get("omlx"), card);
-  assert.equal(page.adding, null);
+  assert.equal(card.id, null);
+  assert.equal(page.cards.has("omlx"), false);
+  assert.equal(page.adding, card);
+  assert.equal(files.has(PROVIDERS), false);
   assert.equal(card.status.tone, "blocked");
-  assert.deepEqual(Object.keys(stored(files)), ["omlx"]);
+  assert.equal(card.status.text, "Could not write model-providers.json.");
 });

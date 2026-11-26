@@ -51,6 +51,11 @@ MOD_SCOPE = {
 }
 
 fixture_json=json.dumps({"version":1,"tasks":[{"id":"snapshot-edit","name":"Snapshot edited task","enabled":False,"agent":"claude","trigger":{"type":"daily","time":"09:00"},"argv":["echo","snapshot"],"cwd":None}]},indent=2)
+cancel_fixture_json=json.dumps({"version":1,"tasks":[{"id":"snapshot-cancel","name":"Snapshot cancel draft","enabled":False,"agent":"claude","trigger":{"type":"daily","time":"09:00"},"argv":["echo","snapshot-cancel"],"cwd":None}]},indent=2)
+safe_tasks_fixture={"version":1,"tasks":[
+    {"id":"claude-reset-ping","name":"Claude reset ping","enabled":False,"agent":"claude","trigger":{"type":"reset","provider":"claude","window":"h5","delaySeconds":5},"argv":["claude","ping"],"cwd":None},
+    {"id":"codex-reset-ping","name":"Codex reset ping","enabled":False,"agent":"codex","trigger":{"type":"reset","provider":"codex","window":"h5","delaySeconds":5},"argv":["codex","ping"],"cwd":None},
+]}
 PERM="Each agent's own settings"
 
 CASES = [
@@ -76,9 +81,12 @@ CASES = [
     case("Agent manager: global permissions dropdown","orca-agent-settings",PERM,visible=True,region=DETAIL,page="main-agents",popover=True,afterText=["Ask for approval","Approve for me"],closedText=[PERM],closedAbsent=["Approve for me"],allowSetupRuntimeErrors=["can't render at a zero size"],allowTransientRuntimeErrors=["can't render at a zero size"]),
     case("Agent manager: provider editor","orca-agent-settings","Add model provider",(38,625),page="main-agents",prepare=[scroll(40,560),scroll(40,560)],afterText=["Add model provider","Test and save"],allowSetupRuntimeErrors=["can't render at a zero size"]),
     case("Task management footer","orca-status-footer orca-tasks","Tasks",(43,671),mouse_only=True,afterText=["Task management"],pageAfter="main-tasks",allowSetupRuntimeErrors=["can't render at a zero size"],allowTransientRuntimeErrors=["can't render at a zero size"]),
-    case("Task management: JSON editor","orca-tasks","Edit JSON",(612,271),page="main-tasks",afterText=["Close JSON","Save","Cancel"],follow=[
-        text("Cancel",MAIN,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"])
-    ]),
+    case("Task management: JSON editor","orca-tasks","Edit JSON",visible=True,region=(.28,.04,.99,.97),page="main-tasks",afterText=["Close JSON","Save","Cancel"],allowSetupRuntimeErrors=["can't render at a zero size"],follow=[
+        {"kind":"paste","label":"version","region":(.30,.29,.64,.76),"occurrence":"bottom","value":cancel_fixture_json,"afterText":["snapshot-cancel"],"evidenceRegion":(.30,.29,.64,.76)},
+        text("Cancel",MAIN,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]),
+        {**text("Edit JSON",MAIN,scroll=True,afterText=["Close JSON"]),"checks":[{"required":["Claude reset ping"],"absent":["Snapshot cancel draft"],"region":(.30,.29,.64,.76)}]},
+        text("Cancel",MAIN,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]),
+    ],fileAssert={"file":"tasks.json","path":[],"equals":safe_tasks_fixture}),
     case("Task management: back to terminals","orca-tasks","Back to terminals",(318,68),page="main-tasks",beforeText=["Task management"],afterText=["Projects"],absentText=["Task management"],pageAfter="main-terminals"),
     case("Sidebar collapse","orca-header","Collapse sidebar",(91,15),files="names",beforeText=["Projects","Find files"],afterText=["Find files"],absentText=["Projects"]),
     case("Right panel collapse","orca-right-sidebar-header orca-header","Collapse right sidebar",(1000,15),files="names",beforeText=["Find files","Names"],afterText=["Projects"],absentText=["Find files","Names"],allowTransientRuntimeErrors=["can't render at a zero size"]),

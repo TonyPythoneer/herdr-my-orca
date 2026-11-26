@@ -20,7 +20,7 @@ CASE_KEYS = {
 CONTROL_KEYS = {"label", "xy", "right", "mouse_only", "visible", "region", "occurrence", "scroll"}
 ACTION_KEYS = {
     "kind", "label", "xy", "amount", "right", "region", "evidenceRegion", "absentRegion", "scroll", "occurrence",
-    "afterText", "absentText", "noOverlay", "name", "args", "value",
+    "afterText", "absentText", "checks", "noOverlay", "name", "args", "value",
 }
 # Manifest mods that are intentionally without a case: mod -> one-line reason.
 EXEMPT = {}

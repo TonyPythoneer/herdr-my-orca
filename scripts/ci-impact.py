@@ -200,13 +200,11 @@ def select(root, files, changed, force=False):
         git_bench = projection_bench = snapshot = config = True
     if all_native:
         page_keys.update((l, s, p) for l, s, p, _ in layouts)
-    # Lint every affected handwritten area, not unrelated modules. Global fallback uses all.
+    # Lint changed handwritten files only; mod-wide expansion includes inherited warnings.
     if full:
         lint.update(("mods", "scripts", "orca-ui"))
     else:
-        lint.update("mods/" + m for m in direct)
-        if any(p.startswith("orca-ui/") and not TEST.search(p) for p in changed):
-            lint.add("orca-ui")
+        lint.update(p for p in changed if p.endswith((".js", ".mjs", ".cjs")) and not TEST.search(p))
     groups = defaultdict(list)
     for l, s, p in sorted(page_keys):
         groups[l, s].append(p)

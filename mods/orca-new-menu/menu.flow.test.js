@@ -25,7 +25,7 @@ test("local inventory is ready after probes, managed commands launch only while 
   row.run();
   inventory.disabled.push("kimi");
   row.run();
-  assert.deepEqual(calls, [["tab.new", { space: "s", folder: "/repo", argv: agent.run }]]);
+  assert.deepEqual(calls, [["tab.new", { space: "s", folder: "/repo", argv: ["env", "HERDR_ENV=1", ...agent.run] }]]);
   globalThis.__herdrFiles.set("/home/programs.json", '{"programs":{"kimi":{"run":["override"]}}}');
   assert.deepEqual(await menu.withLocalRuns([agent]), [{ ...agent, run: ["override"] }]);
 });

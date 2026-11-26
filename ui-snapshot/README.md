@@ -9,7 +9,7 @@ python3 ui-snapshot/capture.py --target . --out /tmp/herdr-ui-snapshot --local
 ```
 The observer uses a temporary HOME, app configuration, Git configuration and unique core session. It opens and focuses its own Herdr window, sends real input, and stops if that window loses focus. Keep the desktop unlocked during the run. After a fixture paste it restores the clipboard if another process has not changed it; an interrupted paste can leave fixture text there. The report records failures and incomplete observations; a local pass does not replace the macOS CI run.
 
-Pull requests run the Ports popover smoke scenario and publish its PNG and manifest. Use **Run workflow** on `Native UI candidate acceptance` with `expanded` enabled to capture the full scenario set. The full run uses the runner's standard window; alternate viewport cases are not part of acceptance.
+Pull requests that change the Agent Settings or Tasks UI run three focused native snapshots: Ports dismissal, the provider editor, and editing then canceling the Tasks JSON editor. They publish PNGs and a manifest. Use **Run workflow** on `Native UI candidate acceptance` with `expanded` enabled to capture the full scenario set. The full run uses the runner's standard window; alternate viewport cases are not part of acceptance.
 
 Push an empty commit to ci/main-ui-snapshot:
 ```sh
@@ -35,4 +35,4 @@ Every scenario normalizes its required layout, project and file-search state. A 
 ## Deep interaction evidence
 The macOS Vision framework reads text from the actual screenshot to locate unique visible controls and check expected content. No external OCR service or synthetic rendering is used. The full scenario set can scroll a specified pane, paste synthetic JSON, and verify persisted fixture values. All intermediate images correspond to actual actions; no startup/stock screenshots. A preview-only dialog is explicitly distinguished from a live agent workflow. No credentials, real providers or external agent runs are used.
 
-Exact duplicate images are linked once in the browser gallery; the full artifact retains the original evidence. Coverage inventory includes every repository mod with explicit dialog-only and passive-panel limitations. The pull request gate verifies the Ports popover's visible and dismissed states from native screenshots; the broader inventory is available through manual expanded runs.
+Exact duplicate images are linked once in the browser gallery; the full artifact retains the original evidence. Coverage inventory includes every repository mod with explicit dialog-only and passive-panel limitations. The pull request gate verifies the Ports popover, provider form, and Tasks cancel flow from native screenshots; the broader inventory is available through manual expanded runs.

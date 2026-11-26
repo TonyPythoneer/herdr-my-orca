@@ -35,7 +35,10 @@ test("validateHost rejects what a base URL cannot be", () => {
 
 test("judgeModels passes a 200 with a non-empty data array", () => {
   const body = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM2-VL-450M-4bit", max_model_len: 65536 }, { id: "b" }] });
-  assert.deepEqual(judgeModels(200, body), { ok: true, models: ["mlx-community--LFM2-VL-450M-4bit", "b"], modelInfo: { "mlx-community--LFM2-VL-450M-4bit": { contextWindow: 65536 } } });
+  const result = judgeModels(200, body);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.models, ["mlx-community--LFM2-VL-450M-4bit", "b"]);
+  assert.deepEqual({ ...result.modelInfo }, { "mlx-community--LFM2-VL-450M-4bit": { contextWindow: 65536 } });
 });
 
 test("judgeModels maps every failure to its fixed message", () => {

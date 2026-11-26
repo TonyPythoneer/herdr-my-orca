@@ -61,7 +61,7 @@ import { settingsPageView, permissionsCardView } from "./page-view.js";
 import { modelProvidersView, providerCardView, providersPageView } from "./provider-view.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
 import { agentPermissionItems, defaultPermissionItems, permissionRow } from "./permission-menu.js";
-import { PROVIDER_FILE, judgeModels, linkInfo, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost, writeProviderFile } from "./codex-provider.js";
+import { PROVIDER_FILE, judgeModels, linkInfo, iconFromHtml, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost, writeProviderFile } from "./codex-provider.js";
 
 import { railRows } from "./agent-rail.js";
 import { createAgentConfigClass } from "./agent-config-view.js";
@@ -106,6 +106,8 @@ const UNINSTALL_MS = 10 * 60_000;
 // curl asks for five seconds; the exec timeout is the same five seconds in milliseconds.
 const CURL_MAX_SECONDS = 5;
 const CURL_TIMEOUT_MS = CURL_MAX_SECONDS * 1000;
+// How many bytes of a site's HTML are read when hunting for its icon.
+const ICON_HTML_MAX_BYTES = 1024 * 1024;
 const SAVED_NOTICE_MS = 2200;
 const PERMISSION_NOTICE_MS = 6000;
 // What must match between the confirmed install and the one found again before npm runs.
@@ -159,6 +161,10 @@ export default class AgentManager extends View {
     this.refreshGen = 0;
     this.action = null; // { key, kind, phase, message }
     this.uninstall = null; // { key, phase, status, message }
+    this.initProviders(props, cx);
+  }
+
+  initProviders(routeProps, cx) {
     // Model providers share this page's rail and workspace with the agent catalog.
     this.providers = {};
     this.providersError = null;
@@ -168,16 +174,17 @@ export default class AgentManager extends View {
     this.providerHealth = new Map();
     this.providerChecks = new Set();
     this.adding = null; // the card for a provider being added
+    this.addRequested = false;
     this.providerText = undefined; // model-providers.json as read, so a write can replace it safely
     this.providerWrittenAt = 0; // when this page last wrote it, so a slower refresh cannot roll it back
 
     // Deep link: a tab or overlay can open the page with one agent's editor showing
     // (`tab.new {mod: "orca-agent-settings", props: {expand: "claude"}}`).
-    const expand = props()?.expand;
+    const expand = routeProps()?.expand;
     if (typeof expand === "string") { this.railSelection = expand; this.focusKey = expand; }
 
     // Keep the old route as a shortcut into the integrated Agent Settings provider section.
-    this.providersPage = props()?.page === "providers";
+    this.providersPage = routeProps()?.page === "providers";
     if (this.providersPage) {
       if (!checking()) {
         setShared("agent-manager.open-agent", { key: "providers" });
@@ -187,6 +194,7 @@ export default class AgentManager extends View {
     }
     this.restoreCache();
     if (checking()) return;
+    this.newProviderCard = this.makeCard(null, null);
     cx.spawn(async (taskCx) => {
       this.applyProviders(await readFile(PROVIDERS));
       taskCx.notify();
@@ -1171,6 +1179,7 @@ export default class AgentManager extends View {
   makeCard(id, record) {
     const card = {
       id,
+      retired: false,
       open: false,
       touched: false, // the user typed here, so a file change must not overwrite the inputs
       testing: false,
@@ -1227,6 +1236,11 @@ export default class AgentManager extends View {
     const parsed = parseProviderFile(text);
     this.providers = parsed.providers ?? {};
     this.providersError = parsed.error ?? null;
+    this.reconcileProviderCards();
+    return true;
+  }
+
+  reconcileProviderCards() {
     for (const id of [...this.cards.keys()]) {
       if (!Object.hasOwn(this.providers, id)) {
         this.cards.delete(id);
@@ -1240,7 +1254,6 @@ export default class AgentManager extends View {
       else if (!card.touched) this.fillCard(card, record);
     }
     if (!this.selectedProviderId && this.railSelection === "providers" && !this.adding) this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
-    return true;
   }
 
   providerHealthState(id) {
@@ -1273,7 +1286,6 @@ export default class AgentManager extends View {
 
   showCardStatus(card, cx, tone, text) {
     card.status = { tone, text };
-    card.testing = false;
     cx?.notify();
   }
 
@@ -1310,29 +1322,41 @@ export default class AgentManager extends View {
   // Saves only after a passing test: validate the card, test the server, then write the record, fix
   // its mode and save the icon. A failed test writes nothing.
   async saveCard(card, cx) {
-    if (card.testing) return;
+    if (card.testing || card.retired) return;
     const input = this.readCardInput(card);
     if (input.error) return this.showCardStatus(card, cx, "blocked", input.error);
     card.testing = true;
     card.status = null;
     cx?.notify();
-    const verdict = await this.testProvider(input.host, input.key);
-    if (!verdict.ok) return this.showCardStatus(card, cx, "blocked", verdict.error);
-    await this.refreshIcon(card, input.info);
-    const saved = await this.saveProvider(card, { name: input.name, host: input.host, key: input.key, link: input.info.link, models: verdict.models, modelInfo: verdict.modelInfo ?? {} });
-    card.testing = false;
-    if (saved) this.adoptSavedCard(card, saved);
-    cx?.notify();
+    try {
+      const verdict = await this.testProvider(input.host, input.key);
+      if (!verdict.ok) {
+        this.showCardStatus(card, cx, "blocked", verdict.error);
+        return;
+      }
+      await this.refreshIcon(card, input.info);
+      const saved = await this.saveProvider(card, { name: input.name, host: input.host, key: input.key, link: input.info.link, models: verdict.models, modelInfo: verdict.modelInfo ?? {} });
+      if (saved) this.adoptSavedCard(card, saved);
+    } catch (error) {
+      this.showCardStatus(card, cx, "blocked", errorText(error) || "Could not save provider.");
+    } finally {
+      card.testing = false;
+      cx?.notify();
+    }
   }
 
   adoptSavedCard(card, saved) {
     if (!card.id) {
       // The new card becomes the saved provider's own card.
-      this.adding = null;
+      const wasActiveDraft = this.adding === card && this.railSelection === "providers";
+      if (this.adding === card) this.adding = null;
       this.cards.set(saved.id, card);
       card.id = saved.id;
-      this.selectedProviderId = saved.id;
-      this.selectedProviderBeforeAdd = null;
+      if (this.newProviderCard === card) this.newProviderCard = this.makeCard(null, null);
+      if (wasActiveDraft) {
+        this.selectedProviderId = saved.id;
+        this.selectedProviderBeforeAdd = null;
+      }
     }
     this.providerHealth.set(card.id, { state: "healthy", checkedAt: saved.record.verifiedAt, models: saved.record.models });
     card.touched = false;
@@ -1434,18 +1458,63 @@ export default class AgentManager extends View {
     cx?.notify();
   }
 
+  // The real icon URL for a pasted link: on GitHub, the repo page's avatar image
+  // (<img data-component="Avatar" data-testid="github-avatar">); otherwise the site HTML's SVG
+  // link icon first, then any other rel=icon, then /favicon.ico.
+  async resolveIconUrl(info) {
+    const url = new URL(info.link);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (host === "github.com") {
+      const html = await this.fetchIconHtml(info.link);
+      const m = html.match(/<img[^>]+data-component="Avatar"[^>]+data-testid="github-avatar"[^>]*src="([^"]+)"/i);
+      if (m) return m[1];
+      return info.iconUrl; // github.com/owner.png?size=64
+    }
+    const html = await this.fetchIconHtml(`https://${host}`);
+    const fromHtml = iconFromHtml(html, `https://${host}`);
+    if (fromHtml) return fromHtml;
+    return info.iconUrl; // https://host/favicon.ico
+  }
+
+  // Fetches a URL's text (a site's HTML or a repo page) through curl, bounded in size and time.
+  async fetchIconHtml(url) {
+    const result = await exec("curl", ["-sL", "--max-time", String(CURL_MAX_SECONDS), "--max-filesize", String(ICON_HTML_MAX_BYTES), url], { timeout: CURL_TIMEOUT_MS });
+    return result.stdout ?? "";
+  }
+
   // Looks for the icon of `info.link` unless that is the one already on the card. Work on one card
   // runs one at a time, so a quick second blur cannot race the first.
   refreshIcon(card, info) {
-    card.iconWork = card.iconWork.then(async () => {
-      if (card.fetched.link === info.link) return;
-      const path = info.iconUrl ? await this.fetchProviderIcon(info.iconUrl) : null;
-      // An unsaved preview goes when it is replaced; the saved icon goes when the save lands.
-      const old = ownedIcon(card.fetched.path);
-      if (old && old !== ownedIcon(this.providers[card.id]?.iconPath)) await removeFile(old);
-      card.fetched = { link: info.link, path: path ?? "" };
-    });
+    if (card.retired) return Promise.resolve();
+    card.iconWork = card.iconWork.then(() => this.updateIconPreview(card, info));
     return card.iconWork;
+  }
+
+  async previewIconPath(card, info) {
+    let iconUrl = info.iconUrl;
+    if (iconUrl) {
+      try { iconUrl = await this.resolveIconUrl(info); }
+      catch { iconUrl = info.iconUrl; }
+    }
+    if (card.retired) return null;
+    const path = iconUrl ? await this.fetchProviderIcon(iconUrl) : null;
+    if (card.retired) return path;
+    if (path || !info.iconUrl || iconUrl === info.iconUrl) return path;
+    return this.fetchProviderIcon(info.iconUrl);
+  }
+
+  async updateIconPreview(card, info) {
+    if (card.retired || card.fetched.link === info.link) return;
+    const path = await this.previewIconPath(card, info);
+    if (card.retired) {
+      const retiredIcon = ownedIcon(path);
+      if (retiredIcon) await removeFile(retiredIcon);
+      return;
+    }
+    // An unsaved preview goes when it is replaced; the saved icon goes when the save lands.
+    const old = ownedIcon(card.fetched.path);
+    if (old && old !== ownedIcon(this.providers[card.id]?.iconPath)) await removeFile(old);
+    card.fetched = { link: info.link, path: path ?? "" };
   }
 
   // Downloads the icon once into this app's folder, under a name no earlier icon had, so nothing
@@ -1668,13 +1737,42 @@ export default class AgentManager extends View {
 
   // Cancel on the card being added: an icon it already fetched goes with it.
   cancelNewCard(card, cx) {
-    if (card.testing) return;
-    const path = ownedIcon(card.fetched.path);
-    if (path) removeFile(path);
+    if (card.testing) {
+      if (this.adding === card) {
+        this.adding = null;
+        this.selectedProviderId = this.selectedProviderBeforeAdd;
+        this.selectedProviderBeforeAdd = null;
+      }
+      return false;
+    }
+    const isCurrentDraft = this.newProviderCard === card;
+    card.retired = true;
     this.adding = null;
     this.selectedProviderId = this.selectedProviderBeforeAdd;
     this.selectedProviderBeforeAdd = null;
+    if (isCurrentDraft) {
+      this.newProviderCard = null;
+      cx.spawn(async (taskCx) => {
+        const cleanup = (async () => {
+          await card.iconWork.catch(() => {});
+          const path = ownedIcon(card.fetched.path);
+          if (path) await removeFile(path);
+        })();
+        await taskCx.sleep(1);
+        this.newProviderCard = this.makeCard(null, null);
+        if (this.addRequested) {
+          this.addRequested = false;
+          this.adding = this.newProviderCard;
+          this.adding.open = true;
+          this.selectedProviderId = null;
+          this.railSelection = "providers";
+        }
+        taskCx.notify();
+        await cleanup;
+      });
+    }
     cx.notify();
+    return true;
   }
 
   // The main stack's terminals page is the way back to the work.
@@ -1808,20 +1906,29 @@ export default class AgentManager extends View {
     const requestedAgent = shared("agent-manager.open-agent");
     if (requestedAgent && typeof requestedAgent.key === "string") {
       const key = requestedAgent.key;
-      if (key !== "provider:add" && this.adding) this.cancelNewCard(this.adding, cx);
+      if (key !== "provider:add" && this.adding) {
+        const draft = this.adding;
+        if (!this.cancelNewCard(draft, cx)) this.adding = null;
+      }
       if (key === "provider:add") {
         this.railSelection = "providers";
-        if (!this.adding) this.selectedProviderBeforeAdd = this.selectedProviderId;
+        if (!this.adding && !this.addRequested) this.selectedProviderBeforeAdd = this.selectedProviderId;
+        this.addRequested = true;
         this.selectedProviderId = null;
-        this.adding ??= this.makeCard(null, null);
-        this.adding.open = true;
+        if (this.newProviderCard) {
+          this.adding ??= this.newProviderCard;
+          this.adding.open = true;
+          this.addRequested = false;
+        }
       } else if (key.startsWith("provider:")) {
+        this.addRequested = false;
         const id = key.slice("provider:".length);
         this.railSelection = "providers";
         this.selectedProviderId = Object.hasOwn(this.providers, id) ? id : Object.keys(this.providers)[0] ?? null;
         this.adding = null;
         this.selectedProviderBeforeAdd = null;
       } else {
+        this.addRequested = false;
         this.railSelection = key;
         if (key === "providers") this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
       }
@@ -1840,9 +1947,10 @@ export default class AgentManager extends View {
       if (row) this.toggleEnabled(row, cx);
     }
     // The left sidebar highlights this row; write only on change, because setShared re-renders every mod.
-    const selectedKey = this.railSelection === "providers"
-      ? this.adding ? "provider:add" : this.selectedProviderId ? `provider:${this.selectedProviderId}` : "provider:add"
-      : this.railSelection;
+    let selectedKey = this.railSelection;
+    if (this.railSelection === "providers") {
+      selectedKey = this.adding || !this.selectedProviderId ? "provider:add" : `provider:${this.selectedProviderId}`;
+    }
     if (shared("agent-manager.selected")?.key !== selectedKey) setShared("agent-manager.selected", { key: selectedKey });
     const providerRail = Object.entries(this.providers).map(([id, record]) => ({
       id, name: record.name, iconPath: record.iconPath, health: this.providerHealthState(id).state,

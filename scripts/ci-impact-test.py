@@ -70,6 +70,10 @@ class ImpactTest(unittest.TestCase):
         self.assertIn("orca-changes", p["native_mods"])
         self.assertFalse(p["full"])
 
+    def test_lint_tracks_changed_files_only(self):
+        p = self.plan("mods/orca-status-bar/main.js")
+        self.assertEqual(p["lint_paths"], ["mods/orca-status-bar/main.js"])
+
     def test_fallback(self):
         p = self.plan("unknown-source.rs")
         self.assertTrue(p["full"])

@@ -301,10 +301,14 @@ test("hasFlyout is true for the agents with a spec only", () => {
 test("sections: Codex has its own, the others get ARGUMENTS and ADVANCED from their option types", () => {
   assert.deepEqual(sectionsOf(SPECS.codex).map((s) => s.title), ["MODEL SOURCE", "HARNESS CLI ARGUMENTS", "HARNESS CLI ADVANCED ARGUMENTS"]);
   assert.deepEqual(sectionsOf(SPECS.claude), [
+    { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
     { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
     { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["advisorModel", "outputStyle", "agents", "systemPrompt"] },
   ]);
-  assert.deepEqual(sectionsOf(SPECS.opencode), [{ title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 }]);
+  assert.deepEqual(sectionsOf(SPECS.opencode), [
+    { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
+    { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+  ]);
 });
 
 test("claude argv: model and effort, then advisor, style, agents and prompt in launch order", () => {

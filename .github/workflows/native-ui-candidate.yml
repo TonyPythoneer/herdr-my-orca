@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'ui-snapshot/**'
+      - 'mods/orca-agent-settings/**'
+      - 'mods/orca-tasks/**'
       - '.github/workflows/native-ui-candidate.yml'
   workflow_dispatch:
     inputs:
@@ -55,6 +57,8 @@ jobs:
           args=()
           if [[ "$EXPANDED" != "true" ]]; then
             args+=(--case "Status ports: open popover, then dismiss")
+            args+=(--case "Agent manager: provider editor")
+            args+=(--case "Task management: JSON editor")
           fi
           python3 target/ui-snapshot/capture.py --target target --out "$RUNNER_TEMP/ui-snapshot" "${args[@]}"
       - name: Build gallery

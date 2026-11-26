@@ -15,6 +15,7 @@ const PROVIDERS = "/home/model-providers.json";
 const CODEX = ["codex", "--no-daemon", "-c", "disable_paste_burst=true"];
 const MODELS = [{ id: "gpt-5.6-sol", label: "GPT-5.6-Sol", efforts: ["low", "high"], fallbackEffort: "high" }];
 const OMLX_MODEL = "mlx-community--LFM2-VL-450M-4bit";
+const withManagerEnvironment = (argv) => ["env", "HERDR_ENV=1", ...argv];
 
 const record = (over = {}) => ({
   name: "oMLX",
@@ -60,7 +61,7 @@ const cx = { notify() {} };
 test("None launches Codex with exactly today's argv", async () => {
   const { view, runs } = flyout();
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), [...CODEX, "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=high"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment([...CODEX, "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=high"]));
 });
 
 test("oMLX launches through the wrapper, without the key in argv and without an effort flag", async () => {
@@ -72,7 +73,7 @@ test("oMLX launches through the wrapper, without the key in argv and without an 
     files: new Map([[PROVIDERS, providersFile({ omlx: record() })]]),
   });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), [
+  assert.deepEqual(argvOf(runs), withManagerEnvironment([
     "/bin/sh",
     "-c",
     WRAPPER,
@@ -96,7 +97,7 @@ test("oMLX launches through the wrapper, without the key in argv and without an 
     'model_providers.omlx.base_url="http://127.0.0.1:8000/v1"',
     "-c",
     'model_providers.omlx.env_key="OMLX_API_KEY"',
-  ]);
+  ]));
   // The key stays in the file: no argument carries it, and only the wrapper mentions where it is.
   const argv = argvOf(runs);
   assert.equal(argv.some((part) => part.includes("test-key-value")), false);
@@ -118,8 +119,8 @@ test("a record chosen by its own id gets its own host and its own key", async ()
   await view.launch(cx);
   const argv = argvOf(runs);
   // The wrapper reads the key of this record, so oMLX's key never goes to the other host.
-  assert.equal(argv[5], "myllm");
-  assert.equal(argv[6], other.host);
+  assert.equal(argv[7], "myllm");
+  assert.equal(argv[8], other.host);
   assert.ok(argv.includes('model_providers.omlx.base_url="http://127.0.0.1:9000/v1"'));
   assert.equal(argv.some((part) => part.includes("other-key") || part.includes("test-key-value")), false);
 });
@@ -133,14 +134,27 @@ test("a provider deleted while the flyout was open blocks the launch", async () 
   assert.equal(view.error, "Model provider is no longer set up.");
 });
 
-test("the launch remembers the provider model in the provider's own record", async () => {
+test("the launch remembers the provider model in the provider's own record", async (t) => {
   const file = providersFile({ omlx: record({ selectedModel: {} }) });
+  const files = new Map([[PROVIDERS, file]]);
+  globalThis.__herdrExec = async (command, args) => {
+    if (command === "mktemp") return { code: 0, stdout: `${args.at(-1).replace(/XXXXXX$/, "fixture")}\n` };
+    if (command === "python3" && args[0] === "-c") {
+      const [, , _lock, target, staged, expectedFile, absent] = args;
+      if (absent === "1" ? files.has(target) : files.get(target) !== files.get(expectedFile)) return { code: 1, stdout: "provider file changed" };
+      files.set(target, files.get(staged));
+    } else if (command === "rm") {
+      for (const path of files.keys()) if (path.startsWith(`${args.at(-1)}/`)) files.delete(path);
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  t.after(() => { delete globalThis.__herdrExec; });
   const { view } = flyout({
     providerId: "omlx",
     providers: { omlx: record() },
     model: OMLX_MODEL,
     effort: "",
-    files: new Map([[PROVIDERS, file]]),
+    files,
   });
   await view.launch(cx);
   await view.saving;
@@ -171,7 +185,7 @@ test("zero providers: the row shows None and still opens, for Add More; on anoth
 test("the provider list ends with Add More, which opens the Model providers page and closes the menu", () => {
   const { view, runs } = flyout({ providers: { omlx: record() } });
   const list = text(view.providerList(t));
-  assert.ok(list.includes("Add More") && list.includes("plus.svg"));
+  assert.ok(list.includes("Add More") && list.includes("plus--orca-agent-flyout.svg"));
   assert.ok(list.indexOf("oMLX") < list.indexOf("Add More"));
   globalThis.__herdrProps = () => ({ key: "codex", space: "s1", overlay: "o1", menu: "m1" });
   view.openProviders();
@@ -188,7 +202,7 @@ test("a saved provider is selectable, and its models hide the EFFORT select", ()
   assert.equal(picker.includes("EFFORT"), false);
 });
 
-test("the flyout is split into sections: Codex has a model source, Claude does not", () => {
+test("the flyout is split into sections: every agent has a model source", () => {
   const codex = text(flyout({ providers: {} }).view.render());
   for (const head of ["MODEL SOURCE", "HARNESS CLI ARGUMENTS", "HARNESS CLI ADVANCED ARGUMENTS"]) assert.ok(codex.includes(head), head);
   assert.ok(codex.indexOf("MODEL SOURCE") < codex.indexOf("HARNESS CLI ARGUMENTS"));
@@ -197,7 +211,8 @@ test("the flyout is split into sections: Codex has a model source, Claude does n
   const input = { value: () => "", set_value() {}, set_soft_wrap() {}, on() {} };
   Object.assign(view, { key: "claude", spec: SPECS.claude, values: { ...defaultValues(SPECS.claude), model: "m", effort: "high" }, styles: ["default"], naming: false, nameError: false, styleInput: input, editors: { agents: { input, dirty: false, error: null }, systemPrompt: { input, dirty: false, error: null } } });
   const claude = text(view.render());
-  assert.equal(claude.includes("MODEL SOURCE"), false);
+  assert.ok(claude.includes("MODEL SOURCE"));
+  assert.ok(claude.indexOf("MODEL SOURCE") < claude.indexOf("HARNESS CLI ARGUMENTS"));
   assert.ok(claude.includes("HARNESS CLI ARGUMENTS") && claude.includes("HARNESS CLI ADVANCED ARGUMENTS"));
 });
 
@@ -207,7 +222,7 @@ test("settings command preview is the exact existing launch argv and has no laun
   view.settingsLoaded=true;
   const preview=await view.buildPreview(CODEX);
   assert.ok(preview.argv);
-  assert.deepEqual(preview.argv,(await view.buildLaunch({argv:CODEX})).argv);
+  assert.deepEqual(preview.argv,withManagerEnvironment((await view.buildLaunch({argv:CODEX})).argv));
   assert.ok(!preview.argv.some(part=>part.includes("test-key-value")));
   assert.equal(runs.length,0);
 });

@@ -2,7 +2,7 @@
 // what a pasted project link becomes, plus the host, preset, slug and key-hint rules around it.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { keyHint, linkInfo, presetFor, recordLink, slugId, validateHost } from "../orca-ui/shared/codex-provider.js";
+import { iconFromHtml, keyHint, linkInfo, presetFor, recordLink, slugId, validateHost } from "../orca-ui/shared/codex-provider.js";
 
 const ERROR = { error: "Enter a link like https://github.com/owner/repo or https://example.com" };
 const NONE = { link: "", name: "", iconUrl: "" };
@@ -42,6 +42,36 @@ test("linkInfo: only plain https links with a dotted host are accepted", () => {
   for (const text of ["http://example.com", "ftp://example.com", "https://localhost", "https://user@example.com", "https://user:pw@example.com", "https://", "https://exa mple.com", "mailto:x@example.com"]) {
     assert.deepEqual(linkInfo(text), ERROR, text);
   }
+});
+
+test("iconFromHtml: an SVG link icon wins", () => {
+  const html = '<html><head><link rel="icon" type="image/svg+xml" href="/logo.svg" sizes="any"><link rel="icon" href="/favicon.ico"></head></html>';
+  assert.equal(iconFromHtml(html, "https://example.com/"), "https://example.com/logo.svg");
+});
+
+test("iconFromHtml: the first rel=icon link wins when there is no SVG", () => {
+  const html = '<html><head><link rel="icon" href="/second.ico"><link rel="icon" href="/first.ico"></head></html>';
+  assert.equal(iconFromHtml(html, "https://example.com/"), "https://example.com/second.ico");
+});
+
+test("iconFromHtml: a shortcut icon still counts as an icon", () => {
+  const html = '<html><head><link rel="shortcut icon" href="/favicon.ico"></head></html>';
+  assert.equal(iconFromHtml(html, "https://example.com/"), "https://example.com/favicon.ico");
+});
+
+test("iconFromHtml: relative hrefs resolve against the site origin", () => {
+  const html = '<html><head><link rel="icon" type="image/svg+xml" href="icons/logo.svg"></head></html>';
+  assert.equal(iconFromHtml(html, "https://example.com/site/"), "https://example.com/site/icons/logo.svg");
+});
+
+test("iconFromHtml: an SVG without href is skipped", () => {
+  const html = '<html><head><link rel="icon" type="image/svg+xml"><link rel="icon" href="/favicon.ico"></head></html>';
+  assert.equal(iconFromHtml(html, "https://example.com/"), "https://example.com/favicon.ico");
+});
+
+test("iconFromHtml: no icon link means null", () => {
+  assert.equal(iconFromHtml("<html><head></head></html>", "https://example.com/"), null);
+  assert.equal(iconFromHtml("<html><head><link rel=\"stylesheet\" href=\"/a.css\"></head></html>", "https://example.com/"), null);
 });
 
 test("recordLink, presetFor, slugId, keyHint and validateHost", () => {

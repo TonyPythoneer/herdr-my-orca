@@ -279,9 +279,19 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--target", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--case", help="Capture only the named scenario (the CI feature smoke case).")
+    p.add_argument("--case", action="append", help="Capture only this named scenario; may be repeated.")
     p.add_argument("--local", action="store_true", help="Run in an isolated local HOME; controls the foreground desktop and clipboard")
     a = p.parse_args()
+    from scenarios import CASES, MOD_SCOPE, RIGHT
+    requested_cases = a.case or []
+    if len(requested_cases) != len(set(requested_cases)):
+        p.error("duplicate UI snapshot case requested")
+    titles = [case["title"] for case in CASES]
+    for requested in requested_cases:
+        if titles.count(requested) != 1:
+            p.error("unknown or ambiguous UI snapshot case: "+requested)
+    requested_set = set(requested_cases)
+    cases = [case for case in CASES if not requested_set or case["title"] in requested_set]
     target, out = a.target.resolve(), a.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     (out / "screens").mkdir(exist_ok=True)
@@ -432,10 +442,6 @@ def main():
                     print("AX helper unavailable:", ax_error, flush=True)
                 vision = root/"screen-text"
                 run(["swiftc",Path(__file__).with_name("screen-text.swift"),"-o",vision],timeout=90)
-                from scenarios import CASES, MOD_SCOPE, RIGHT
-                cases = [case for case in CASES if not a.case or case["title"] == a.case]
-                if a.case and len(cases) != 1:
-                    raise RuntimeError("Unknown or ambiguous UI snapshot case: "+a.case)
                 viewport=(1024,681)
                 def dimensions(path):
                     data=path.read_bytes()
@@ -768,7 +774,7 @@ def main():
                     raise RuntimeError("Native startup/setup log check failed: "+startup_errors[0])
                 info["coverage"] = {"repositoryMods":sorted(p.parent.name for p in (target/"mods").glob("*/mod.json")),
                                     "plannedMods":sorted({m for c in cases for m in c["mods"]}),
-                                    "scope":"Only the selected real mod interaction; no stock UI or native command screenshots." if a.case else "Only real interactions with repository mods; no stock UI or native command screenshots.",
+                                    "scope":"Only selected real mod interactions; no stock UI or native command screenshots." if a.case else "Only real interactions with repository mods; no stock UI or native command screenshots.",
                                     "modScope":MOD_SCOPE}
                 for i,case in enumerate(cases,1):
                     row = {"id":f"{i:02d}","title":case["title"],"mod":" / ".join(case["mods"]),
@@ -870,6 +876,8 @@ def main():
                                     wait_visible(action.get("afterText",[]),region=evidence_region)
                                 if action.get("absentText"):
                                     wait_visible(absent=action.get("absentText",[]),region=absent_region)
+                                for check in action.get("checks",[]):
+                                    wait_visible(check.get("required",[]),check.get("absent",[]),check["region"])
                                 shot(row,phase)
                                 step={"action":action.get("label",action["kind"]),"phase":phase}
                                 if point:
@@ -879,6 +887,8 @@ def main():
                                     assert_visible(words(out/row["images"][phase]["file"],action.get("afterText",[]),evidence_region),action.get("afterText",[]),region=evidence_region)
                                 if action.get("absentText"):
                                     assert_visible(words(out/row["images"][phase]["file"],region=absent_region,absent=action.get("absentText",[])),absent=action.get("absentText",[]),region=absent_region)
+                                for check in action.get("checks",[]):
+                                    assert_visible(words(out/row["images"][phase]["file"],check.get("required",[]),check["region"],check.get("absent",[])),required=check.get("required",[]),absent=check.get("absent",[]),region=check["region"])
                                 if action.get("noOverlay") and blocking_overlays(status()):
                                     raise RuntimeError("Expected closed dialog after "+step["action"])
                                 row["actions"].append(step)
