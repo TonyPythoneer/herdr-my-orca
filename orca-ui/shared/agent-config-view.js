@@ -621,25 +621,24 @@ class AgentConfigCore {
       return { error: "Model provider is no longer set up." };
     }
     const provider = { ...record, id: providerId, configPath: file };
+    const model = preview ? values.model : this.model;
+    const argv = buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] });
+    return this.providerLaunchArgv(provider, model, argv);
+  }
+
+  providerLaunchArgv(provider, model, argv) {
+    const info = provider.modelInfo?.[model];
     if (this.key === "pi") {
-      const model = preview ? values.model : this.model;
-      const info = record.modelInfo?.[model];
       if (!supportsCodingModel(info)) return { error: "Pi needs a text model with tool support." };
-      if (!piModelLimits(info)) {
-        return { error: "Pi needs a known context limit above 16,384 tokens and an output limit that fits it." };
-      }
-      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
+      if (!piModelLimits(info)) return { error: "Pi needs a known context limit above 16,384 tokens and an output limit that fits it." };
+      return { argv: launchPiArgv(argv, provider, model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
     }
-    if (this.key === "claude") {
-      return { argv: launchClaudeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
-    }
+    if (this.key === "claude") return { argv: launchClaudeArgv(argv, provider, model) };
     if (this.key === "opencode") {
-      const model = preview ? values.model : this.model;
-      if (!supportsCodingModel(record.modelInfo?.[model])) return { error: "OpenCode needs a text model with tool support." };
-      return { argv: launchOpenCodeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model) };
+      if (!supportsCodingModel(info)) return { error: "OpenCode needs a text model with tool support." };
+      return { argv: launchOpenCodeArgv(argv, provider, model) };
     }
-    // Codex adds no effort flag; its model flag is placed by launchArgv.
-    return { argv: launchArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
+    return { argv: launchArgv(argv, provider, model) };
   }
 
   // The flyout is sticky; availability may have changed while it was open. Local settings only.

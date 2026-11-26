@@ -246,6 +246,10 @@ export function writeRunOverride(text, key, run) {
  * `agent-manager.json`: agent availability, permissions and the environment marker for dropdown launches.
  * Missing permissions and `herdrEnv` keep their backward-compatible defaults.
  */
+function validDisabledKeys(value) {
+  return value === undefined || (Array.isArray(value) && value.every((key) => typeof key === "string"));
+}
+
 export function parseManagerConfig(text) {
   if (text == null || String(text).trim() === "") {
     return { disabled: new Set(), permissions: { default: "own", overrides: {} }, herdrEnv: true };
@@ -264,10 +268,8 @@ export function parseManagerConfig(text) {
   if (root.herdrEnv !== undefined && typeof root.herdrEnv !== "boolean") {
     return { error: "agent-manager.json's `herdrEnv` must be a boolean." };
   }
-  if (root.disabled !== undefined) {
-    if (!Array.isArray(root.disabled) || root.disabled.some((key) => typeof key !== "string")) {
-      return { error: "agent-manager.json's `disabled` must be an array of agent keys." };
-    }
+  if (!validDisabledKeys(root.disabled)) {
+    return { error: "agent-manager.json's `disabled` must be an array of agent keys." };
   }
   return { disabled: new Set(root.disabled ?? []), permissions, herdrEnv: root.herdrEnv !== false };
 }

@@ -69,6 +69,11 @@ test("iconFromHtml: an SVG without href is skipped", () => {
   assert.equal(iconFromHtml(html, "https://example.com/"), "https://example.com/favicon.ico");
 });
 
+test("iconFromHtml: quoted attributes and unsafe URLs", () => {
+  assert.equal(iconFromHtml("<link rel = 'icon' type = 'image/svg+xml' href = '/logo.svg'>", "https://example.com/"), "https://example.com/logo.svg");
+  assert.equal(iconFromHtml('<link rel="icon" href="file:///etc/passwd"><link rel="icon" href="/safe.png">', "https://example.com/"), "https://example.com/safe.png");
+});
+
 test("iconFromHtml: no icon link means null", () => {
   assert.equal(iconFromHtml("<html><head></head></html>", "https://example.com/"), null);
   assert.equal(iconFromHtml("<html><head><link rel=\"stylesheet\" href=\"/a.css\"></head></html>", "https://example.com/"), null);
