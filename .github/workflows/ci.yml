@@ -2,15 +2,10 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      native_check:
-        description: Run Herdr's native mod checker on macOS (downloads current upstream release)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -42,7 +37,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Verify selector contracts
-        run: python3 scripts/ci-impact-test.py
+        run: |
+          python3 scripts/ci-impact-test.py
+          python3 scripts/test-ci-routing.py
       - name: Resolve change scope
         id: plan
         run: python3 scripts/ci-impact.py --output impact-plan.json
@@ -103,7 +100,7 @@ jobs:
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
       - name: Paired Git branch-header microbenchmark
-        if: needs.plan.outputs.git_benchmark == 'true'
+        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
         run: |
           python3 scripts/benchmark-git-status.py --output "$RUNNER_TEMP/git-status-benchmark.json"
           python3 - "$RUNNER_TEMP/git-status-benchmark.json" <<'PY'
@@ -116,16 +113,16 @@ jobs:
                   f.write(f"| {m} | {d['before'][m]} | {d['after'][m]} | {d[m + '_reduction_pct']}% |\n")
           PY
       - uses: actions/upload-artifact@v4
-        if: needs.plan.outputs.git_benchmark == 'true'
+        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
         with:
           name: git-status-benchmark
           path: ${{ runner.temp }}/git-status-benchmark.json
           if-no-files-found: error
       - name: Benchmark workspace projection at increasing sizes
-        if: needs.plan.outputs.projection_benchmark == 'true'
+        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
         run: node scripts/benchmark-worktree-plan.mjs "$RUNNER_TEMP/worktree-projection.json"
       - uses: actions/upload-artifact@v4
-        if: needs.plan.outputs.projection_benchmark == 'true'
+        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
         with:
           name: worktree-projection-benchmark
           path: ${{ runner.temp }}/worktree-projection.json
@@ -229,11 +226,11 @@ jobs:
               'Head: `' + current.head.sha.slice(0,12) + '`',
               '| Scope | Selected | Total | Result |', '|---|---:|---:|---|',
               '| JS test files | ' + p.selected_test_files + ' | ' + p.total_test_files + ' | ' + process.env.TEST_RESULT + ' |',
-              '| Native page routes | ' + p.native_routes + ' | ' + p.total_native_routes + ' | separate workflow |',
-              '| Native mod checks | ' + p.native_mods.length + ' | — | separate job |',
+              '| Native page routes | ' + (current.base.ref === 'ci/main-with-full-process' ? p.total_native_routes : 0) + ' | ' + p.total_native_routes + ' | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' |',
+              '| Native mod checks | ' + (current.base.ref === 'ci/main-with-full-process' ? 'all' : '0') + ' | — | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' |',
               '| Config / syntax / lint | — | — | ' + process.env.VALIDATION_RESULT + ' |',
-              '| Git benchmark | ' + (p.git_benchmark ? 'selected' : 'not selected') + ' | — | see validation |',
-              '| Workspace projection | ' + (p.projection_benchmark ? 'selected' : 'not selected') + ' | — | see validation |',
+              '| Git benchmark | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' | — | see validation |',
+              '| Workspace projection | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' | — | see validation |',
               '', 'Full fallback: ' + p.full + '. Unselected work is not a passing measurement.',
               '', '[Impact plan and scoped coverage artifacts](' + url + ')'
             ].join('\n');
@@ -267,7 +264,7 @@ jobs:
 
   native:
     name: Herdr native mod check (isolated)
-    if: needs.plan.outputs.has_mods == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.native_check))
+    if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
     needs: [plan, checks]
     runs-on: macos-15
     timeout-minutes: 15
@@ -281,10 +278,8 @@ jobs:
           curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
           sh "$RUNNER_TEMP/herdr-install.sh"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Validate impacted mods in an isolated Herdr app home
+      - name: Validate all mods in an isolated Herdr app home
         shell: bash
-        env:
-          SELECTED_MODS: ${{ needs.plan.outputs.mods }}
         run: |
           export HERDR_APP_HOME="$RUNNER_TEMP/herdr-ci-home"
           mkdir -p "$HERDR_APP_HOME"
@@ -301,5 +296,5 @@ jobs:
               failed=1
             fi
             echo "::endgroup::"
-          done < <(python3 -c 'import os,json; print("\n".join(json.loads(os.environ["SELECTED_MODS"])))')
+          done < <(find mods -mindepth 2 -maxdepth 2 -name mod.json -print | sort | sed 's|^mods/||;s|/mod.json$||')
           exit "$failed"

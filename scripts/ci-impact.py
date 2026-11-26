@@ -237,6 +237,7 @@ def pull_request_base(event, parents):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output", required=True, type=Path)
+    p.add_argument("--force-full", action="store_true", help="Select every native route for the full process workflow")
     a = p.parse_args()
     files = [x for x in git(ROOT, "ls-files", "-z") if x]
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text()) if os.environ.get("GITHUB_EVENT_PATH") else {}
@@ -249,7 +250,7 @@ def main():
             base = pull_request_base(event, parents)
         except subprocess.CalledProcessError:
             base = None
-    force = not base or base == "0" * 40 or name not in ("pull_request", "push")
+    force = a.force_full or not base or base == "0" * 40 or name not in ("pull_request", "push")
     changed = []
     if not force:
         try:
