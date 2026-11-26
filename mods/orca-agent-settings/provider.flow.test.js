@@ -429,3 +429,17 @@ test("a failed staging permission check keeps the new provider draft for retry",
   assert.equal(card.status.tone, "blocked");
   assert.equal(card.status.text, "Could not write model-providers.json.");
 });
+
+test("icon discovery preserves the supplied origin and restricts curl to HTTPS", async () => {
+  const { page, calls, cx } = harness({ siteHtml: "<link rel='icon' href='/logo.png'>" });
+  const card = cardOf({ link: field("https://www.example.com:8443") });
+  await page.saveCard(card, cx);
+  const iconCalls = calls.filter(call => call[0] === "curl" && !call.includes("-H"));
+  assert.ok(iconCalls.some(call => call.at(-1) === "https://www.example.com:8443"));
+  assert.ok(iconCalls.some(call => call.at(-1) === "https://www.example.com:8443/logo.png"));
+  for (const call of iconCalls) {
+    assert.equal(call[1], "-q");
+    assert.equal(call[call.indexOf("--proto") + 1], "=https");
+    assert.equal(call[call.indexOf("--proto-redir") + 1], "=https");
+  }
+});

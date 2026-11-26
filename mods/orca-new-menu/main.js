@@ -162,8 +162,12 @@ export default class NewMenu extends View {
     this.agentsFailed = agentsFailedByMachine.get(key) ?? false;
     this.disabled = firstPaintDisabled(machine, inventory);
     this.disabledReady = Array.isArray(inventory?.disabled) || Boolean(machine);
-    this.herdrEnv = typeof inventory?.herdrEnv === "boolean" ? inventory.herdrEnv : true;
+    this.restoreInventoryOptions(inventory);
+  }
+
+  restoreInventoryOptions(inventory) {
     this.herdrEnvReady = typeof inventory?.herdrEnv === "boolean";
+    this.herdrEnv = this.herdrEnvReady ? inventory.herdrEnv : true;
     this.freebuff = typeof inventory?.freebuff === "boolean" ? inventory.freebuff : undefined;
   }
 

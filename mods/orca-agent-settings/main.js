@@ -1470,16 +1470,20 @@ export default class AgentManager extends View {
       if (m) return m[1];
       return info.iconUrl; // github.com/owner.png?size=64
     }
-    const html = await this.fetchIconHtml(`https://${host}`);
-    const fromHtml = iconFromHtml(html, `https://${host}`);
+    const html = await this.fetchIconHtml(url.origin);
+    const fromHtml = iconFromHtml(html, url.origin);
     if (fromHtml) return fromHtml;
     return info.iconUrl; // https://host/favicon.ico
   }
 
   // Fetches a URL's text (a site's HTML or a repo page) through curl, bounded in size and time.
   async fetchIconHtml(url) {
-    const result = await exec("curl", ["-sL", "--max-time", String(CURL_MAX_SECONDS), "--max-filesize", String(ICON_HTML_MAX_BYTES), url], { timeout: CURL_TIMEOUT_MS });
-    return result.stdout ?? "";
+    try {
+      const result = await exec("curl", ["-q", "-fsL", "--proto", "=https", "--proto-redir", "=https", "--max-time", String(CURL_MAX_SECONDS), "--max-filesize", String(ICON_HTML_MAX_BYTES), url], { timeout: CURL_TIMEOUT_MS });
+      return result.code === 0 ? result.stdout ?? "" : "";
+    } catch {
+      return "";
+    }
   }
 
   // Looks for the icon of `info.link` unless that is the one already on the card. Work on one card
@@ -1528,13 +1532,13 @@ export default class AgentManager extends View {
       await exec("mkdir", ["-p", dir]);
       const result = await exec(
         "curl",
-        ["-sL", "--max-time", String(CURL_MAX_SECONDS), "--max-filesize", String(ICON_MAX_BYTES), "-o", partial, "-w", "\n%{http_code}", url],
+        ["-q", "-sL", "--proto", "=https", "--proto-redir", "=https", "--max-time", String(CURL_MAX_SECONDS), "--max-filesize", String(ICON_MAX_BYTES), "-o", partial, "-w", "\n%{http_code}", url],
         { timeout: CURL_TIMEOUT_MS },
       );
       const text = result.stdout ?? "";
       const status = Number(text.slice(text.lastIndexOf("\n") + 1).trim());
       const head = (await exec("xxd", ["-p", "-l", String(MAGIC_PROBE_BYTES), partial]).catch(() => ({ stdout: "" }))).stdout.trim();
-      if (status !== 200 || !IMAGE_MAGIC.some((magic) => head.startsWith(magic))) {
+      if (result.code !== 0 || status !== 200 || !IMAGE_MAGIC.some((magic) => head.startsWith(magic))) {
         await drop();
         return null;
       }

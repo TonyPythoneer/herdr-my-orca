@@ -179,17 +179,21 @@ export function linkInfo(text) {
 export function iconFromHtml(html, baseUrl) {
   const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   const resolve = (href) => {
-    try { return new URL(href, base).href; } catch { return null; }
+    try {
+      if (!href.trim()) return null;
+      const url = new URL(href, base);
+      return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
+    } catch { return null; }
   };
   const hrefOf = (tag) => {
-    const m = tag.match(/href\s*=\s*"([^"]*)"/i);
-    return m ? resolve(m[1]) : null;
+    const m = tag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+    return m ? resolve(m[1] ?? m[2] ?? m[3]) : null;
   };
   // All link tags whose rel mentions icon, in document order.
-  const links = [...html.matchAll(/<link[^>]*?\brel="[^"]*icon[^"]*"[^>]*?>/gi)];
+  const links = [...html.matchAll(/<link\b[^>]*?\brel\s*=\s*(?:"[^"]*icon[^"]*"|'[^']*icon[^']*'|[^\s>]*icon[^\s>]*)[^>]*?>/gi)];
   // 1. SVG icon first: <link rel="icon" type="image/svg+xml" href="...">
   for (const [tag] of links) {
-    if (/\btype="image\/svg\+xml"/i.test(tag)) {
+    if (/\btype\s*=\s*["']?image\/svg\+xml(?:["'\s>])/i.test(tag)) {
       const resolved = hrefOf(tag);
       if (resolved) return resolved;
     }
