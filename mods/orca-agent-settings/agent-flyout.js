@@ -10,7 +10,8 @@
 //   select    a select over `choices` (or a hooked list, `source`)
 //   checklist ticked items, each a flag or a hooked expansion
 //   editor    a text editor with a manual Save (`language: "json"` also validates)
-//   provider  the model source select (Codex only; its launch is a hook)
+//   toggle    an on/off flag, its argv added when on
+//   provider  the model source select (its launch is a hook)
 //
 // Argument templates are argv elements: `{v}` is the option's value, `{id}` a checklist item's id,
 // and `{ json: <template> }` is JSON.stringify of the template with those substituted.
@@ -85,22 +86,22 @@ export const SPECS = {
       parser: "claudeInitialize",
     },
     options: {
-      provider: { type: "provider", label: "MODEL PROVIDER" },
+      provider: { type: "provider", label: "MODEL SOURCE" },
       model: { type: "model", label: "MODEL", argv: ["--model", "{v}"] },
       effort: { type: "effort", label: "EFFORT", argv: ["--effort", "{v}"], omit: [""] },
+      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
       advisorModel: { type: "select", label: "ADVISOR", choices: ["none", "opus", "haiku", "fable", "sonnet"], default: "opus", argv: ["--advisor", "{v}"], omit: ["none"] },
       outputStyle: { type: "select", label: "OUTPUT STYLE", source: "claudeOutputStyles", default: "default", argv: ["--settings", { json: { outputStyle: "{v}" } }], omit: ["default"] },
       agents: { type: "editor", label: "Agents", language: "json", default: DEFAULT_AGENTS_TEXT, argv: ["--agents", "{v}"] },
       systemPrompt: { type: "editor", label: "Append system prompt", default: DEFAULT_PROMPT, argv: ["--append-system-prompt", "{v}"] },
     },
-    launch: ["model", "effort", "advisorModel", "outputStyle", "agents", "systemPrompt"],
+    launch: ["model", "effort", "fast", "advisorModel", "outputStyle", "agents", "systemPrompt"],
     ui: {
       sections: [
-        { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
-        { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 },
         { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["advisorModel", "outputStyle", "agents", "systemPrompt"] },
       ],
-      rows: [["model", "effort"], ["advisorModel", "outputStyle"]],
+      rows: [["provider", "model"], ["effort", "fast"], ["advisorModel", "outputStyle"]],
       reset: true,
     },
   },
@@ -110,19 +111,19 @@ export const SPECS = {
     // `codex debug models` prints the catalog as JSON: its visible models and each one's efforts.
     models: { shell: "codex debug models", parser: "codexCatalog" },
     options: {
-      provider: { type: "provider", label: "MODEL PROVIDER" },
+      provider: { type: "provider", label: "MODEL SOURCE" },
       model: { type: "model", label: "MODEL", argv: ["-m", "{v}"] },
       effort: { type: "effort", label: "EFFORT", argv: ["-c", "model_reasoning_effort={v}"], omit: ["", null] },
+      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
       codexOff: { type: "checklist", label: "DISABLE", bulk: true, items: [...CODEX_ITEMS, { id: "mcp", expand: "codexMcp" }] },
     },
-    launch: ["model", "effort", "codexOff"],
+    launch: ["model", "effort", "fast", "codexOff"],
     ui: {
       sections: [
-        { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
-        { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 },
         { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["codexOff"] },
       ],
-      rows: [["model", "effort"]],
+      rows: [["effort", "fast"]],
     },
   },
   opencode: {
@@ -133,7 +134,7 @@ export const SPECS = {
     // catalog does not reflect payment, so an unpaid account still sees paid models.
     models: { shell: "opencode api GET /api/model", parser: "opencodeCatalog" },
     options: {
-      provider: { type: "provider", label: "MODEL PROVIDER" },
+      provider: { type: "provider", label: "MODEL SOURCE" },
       model: {
         type: "model",
         label: "MODEL",
@@ -147,18 +148,18 @@ export const SPECS = {
         group: "free", // a paid model just answers 402, so the list starts on free
       },
       effort: { type: "effort", label: "EFFORT" },
+      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
     },
-    launch: ["model", "effort"],
+    launch: ["model", "effort", "fast"],
     // The TUI takes no --model flag: the model goes in through its config env var, and it must run
     // its own server (--standalone), since the background service keeps its own config and a TUI
     // that connects to it ignores OPENCODE_CONFIG_CONTENT. Its effort is its own state file.
     wrap: { env: { OPENCODE_CONFIG_CONTENT: { json: { model: "{model}" } } }, suffix: ["--standalone"], after: "opencodeVariant" },
     ui: {
       sections: [
-        { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
-        { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 },
       ],
-      rows: [["model", "effort"]],
+      rows: [["effort", "fast"]],
     },
   },
   pi: {
@@ -169,20 +170,20 @@ export const SPECS = {
     // (and still starts it when the list is empty, e.g. nothing is logged in yet).
     models: { shell: "pi --list-models", parser: "piTable", default: "Default" },
     options: {
-      provider: { type: "provider", label: "MODEL PROVIDER" },
+      provider: { type: "provider", label: "MODEL SOURCE" },
       model: { type: "model", label: "MODEL", argv: ["--model", "{v}"] },
       effort: { type: "effort", label: "THINKING", argv: ["--thinking", "{v}"], omit: [""] },
+      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
       off: { type: "checklist", label: "TURN OFF", bulk: true, items: PI_ITEMS },
       systemPrompt: { type: "editor", label: "Append system prompt", default: "", argv: ["--append-system-prompt", "{v}"] },
     },
-    launch: ["model", "effort", "off", "systemPrompt"],
+    launch: ["model", "effort", "fast", "off", "systemPrompt"],
     ui: {
       sections: [
-        { title: "MODEL SOURCE", options: ["provider"], gap: 4 },
-        { title: "HARNESS CLI ARGUMENTS", options: ["model", "effort"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 },
         { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["off", "systemPrompt"] },
       ],
-      rows: [["model", "effort"]],
+      rows: [["effort", "fast"]],
     },
   },
 };
@@ -228,6 +229,7 @@ export function optionArgs(option, value, expansions = {}) {
       return fill(item.argv ?? [], { id: item.id });
     });
   }
+  if (option.type === "toggle") return value ? fill(option.argv, { v: value }) : [];
   if (!option.argv || blank(value) || (option.omit ?? []).includes(value)) return [];
   return fill(option.argv, { v: value });
 }
@@ -256,6 +258,7 @@ export function defaultValues(spec) {
   const values = {};
   for (const [id, option] of Object.entries(spec.options)) {
     if (option.type === "checklist") values[id] = [];
+    else if (option.type === "toggle") values[id] = option.default ?? false;
     else if (option.type === "editor" || option.type === "select") values[id] = option.default ?? "";
   }
   return values;
@@ -270,6 +273,7 @@ export function readValues(spec, saved = {}) {
       if (typeof saved[id] === "string") values[id] = saved[id];
     }
     else if (option.type === "checklist") values[id] = readChecklist(option, preset[id]);
+    else if (option.type === "toggle") values[id] = preset[id] === true;
     else if (option.type === "select") values[id] = readSelect(id, option, preset, values[id]);
     else if (option.type === "editor") values[id] = readText(preset[id], values[id]);
   }
@@ -297,7 +301,8 @@ function readSelect(id, option, preset, fallback) {
 export function presetOf(spec, values) {
   return Object.fromEntries(
     Object.entries(spec.options)
-      .filter(([id, option]) => !TOP.includes(id) && ["select", "checklist", "editor"].includes(option.type))
+      .filter(([id, option]) => !TOP.includes(id) && ["select", "checklist", "editor", "toggle"].includes(option.type))
+      .filter(([id]) => values[id] !== undefined)
       .map(([id, option]) => [id, option.type === "checklist" ? [...(values[id] ?? [])] : values[id]]),
   );
 }

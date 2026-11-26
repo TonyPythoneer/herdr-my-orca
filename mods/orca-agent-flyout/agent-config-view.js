@@ -136,6 +136,10 @@ class AgentConfigCore {
     this.providerId = "none"; // none: the agent's own source
     this.cliModel = null; // the model to come back to when the provider goes back to None
 
+    // Fast mode: whether this agent's CLI supports a `--fast` flag. `null` while probing.
+    this.fastSupported = null;
+    this.fast = false;
+
     // Output styles (the `claudeOutputStyles` list): the .md files of ~/.claude/output-styles.
     this.styles = BUILTIN_STYLES;
     this.naming = false; // "+ New style…" shows a name input until Enter
@@ -187,6 +191,7 @@ class AgentConfigCore {
       if (cachedModels?.length) this.paintCached(cachedModels, saved, cx);
       if (isFresh(cached, cachedModels)) return;
       await this.checkCatalog(cx, saved, cached, cachedModels);
+      cx.spawn((taskCx) => this.probeFast(taskCx));
     } catch (e) {
       // A failed refresh keeps the cached list; only show the error when there is nothing to show.
       if (!this.models?.length) this.error = `Could not list models: ${e?.message ?? e}`;
@@ -276,6 +281,16 @@ class AgentConfigCore {
       if (first.length) return first;
       throw error;
     }
+  }
+
+  // Whether this agent's CLI supports a `--fast` flag: probe its help output once, cached on the
+  // view for the lifetime of the flyout. The FAST toggle is only enabled when the CLI supports it.
+  async probeFast(cx) {
+    try {
+      const { stdout } = await exec("zsh", ["-lic", `${this.spec.command} --help`], { timeout: CLI_TIMEOUT_MS });
+      this.fastSupported = /--fast\b|-f\b|\bfast\b/i.test(stdout);
+    } catch { this.fastSupported = false; }
+    cx.notify();
   }
 
   // Picking a model keeps the effort when the model supports it, else the model's own default.
@@ -865,33 +880,59 @@ class AgentConfigCore {
     return div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(providerGlyph(record, t));
   }
 
-  // The model source section: one select like MODEL and EFFORT, its label inside. None, or a provider
-  // whose test passed. Greyed out when there is none to pick, and on another machine (the file and
-  // the icon live on this one). The list opens inline below it.
+  // The agent's own icon, shown for the default origin (no-provider) model source.
+  agentIcon(t) {
+    const byKey = { claude: "claude.svg", codex: "codex--orca-header.svg", opencode: "opencode.svg" };
+    const file = byKey[this.key];
+    if (!file) return svg("mods/orca-assets/bot.svg").size(18).text_color(t.muted);
+    return svg(`mods/orca-assets/${file}`).size(18);
+  }
+
+  // Model source: an expanded list of the default origin source (the agent itself, shown with its
+  // icon) plus any saved providers. Replaces the old MODEL SOURCE select: it now sits on the same
+  // layer as MODEL and EFFORT.
   providerRow(t) {
     const ids = Object.keys(this.providers ?? {});
     const space = launchSpace(this.context());
     const remote = !this.settingsContext && Boolean(space?.machine);
-    // With none saved the select still opens, for its "Add More" row.
     const enabled = !remote;
-    const label = this.providerId === "none" ? "None" : this.providers[this.providerId]?.name ?? "None";
+    const label = this.providerId === "none" ? "Origin source" : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
       .gap(4)
+      .mx(6)
       .child(
         h_flex()
           .id("provider-wrap")
-          .mx(6)
+          .items_center()
+          .gap(6)
           .when(!enabled, (el) => el.opacity(0.5))
           .role("group")
-          .accessibility_label(`Model provider: ${label}`)
+          .accessibility_label(`Model source: ${label}`)
           .tooltip(providerTooltip(remote, ids.length))
-          .child(
-            this.selectBox({ id: "provider-select", label: "MODEL PROVIDER", value: label, open: this.open === "provider" && enabled, onToggle: (cx) => this.toggle("provider", cx), t, disabled: !enabled }),
-          ),
+          .child(div().text_size(9).text_color(t.dim).child("MODEL SOURCE"))
+          .child(div().flex_1())
       )
-      .when(this.open === "provider" && enabled, (el) =>
-        el.child(v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(this.providerList(t))),
-      );
+      .child(this.sourceList(t, enabled));
+  }
+
+  // The expanded model source list: the origin source (agent icon) first, then saved providers.
+  sourceList(t, enabled) {
+    const rows = [
+      { id: "none", label: "Origin source", icon: this.agentIcon(t) },
+      ...Object.entries(this.providers ?? {}).map(([id, record]) => ({ id, label: record?.name ?? id, icon: this.providerIcon(record, t) })),
+    ];
+    return v_flex()
+      .gap(2)
+      .child(this.scrollList("source-list",
+        rows.map((option) =>
+          this.listRow(`source-${option.id}`, t)
+            .when(!enabled, (el) => el.opacity(0.5))
+            .when(enabled, (el) => el.on_click((_e, cx) => this.setProvider(option.id, cx)))
+            .child(option.icon)
+            .child(div().flex_1().min_w(0).truncate().child(option.label))
+            .when(this.providerId === option.id, (el) => el.child(div().flex_none().text_color(t.accent).child("✓"))),
+        )
+      ));
   }
 
   // The flyout's rhythm: a block is a label, 8px of air, then its controls. Blocks are 14px apart
@@ -1038,6 +1079,7 @@ class AgentConfigCore {
       if ((this.current()?.efforts ?? []).length === 0) return null; // a model without effort variants has nothing to pick
       return this.selectBox({ id: "effort-select", label: option.label, value: EFFORT_LABEL[this.effort] ?? this.effort ?? "…", open: this.open === "effort", onToggle: (cx) => this.toggle("effort", cx), t });
     }
+    if (option.type === "toggle") return this.toggleControl(id, option, t); // inline on/off, never a dropdown
     return this.choiceSelect(id, option, t);
   }
 
@@ -1070,11 +1112,13 @@ class AgentConfigCore {
     }).child(Input.new(this.styleInput));
   }
 
-  // The list a select opens: models, efforts, or the option's choices.
+  // The list a select opens: models, efforts, or the option's choices. Toggles are inline and never
+  // open a list.
   listFor(id, t) {
     const option = this.spec.options[id];
     if (option.type === "model") return this.modelList(t);
     if (option.type === "effort") return this.effortList(t);
+    if (option.type === "toggle") return v_flex();
     const choices = option.source === "claudeOutputStyles" ? [...this.styles, NEW_STYLE] : option.choices;
     return this.optionList(id, choices, this.values[id], (name, cx) => this.pickChoice(id, name, cx), t);
   }
@@ -1186,6 +1230,7 @@ class AgentConfigCore {
 
   // One section's controls, in its option order; options named in a `ui.rows` row share one line.
   sectionBody(section, t) {
+    if (section.title === "HARNESS CLI ARGUMENTS") return this.argumentControls(t);
     const rows = this.spec.ui?.rows ?? [];
     const done = new Set();
     const parts = [];
@@ -1203,6 +1248,64 @@ class AgentConfigCore {
       else parts.push(...this.selectRow([id], t));
     }
     return v_flex().w_full().gap(section.gap ?? 8).children(parts);
+  }
+
+  // HARNESS CLI ARGUMENTS: model source, model and effort are shown as expanded lists on the same
+  // layer (no separate MODEL SOURCE section); the FAST toggle sits on effort's right hand side.
+  argumentControls(t) {
+    const parts = [];
+    parts.push(this.providerRow(t));   // model source: origin source (agent icon) + providers
+    parts.push(this.expandedModel(t)); // model: expanded list
+    parts.push(this.expandedEffortRow(t)); // effort list + fast toggle side by side
+    return v_flex().w_full().gap(4).children(parts);
+  }
+
+  // A bordered box holding a list, matching the look of an opened select.
+  listBox(list, t) {
+    return v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(list);
+  }
+
+  expandedModel(t) {
+    return v_flex().gap(2)
+      .child(div().text_size(9).text_color(t.dim).child("MODEL"))
+      .child(this.listBox(this.modelList(t), t));
+  }
+
+  // The effort list plus the FAST toggle on its right hand side.
+  expandedEffortRow(t) {
+    const efforts = (this.current()?.efforts ?? []);
+    return h_flex().mx(6).gap(8).items_start()
+      .child(div().flex_1().min_w(0).child(
+        v_flex().gap(2)
+          .child(div().text_size(9).text_color(t.dim).child("EFFORT"))
+          .child(efforts.length ? this.listBox(this.effortList(t), t) : div().px(4).py(2).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).child("—"))
+      ))
+      .child(this.toggleControl("fast", this.spec.options.fast, t));
+  }
+
+  // An on/off toggle for a boolean option. Only enabled when the CLI supports the flag (fast).
+  toggleControl(id, option, t) {
+    const on = Boolean(this.values[id]);
+    const enabled = id === "fast" ? this.fastSupported === true : true;
+    return h_flex().items_center().gap(6)
+      .child(div().text_size(9).text_color(t.dim).child(option.label))
+      .child(
+        h_flex()
+          .h(24)
+          .px(8)
+          .rounded(6)
+          .border_1()
+          .border_color(enabled ? (on ? t.accent : t.input) : t.border)
+          .bg(on && enabled ? t.accent : t.raised)
+          .text_size(10)
+          .when(enabled, (el) => el.cursor_pointer().on_click((_e, cx) => {
+            this.values[id] = !on;
+            this.rememberPreset();
+            cx.notify();
+          }))
+          .when(!enabled, (el) => el.opacity(0.5))
+          .child(div().flex_none().text_color(on && enabled ? t.accent_foreground : t.foreground).child(on ? "ON" : "OFF"))
+      );
   }
 
   openAgentSettings() {
