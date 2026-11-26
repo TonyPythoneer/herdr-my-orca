@@ -899,7 +899,6 @@ class AgentConfigCore {
     const label = this.providerId === "none" ? "Origin source" : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
       .gap(4)
-      .mx(6)
       .child(
         h_flex()
           .id("provider-wrap")
@@ -1250,14 +1249,18 @@ class AgentConfigCore {
     return v_flex().w_full().gap(section.gap ?? 8).children(parts);
   }
 
-  // HARNESS CLI ARGUMENTS: model source, model and effort are shown as expanded lists on the same
-  // layer (no separate MODEL SOURCE section); the FAST toggle sits on effort's right hand side.
+  // HARNESS CLI ARGUMENTS: model source, model and effort are shown as expanded lists side by side
+  // on the same row (no separate MODEL SOURCE section), with the FAST toggle on effort's right.
+  // effort is drawn narrower than model so the row stays compact.
   argumentControls(t) {
-    const parts = [];
-    parts.push(this.providerRow(t));   // model source: origin source (agent icon) + providers
-    parts.push(this.expandedModel(t)); // model: expanded list
-    parts.push(this.expandedEffortRow(t)); // effort list + fast toggle side by side
-    return v_flex().w_full().gap(4).children(parts);
+    return h_flex()
+      .mx(6)
+      .gap(10)
+      .items_start()
+      .child(this.providerRow(t))   // model source: origin source (agent icon) + providers
+      .child(this.modelControl(t))  // model: expanded list, takes remaining width
+      .child(this.effortControl(t)) // effort: expanded list, narrower
+      .child(this.fastControl(t));  // fast: on/off toggle
   }
 
   // A bordered box holding a list, matching the look of an opened select.
@@ -1265,22 +1268,31 @@ class AgentConfigCore {
     return v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(list);
   }
 
-  expandedModel(t) {
-    return v_flex().gap(2)
+  modelControl(t) {
+    return v_flex()
+      .gap(2)
       .child(div().text_size(9).text_color(t.dim).child("MODEL"))
-      .child(this.listBox(this.modelList(t), t));
+      .child(this.listBox(this.modelList(t), t))
+      .flex_1();
   }
 
-  // The effort list plus the FAST toggle on its right hand side.
-  expandedEffortRow(t) {
+  // Effort control drawn narrower than model.
+  effortControl(t) {
     const efforts = (this.current()?.efforts ?? []);
-    return h_flex().mx(6).gap(8).items_start()
-      .child(div().flex_1().min_w(0).child(
-        v_flex().gap(2)
-          .child(div().text_size(9).text_color(t.dim).child("EFFORT"))
-          .child(efforts.length ? this.listBox(this.effortList(t), t) : div().px(4).py(2).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).child("—"))
-      ))
-      .child(this.toggleControl("fast", this.spec.options.fast, t));
+    return v_flex()
+      .gap(2)
+      .child(div().text_size(9).text_color(t.dim).child("EFFORT"))
+      .child(
+        efforts.length
+          ? this.listBox(this.effortList(t), t)
+          : div().px(4).py(2).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).child("—")
+      )
+      .w(130);
+  }
+
+  // FAST on/off toggle on effort's right hand side.
+  fastControl(t) {
+    return this.toggleControl("fast", this.spec.options.fast, t);
   }
 
   // An on/off toggle for a boolean option. Only enabled when the CLI supports the flag (fast).
