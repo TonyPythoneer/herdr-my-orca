@@ -221,6 +221,19 @@ def select(root, files, changed, force=False):
             "total_native_routes": len(layouts)}
 
 
+def pull_request_base(event, parents):
+    """Diff the actual tested merge against its first parent, not stale event metadata.
+
+    GitHub can synthesize the PR merge against a newer main after dispatch.
+    Require the second parent to match the event's PR head; an unexpected
+    checkout must fail open to full validation instead of under-selecting.
+    """
+    head = event.get("pull_request", {}).get("head", {}).get("sha")
+    if head and len(parents) == 3 and parents[2] == head:
+        return parents[1]
+    return None
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output", required=True, type=Path)
@@ -228,7 +241,14 @@ def main():
     files = [x for x in git(ROOT, "ls-files", "-z") if x]
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text()) if os.environ.get("GITHUB_EVENT_PATH") else {}
     name = os.environ.get("GITHUB_EVENT_NAME", "")
-    base = event.get("pull_request", {}).get("base", {}).get("sha") if name == "pull_request" else event.get("before")
+    event_base = event.get("pull_request", {}).get("base", {}).get("sha") if name == "pull_request" else event.get("before")
+    base = event_base
+    if name == "pull_request":
+        try:
+            parents = git(ROOT, "rev-list", "--parents", "-n", "1", "HEAD")[0].split()
+            base = pull_request_base(event, parents)
+        except subprocess.CalledProcessError:
+            base = None
     force = not base or base == "0" * 40 or name not in ("pull_request", "push")
     changed = []
     if not force:
@@ -237,7 +257,7 @@ def main():
         except subprocess.CalledProcessError:
             force = True
     result = select(ROOT, files, changed, force)
-    result.update(base_sha=base, checkout_sha=git(ROOT, "rev-parse", "HEAD")[0].strip())
+    result.update(base_sha=base, event_base_sha=event_base, checkout_sha=git(ROOT, "rev-parse", "HEAD")[0].strip())
     a.output.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))
     if os.environ.get("GITHUB_OUTPUT"):

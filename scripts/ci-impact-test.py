@@ -11,6 +11,18 @@ class ImpactTest(unittest.TestCase):
     def plan(self, *paths, force=False):
         return M["select"](ROOT, FILES, paths, force)
 
+    def test_pull_request_base_tracks_tested_merge_not_stale_event(self):
+        event = {"pull_request": {"base": {"sha": "old-main"}, "head": {"sha": "pr-head"}}}
+        parents = ["merge-commit", "new-main", "pr-head"]
+        self.assertEqual(M["pull_request_base"](event, parents), "new-main")
+
+    def test_pull_request_base_fails_open_for_unverified_checkout(self):
+        event = {"pull_request": {"base": {"sha": "old-main"}, "head": {"sha": "pr-head"}}}
+        for parents in ([], ["pr-head", "old-main"], ["merge", "new-main", "other-head"], ["merge", "new-main", "pr-head", "extra"]):
+            with self.subTest(parents=parents):
+                self.assertIsNone(M["pull_request_base"](event, parents))
+        self.assertIsNone(M["pull_request_base"]({}, ["merge", "new-main", "pr-head"]))
+
     def test_docs(self):
         p = self.plan("README.md")
         self.assertEqual(p["selected_test_files"], 0)
