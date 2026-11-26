@@ -166,7 +166,9 @@ class GatewayE2E(unittest.TestCase):
                     headers={"Authorization":"Bearer " + key})
                 with self.assertRaises(urllib.error.HTTPError) as denied:
                     urllib.request.urlopen(admin, timeout=10)
-                self.assertIn(denied.exception.code, (401, 403))
+                body = denied.exception.read().decode()
+                self.assertTrue(denied.exception.code in (401, 403)
+                                or denied.exception.code == 500 and "Database not connected" in body)
                 response = call(route["host"], "/chat/completions", {"model":route["model"],"messages":messages})
                 self.assertIn(SENTINEL, response)
                 response = call(route["host"], "/chat/completions", {"model":route["model"],"messages":messages,

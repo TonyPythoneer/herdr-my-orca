@@ -73,14 +73,19 @@ export function environmentCardView(owner, t) {
 export function gatewayCardView(owner, t) {
   const on = owner.litellmEnabled;
   const local = owner.litellmStatus?.local;
+  const quickstart = local?.quickstart;
   const remote = owner.litellmStatus?.remote;
   let health;
   if (owner.litellmMode === "local") {
-    if (local?.running && local.healthy && local.installed) health = { text: `Healthy · LiteLLM ${local.version}`, color: t.done };
+    if (local?.running && local.healthy && local.usable) health = { text: `Healthy · LiteLLM ${local.version}`, color: t.done };
     else if (local?.running && !local.healthy) health = { text: `Gateway process is running but health check failed · ${local.version ?? "unknown version"}`, color: t.blocked };
     else if (local?.running) health = { text: `Gateway running with an unsupported version · ${local.version ?? "unknown"}`, color: t.blocked };
-    else if (local?.installed) health = { text: `Ready · LiteLLM ${local.version}; gateway starts on first launch`, color: t.muted };
-    else if (local?.cli) health = { text: `CLI found at ${local.cli}${local.version ? ` · ${local.version}` : ""}; gateway not installed`, color: t.blocked };
+    else if (local?.usable) health = { text: `Ready · LiteLLM ${local.version}; gateway starts on first launch`, color: t.muted };
+    else if (quickstart?.usable) health = { text: `Local LiteLLM Gateway is ready · ${quickstart.version ?? "version unknown"}; switch to Existing to connect`, color: t.done };
+    else if (quickstart?.running) health = { text: `Local LiteLLM Gateway is running, but its API readiness check failed · ${quickstart.version ?? "version unknown"}`, color: t.blocked };
+    else if (quickstart?.installed) health = { text: `litellm-gateway found at ${quickstart.cli}; the local service is not running`, color: t.blocked };
+    else if (local?.installed) health = { text: `LiteLLM ${local.version} is installed, but its CLI startup check failed`, color: t.blocked };
+    else if (local?.cli) health = { text: `CLI found at ${local.cli}${local.version ? ` · ${local.version}` : ""}; pinned managed install is not usable`, color: t.blocked };
     else health = { text: "No managed LiteLLM CLI found", color: t.blocked };
   } else if (remote?.healthy) {
     health = remote.models.length
@@ -132,8 +137,8 @@ export function gatewayCardView(owner, t) {
       .child(owner.button("am-litellm-local", "Managed", t, (_event, cx) => owner.setLiteLLMMode("local", cx), { primary: owner.litellmMode === "local", disabled: owner.litellmBusy || owner.litellmEnabled }))
       .child(owner.button("am-litellm-remote", "Existing", t, (_event, cx) => owner.setLiteLLMMode("remote", cx), { primary: owner.litellmMode === "remote", disabled: owner.litellmBusy || owner.litellmEnabled })))
     .when(on, el => el.child(div().text_size(11).text_color(t.muted).child("Turn off LiteLLM to change mode.")))
-    .when(on && owner.litellmMode === "local" && Boolean(local) && !local.installed, el => el.child(div().text_size(11).line_height("16px").text_color(t.blocked)
-      .child("LiteLLM is on, but the managed gateway is not ready. New Model Provider launches will fail.")))
+    .when(on && owner.litellmMode === "local" && Boolean(local) && !local.usable, el => el.child(div().text_size(11).line_height("16px").text_color(t.blocked)
+      .child("LiteLLM is on, but the managed gateway is not ready. New Model Provider launches will fail. If you use litellm-gateway, switch to Existing and check its API key.")))
     .when(owner.litellmMode === "local", el => el.child(v_flex().gap(6)
       .child(div().text_size(11).text_color(health.color).child(health.text))
       .when(Boolean(local?.cli), inner => inner.child(div().min_w(0).truncate().text_size(10).text_color(t.dim).child(local.cli)))
@@ -144,7 +149,7 @@ export function gatewayCardView(owner, t) {
         .tooltip("Open the LiteLLM repository on GitHub")
         .child("LiteLLM on GitHub ↗"))
       .child(h_flex().items_center().gap(8)
-        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check local CLI", t,
+        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check local LiteLLM", t,
           (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
         .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))))))
     .when(owner.litellmMode === "remote", el => el.child(v_flex().w_full().gap(8)

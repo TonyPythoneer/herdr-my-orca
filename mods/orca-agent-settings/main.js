@@ -1863,8 +1863,10 @@ export default class AgentManager extends View {
       cx.notify();
       return;
     }
-    if (!this.litellmEnabled && this.litellmMode === "local" && !this.litellmStatus?.local?.installed) {
-      this.litellmError = "Install the pinned local LiteLLM version before enabling it.";
+    if (!this.litellmEnabled && this.litellmMode === "local" && !this.litellmStatus?.local?.usable) {
+      this.litellmError = this.litellmStatus?.local?.quickstart?.usable
+        ? "A local LiteLLM Gateway is running. Switch to Existing and check its host and API key before enabling it."
+        : "Install or repair the pinned local LiteLLM version before enabling it.";
       cx.notify();
       return;
     }

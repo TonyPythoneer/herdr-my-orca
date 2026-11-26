@@ -137,6 +137,42 @@ def remote_health(config):
     except (OSError, ValueError, KeyError, TypeError, RuntimeError):
         return {"healthy": False, "error": "Could not connect to LiteLLM. Check the host and network."}
 
+def local_quickstart_status():
+    cli = shutil.which("litellm-gateway") or str(Path.home() / ".local/bin/litellm-gateway")
+    if not Path(cli).is_file() or not os.access(cli, os.X_OK):
+        return None
+    try:
+        result = subprocess.run([cli, "status"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return {"cli": cli, "installed": True, "running": False, "usable": False}
+    output = result.stdout or result.stderr
+    running = result.returncode == 0 and "LiteLLM is running." in output
+    version = next((line.split(":", 1)[1].strip() for line in output.splitlines()
+                    if line.strip().startswith("Version:")), None)
+    admin = next((line.split(":", 1)[1].strip() for line in output.splitlines()
+                 if line.strip().startswith("Admin UI:")), None)
+    root = None
+    if admin:
+        try:
+            parsed = urllib.parse.urlsplit(admin)
+            if parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1"):
+                root = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+        except ValueError:
+            pass
+    health = {}
+    if running and root:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        for name, path in (("liveness", "/health/liveliness"), ("readiness", "/health/readiness")):
+            try:
+                with opener.open(root + path, timeout=3) as response:
+                    health[name] = 200 <= response.status < 300
+            except (OSError, urllib.error.HTTPError, urllib.error.URLError):
+                health[name] = False
+    return {"cli": cli, "installed": True, "running": running, "version": version,
+            "host": root, "liveness": health.get("liveness", False),
+            "readiness": health.get("readiness", False),
+            "usable": running and health.get("liveness", False) and health.get("readiness", False)}
+
 def local_status(app):
     root = app / "litellm-gateway"
     binary = root / "venv/bin/litellm"
@@ -144,33 +180,30 @@ def local_status(app):
     inherited = ("PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SSL_CERT_FILE", "SSL_CERT_DIR",
                  "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE")
     cli_env = {name: os.environ[name] for name in inherited if name in os.environ}
-    version = None
-    if binary.is_file() and python.is_file():
-        try:
-            result = subprocess.run([str(python), "-c", "import importlib.metadata as m; print(m.version('litellm'))"],
-                                    capture_output=True, text=True, timeout=10, env=cli_env)
-            if result.returncode == 0:
-                version = result.stdout.strip()
-        except (OSError, subprocess.SubprocessError):
-            pass
+    cli_env.update(LITELLM_LOCAL_MODEL_COST_MAP="True", LITELLM_TELEMETRY="False")
     cli = str(binary) if binary.is_file() else shutil.which("litellm")
     cli_version = None
-    if cli:
+    managed_cli_usable = False
+    if binary.is_file():
         try:
-            result = subprocess.run([cli, "--version"], capture_output=True, text=True, timeout=5, env=cli_env)
-            lines = (result.stdout or result.stderr).strip().splitlines()
-            cli_version = lines[0] if result.returncode == 0 and lines else None
+            result = subprocess.run([str(binary), "--version"], capture_output=True, text=True, timeout=12, env=cli_env)
+            lines = (result.stdout + "\n" + result.stderr).strip().splitlines()
+            cli_version = next((line.split("=", 1)[1].strip() for line in lines
+                                if "Current Version =" in line), None)
+            managed_cli_usable = result.returncode == 0
         except (OSError, subprocess.SubprocessError):
             pass
-    if version is None:
-        version = cli_version
+    version = cli_version
     state = read(root / "state.json") if (root / "state.json").exists() else {}
     running = bool(state and alive(state.get("pid")))
     routes = read(root / "routes.json") if (root / "routes.json").exists() else {}
+    installed = version == VERSION and binary.is_file() and python.is_file()
+    usable = installed and managed_cli_usable and cli_version == VERSION
     return {"cli": cli, "version": version, "cliVersion": cli_version,
             "requiredVersion": VERSION,
-            "installed": version == VERSION and binary.is_file(), "running": running,
-            "healthy": running and ready(state, routes)}
+            "installed": installed, "usable": usable, "running": running,
+            "healthy": running and ready(state, routes),
+            "quickstart": local_quickstart_status()}
 
 def status(app):
     config = settings(app)
@@ -272,14 +305,10 @@ def prepare(app, provider, model, expected_host, kind):
             if not ready(state, routes):
                 raise RuntimeError("Local gateway is not ready. Stop it after closing managed sessions, then retry.")
         else:
+            local = local_status(app)
+            if not local.get("usable"):
+                raise RuntimeError("The pinned local LiteLLM install is missing or cannot start. Install or repair version " + VERSION + " in the gateway venv before launching.")
             binary = root / "venv/bin/litellm"
-            if not binary.is_file():
-                raise RuntimeError("Local LiteLLM is not installed. See the local gateway setup in docs/designs/litellm-local-provider-observability.md.")
-            version = subprocess.run([str(root / "venv/bin/python"), "-c",
-                                      "import importlib.metadata as m; print(m.version('litellm'))"],
-                                     capture_output=True, text=True, timeout=10)
-            if version.returncode or version.stdout.strip() != VERSION:
-                raise RuntimeError("Install the pinned LiteLLM version " + VERSION + " in the gateway venv.")
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
@@ -294,6 +323,7 @@ def prepare(app, provider, model, expected_host, kind):
                          "http_proxy", "https_proxy", "all_proxy")
             env = {name: os.environ[name] for name in inherited if name in os.environ}
             env.update(HERDR_GATEWAY_DIR=str(root), LITELLM_TELEMETRY="False",
+                       LITELLM_LOCAL_MODEL_COST_MAP="True", LITELLM_MASTER_KEY=key,
                        HERDR_GATEWAY_KEY=key,
                        PYTHONPATH=str(Path(__file__).resolve().parent),
                        LITELLM_RUST_FIRST="false", LITELLM_RUST="false",
@@ -381,8 +411,9 @@ def main():
                     if not remote.get("models"):
                         raise RuntimeError("The existing LiteLLM server advertises no models; add one before enabling it.")
                 if ns.action == "enable" and config.get("mode") != "remote":
-                    if not local_status(ns.app).get("installed"):
-                        raise RuntimeError("Install the pinned local LiteLLM version before enabling it.")
+                    local = local_status(ns.app)
+                    if not local.get("usable"):
+                        raise RuntimeError("The pinned local LiteLLM install is missing or cannot start. Install or repair version " + VERSION + " in the gateway venv before enabling it.")
                 config["enabled"] = ns.action == "enable"
             else:
                 if config.get("enabled") is True and config.get("mode") != ns.action:
