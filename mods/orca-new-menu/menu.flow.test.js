@@ -20,7 +20,7 @@ test("local inventory is ready after probes, managed commands launch only while 
   assert.deepEqual(menu.agentRows(), []);
   for (const task of tasks) await task(cx);
   assert.ok(menu.disabled.has("codex"));
-  assert.deepEqual(menu.agentRows().map(row => row.label), ["Kimi", "FreeBuff CLI"]);
+  assert.deepEqual(menu.agentRows().map(row => row.label), ["Kimi", "FreeBuff CLI", "Agent Settings"]);
   const row = menu.agentRows()[0];
   row.run();
   inventory.disabled.push("kimi");
@@ -30,13 +30,18 @@ test("local inventory is ready after probes, managed commands launch only while 
   assert.deepEqual(await menu.withLocalRuns([agent]), [{ ...agent, run: ["override"] }]);
 });
 
-test("flyout prefers right, then left, then clamps to the viewport", () => {
+test("flyout centers under the menu, then clamps to the viewport", () => {
   const menu = new Menu();
   const agent = { key: "codex" };
   assert.equal(menu.flyoutAt(agent), "pointer");
-  for (const [width, left, right, x] of [[900, 100, 200, 206], [700, 380, 480, 70], [350, 30, 140, 42]]) {
+  for (const [width, left, right, bottom, x, y] of [
+    [1200, 400, 600, 60, 260, 66],
+    [900, 100, 200, 80, 8, 86],
+    [700, 380, 480, 90, 190, 96],
+    [350, 30, 140, 100, 8, 106],
+  ]) {
     globalThis.window = { viewport_size: () => ({ width, height: 600 }) };
-    menu.rowEdge = { key: agent.key, left, right, y: 230 };
-    assert.deepEqual(menu.flyoutAt(agent), { x, y: 152 });
+    menu.rowEdge = { key: agent.key, left, right, bottom };
+    assert.deepEqual(menu.flyoutAt(agent), { x, y });
   }
 });

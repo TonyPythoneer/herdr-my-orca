@@ -40,7 +40,7 @@ test("Add project opens the space dialog and Create workspace opens the new menu
   click(byId(tree, "landing-add"));
   click(byId(tree, "landing-create"));
   assert.deepEqual(runs, [["space.new", undefined]]);
-  assert.deepEqual(globalThis.opened, [{ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }]);
+  assert.deepEqual(globalThis.opened, [{ mod: "orca-new-menu", kind: "popup", width: 288 }]);
   delete globalThis.__herdrRun;
   delete globalThis.opened;
 });

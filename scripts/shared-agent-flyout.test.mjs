@@ -5,20 +5,20 @@ import assert from "node:assert/strict";
 import { DEFAULT_PROMPT, SPECS, defaultValues, parseModels, readValues } from "../orca-ui/shared/agent-flyout.js";
 
 test("defaultValues: checklists start empty, selects and editors at their default, models and effort unset", () => {
-  assert.deepEqual(defaultValues(SPECS.codex), { codexOff: [] });
-  assert.deepEqual(defaultValues(SPECS.pi), { off: [], systemPrompt: "" });
+  assert.deepEqual(defaultValues(SPECS.codex), { codexOff: [], fast: false });
+  assert.deepEqual(defaultValues(SPECS.pi), { off: [], systemPrompt: "", fast: false });
   const claude = defaultValues(SPECS.claude);
-  assert.deepEqual(Object.keys(claude), ["advisorModel", "outputStyle", "agents", "systemPrompt"]);
+  assert.deepEqual(Object.keys(claude), ["fast", "advisorModel", "outputStyle", "agents", "systemPrompt"]);
   assert.equal(claude.advisorModel, "opus");
   assert.equal(claude.outputStyle, "default");
   assert.equal(claude.systemPrompt, DEFAULT_PROMPT);
 });
 
 test("readValues: model and effort come from the top of the record, strings only", () => {
-  assert.deepEqual(readValues(SPECS.codex, { model: "m", effort: "low" }), { model: "m", effort: "low", codexOff: [] });
-  assert.deepEqual(readValues(SPECS.codex, { model: 5, effort: null }), { codexOff: [] });
-  assert.deepEqual(readValues(SPECS.codex, { preset: { model: "ignored", effort: "ignored" } }), { codexOff: [] });
-  assert.deepEqual(readValues(SPECS.codex), { codexOff: [] });
+  assert.deepEqual(readValues(SPECS.codex, { model: "m", effort: "low" }), { model: "m", effort: "low", codexOff: [], fast: false });
+  assert.deepEqual(readValues(SPECS.codex, { model: 5, effort: null }), { codexOff: [], fast: false });
+  assert.deepEqual(readValues(SPECS.codex, { preset: { model: "ignored", effort: "ignored" } }), { codexOff: [], fast: false });
+  assert.deepEqual(readValues(SPECS.codex), { codexOff: [], fast: false });
 });
 
 test("readValues: a checklist keeps known ids in the saved order and drops the rest", () => {

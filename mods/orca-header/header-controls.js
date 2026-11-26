@@ -130,7 +130,7 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
       )
     )
     // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-    .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: view.newMenuAt() })).id("tab-new").relative())
+    .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, at: view.newMenuAt() })).id("tab-new").relative())
     .child(div().flex_1())
     // TitlebarMainStrip.tsx:58-69 — the single-tab case gets a `Minimize2`
     // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,

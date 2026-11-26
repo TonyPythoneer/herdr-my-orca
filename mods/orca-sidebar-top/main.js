@@ -214,7 +214,7 @@ function newWorkspaceButton(t) {
   return div().id("proj-new").size(24).flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
     .role("button").accessibility_label("New workspace")
     // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-    .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }))
+    .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }))
     .child(svg("mods/orca-assets/plus--orca-sidebar-top.svg").size(14));
 }
 

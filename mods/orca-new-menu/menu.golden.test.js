@@ -114,6 +114,7 @@ function start(host, effects) {
   const scope = {
     View: class {}, MODELS, ...rowsApi, detectFreebuff,
     div: recorder(handlers)("div"), svg: recorder(handlers)("svg"), image: recorder(handlers)("image"),
+    HoverCard: { new: (id) => recorder(handlers)("HoverCard.new")(id) },
     v_flex: recorder(handlers)("v_flex"), h_flex: recorder(handlers)("h_flex"),
     InputState: { new: () => input }, Input: { new: (...a) => recorder(handlers)("Input.new")(...a) },
     checking: () => Boolean(host.checking), theme: () => ({ popover: "pop", foreground: "fg", selected: "sel", muted: "mu", dim: "dim", border: "bd", ring: "rg", input: "in", hover: "hv" }),
@@ -215,6 +216,12 @@ async function record(host) {
   const log = [];
   x.cx.notify = () => log.push(["notify"]);
   for (const [, fn] of hovers) { fn(false, x.cx); fn(true, x.cx); out.pointer.push(["hover", x.menu.at]); }
+  // Render the New Terminal tooltip once lit, then once the icon has lost hover: the card must
+  // disappear, and its custom tree must still build.
+  x.menu.tipHot = "new-terminal";
+  const tipOn = view(x);
+  x.menu.tipHot = null;
+  out.pointer.push(["tip", tipOn, view(x)]);
   const rowEvent = (xPos, y) => ({ position: { x: 300 + xPos, y: 100 + y }, local_position: { x: xPos, y }, bounds: { width: 272 } });
   for (const [, fn] of moves) for (const e of [{}, rowEvent(10, 5), rowEvent(250, 5)]) {
     log.length = 0; fn(e, x.cx); await settle(x);
@@ -225,7 +232,9 @@ async function record(host) {
     const f = await opened({ ...host, viewport }, []);
     view(f);
     const trackers = f.handlers.filter(([name]) => name === "on_mouse_move");
-    if (trackers.length) { trackers[0][1](rowEvent(250, 20), f.cx); out.flyout.push([viewport, plain(f.menu.rowEdge)]); }
+    // The icon handlers set hoverAgent; the agents-row handler establishes the menu edge.
+    for (const [, fn] of trackers) fn(rowEvent(250, 20), f.cx);
+    if (trackers.length) out.flyout.push([viewport, plain(f.menu.rowEdge ?? null)]);
   }
   const clickLog = [];
   const y = await opened(host, clickLog);
@@ -281,6 +290,54 @@ test("every host records as before", async () => {
   const now = summary(got);
   if (!existsSync(GOLDEN)) writeFileSync(GOLDEN, `${JSON.stringify(now, null, 1)}\n`);
   assert.deepEqual(now, JSON.parse(readFileSync(GOLDEN, "utf8")));
+});
+
+test("the agent bar arrow steps one icon", async () => {
+  const w = await opened(HOSTS["local, fresh inventory, freebuff on"], []);
+  view(w);
+  const clicks = w.handlers.filter(([name]) => name === "on_click");
+  const arrow = clicks.find(([, handler]) => handler.toString().includes("this.agentAt += dir"));
+  arrow[1]({}, w.cx);
+  assert.equal(w.menu.agentAt, 1);
+});
+
+test("the agent bar scrolls its icon window with the wheel", async () => {
+  const w = await opened(HOSTS["local, fresh inventory, freebuff on"], []);
+  view(w);
+  const scroll = w.handlers.filter(([name]) => name === "on_scroll_wheel")
+    .find(([, handler]) => handler.toString().includes("this.agentAt = Math.max"));
+  const cx = { ...w.cx, stop_propagation() {} };
+  w.menu.agentAt = 0;
+  scroll[1]({ delta: { y: 1 } }, cx);
+  assert.equal(w.menu.agentAt, 1);
+  scroll[1]({ delta: { y: -1 } }, cx);
+  assert.equal(w.menu.agentAt, 0);
+});
+
+test("New Terminal and FreeBuff use the light pointer tooltip and release it on leave", async () => {
+  const w = await opened(HOSTS["local, fresh inventory, freebuff on"], []);
+  for (const [tip, label, start] of [["new-terminal", "New Terminal", 0], ["freebuff", "FreeBuff CLI", 99]]) {
+    w.menu.agentAt = start;
+    w.menu.tipHot = tip;
+    const lit = JSON.stringify(w.menu.render(w.cx).__node);
+    assert.match(lit, new RegExp(label));
+    assert.match(lit, /tip-arrow--orca-new-menu\.svg/);
+    assert.match(lit, /#f4f4f5/);
+  }
+  w.menu.tipHot = null;
+  assert.doesNotMatch(JSON.stringify(w.menu.render(w.cx).__node), /tip-arrow--orca-new-menu\.svg/);
+});
+
+test("crossing onto a non-agent action drops the open agent flyout", async () => {
+  const log = [];
+  const w = await opened(HOSTS["local, fresh inventory, freebuff on"], log);
+  const claude = w.menu.agents.find(a => a.key === "claude");
+  w.menu.hoverConfig(claude, true, false);
+  view(w);
+  const move = w.handlers.find(([name, handler]) => name === "on_mouse_move" && handler.toString().includes("row.config"));
+  move[1]({ local_position: { x: 1, y: 1 }, bounds: {} }, w.cx);
+  assert.equal(w.menu.hoverAgent, null);
+  assert.deepEqual(plain(log.at(-1)), ["setShared", "orca-agent-flyout", null]);
 });
 
 test("the flyout opens through the orca-agent-flyout popup and swaps for another agent", async () => {

@@ -5,6 +5,13 @@
 // shortcut: the catalog is a Herdr version snapshot, update all three lists when Herdr adds agents.
 const OFFICIAL = new Set("claude codex pi opencode cursor copilot amp gemini grok antigravity boldcreate crush dsh-tui empryo goose hermes kimi kiro omp pig qoder swival".split(" "));
 
+/** The agent bar shows five full icons and half of the next; arrows step one icon. */
+export function agentWindow(total, start, full = 5) {
+  const last = Math.max(0, total - full);
+  const at = Math.max(0, Math.min(start, last));
+  return { start: at, count: Math.min(total - at, at < last ? full + 1 : full), left: at > 0, right: at < last };
+}
+
 /** Only officially supported, installed, enabled agents; registry order is preserved. */
 export function installedEnabledAgents(agents, disabled) {
   const seen = new Set();

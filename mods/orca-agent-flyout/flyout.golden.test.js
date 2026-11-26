@@ -73,7 +73,7 @@ const GROUPED = [
   { id: "opencode/b", label: "B", group: "paid", efforts: [], fallbackEffort: "high" },
   { id: "omlx/c", label: "C", group: "omlx", efforts: [], fallbackEffort: "high" },
 ];
-const catalog = (key, models, checkedAt = NOW, schema = 3) => ({ catalog: { [key]: { models, checkedAt, schema, version: "v1" } } });
+const catalog = (key, models, checkedAt = NOW, schema = 4) => ({ catalog: { [key]: { models, checkedAt, schema, version: "v1" } } });
 const json = x => `${JSON.stringify(x, null, 2)}\n`;
 const withManagerEnvironment = argv => ["env", "HERDR_ENV=1", ...argv];
 const record = (name, over = {}) => ({ name, host: "http://127.0.0.1:8000/v1", apiKey: "k", githubOwner: "", iconPath: "", verifiedAt: "x", models: ["pm1", "pm2"], selectedModel: { codex: "pm2" }, ...over });
@@ -146,6 +146,7 @@ function start(world, log, settingsPage = false) {
     TextareaState: { new: o => field(o?.value) }, InputState: { new: () => field("") },
     Textarea: { new: (...a) => recorder(handlers)("Textarea.new")(...a) }, Input: { new: (...a) => recorder(handlers)("Input.new")(...a) },
     Scrollbar: { vertical: (...a) => recorder(handlers)("Scrollbar.vertical")(...a) },
+    HoverCard: { new: (...a) => recorder(handlers)("HoverCard.new")(...a) },
     checking: () => Boolean(world.checking), run: (...a) => log.push(["run", ...plain(a)]), props: () => props, closeOverlay: id => log.push(["closeOverlay", id]),
     theme: () => t, setShared: (...a) => log.push(["setShared", ...plain(a)]), appHome: () => "/home", home: () => "/home", settings: () => ({ dark: world.dark !== false, font_family: "Mono" }),
     spaces: () => [{ id: "s1", active: true, machine: world.machine ?? null, folder: "/repo" }],
@@ -323,7 +324,7 @@ test("the settings controller loads a real catalog, previews current argv, and l
   const tree = drawSettings(w);
   assert.match(tree, /am-copy-command/);
   assert.match(tree, /am-launch-from-settings/);
-  assert.match(tree, /MODEL SOURCE/);
+  assert.match(tree, /Model source: Codex/);
   assert.ok(!w.log.some(entry => entry[0] === "run"));
   w.menu.setAllItems("codexOff", false, w.cx);
   await settle(w);

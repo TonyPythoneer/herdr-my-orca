@@ -8,7 +8,7 @@
 // The flyout is sticky: it stays after the pointer leaves and closes on launch.
 
 import { div, image, svg } from "gpui-kit";
-import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
+import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar, HoverCard } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
 import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, piModelLimits, serializeProviderFile, supportsCodingModel, validateHost, writeProviderFile } from "./codex-provider.js";
 import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
@@ -31,8 +31,8 @@ const BUILTIN_STYLES = ["default", "Explanatory", "Learning"];
 const NEW_STYLE = "+ New style…";
 const styleDir = () => `${home()}/.claude/output-styles`;
 const styleTemplate = (name) => `---\nname: ${name}\ndescription: Describe this output style\n---\n\nYou are an interactive CLI tool that helps users with software engineering tasks.\n`;
-// Bump when the cached model shape changes (opencode gained providers/groups).
-const CATALOG_SCHEMA = 3;
+// Bump when the cached model shape changes (opencode gained providers/groups, models gained fast).
+const CATALOG_SCHEMA = 4;
 // Reuse a cache for ten minutes; the CLI and the upstream list are checked again after that.
 const CATALOG_TTL_MS = 10 * 60_000;
 const SETTINGS = `${appHome()}/agent-config.json`;
@@ -98,11 +98,6 @@ function providerGlyph(record, t) {
   return svg("mods/orca-assets/hard-drive.svg").size(14).text_color(t.muted);
 }
 
-function providerTooltip(remote, providerCount) {
-  if (remote) return "A model provider is set up on this computer only";
-  return providerCount > 0 ? "Choose which model source Codex starts with" : "Add a model provider";
-}
-
 // The validity badge of a JSON editor: invalid, edited since the last save, or fine.
 function jsonBadge(editor, danger, t) {
   if (editor.error) return { text: `Invalid JSON · line ${editor.error.line}`, color: danger, bg: "#ef444414", border: "#ef444440" };
@@ -135,6 +130,9 @@ class AgentConfigCore {
     this.providers = {};
     this.providerId = "none"; // none: the agent's own source
     this.cliModel = null; // the model to come back to when the provider goes back to None
+
+    this.fast = false;
+    this.hotTip = null; // the one icon tip lit by the pointer
 
     // Output styles (the `claudeOutputStyles` list): the .md files of ~/.claude/output-styles.
     this.styles = BUILTIN_STYLES;
@@ -278,6 +276,12 @@ class AgentConfigCore {
     }
   }
 
+  // Fast mode is a property of the model, and only the agent's own catalog can offer it: a saved
+  // provider fails here even when it reuses a model name (oMLX does).
+  fastAvailable(model = this.current()) {
+    return Boolean(this.spec.options.fast) && this.providerId === "none" && Boolean(model?.fast);
+  }
+
   // Picking a model keeps the effort when the model supports it, else the model's own default.
   choose(model, effort) {
     if (!model) {
@@ -290,6 +294,7 @@ class AgentConfigCore {
     const fallback = efforts.includes(model.fallbackEffort) ? model.fallbackEffort : efforts[0];
     const kept = [effort, this.effort].find((level) => efforts.includes(level));
     this.effort = kept !== undefined ? kept : fallback;
+    if (this.values.fast && !this.fastAvailable(model)) this.values.fast = false;
   }
 
   current() {
@@ -716,32 +721,34 @@ class AgentConfigCore {
   modelRow(m, t) {
     const on = this.model === m.id;
     const hidden = this.hidden.has(m.id);
-    return this.listRow(`model-${m.id}`, t)
-      .flex_none()
-      .on_click((_e, cx) => {
-        this.choose(m, this.effort);
-        this.open = null;
-        this.groupOpen = false;
-        this.remember();
-        cx.notify();
-      })
-      .child(div().flex_1().min_w(0).truncate().text_color(hidden ? t.muted : t.foreground).child(m.label))
-      .when(on, (el) => el.child(div().flex_none().text_color(t.accent).child("✓")))
-      .child(
-        div()
-          .id(`visibility-${m.id}`)
-          .flex_none()
-          .p(2)
-          .rounded(4)
-          .hover((s) => s.bg(t.hover))
-          .on_click((_e, cx) => {
-            // The eye is a control inside the row: toggling it must not also select the model.
-            cx.stop_propagation();
-            this.toggleHidden(m.id);
-            cx.notify();
-          })
-          .child(svg(hidden ? "mods/orca-assets/eye-off.svg" : "mods/orca-assets/eye--orca-agent-flyout.svg").size(14).text_color(t.muted)),
-      );
+    return this.tip(`model-${m.id}`, m.label,
+      this.listRow(`model-${m.id}`, t)
+        .flex_none()
+        .on_click((_e, cx) => {
+          this.choose(m, this.effort);
+          this.open = null;
+          this.groupOpen = false;
+          this.remember();
+          cx.notify();
+        })
+        .child(div().flex_1().min_w(0).truncate().text_color(hidden ? t.muted : t.foreground).child(m.label))
+        .when(on, (el) => el.child(div().flex_none().text_color(t.accent).child("✓")))
+        .child(
+          div()
+            .id(`visibility-${m.id}`)
+            .flex_none()
+            .p(2)
+            .rounded(4)
+            .hover((s) => s.bg(t.hover))
+            .on_click((_e, cx) => {
+              // The eye is a control inside the row: toggling it must not also select the model.
+              cx.stop_propagation();
+              this.toggleHidden(m.id);
+              cx.notify();
+            })
+            .child(svg(hidden ? "mods/orca-assets/eye-off.svg" : "mods/orca-assets/eye--orca-agent-flyout.svg").size(14).text_color(t.muted)),
+        ),
+      true);
   }
 
   // opencode mixes cloud models (free/paid) and local omlx models; the list shows one group.
@@ -859,39 +866,115 @@ class AgentConfigCore {
       );
   }
 
+  // Orca's HTML tooltip, drawn below its trigger with the same light card as New Terminal.
+  tipCard(label) {
+    return div().relative().mt(4).pt(7)
+      .child(h_flex()
+        .min_h(30)
+        .px(10)
+        .py(4)
+        .items_center()
+        .rounded(8)
+        .border_1()
+        .border_color("#e4e4e7")
+        .bg("#f4f4f5")
+        .shadow_md()
+        .child(div().max_w(260).text_size(12).font_medium().text_color("#18181b").child(label)))
+      .child(div().absolute().top(0).left(0).right(0).flex().justify_center()
+        .child(svg("mods/orca-assets/tip-arrow--orca-new-menu.svg").w(14).h(8).flex_none()));
+  }
+
+  // A downward tip on any control. Only the trigger holds hover, so the card is never a target.
+  tip(id, label, trigger, full = false) {
+    const lit = div()
+      .id(`cfg-hot-${id}`)
+      .when(full, (el) => el.w_full().flex_none())
+      .on_hover((hovered, cx) => {
+        if (hovered) this.hotTip = id;
+        else if (this.hotTip === id) this.hotTip = null;
+        cx.notify();
+      })
+      .child(trigger);
+    return HoverCard.new(`cfg-tip-${id}`)
+      .anchor("top_center")
+      .open_delay(150)
+      .close_delay(0)
+      .trigger(lit)
+      .content(this.hotTip === id ? this.tipCard(label) : div());
+  }
+
+  // The four headings are icons; their names live in the tip instead of taking a text column.
+  controlHead(id, icon, label, t) {
+    return this.tip(id, label, div()
+      .size(18)
+      .flex_none()
+      .flex()
+      .items_center()
+      .justify_center()
+      .accessibility_label(label)
+      .child(svg(`mods/orca-assets/${icon}`).size(12).flex_none().text_color(t.foreground)));
+  }
+
   // A provider's icon sits in a small tile: the file saved in this app's folder, else the default
   // drive; None gets a plain circle. Without a record the tile is None's.
   providerIcon(record, t) {
     return div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(providerGlyph(record, t));
   }
 
-  // The model source section: one select like MODEL and EFFORT, its label inside. None, or a provider
-  // whose test passed. Greyed out when there is none to pick, and on another machine (the file and
-  // the icon live on this one). The list opens inline below it.
+  // The agent's own icon, shown for the default origin (no-provider) model source. The menu
+  // passes the program's icon so every agent, Pi included, names itself with its own mark.
+  agentIcon(t) {
+    const p = this.context();
+    // Known agents use the bundled glyph, which renders everywhere; anything newer uses the
+    // home-folder SVG the menu also draws. image() is for full-color bitmaps, not these marks.
+    const byKey = { claude: "claude.svg", codex: "codex--orca-header.svg", opencode: "opencode.svg" };
+    const file = byKey[this.key];
+    if (file) return svg(`mods/orca-assets/${file}`).size(18).text_color(t.foreground);
+    const path = String(p.icon ?? "");
+    if (path) return svg(path).size(18).text_color(t.foreground);
+    return svg("mods/orca-assets/bot.svg").size(18).text_color(t.muted);
+  }
+
+  // Model source: an expanded list of the default origin source (the agent itself, shown with its
+  // icon) plus any saved providers. Replaces the old MODEL SOURCE select: it now sits on the same
+  // layer as MODEL and EFFORT. Icon-only and narrow, so the model list gets the row's width.
   providerRow(t) {
-    const ids = Object.keys(this.providers ?? {});
     const space = launchSpace(this.context());
     const remote = !this.settingsContext && Boolean(space?.machine);
-    // With none saved the select still opens, for its "Add More" row.
     const enabled = !remote;
-    const label = this.providerId === "none" ? "None" : this.providers[this.providerId]?.name ?? "None";
+    const label = this.providerId === "none" ? this.spec.label : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
-      .gap(4)
-      .child(
-        h_flex()
-          .id("provider-wrap")
-          .mx(6)
-          .when(!enabled, (el) => el.opacity(0.5))
-          .role("group")
-          .accessibility_label(`Model provider: ${label}`)
-          .tooltip(providerTooltip(remote, ids.length))
-          .child(
-            this.selectBox({ id: "provider-select", label: "MODEL PROVIDER", value: label, open: this.open === "provider" && enabled, onToggle: (cx) => this.toggle("provider", cx), t, disabled: !enabled }),
-          ),
-      )
-      .when(this.open === "provider" && enabled, (el) =>
-        el.child(v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(this.providerList(t))),
-      );
+      .gap(2)
+      .w(48)
+      .when(!enabled, (el) => el.opacity(0.5))
+      .role("group")
+      .accessibility_label(`Model source: ${label}`)
+      .child(this.controlHead("source-head", "hard-drive.svg", `Model source: ${label}`, t))
+      .child(this.sourceList(t, enabled));
+  }
+
+  // The expanded model source list: the origin source (agent icon) first, then saved providers.
+  // Each row is only its icon; the tip names it, left-aligned with the other controls.
+  sourceList(t, enabled) {
+    const rows = [
+      { id: "none", label: this.spec.label, icon: div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(this.agentIcon(t)) },
+      ...Object.entries(this.providers ?? {}).map(([id, record]) => ({ id, label: record?.name ?? id, icon: this.providerIcon(record, t) })),
+    ];
+    return v_flex()
+      .gap(2)
+      .child(this.scrollList("source-list",
+        rows.map((option) => this.tip(`source-${option.id}`, option.label,
+          this.listRow(`source-${option.id}`, t, 0)
+            .w_full()
+            .px(4)
+            .justify_start()
+            .accessibility_label(option.label)
+            .when(!enabled, (el) => el.opacity(0.5))
+            .when(enabled, (el) => el.on_click((_e, cx) => this.setProvider(option.id, cx)))
+            .when(this.providerId === option.id, (el) => el.bg(t.selected))
+            .child(option.icon),
+          true)),
+      ));
   }
 
   // The flyout's rhythm: a block is a label, 8px of air, then its controls. Blocks are 14px apart
@@ -1038,6 +1121,7 @@ class AgentConfigCore {
       if ((this.current()?.efforts ?? []).length === 0) return null; // a model without effort variants has nothing to pick
       return this.selectBox({ id: "effort-select", label: option.label, value: EFFORT_LABEL[this.effort] ?? this.effort ?? "…", open: this.open === "effort", onToggle: (cx) => this.toggle("effort", cx), t });
     }
+    if (option.type === "toggle") return this.toggleControl(id, option, t); // inline on/off, never a dropdown
     return this.choiceSelect(id, option, t);
   }
 
@@ -1070,11 +1154,13 @@ class AgentConfigCore {
     }).child(Input.new(this.styleInput));
   }
 
-  // The list a select opens: models, efforts, or the option's choices.
+  // The list a select opens: models, efforts, or the option's choices. Toggles are inline and never
+  // open a list.
   listFor(id, t) {
     const option = this.spec.options[id];
     if (option.type === "model") return this.modelList(t);
     if (option.type === "effort") return this.effortList(t);
+    if (option.type === "toggle") return v_flex();
     const choices = option.source === "claudeOutputStyles" ? [...this.styles, NEW_STYLE] : option.choices;
     return this.optionList(id, choices, this.values[id], (name, cx) => this.pickChoice(id, name, cx), t);
   }
@@ -1186,6 +1272,7 @@ class AgentConfigCore {
 
   // One section's controls, in its option order; options named in a `ui.rows` row share one line.
   sectionBody(section, t) {
+    if (section.title === "HARNESS CLI ARGUMENTS") return this.argumentControls(t);
     const rows = this.spec.ui?.rows ?? [];
     const done = new Set();
     const parts = [];
@@ -1203,6 +1290,107 @@ class AgentConfigCore {
       else parts.push(...this.selectRow([id], t));
     }
     return v_flex().w_full().gap(section.gap ?? 8).children(parts);
+  }
+
+  // HARNESS CLI ARGUMENTS: model source, model and effort are shown as expanded lists side by side
+  // on the same row (no separate MODEL SOURCE section), with the FAST toggle on effort's right.
+  // Their headings are icons; the names are tips, which keeps the row narrow.
+  argumentControls(t) {
+    return h_flex()
+      .mx(6)
+      .gap(10)
+      .items_start()
+      .child(this.providerRow(t))   // model source: origin source (agent icon) + providers
+      .child(this.modelControl(t))  // model: expanded list, takes remaining width
+      .child(this.effortControl(t)) // effort: expanded list, narrower
+      .when(this.spec.options.fast, (el) => el.child(this.fastControl(t))); // fast: on/off toggle
+  }
+
+  // A bordered box holding a list, matching the look of an opened select.
+  listBox(list, t) {
+    return v_flex().mx(6).py(4).rounded(8).border_1().border_color(t.border).bg(t.popover).child(list);
+  }
+
+  modelControl(t) {
+    return v_flex()
+      .gap(2)
+      .flex_none()
+      .w(236)
+      .child(this.controlHead("model-head", "bot.svg", "Model", t))
+      .child(this.listBox(this.modelList(t), t))
+      .min_w(0);
+  }
+
+  // Effort control sized to its labels, not a fixed column. GPUI has no text measurement here, so
+  // the width follows the longest rendered label (7px per character plus padding and the check).
+  // shortcut: an estimated width; measure the label if the theme's font changes much.
+  effortControl(t) {
+    const efforts = (this.current()?.efforts ?? []);
+    const longest = Math.max(0, ...efforts.map((e) => (EFFORT_LABEL[e] ?? e).length));
+    return v_flex()
+      .gap(2)
+      .flex_none()
+      .w(Math.max(78, 44 + longest * 7))
+      .child(this.controlHead("effort-head", "sliders-horizontal.svg", "Effort", t))
+      .child(
+        efforts.length
+          ? this.listBox(this.effortList(t), t)
+          : div().px(4).py(2).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).child("—")
+      );
+  }
+
+  // FAST is only a lightning mark: the tip says what it is, and the accent fill is its on state.
+  fastControl(t) {
+    const on = Boolean(this.values.fast);
+    const enabled = this.fastAvailable();
+    const fg = on && enabled ? t.accent_foreground : t.foreground;
+    const button = h_flex()
+      .w(30)
+      .h(24)
+      .justify_center()
+      .rounded(6)
+      .border_1()
+      .border_color(enabled ? (on ? t.accent : t.input) : t.border)
+      .bg(on && enabled ? t.accent : t.raised)
+      .role("button")
+      .accessibility_label(`Fast: ${on ? "on" : "off"}`)
+      .when(enabled, (el) => el.cursor_pointer().on_click((_e, cx) => {
+        this.values.fast = !on;
+        this.rememberPreset();
+        cx.notify();
+      }))
+      .when(!enabled, (el) => el.opacity(0.5))
+      .child(svg("mods/orca-assets/zap--orca-agent-flyout.svg").size(13).text_color(fg));
+    return v_flex()
+      .gap(2)
+      .flex_none()
+      .child(div().h(18))
+      .child(this.tip("fast", enabled ? "Fast mode" : "Fast mode is unavailable for this model", button));
+  }
+
+  // An on/off toggle for a boolean option. Only enabled when the CLI supports the flag (fast).
+  toggleControl(id, option, t) {
+    const on = Boolean(this.values[id]);
+    const enabled = id === "fast" ? this.fastAvailable() : true;
+    return h_flex().items_center().gap(6)
+      .child(div().text_size(9).text_color(t.dim).child(option.label))
+      .child(
+        h_flex()
+          .h(24)
+          .px(8)
+          .rounded(6)
+          .border_1()
+          .border_color(enabled ? (on ? t.accent : t.input) : t.border)
+          .bg(on && enabled ? t.accent : t.raised)
+          .text_size(10)
+          .when(enabled, (el) => el.cursor_pointer().on_click((_e, cx) => {
+            this.values[id] = !on;
+            this.rememberPreset();
+            cx.notify();
+          }))
+          .when(!enabled, (el) => el.opacity(0.5))
+          .child(div().flex_none().text_color(on && enabled ? t.accent_foreground : t.foreground).child(on ? "ON" : "OFF"))
+      );
   }
 
   openAgentSettings() {

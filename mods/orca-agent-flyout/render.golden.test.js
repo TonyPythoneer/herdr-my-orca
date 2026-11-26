@@ -64,7 +64,7 @@ test("each flyout renders its model controls and settings shortcut", () => {
     }
     stripRobot(recorded);
     assert.equal(botCount, 1, name + " has exactly one robot shortcut");
-    assert.ok(text.includes("MODEL"), name + " renders its model control");
+    assert.ok(text.includes('"Model"'), name + " renders its model control");
     if (name === "codex, provider list open") assert.ok(text.includes("oMLX"), "provider list renders the saved provider");
     if (name === "codex, model list open") {
       assert.ok(text.includes("Model One") && text.includes("Model Two"), name + " renders model choices");

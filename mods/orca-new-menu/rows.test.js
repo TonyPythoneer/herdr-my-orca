@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  agentWindow,
   currentInventory,
   emptyAgentState,
   freebuffRun,
@@ -17,6 +18,14 @@ const AGENTS = [
   { key: "custom", installed: true, run: ["custom"] },
   { key: "freebuff", name: "freebuff", installed: true, run: ["freebuff"] },
 ];
+
+test("agent bar shows 5 full icons and half of the next", () => {
+  assert.deepEqual(agentWindow(5, 0), { start: 0, count: 5, left: false, right: false });
+  assert.deepEqual(agentWindow(6, 0), { start: 0, count: 6, left: false, right: true });
+  assert.deepEqual(agentWindow(6, 1), { start: 1, count: 5, left: true, right: false });
+  assert.deepEqual(agentWindow(7, 1), { start: 1, count: 6, left: true, right: true });
+  assert.deepEqual(agentWindow(7, 9), { start: 2, count: 5, left: true, right: false });
+});
 
 test("only installed and enabled official agents become rows", () => {
   assert.deepEqual(installedEnabledAgents(AGENTS, new Set()).map((a) => a.key), ["claude", "codex"]);
