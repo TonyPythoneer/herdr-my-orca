@@ -41,8 +41,8 @@ export default class WorkspaceChrome extends View {
     };
     const onAgents = find(layout(), "main")?.active === "main-agents";
     // Same fill and top border as orca-status-bar, so the row reads as one bar.
-    const footerBar = h_flex().size_full().items_center().bg(t.surface).border_t(1).border_color(t.border).pl(8).text_size(12)
-      .child(h_flex().items_center().gap(8)
+    const footerBar = h_flex().size_full().items_center().bg(t.surface).border_t(1).border_color(t.border).pl(8).pr(8).text_size(12)
+      .child(h_flex().flex_1().items_center().justify_end().gap(8)
         // The Agent Settings is part of this layout's navigation: Settings is Herdr's native pane,
         // while the Agents page lives in the `main` stack (`main-agents`).
         .child(row("agents", "bot", "Agents", () => run("orca-header.agent-settings"), onAgents))

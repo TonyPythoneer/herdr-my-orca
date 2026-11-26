@@ -46,6 +46,11 @@ const catalogEntry = (all, key) => all.catalog?.[key];
 const currentCatalogModels = (cached) => (cached?.schema === CATALOG_SCHEMA ? cached.models : null);
 const isFresh = (cached, cachedModels) => Boolean(cachedModels) && typeof cached.checkedAt === "number" && Date.now() - cached.checkedAt < CATALOG_TTL_MS;
 
+// Bootstrap-style 12-column proportions for the flyout's horizontal controls.
+function gridColumn(element, span, minWidth = 0) {
+  return element.flex_basis(0).flex_grow(span).flex_shrink(1).min_w(minWidth);
+}
+
 // The CLI's version, the last line of `--version` output: the cache is valid while it stays the same.
 async function cliVersion(command) {
   const { stdout } = await exec("zsh", ["-lic", `${command} --version`], { timeout: CLI_TIMEOUT_MS });
@@ -954,14 +959,15 @@ class AgentConfigCore {
   // Model source: an expanded list of the default origin source (the agent itself, shown with its
   // icon) plus any saved providers. Replaces the old MODEL SOURCE select: it now sits on the same
   // layer as MODEL and EFFORT. Icon-only and narrow, so the model list gets the row's width.
-  providerRow(t) {
+  providerRow(t, responsive = false) {
     const space = launchSpace(this.context());
     const remote = !this.settingsContext && Boolean(space?.machine);
     const enabled = !remote;
     const label = this.providerId === "none" ? this.spec.label : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
       .gap(2)
-      .w(48)
+      .when(!responsive, (el) => el.w(48))
+      .when(responsive, (el) => el.w_full().min_w(0))
       .when(!enabled, (el) => el.opacity(0.5))
       .role("group")
       .accessibility_label(`Model source: ${label}`)
@@ -1313,13 +1319,15 @@ class AgentConfigCore {
   // Their headings are icons; the names are tips, which keeps the row narrow.
   argumentControls(t) {
     return h_flex()
+      .w_full()
+      .min_w(0)
       .mx(6)
       .gap(10)
       .items_start()
-      .child(this.providerRow(t))   // model source: origin source (agent icon) + providers
-      .child(this.modelControl(t))  // model: expanded list, takes remaining width
-      .child(this.effortControl(t)) // effort: expanded list, narrower
-      .when(this.spec.options.fast, (el) => el.child(this.fastControl(t))); // fast: on/off toggle
+      .child(gridColumn(this.providerRow(t, true), 2, 48)) // col-2: model source
+      .child(gridColumn(this.modelControl(t), 6))         // col-6: expanded model list
+      .child(gridColumn(this.effortControl(t), 3, 78))    // col-3: effort list
+      .when(this.spec.options.fast, (el) => el.child(gridColumn(this.fastControl(t), 1, 30))); // col-1: fast toggle
   }
 
   // A bordered box holding a list, matching the look of an opened select.
@@ -1330,23 +1338,16 @@ class AgentConfigCore {
   modelControl(t) {
     return v_flex()
       .gap(2)
-      .flex_none()
-      .w(236)
       .child(this.controlHead("model-head", "bot.svg", "Model", t))
       .child(this.listBox(this.modelList(t), t))
       .min_w(0);
   }
 
-  // Effort control sized to its labels, not a fixed column. GPUI has no text measurement here, so
-  // the width follows the longest rendered label (7px per character plus padding and the check).
-  // shortcut: an estimated width; measure the label if the theme's font changes much.
+  // The column owns the width; list labels truncate within it when the flyout is narrow.
   effortControl(t) {
     const efforts = (this.current()?.efforts ?? []);
-    const longest = Math.max(0, ...efforts.map((e) => (EFFORT_LABEL[e] ?? e).length));
     return v_flex()
       .gap(2)
-      .flex_none()
-      .w(Math.max(78, 44 + longest * 7))
       .child(this.controlHead("effort-head", "sliders-horizontal.svg", "Effort", t))
       .child(
         efforts.length
