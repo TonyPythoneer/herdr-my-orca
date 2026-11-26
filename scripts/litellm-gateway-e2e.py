@@ -32,11 +32,8 @@ class Upstream(BaseHTTPRequestHandler):
         if self.status == 429:
             self.send_json(429, {"error": {"message": "limited " + SENTINEL, "type": "rate_limit_error"}})
             return
-        if self.path.endswith("/responses"):
-            self.send_json(200, {"id":"resp_fixture","object":"response","created_at":int(time.time()),
-                "status":"completed","model":body["model"],"output":[{"id":"msg_fixture","type":"message",
-                "role":"assistant","status":"completed","content":[{"type":"output_text","text":SENTINEL,"annotations":[]}]}],
-                "usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}})
+        if not self.path.endswith("/chat/completions"):
+            self.send_json(404, {"error": {"message": "Only OpenAI Chat Completions is supported"}})
             return
         if body.get("stream"):
             self.send_response(200)
@@ -97,6 +94,16 @@ class GatewayE2E(unittest.TestCase):
                 self.assertNotEqual(route["model"], second["model"])
                 key = json.loads(Path(route["configPath"]).read_text())["openai"]["apiKey"]
                 self.assertNotEqual(key, API_KEY)
+                local_status = manager("status")
+                self.assertTrue(local_status["local"]["healthy"])
+                self.assertTrue(local_status["local"]["cli"])
+                remote_file = app / "remote-settings.json"
+                remote_file.write_text(json.dumps({"host":route["host"],"apiKey":key}))
+                remote_file.chmod(0o600)
+                remote_status = manager("save-remote", str(remote_file))
+                self.assertEqual(remote_status["mode"], "remote")
+                self.assertTrue(remote_status["remote"]["healthy"])
+                self.assertIn(route["model"], remote_status["remote"]["models"])
                 def call(base, path, body, expected=200, credential=key, anthropic=False):
                     headers = {"Content-Type":"application/json","Authorization":"Bearer "+credential}
                     if anthropic:
@@ -104,16 +111,25 @@ class GatewayE2E(unittest.TestCase):
                     req = urllib.request.Request(base+path, data=json.dumps(body).encode(), headers=headers)
                     try:
                         with urllib.request.urlopen(req, timeout=30) as response:
-                            self.assertEqual(response.status, expected)
+                            if expected is None:
+                                self.assertNotEqual(response.status, 200)
+                            else:
+                                self.assertEqual(response.status, expected)
                             return response.read().decode()
                     except urllib.error.HTTPError as error:
-                        self.assertEqual(error.code, expected)
+                        if expected is not None:
+                            self.assertEqual(error.code, expected)
                         return error.read().decode()
                 messages = [{"role":"user","content":SENTINEL}]
-                # Unauthenticated traffic must not reach the upstream.
+                # Invalid credentials must not reach the upstream.
                 call(route["host"], "/chat/completions", {"model":route["model"],"messages":messages},
-                     expected=401, credential="wrong-key")
+                     expected=None, credential="wrong-key")
                 self.assertEqual(len(Upstream.calls), 0)
+                admin = urllib.request.Request(route["host"].removesuffix("/v1") + "/key/list",
+                    headers={"Authorization":"Bearer " + key})
+                with self.assertRaises(urllib.error.HTTPError) as denied:
+                    urllib.request.urlopen(admin, timeout=10)
+                self.assertIn(denied.exception.code, (401, 403))
                 response = call(route["host"], "/chat/completions", {"model":route["model"],"messages":messages})
                 self.assertIn(SENTINEL, response)
                 response = call(route["host"], "/chat/completions", {"model":route["model"],"messages":messages,

@@ -63,5 +63,5 @@ function noChoiceText(noChoice, choice) {
   const lead = noChoice.length === 1 ? "1 agent has" : `${noChoice.length} agents have`;
   const names = noChoice.slice(0, SUMMARY_NAMES).map((row) => row.name).join(", ");
   const more = noChoice.length > SUMMARY_NAMES ? ` +${noChoice.length - SUMMARY_NAMES}` : "";
-  return `${lead} no ${PERMISSION_LABELS[choice]} flag and keep ${noChoice.length === 1 ? "its" : "their"} own command: ${names}${more}.`;
+  return `${lead} no ${PERMISSION_LABELS[choice]} flag and ${noChoice.length === 1 ? "keeps its" : "keep their"} own command: ${names}${more}.`;
 }

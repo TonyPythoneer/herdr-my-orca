@@ -62,6 +62,7 @@ test("refresh probes the cached inventory, retries the login shell and keeps the
   };
   await drain();
   assert.deepEqual(calls.map(([cmd, args, ms]) => [cmd, args[0], ms]), [
+    ["python3", "/home/mods/orca-agent-flyout/litellm_gateway.py", 15000],
     ["/bin/sh", "-c", 5000], ["/bin/zsh", "-lic", 30000], ["/bin/zsh", "-lc", 30000],
   ]);
   assert.deepEqual(JSON.parse(cache.get("agent-manager.inventory.v1")).map((a) => a.installed), [false, true]);

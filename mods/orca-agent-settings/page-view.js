@@ -1,7 +1,7 @@
 // The Agents page: its header, the all-agents permission card and the catalog sections. Each
 // builder takes the page (`owner`) and reads its state; the page's logic stays in main.js.
 import { div, svg } from "gpui-kit";
-import { Button, v_flex, h_flex } from "gpui-base";
+import { Button, Link, v_flex, h_flex, Input } from "gpui-base";
 import { layout, settings, shared } from "herdr";
 import { PERMISSION_LABELS } from "./permissions.js";
 import { defaultPermissionItems, permissionSelect } from "./permission-menu.js";
@@ -53,21 +53,112 @@ export function environmentCardView(owner, t) {
         .child(v_flex().flex_1().min_w(0).gap(3)
           .child(div().text_size(13).font_semibold().text_color(t.foreground).child("Agent environment"))
           .child(div().text_size(11).line_height("16px").text_color(t.muted)
-            .child("Set HERDR_ENV=1 for agents launched from the agent dropdown.")))
+            .child("Adds HERDR_ENV=1 to new agent commands, so tools can tell they are running inside Herdr.")))
         .child(
           div().id("am-herdr-env-toggle").w(36).h(20).flex_none().flex().items_center().p(2).rounded_full()
             .bg(on ? t.foreground : t.input)
             .when(owner.herdrEnvSaving || owner.persisting || owner.managerError, el => el.opacity(0.45))
             .when(!owner.herdrEnvSaving && !owner.persisting && !owner.managerError, el => el.cursor_pointer())
             .role("switch").checked(on)
-            .accessibility_label("Set HERDR_ENV=1 for agents launched from the agent dropdown")
-            .tooltip(owner.herdrEnvSaving ? "Saving…" : "Set HERDR_ENV=1 for agents launched from the agent dropdown")
+            .accessibility_label("Add HERDR_ENV=1 to new agent commands")
+            .tooltip(owner.herdrEnvSaving ? "Saving…" : "Add HERDR_ENV=1 to new agent commands")
             .when(!owner.herdrEnvSaving && !owner.persisting && !owner.managerError, el => el.on_click((_event, cx) => owner.setHerdrEnv(!on, cx)))
             .child(h_flex().w_full().items_center().when(on, el => el.justify_end())
               .when(!on, el => el.justify_start())
               .child(div().size(16).rounded_full().bg(on ? t.background : t.muted))),
         ),
     );
+}
+
+export function gatewayCardView(owner, t) {
+  const on = owner.litellmEnabled;
+  const local = owner.litellmStatus?.local;
+  const remote = owner.litellmStatus?.remote;
+  let health;
+  if (owner.litellmMode === "local") {
+    if (local?.running && local.healthy && local.installed) health = { text: `Healthy · LiteLLM ${local.version}`, color: t.done };
+    else if (local?.running && !local.healthy) health = { text: `Gateway process is running but health check failed · ${local.version ?? "unknown version"}`, color: t.blocked };
+    else if (local?.running) health = { text: `Gateway running with an unsupported version · ${local.version ?? "unknown"}`, color: t.blocked };
+    else if (local?.installed) health = { text: `Ready · LiteLLM ${local.version}; gateway starts on first launch`, color: t.muted };
+    else if (local?.cli) health = { text: `CLI found at ${local.cli}${local.version ? ` · ${local.version}` : ""}; gateway not installed`, color: t.blocked };
+    else health = { text: "No managed LiteLLM CLI found", color: t.blocked };
+  } else if (remote?.healthy) {
+    health = { text: `Healthy · ${remote.models.length} models available`, color: t.done };
+  } else {
+    health = { text: remote?.error ?? "Remote connection has not been checked", color: remote ? t.blocked : t.muted };
+  }
+  const field = (id, label, state) => v_flex().w_full().gap(4)
+    .child(div().text_size(10).font_semibold().text_color(t.dim).child(label))
+    .child(h_flex().w_full().h(32).px(8).rounded(6).border_1().border_color(t.input).bg(t.background)
+      .child(Input.new(state).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000")));
+  const keyField = owner.litellmHasApiKey && !owner.litellmReplaceKey
+    ? h_flex().w_full().items_center().gap(8)
+      .child(div().flex_1().text_size(11).text_color(t.muted).child("API key saved securely"))
+      .child(owner.button("am-litellm-replace-key", "Replace", t, (_event, cx) => {
+        owner.litellmReplaceKey = true;
+        cx.notify();
+      }, { height: 24, px: 8, color: t.muted }))
+    : field("am-litellm-api-key", "API KEY", owner.litellmApiKey);
+  return v_flex()
+    .id("am-litellm-card")
+    .w_full()
+    .p(12)
+    .gap(10)
+    .rounded(10)
+    .border_1()
+    .border_color(t.border)
+    .bg(t.surface)
+    .child(
+      h_flex().w_full().items_center().gap(16)
+        .child(v_flex().flex_1().min_w(0).gap(3)
+          .child(div().text_size(13).font_semibold().text_color(t.foreground).child("LiteLLM"))
+          .child(div().text_size(11).line_height("16px").text_color(t.muted)
+            .child("Local records usage; remote checks health. Running sessions keep their current route.")))
+        .child(div().id("am-litellm-toggle").w(36).h(20).flex_none().flex().items_center().p(2).rounded_full()
+          .bg(on ? t.foreground : t.input)
+          .when(owner.litellmBusy, el => el.opacity(0.45))
+          .when(!owner.litellmBusy, el => el.cursor_pointer())
+          .role("switch").checked(on)
+          .accessibility_label("Enable LiteLLM for Model Provider launches")
+          .tooltip(owner.litellmBusy ? "Saving…" : "Applies to new Model Provider launches")
+          .when(!owner.litellmBusy, el => el.on_click((_event, cx) => owner.toggleLiteLLM(cx)))
+          .child(h_flex().w_full().items_center().when(on, el => el.justify_end())
+            .when(!on, el => el.justify_start())
+            .child(div().size(16).rounded_full().bg(on ? t.background : t.muted)))),
+    )
+    .child(h_flex().gap(6)
+      .child(owner.button("am-litellm-local", "Local", t, (_event, cx) => owner.setLiteLLMMode("local", cx), { primary: owner.litellmMode === "local", disabled: owner.litellmBusy || owner.litellmEnabled }))
+      .child(owner.button("am-litellm-remote", "Remote", t, (_event, cx) => owner.setLiteLLMMode("remote", cx), { primary: owner.litellmMode === "remote", disabled: owner.litellmBusy || owner.litellmEnabled })))
+    .when(on, el => el.child(div().text_size(11).text_color(t.muted).child("Turn off LiteLLM to change mode.")))
+    .when(on && owner.litellmMode === "local" && Boolean(local) && !local.installed, el => el.child(div().text_size(11).line_height("16px").text_color(t.blocked)
+      .child("LiteLLM is on, but the managed local gateway is not ready. New Model Provider launches will fail.")))
+    .when(owner.litellmMode === "local", el => el.child(v_flex().gap(6)
+      .child(div().text_size(11).text_color(health.color).child(health.text))
+      .when(Boolean(local?.cli), inner => inner.child(div().min_w(0).truncate().text_size(10).text_color(t.dim).child(local.cli)))
+      .when(Boolean(local) && !local.cli, inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
+        .child("Local mode uses Herdr's managed CLI, not Docker. Choose Remote to connect a running server.")))
+      .child(Link.new("am-litellm-repo").href("https://github.com/BerriAI/litellm")
+        .text_size(11).text_color(t.accent).underline()
+        .tooltip("Open the LiteLLM repository on GitHub")
+        .child("LiteLLM on GitHub ↗"))
+      .child(h_flex().items_center().gap(8)
+        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check local CLI", t,
+          (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
+        .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))))))
+    .when(owner.litellmMode === "remote", el => el.child(v_flex().w_full().gap(8)
+      .child(field("am-litellm-host", "API HOST", owner.litellmHost))
+      .child(keyField)
+      .child(div().text_size(10).text_color(t.dim).child("Use an inference-only LiteLLM API key where available."))
+      .child(div().text_size(11).text_color(health.color).child(health.text))
+      .when(Boolean(remote?.models?.length), inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
+        .child(`Models: ${remote.models.slice(0, 5).join(", ")}${remote.models.length > 5 ? ", …" : ""}`)))
+      .when(owner.litellmRemoteDirty, inner => inner.child(div().text_size(10).text_color(t.dim).child("Connection status is for the saved settings.")))
+      .child(h_flex().gap(8)
+        .child(owner.button("am-litellm-save-remote", owner.litellmBusy ? "Checking…" : "Save & check", t,
+          (_event, cx) => owner.saveRemoteLiteLLM(cx), { height: 24, px: 8, primary: true, disabled: owner.litellmBusy }))
+        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check saved connection", t,
+          (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy })))))
+    .when(Boolean(owner.litellmError), el => el.child(div().text_size(11).text_color(t.blocked).child(owner.litellmError)));
 }
 
 function permissionTitleRow(owner, managed, permissions, t, compact) {
@@ -85,24 +176,26 @@ function permissionTitleRow(owner, managed, permissions, t, compact) {
             .text_size(11)
             .line_height("16px")
             .text_color(t.muted)
-            .child("How much every agent may do without asking. You can set one agent differently below."),
+            .child("How much every agent may do without asking. Each agent can keep its own."),
         ),
     )
     .child(
-      permissionSelect(
-        {
-          id: "default",
-          open: owner.permissionOpen === "default",
-          active: owner.permissionActive,
-          choice: permissions.default,
-          label: PERMISSION_LABELS[permissions.default],
-          warn: permissions.default === "full-access",
-          width: compact ? 300 : 340,
-          items: defaultPermissionItems(owner, managed),
-          onOpenChange: (open, cx) => owner.setPermissionMenu("default", open, cx),
-        },
-        t,
-      ),
+      div()
+        .when(compact, (el) => el.w_full().max_w(300))
+        .child(permissionSelect(
+          {
+            id: "default",
+            open: owner.permissionOpen === "default",
+            active: owner.permissionActive,
+            choice: permissions.default,
+            label: PERMISSION_LABELS[permissions.default],
+            warn: permissions.default === "full-access",
+            width: compact ? 300 : 340,
+            items: defaultPermissionItems(owner, managed),
+            onOpenChange: (open, cx) => owner.setPermissionMenu("default", open, cx),
+          },
+          t,
+        )),
     );
 }
 
@@ -403,8 +496,14 @@ export function settingsPageView(owner, t, cx) {
       .child(div().mt(4).text_size(12).line_height("18px").text_color(t.muted).child("Configure the model sources shared by supported agents."))
       .child(owner.modelProvidersCard(t)))
     .when(!loading && owner.railSelection === "global", el => el.child(div().text_size(18).font_semibold().text_color(t.foreground).child("Global Agent Settings"))
-      .when(rows.some(row => row.supports), inner => inner.child(permissionsCardView(owner, rows, t, true)))
-      .child(environmentCardView(owner, t)))
+      .child(div().mt(4).text_size(12).line_height("18px").text_color(t.muted)
+        .child("Defaults for every agent on this computer. Changes apply to new launches."))
+      .child(group("Agent launch arguments", "Defaults Herdr applies when it launches an agent command.", t))
+      .child(v_flex().w_full().gap(8)
+        .when(rows.some(row => row.supports), inner => inner.child(permissionsCardView(owner, rows, t, true)))
+        .child(environmentCardView(owner, t)))
+      .child(group("Global model providers", "Routing for new Model Provider launches. Official and unofficial agents are unaffected.", t))
+      .child(gatewayCardView(owner, t)))
     .when(!loading && !providersSelected && owner.railSelection !== "global", el => el.child(selected ? owner.agentDetail(selected, t, cx) : empty("Agent unavailable on this computer. Refresh or select another agent.", t)))
     .when(!providersSelected, el => el.child(div().pt(12).text_size(11).text_color(t.dim).child(timeLabel(owner.lastChecked))));
   return v_flex().id("am-root").size_full().min_h(0).overflow_hidden().bg(t.background).text_size(12)

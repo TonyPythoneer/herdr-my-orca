@@ -10,9 +10,11 @@ Use the maintained official [LiteLLM project](https://github.com/BerriAI/litellm
 
 ## Product contract
 
-- A single global **Enable Logging** setting in the existing Model Providers settings page; default off for existing and new installations. No per-provider switch, new settings page or standalone dashboard.
+- A single global LiteLLM setting in Global Agent Settings; default off for existing and new installations. Choose a local gateway or a remote LiteLLM endpoint. No per-provider switch or standalone dashboard.
 - OFF: existing Model Provider launch behavior and upstream endpoints are unchanged.
-- ON: a launch through the **Model Providers** flow uses the exact selected provider and model via one shared local LiteLLM service. The picker continues to show the real provider/model, never LiteLLM as a selectable provider, model or agent. No change to native Official Agents or Unofficial Agents flows, even when the same executable (e.g. Codex or Claude) is selected.
+- ON: a launch through the **Model Providers** flow uses the exact selected provider and model through the chosen LiteLLM endpoint. The picker continues to show the real provider/model, never LiteLLM as a selectable provider, model or agent. No change to native Official Agents or Unofficial Agents flows, even when the same executable (e.g. Codex or Claude) is selected.
+- Local mode starts a pinned gateway on demand and records local usage. Remote mode requires an HTTPS API host and LiteLLM API key, verifies authenticated `/v1/models`, and requires the selected model ID to exist there. Remote mode shows connection health; it does not claim local usage counts.
+- Both modes accept the OpenAI Chat Completions upstream protocol. LiteLLM translates the managed clients' Chat Completions, Responses and Anthropic Messages requests to it; upstreams that only support another protocol are not supported by this implementation.
 - Logging is metadata only. No prompt, response text, tool inputs, credentials, raw headers or unredacted errors in persistent logs. Do not export telemetry externally.
 - Fail closed: when logging is enabled, an unavailable/incompatible gateway prevents the affected new launch with an actionable error. Never silently bypass it or choose another provider/model.
 - No automatic retry, fallback, load balancing, semantic cache, or budget enforcement introduced by the gateway. Preserve upstream status/error behavior, streaming, cancellation and tool calling. Existing agent retries remain observable.
@@ -23,16 +25,21 @@ Use the maintained official [LiteLLM project](https://github.com/BerriAI/litellm
 
 ```mermaid
 flowchart TD
-  A[Model Providers: select real provider and model] --> B{Global Logging enabled?}
+  A[Model Providers: select real provider and model] --> B{Global LiteLLM enabled?}
   B -->|No| C[Existing direct launch]
-  B -->|Yes| D[Ensure one local LiteLLM service and route]
-  D -->|Ready| E[Launch agent with local endpoint and credential]
-  D -->|Unavailable| F[Actionable error; no direct fallback]
-  E --> G[LiteLLM proxy]
-  G --> H[Exact configured upstream]
+  B -->|Yes| D{Local or remote LiteLLM?}
+  D -->|Local| E[Ensure one local service and route]
+  D -->|Remote| R[Check remote host, key and model]
+  E -->|Ready| G[Launch agent with local endpoint and credential]
+  R -->|Healthy| H[Launch agent with remote endpoint and credential]
+  E -->|Unavailable| F[Actionable error; no direct fallback]
+  R -->|Unavailable| F
+  H --> V[Remote LiteLLM endpoint]
   G --> I[Metadata-only local event log]
-  I --> J[Provider usage and limit policies]
-  J --> K[Existing bottom status bar]
+  G --> J[Exact selected model route]
+  V --> J
+  I --> U[Provider usage and limit policies]
+  U --> K[Existing bottom status bar]
   L[Official and Unofficial Agent launch] --> M[Existing native flow unchanged]
 ```
 
@@ -50,10 +57,12 @@ Keep the service/lifecycle and route mapping separate from provider usage polici
 
 - Pin a tested official stable LiteLLM release; do not require a pure-Rust build. Validate its supported installation mode locally without Docker, Redis or PostgreSQL. Use a dedicated environment, no mutation of system Python; explicit actionable setup if the dependency is missing.
 - Start lazily on the first managed launch; ensure a single instance with a process/ownership lock, localhost-only binding, authenticated requests and health/readiness checks. Use an app-owned loopback endpoint and private configuration directory. Reject unexpected listener ownership. Do not expose a general arbitrary upstream proxy.
+- In Local mode, show the pinned CLI version/path and whether the gateway is running and healthy. In Remote mode, keep the host and API key in a private settings file, probe authenticated `/v1/models`, show returned models, and fail launches when the selected model is unavailable.
+- Use LiteLLM's supported custom-auth hook for an inference-only key; do not give managed agents the proxy master key. Pass only the gateway's required environment to its process, never inherited database URLs.
 - Keep the gateway independent of page navigation and mod reloads; avoid terminating active agent sessions when logging is toggled or routes change. If safe in-place config updates are unavailable, explicitly handle pending changes instead of restarting active sessions.
 - Derive routes from saved provider IDs and model IDs, not display labels; map collision-free internal aliases back to the original IDs. Preserve user selections, custom base URLs, exact upstream model names and supported authentication including anonymous Kilo if possible. Avoid placing upstream secrets in CLI argv, logs or repository; keep existing credential storage as source of truth.
-- Route only the explicit Model Providers launch branch. Support the required CLI wire protocols: Pi OpenAI chat completions, Codex OpenAI Responses, Claude Anthropic Messages. Validate LiteLLM's actual compatibility per supported provider/protocol combination; reject unsupported combinations instead of silently substituting. Do not imply every provider supports every protocol.
-- Add the persisted global switch to the existing page; no new UI beyond the switch, errors and bottom-line usage.
+- Route only the explicit Model Providers launch branch. Verify Pi OpenAI chat completions, Codex Responses-to-chat translation, and Claude Messages-to-chat translation against the pinned release and a chat-only mock upstream. Do not imply that non-OpenAI-chat upstreams are supported.
+- Add the persisted global switch and Local/Remote selection to Global Agent Settings. Remote mode needs host/key fields and connection health; keep the UI on this page.
 
 ### 2. Metadata collection, provider policy and bottom line
 
@@ -70,10 +79,11 @@ Use a local deterministic mock LLM upstream and real pinned LiteLLM in an isolat
 
 Acceptance criteria:
 - [ ] Default OFF and toggled OFF retain existing direct endpoint; no service required.
-- [ ] ON routes managed Pi/Codex/Claude requests through the same local service to the exact selected upstream/model; prove applicable protocol combinations, streaming, tool calls and cancellation.
+- [ ] ON routes managed Pi/Codex/Claude requests through the same local service to the exact selected OpenAI Chat Completions upstream/model; prove the three client protocol translations, streaming and tool calls.
 - [ ] Native Official/Unofficial launch paths are unchanged, including when executable names match managed launches; LiteLLM is absent from provider/model pickers.
 - [ ] Multiple sessions and provider IDs remain isolated and share one gateway; settings reload does not duplicate processes or interrupt active sessions.
 - [ ] Local readiness/auth failures and unsupported combinations fail visibly with no direct fallback; reject unauthenticated requests.
+- [ ] Remote host/key checks authenticated `/v1/models`, reports health and available models, and refuses launches whose selected model is absent.
 - [ ] Mock upstream verifies exactly one upstream attempt per normal request; controlled retries/fallbacks disabled; 429 and failures propagated/recorded without misclassifying local failures.
 - [ ] Metadata-only files contain no fixture prompts, responses, credentials, tool arguments or sensitive headers/errors.
 - [ ] Kilo free/paid distinction, duplicate callbacks, expiry at the 60-minute boundary, concurrent sessions and app/service restart produce correct observed counts; unknown limit/coverage not misrepresented.

@@ -61,23 +61,30 @@ def event(data, kind, status=None, response=None, latency_ms=None):
         with os.fdopen(fd, "a") as out:
             out.write(line)
 
+def record(data, kind, status=None, response=None, latency_ms=None):
+    try:
+        event(data, kind, status, response, latency_ms)
+    except OSError:
+        # Observability must not turn a valid provider call into a failed request.
+        return
+
 class MetadataLogger(CustomLogger):
     def __init__(self):
         super().__init__(turn_off_message_logging=True)
 
     async def async_pre_call_deployment_hook(self, kwargs, call_type):
-        event(kwargs, "attempt")
+        record(kwargs, "attempt")
         return None
 
     async def async_post_call_failure_deployment_hook(self, request_data, exception, call_type, fallback_depth=None):
-        event(request_data, "failure", getattr(exception, "status_code", None))
+        record(request_data, "failure", getattr(exception, "status_code", None))
 
     async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
         try:
             latency_ms = int((end_time - start_time).total_seconds() * 1000)
         except (AttributeError, TypeError, ValueError):
             latency_ms = None
-        event(kwargs, "success", 200, response_obj, latency_ms)
+        record(kwargs, "success", 200, response_obj, latency_ms)
 
     async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
         # Deployment hook owns failure/attempt counting; request-level errors may be local.

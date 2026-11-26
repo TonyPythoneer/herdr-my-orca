@@ -361,6 +361,7 @@ export default class OrcaStatus extends View {
       try {
         const root = `${appHome()}/litellm-gateway/events.jsonl`;
         const texts = await Promise.all([root + ".1", root].map(path => readTextFile(path).catch(() => null)));
+        if (texts.every(text => text === null)) return;
         this.gatewayUsage = gatewayReadings(texts);
       } catch { /* keep previous observation on read failure */ }
       finally { this.gatewayRefreshing = false; jobCx.notify(); }

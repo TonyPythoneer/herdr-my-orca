@@ -20,7 +20,7 @@ const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() =
   // Shared values go through `globalThis.__herdrShared`, so a test can show what another mod published.
   shared: "(key) => globalThis.__herdrShared?.(key)",
   // Programs go through `globalThis.__herdrExec` too, so a flow test can answer curl, chmod and stat.
-  exec: "async (cmd, args, options) => globalThis.__herdrExec ? globalThis.__herdrExec(cmd, args, options) : ({ code: 0, stdout: '', stderr: '' })" };
+  exec: "async (cmd, args, options) => { const prepare = cmd === 'python3' && args?.[0]?.endsWith('/litellm_gateway.py') && args?.[2] === 'prepare'; if (globalThis.__herdrExec) { const result = await globalThis.__herdrExec(cmd, args, options); return prepare && result?.code === 0 && !String(result.stdout ?? '').trim() ? ({ code: 0, stdout: '{\"direct\":true}', stderr: '' }) : result; } return prepare ? ({ code: 0, stdout: '{\"direct\":true}', stderr: '' }) : ({ code: 0, stdout: '', stderr: '' }); }" };
 
 export async function resolve(specifier, context, next) {
   if (!STUBS.has(specifier)) return next(specifier, context);

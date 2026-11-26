@@ -57,7 +57,7 @@ import {
 } from "./install.js";
 import { errorText, sameRun, tail } from "./util.js";
 import { icon, monoFont, empty } from "./parts.js";
-import { settingsPageView, permissionsCardView } from "./page-view.js";
+import { settingsPageView, permissionsCardView, gatewayCardView } from "./page-view.js";
 import { modelProvidersView, providerCardView, providersPageView } from "./provider-view.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
 import { agentPermissionItems, defaultPermissionItems, permissionRow } from "./permission-menu.js";
@@ -168,9 +168,28 @@ export default class AgentManager extends View {
     // Model providers share this page's rail and workspace with the agent catalog.
     this.providers = {};
     this.providersError = null;
-    this.gatewayLogging = false;
-    this.gatewayLoggingBusy = false;
-    this.gatewayLoggingError = null;
+    this.litellmEnabled = false;
+    this.litellmMode = "local";
+    this.litellmBusy = false;
+    this.litellmError = null;
+    this.litellmStatus = null;
+    this.litellmCheckedAt = null;
+    this.litellmHasApiKey = false;
+    this.litellmReplaceKey = false;
+    this.litellmRemoteDirty = false;
+    this.litellmHost = InputState.new({ placeholder: "https://litellm.example.com" });
+    this.litellmApiKey = InputState.new({ placeholder: "LiteLLM API key" });
+    this.litellmApiKey.set_masked(true);
+    for (const input of [this.litellmHost, this.litellmApiKey]) {
+      input.on("change", (_event, cx) => {
+        if (this.litellmLoadingHost) return;
+        this.litellmRemoteDirty = true;
+        this.litellmError = null;
+        cx.notify();
+      });
+      input.on("focus", (_event, cx) => { this.typing = true; cx.notify(); });
+      input.on("blur", (_event, cx) => { this.typing = false; cx.notify(); });
+    }
     this.cards = new Map();
     this.selectedProviderId = null;
     this.selectedProviderBeforeAdd = null;
@@ -200,7 +219,7 @@ export default class AgentManager extends View {
     this.newProviderCard = this.makeCard(null, null);
     cx.spawn(async (taskCx) => {
       this.applyProviders(await readFile(PROVIDERS));
-      try { this.gatewayLogging = JSON.parse(await readFile(`${appHome()}/model-gateway.json`) ?? "{}").enabled === true; } catch { this.gatewayLoggingError = "Invalid gateway setting."; }
+      await this.readLiteLLMStatus();
       taskCx.notify();
     });
     this.refresh(cx);
@@ -1740,29 +1759,138 @@ export default class AgentManager extends View {
   }
 
   modelProvidersCard(t) {
-    return v_flex().w_full().gap(8)
-      .child(h_flex().w_full().items_center().gap(8)
-        .child(div().flex_1().text_color(t.foreground).child("Enable Logging"))
-        .child(this.button("am-gateway-logging", this.gatewayLogging ? "On" : "Off", t,
-          (_event, cx) => this.toggleGatewayLogging(cx), { disabled: this.gatewayLoggingBusy, height: 26, px: 10 })))
-      .when(Boolean(this.gatewayLoggingError), el => el.child(div().text_color(t.blocked).child(this.gatewayLoggingError)))
-      .child(modelProvidersView(this, t));
+    return modelProvidersView(this, t);
   }
 
-  async toggleGatewayLogging(cx) {
-    if (this.gatewayLoggingBusy) return;
-    this.gatewayLoggingBusy = true;
-    this.gatewayLoggingError = null;
+  async readLiteLLMStatus() {
+    try {
+      const result = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`, appHome(), "status"], { timeout: 15000 });
+      if (result?.code !== 0) throw new Error("status");
+      const status = JSON.parse(result.stdout);
+      this.litellmStatus = status;
+      this.litellmEnabled = status.enabled === true;
+      this.litellmMode = status.mode === "remote" ? "remote" : "local";
+      this.litellmHasApiKey = status.hasApiKey === true;
+      if (!this.litellmRemoteDirty) {
+        this.litellmLoadingHost = true;
+        this.litellmHost.set_value(status.host ?? "");
+        this.litellmLoadingHost = false;
+      }
+    } catch {
+      this.litellmStatus = { error: "Could not read LiteLLM status." };
+    } finally {
+      this.litellmCheckedAt = Date.now();
+    }
+  }
+
+  async refreshLiteLLMStatus(cx) {
+    if (this.litellmBusy) return;
+    this.litellmBusy = true;
+    this.litellmError = null;
+    cx.notify();
+    await this.readLiteLLMStatus();
+    this.litellmBusy = false;
+    cx.notify();
+  }
+
+  async setLiteLLMMode(mode, cx) {
+    if (this.litellmBusy || this.litellmEnabled || !["local", "remote"].includes(mode) || mode === this.litellmMode) return;
+    this.litellmBusy = true;
+    this.litellmError = null;
+    cx.notify();
+    try {
+      const result = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`, appHome(), mode]);
+      if (result?.code !== 0) {
+        let detail;
+        try { detail = JSON.parse(result?.stdout ?? "").error; } catch { /* use fixed message */ }
+        throw new Error(detail ?? "Could not save LiteLLM mode.");
+      }
+      this.litellmMode = mode;
+      await this.readLiteLLMStatus();
+    } catch (error) {
+      this.litellmError = error?.message || "Could not save LiteLLM mode.";
+    } finally {
+      this.litellmBusy = false;
+      cx.notify();
+    }
+  }
+
+  async saveRemoteLiteLLM(cx) {
+    if (this.litellmBusy) return;
+    const host = this.litellmHost.value().trim();
+    const apiKey = this.litellmApiKey.value();
+    if (!host || (this.litellmReplaceKey && !apiKey) || (!this.litellmHasApiKey && !apiKey)) {
+      this.litellmError = "Enter the remote LiteLLM host and API key.";
+      cx.notify();
+      return;
+    }
+    this.litellmBusy = true;
+    this.litellmError = null;
+    cx.notify();
+    let dir;
+    try {
+      const made = await exec("mktemp", ["-d", `${appHome()}/.litellm-settings.XXXXXX`]);
+      dir = String(made?.stdout ?? "").trim();
+      if (made?.code !== 0 || !dir.startsWith(`${appHome()}/.litellm-settings.`)) throw new Error("stage");
+      if ((await exec("chmod", ["700", dir])).code !== 0) throw new Error("permissions");
+      const staged = `${dir}/remote.json`;
+      await writeTextFile(staged, JSON.stringify({ host, apiKey }), null);
+      if ((await exec("chmod", ["600", staged])).code !== 0) throw new Error("permissions");
+      const saved = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`, appHome(), "save-remote", staged], { timeout: 15000 });
+      let status;
+      try { status = JSON.parse(saved?.stdout ?? "{}"); } catch { status = null; }
+      if (saved?.code !== 0 || !status) throw new Error(status?.error ?? "Could not save remote LiteLLM settings.");
+      this.litellmMode = "remote";
+      this.litellmEnabled = status.enabled === true;
+      this.litellmStatus = status;
+      this.litellmHasApiKey = status.hasApiKey === true;
+      this.litellmReplaceKey = false;
+      this.litellmApiKey.set_value("");
+      this.litellmRemoteDirty = false;
+    } catch (error) {
+      this.litellmError = error?.message || "Could not save remote LiteLLM settings.";
+    } finally {
+      if (dir) await exec("rm", ["-rf", dir]).catch(() => {});
+      this.litellmBusy = false;
+      cx.notify();
+    }
+  }
+
+  async toggleLiteLLM(cx) {
+    if (this.litellmBusy) return;
+    if (!this.litellmEnabled && this.litellmMode === "remote" && this.litellmRemoteDirty) {
+      this.litellmError = "Save and check the remote connection before enabling LiteLLM.";
+      cx.notify();
+      return;
+    }
+    if (!this.litellmEnabled && this.litellmMode === "local" && !this.litellmStatus?.local?.installed) {
+      this.litellmError = "Install the pinned local LiteLLM version before enabling it.";
+      cx.notify();
+      return;
+    }
+    if (!this.litellmEnabled && this.litellmMode === "remote" && !this.litellmStatus?.remote?.healthy) {
+      this.litellmError = "Save and check a healthy remote LiteLLM connection before enabling it.";
+      cx.notify();
+      return;
+    }
+    this.litellmBusy = true;
+    this.litellmError = null;
     cx.notify();
     try {
       const result = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`,
-        appHome(), this.gatewayLogging ? "disable" : "enable"]);
-      if (result?.code !== 0) throw new Error("Could not save logging setting.");
-      this.gatewayLogging = JSON.parse(result.stdout).enabled === true;
-    } catch {
-      this.gatewayLoggingError = "Could not save logging setting.";
+        appHome(), this.litellmEnabled ? "disable" : "enable"]);
+      if (result?.code !== 0) {
+        let detail;
+        try { detail = JSON.parse(result?.stdout ?? "").error; } catch { /* use fixed message */ }
+        throw new Error(detail ?? "Could not save LiteLLM setting.");
+      }
+      const saved = JSON.parse(result.stdout);
+      this.litellmEnabled = saved.enabled === true;
+      this.litellmMode = saved.mode === "remote" ? "remote" : "local";
+    } catch (error) {
+      this.litellmError = error?.message || "Could not save LiteLLM setting.";
     } finally {
-      this.gatewayLoggingBusy = false;
+      this.litellmBusy = false;
       cx.notify();
     }
   }

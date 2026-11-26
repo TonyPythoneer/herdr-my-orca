@@ -435,7 +435,11 @@ test("settings route follows the left sidebar's requests and publishes its selec
   const freebuff = open("freebuff");
   assert.match(freebuff, /Preview command/);
   assert.match(freebuff, /am-copy-command/);
-  assert.match(open("global"), /Global Agent Settings/);
+  const globalPage = open("global");
+  assert.match(globalPage, /Global Agent Settings/);
+  assert.match(globalPage, /Agent launch arguments/);
+  assert.match(globalPage, /Global model providers/);
+  assert.match(globalPage, /LiteLLM on GitHub/);
   assert.deepEqual(store.get("agent-manager.selected"), { key: "global" });
   const draft = page.newProviderCard;
   page.makeCard = (...args) => {
@@ -477,6 +481,25 @@ test("settings route follows the left sidebar's requests and publishes its selec
   assert.equal(page.selectedProviderId, "saved");
   press(handler("on_size_change", "am-root"), { width: 420 }, spy);
   assert.equal(page.width, 420);
+});
+test("checking local LiteLLM shows a result and explains that Docker is not used", async (t) => {
+  const { page, cx } = harness(t);
+  page.railSelection = "global";
+  page.litellmStatus = { local: { cli: null, installed: false, running: false, healthy: false } };
+  page.litellmEnabled = true;
+  assert.match(JSON.stringify(draw(page, cx)), /managed local gateway is not ready/);
+  globalThis.__herdrExec = async (command, args) => {
+    assert.equal(command, "python3");
+    assert.equal(args[2], "status");
+    return { code: 0, stdout: JSON.stringify({ enabled: false, mode: "local", local: { cli: null, installed: false, running: false, healthy: false } }), stderr: "" };
+  };
+  t.after(() => { delete globalThis.__herdrExec; });
+  await handler("on_click", "am-litellm-refresh")({}, cx);
+  assert.ok(page.litellmCheckedAt);
+  const text = JSON.stringify(draw(page, cx));
+  assert.match(text, /No managed LiteLLM CLI found/);
+  assert.match(text, /Checked \d\d:\d\d:\d\d/);
+  assert.match(text, /not Docker/);
 });
 
 test("harness inputs are initialized after render and cached by the manager", async (t) => {

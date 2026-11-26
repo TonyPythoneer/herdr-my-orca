@@ -629,26 +629,18 @@ class AgentConfigCore {
     let model = preview ? values.model : this.model;
     // Only this explicit Model Provider launch can enter the gateway. Preview must not start it.
     if (!preview) {
-      let gatewaySetting;
-      try { gatewaySetting = await readTextFile(`${appHome()}/model-gateway.json`); }
-      catch { return { error: "Could not read model gateway setting." }; }
-      if (gatewaySetting) {
-        let enabled;
-        try { enabled = JSON.parse(gatewaySetting).enabled === true; }
-        catch { return { error: "Invalid model gateway setting." }; }
-        if (enabled) {
-          const result = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`,
-            appHome(), "prepare", providerId, model, record.host, this.key], { timeout: 180000 }).catch(() => null);
-          let route;
-          try { route = JSON.parse(result?.stdout ?? ""); } catch { /* fail closed */ }
-          if (result?.code !== 0 || !route?.host || !route?.model || !route?.aliases) {
-            return { error: route?.error ?? "Local LiteLLM gateway is unavailable." };
-          }
-          provider = { ...provider, host: route.host, configPath: route.configPath, id: route.id,
-            models: Object.values(route.aliases),
-            modelInfo: Object.fromEntries(Object.entries(route.aliases).map(([id, alias]) => [alias, record.modelInfo?.[id] ?? {}])) };
-          model = route.model;
-        }
+      const result = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`,
+        appHome(), "prepare", providerId, model, record.host, this.key], { timeout: 180000 }).catch(() => null);
+      let route;
+      try { route = JSON.parse(result?.stdout ?? ""); } catch { /* fail closed */ }
+      if (result?.code !== 0 || !route || (!route.direct && (!route.host || !route.model || !route.aliases))) {
+        return { error: route?.error ?? "LiteLLM is unavailable or the selected model is not configured." };
+      }
+      if (!route.direct) {
+        provider = { ...provider, host: route.host, configPath: route.configPath, id: route.id,
+          models: Object.values(route.aliases),
+          modelInfo: Object.fromEntries(Object.entries(route.aliases).map(([id, alias]) => [alias, record.modelInfo?.[id] ?? {}])) };
+        model = route.model;
       }
     }
     const argv = buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] });
