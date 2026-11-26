@@ -29,6 +29,30 @@ class ImpactTest(unittest.TestCase):
         self.assertEqual(p["native_routes"], 0)
         self.assertFalse(p["git_benchmark"])
 
+    def test_known_ci_orchestration_only(self):
+        p = self.plan(".github/workflows/ci.yml", ".github/workflows/benchmark-native.yml",
+                      ".github/workflows/performance-retention.yml", ".github/workflows/main-ui-snapshot.yml",
+                      ".github/workflows/main-ui-snapshot-reusable.yml", ".github/workflows/native-ui-candidate.yml",
+                      "scripts/ci-impact.py", "scripts/ci-impact-test.py", "scripts/test-ci-routing.py",
+                      "docs/ci-full-process.md", "ui-snapshot/README.md")
+        self.assertFalse(p["full"])
+        self.assertEqual(p["selected_test_files"], 0)
+        self.assertEqual(p["native_routes"], 0)
+        self.assertTrue(p["snapshot"])
+        self.assertEqual(p["lint_paths"], [])
+
+    def test_ci_orchestration_with_product_change_keeps_product_tests(self):
+        p = self.plan(".github/workflows/ci.yml", "mods/orca-files/main.js")
+        self.assertIn("orca-files", p["native_mods"])
+        self.assertGreater(p["selected_test_files"], 0)
+        self.assertEqual(p["native_routes"], 1)
+
+    def test_full_process_keeps_all_logic_and_native_checks(self):
+        p = self.plan(".github/workflows/ci.yml", force=True)
+        self.assertTrue(p["full"])
+        self.assertEqual(p["selected_test_files"], p["total_test_files"])
+        self.assertEqual(p["native_routes"], p["total_native_routes"])
+
     def test_single_test(self):
         p = self.plan("mods/orca-sidebar-projects/git-refresh.test.js")
         self.assertEqual(p["selected_test_files"], 1)

@@ -101,7 +101,7 @@ def select(root, files, changed, force=False):
     for path in sorted(set(changed)):
         if path in ("README.md", "metrics/WORKERS.md") or (path.startswith("docs/") and path.endswith(".md")):
             reasons[path] = "documentation"
-        elif path == "scripts/ci-impact-test.py":
+        elif path in ("scripts/ci-impact-test.py", "scripts/test-ci-routing.py"):
             reasons[path] = "selector contract test"
         elif path == "scripts/ci-impact.py":
             reasons[path] = "selector implementation"
@@ -111,8 +111,10 @@ def select(root, files, changed, force=False):
         elif path == ".github/workflows/native-ui-candidate.yml":
             snapshot = True
             reasons[path] = "native snapshot workflow"
-        elif path == ".github/workflows/benchmark-native.yml":
-            reasons[path] = "manual performance workflow"
+        elif path in (".github/workflows/ci.yml", ".github/workflows/benchmark-native.yml",
+                      ".github/workflows/performance-retention.yml", ".github/workflows/main-ui-snapshot.yml",
+                      ".github/workflows/main-ui-snapshot-reusable.yml"):
+            reasons[path] = "CI orchestration (selector and routing contracts always run)"
         elif path == "scripts/benchmark-pages-test.py":
             selected.add("scripts/benchmark-pages.test.js")
             reasons[path] = "benchmark harness test only"

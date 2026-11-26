@@ -42,7 +42,12 @@ jobs:
           python3 scripts/test-ci-routing.py
       - name: Resolve change scope
         id: plan
-        run: python3 scripts/ci-impact.py --output impact-plan.json
+        env:
+          FULL_PROCESS: ${{ github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process' }}
+        run: |
+          args=()
+          if [[ "$FULL_PROCESS" == "true" ]]; then args+=(--force-full); fi
+          python3 scripts/ci-impact.py "${args[@]}" --output impact-plan.json
       - uses: actions/upload-artifact@v4
         with:
           name: impact-plan
