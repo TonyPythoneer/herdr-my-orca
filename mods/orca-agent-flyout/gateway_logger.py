@@ -1,5 +1,6 @@
 """LiteLLM callback: allowlisted metadata only; no payloads or raw exceptions."""
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ from litellm.integrations.custom_logger import CustomLogger
 
 ROOT = Path(os.environ["HERDR_GATEWAY_DIR"])
 ROUTES = json.loads((ROOT / "routes.json").read_text())
-MAX_BYTES = 4 * 1024 * 1024
+MAX_BYTES = 512 * 1024
 
 def mapping(value):
     return value if isinstance(value, dict) else {}
@@ -23,7 +24,7 @@ def route_for(data):
             return ROUTES[alias]
     return None
 
-def event(data, kind, status=None, response=None):
+def event(data, kind, status=None, response=None, latency_ms=None):
     route = route_for(data)
     if route is None:
         return
@@ -37,9 +38,10 @@ def event(data, kind, status=None, response=None):
             if isinstance(v, int) and not isinstance(v, bool) and v >= 0:
                 return v
         return None
-    obj = {"version": 1, "kind": kind, "id": str(request_id)[:128], "timestamp": int(time.time()*1000),
+    obj = {"version": 1, "kind": kind, "id": hashlib.sha256(str(request_id).encode()).hexdigest(), "timestamp": int(time.time()*1000),
            "provider": route["provider"], "model": route["model"], "kilo": route["kilo"],
            "status": status if isinstance(status, int) else None,
+           "latency_ms": latency_ms if isinstance(latency_ms, int) and latency_ms >= 0 else None,
            "input_tokens": number("prompt_tokens", "input_tokens"),
            "output_tokens": number("completion_tokens", "output_tokens")}
     line = json.dumps(obj, ensure_ascii=True, separators=(",", ":")) + "\n"
@@ -65,7 +67,11 @@ class MetadataLogger(CustomLogger):
         event(request_data, "failure", getattr(exception, "status_code", None))
 
     async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
-        event(kwargs, "success", 200, response_obj)
+        try:
+            latency_ms = int((end_time - start_time).total_seconds() * 1000)
+        except (AttributeError, TypeError, ValueError):
+            latency_ms = None
+        event(kwargs, "success", 200, response_obj, latency_ms)
 
     async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
         # Deployment hook owns failure/attempt counting; request-level errors may be local.

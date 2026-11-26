@@ -1,6 +1,6 @@
 # Local Model Provider observability through LiteLLM
 
-Status: accepted direction; implementation and E2E verification pending.
+Status: implementation candidate; runtime E2E verification pending.
 
 ## Motivation
 
@@ -90,3 +90,20 @@ Acceptance criteria:
 References: [LiteLLM docs](https://docs.litellm.ai/), [official Rust migration tracking issue](https://github.com/BerriAI/litellm/issues/31263), [Kilo gateway docs](https://kilo.ai/docs/).
 
 This design is a planning baseline, not a claim that integration or E2E tests have passed.
+
+## Local installation for the implementation candidate
+
+Set APP_HOME to the Herdr App configuration directory (the same directory that contains model-providers.json and mods/). Install the pinned official release into a dedicated local virtual environment:
+
+```sh
+python3 -m venv "$APP_HOME/litellm-gateway/venv"
+"$APP_HOME/litellm-gateway/venv/bin/pip" install 'litellm[proxy]==1.111.0'
+```
+
+Enable Logging under Model Providers, then launch a managed agent. The gateway starts on demand. When provider routes change while the service is alive, a new launch reports an error rather than interrupting existing sessions. After closing managed agents, explicitly stop it with:
+
+```sh
+python3 "$APP_HOME/mods/orca-agent-flyout/litellm_gateway.py" "$APP_HOME" stop
+```
+
+This candidate uses the stable Python server and disables optional Rust paths to preserve Python callback coverage. The current adapter assumes OpenAI-compatible upstreams and requires an existing provider key; anonymous Kilo auth, all real provider protocol combinations, active-route reload, stream cancellation, and token completeness are not verified. The E2E workflow exercises real LiteLLM against a local mock, including the three agent wire protocols, not live agent executables or production providers. The bottom bar counts observed deployment attempts (including failures), not authoritative billing or quota. Retained logs are bounded; a high-volume rotation can lose older observations. No benchmark or UI snapshots are introduced.
