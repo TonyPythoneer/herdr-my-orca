@@ -77,15 +77,14 @@ export function gatewayCardView(owner, t) {
   const remote = owner.litellmStatus?.remote;
   let health;
   if (owner.litellmMode === "local") {
-    if (local?.running && local.healthy && local.usable) health = { text: `Healthy · LiteLLM ${local.version}`, color: t.done };
-    else if (local?.running && !local.healthy) health = { text: `Gateway process is running but health check failed · ${local.version ?? "unknown version"}`, color: t.blocked };
-    else if (local?.running) health = { text: `Gateway running with an unsupported version · ${local.version ?? "unknown"}`, color: t.blocked };
-    else if (local?.usable) health = { text: `Ready · LiteLLM ${local.version}; gateway starts on first launch`, color: t.muted };
+    if (local?.running && local.healthy && local.usable) health = { text: "Healthy · Managed LiteLLM gateway", color: t.done };
+    else if (local?.running && !local.healthy) health = { text: "Gateway process is running but its health check failed", color: t.blocked };
+    else if (local?.running) health = { text: "Managed LiteLLM gateway is running", color: t.blocked };
+    else if (local?.usable) health = { text: "Ready · Managed LiteLLM installation found; gateway starts on first launch", color: t.muted };
     else if (quickstart?.usable) health = { text: `Local LiteLLM Gateway is ready · ${quickstart.version ?? "version unknown"}; switch to Existing to connect`, color: t.done };
-    else if (quickstart?.running) health = { text: `Local LiteLLM Gateway is running, but its API readiness check failed · ${quickstart.version ?? "version unknown"}`, color: t.blocked };
     else if (quickstart?.installed) health = { text: `litellm-gateway found at ${quickstart.cli}; the local service is not running`, color: t.blocked };
-    else if (local?.installed) health = { text: `LiteLLM ${local.version} is installed, but its CLI startup check failed`, color: t.blocked };
-    else if (local?.cli) health = { text: `CLI found at ${local.cli}${local.version ? ` · ${local.version}` : ""}; pinned managed install is not usable`, color: t.blocked };
+    else if (local?.installed) health = { text: "Managed LiteLLM installation found but not ready", color: t.blocked };
+    else if (local?.cli) health = { text: `CLI found at ${local.cli}; managed installation is not usable`, color: t.blocked };
     else health = { text: "No managed LiteLLM CLI found", color: t.blocked };
   } else if (remote?.healthy) {
     health = remote.models.length
