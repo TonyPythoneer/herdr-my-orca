@@ -1,48 +1,48 @@
 {
  "local, fresh inventory, freebuff on": {
-  "init": "12761339d9521d0f807294030a024e5c2f133f30",
+  "init": "49035e17de7009b5d16a9a4ce5377afc1079d804",
   "rows": "a9a769158c13dae885e11a16fdf506c8ee6d8a95",
   "create": "1a6ad633c1410d5c53e87a45a044be30b3517447",
-  "render": "3d4187f75b40c9cfc0c61e4e0842295c46931d66",
-  "choose": "97271f535b3c3a058aceb5c85c40eec1e363a433",
-  "keys": "3a9459dc1d460b21c5809c0e5c18f3b21e515065",
+  "render": "0339cf1bb1abd6f048996124ac06be03efff3c8e",
+  "choose": "4bdf384614e4b07715789015b49db5ae2c485aab",
+  "keys": "4f28ba27cc1d998d499053b45fee548dec16f31c",
   "wheel": "e622f046ee26b8e773eafa826fccde9bc8f79209",
   "pointer": "c5e1e898c82cd29719113b228adbf279b76e8e3d",
   "flyout": "dbb0095ff1a31ef0ef857cc11362f889f93479ae",
   "click": "9b1555d805726b199f2a1e10279b9b862ffc256c",
-  "picker": "8b9b89fd2cb147b9ac12e69179faabddf81a5ed1"
+  "picker": "99d6065c41e0da3de9aad38e1028cf83e65a4f52"
  },
  "local, probes only, manager file and overrides": {
-  "init": "727d9c9628e03ef502b96cacc020b799060573e2",
+  "init": "7f70c2bfb4b451a47e482ea0ac5012554e786fbc",
   "rows": "2f6bf65abc24e2379d342f3a951156a3740edf84",
   "create": "f5e845674183b16d49a971ccc17f7bda6bc8eae7",
-  "render": "00cb6e7e38cd01dec5e72ae8d2e2545c9a4402fc",
-  "choose": "5b9afe30549bfc0e0b25f1b7099c779c6530fa06",
-  "keys": "d56898dd3b7308369d67e0be1d71f613fa753b93",
+  "render": "dbc3196b1a8f9c3e91e8800ffe07366ae870a7c3",
+  "choose": "7352fab4019eb24eb17709d3ed0ea95fca55fc8a",
+  "keys": "3495dc2fff4b20b35d51d4da5176ed101172aa5f",
   "wheel": "e7eb62f89285e4c1a5042f0bde2afc71ecd480ca",
   "pointer": "8330794d4f893815198f77d62c7e9db8010572aa",
   "flyout": "97d170e1550eee4afc0af065b78cda302a97674c",
-  "click": "9eee89720455edc1bfb7f16e0aa2c4ca55134798",
-  "picker": "78a9d72d40232d902793b718cc289e67dfda11c9"
+  "click": "937841a2bf7a0f434d179d46fe50550a23c39f73",
+  "picker": "9a85de9e0f7b88ef8c89ff1db8545ed5b3f026ad"
  },
  "local, programs.json is not json": {
-  "init": "eb03b74ce153f2e435141714e568509de40e8ea4",
+  "init": "c90ad187bf327b147f4c73d51e4384dd8028e30f",
   "rows": "b8a9130f2a224308bbcad47adf998618b3c09575",
   "create": "f5e845674183b16d49a971ccc17f7bda6bc8eae7",
-  "render": "552425a1de0ca4b7dca5209e5279c3d7be95a85f",
+  "render": "35d43652438dc0ff67b4b629cbd8e6e01b25b8ef",
   "choose": "a1f5f7b8542f4e5acd616336fb03a88cb89c96e9",
   "keys": "fd118f12472954199abdc41c979e69f76f6ce63e",
   "wheel": "9008df09e54e2d4cfde294cb074933105a2ba68c",
   "pointer": "d9d439313d88e03280fadf1abf60a55f7969d425",
   "flyout": "97d170e1550eee4afc0af065b78cda302a97674c",
   "click": "6cb00adf9e14202fb5801c58d75a142c25f7a6bf",
-  "picker": "6ce4a4454c936f3e8a5a49f7d803031166d5cd09"
+  "picker": "2d0a6d776ba804079fc5d18a8359e5605e256329"
  },
  "local, nothing installed, no freebuff": {
-  "init": "e5e6f198b7f7fa7dd7f2a7b5b957499677635328",
+  "init": "b2bf8166782a52305f9491fa0f21403a932e6176",
   "rows": "32823368404646434b308ae8fcf1674c61bbdde6",
   "create": "f5e845674183b16d49a971ccc17f7bda6bc8eae7",
-  "render": "5c1065227052f14913ff3080e87efca9f5791c58",
+  "render": "cb59053987201e86e427800c7764f08d4e091f59",
   "choose": "7a4b9aa5daffa38527fad60b97619f5f274188d3",
   "keys": "5379328d368883da469fbaeed3ca571887a8e86b",
   "wheel": "822ad5edaf89dbad4da7562dfcc909454233f159",
@@ -52,10 +52,10 @@
   "picker": "bf21a9e8fbc5a3846fb05b4fa0859e0917b2202f"
  },
  "local, catalog fails": {
-  "init": "5623c6a91495563ffeed576c8425b8d5d641b2e4",
+  "init": "f4d2992445989c073cea8526ca1a2ce4e2d72cbf",
   "rows": "fdeb50b5061162d57c3e38e0f17f1cf9893dea75",
   "create": "f5e845674183b16d49a971ccc17f7bda6bc8eae7",
-  "render": "307e2e6e2263f71826e7e097e0ebbe7b2e5e143d",
+  "render": "73bd749b273d78b926f69ed6bf51e39303db5ba7",
   "choose": "d063ab0098fae0239f3244c7c53b81ca05f47724",
   "keys": "e323d670cd9f27263c552b804c916aa75fa9ea23",
   "wheel": "970700768c154c682879b9e593441fb515eb350e",
@@ -65,10 +65,10 @@
   "picker": "bf21a9e8fbc5a3846fb05b4fa0859e0917b2202f"
  },
  "local, catalog fails after an inventory": {
-  "init": "077a29705f4e969a0dc482b7f555d351a1d34cf9",
+  "init": "113d9e6bddff05e4c1a33b61efb611e67930d109",
   "rows": "8c0a084a98c0fc6d7dfb1b4eb60674d39491e610",
   "create": "f5e845674183b16d49a971ccc17f7bda6bc8eae7",
-  "render": "64f554776feb5db6882cf23172e2147a4333b9ae",
+  "render": "faa1a5360dc68d1f069e3f46db5dbca95a4ba580",
   "choose": "a87b11e4f4f4786b7d726871c4cfad879d4a2373",
   "keys": "6a158b8687d45f3030d68ef286bf0d5d1a5945b5",
   "wheel": "822ad5edaf89dbad4da7562dfcc909454233f159",
@@ -78,23 +78,23 @@
   "picker": "bf21a9e8fbc5a3846fb05b4fa0859e0917b2202f"
  },
  "remote machine": {
-  "init": "d7410ff2daa8b5d1352bf77df68b3d0cd22926be",
+  "init": "0f2a784dcbe91047cfbc64c6ac04bb3bbd8557fa",
   "rows": "035262f6b8e315b4e863bf7241341659744d0d84",
   "create": "87d95ac650ad3eaaf53e041b439d5eaac7412251",
-  "render": "6b8fa5d3eb13d680a0ae39460eaa3649b710c31a",
-  "choose": "ae7af803b4b2a2cec68d625e7f1ec4cada23ef42",
-  "keys": "82baad29c2b2dd0ebf9023a000055c9a1f733cb3",
+  "render": "bc247a7b490c67a0917f3cfbe0cb968b7cf178c9",
+  "choose": "17c5c7db8f1b4e068e8934cdd2a1118d6f0601b3",
+  "keys": "495f5b7043e627c6d5c5446fd119a081e707fe24",
   "wheel": "e7eb62f89285e4c1a5042f0bde2afc71ecd480ca",
   "pointer": "35ae6acba0b87d3fa6414133b12896c95366a8e2",
   "flyout": "97d170e1550eee4afc0af065b78cda302a97674c",
-  "click": "f9fd074fe1b448fee28267ad77355ee6faec9b3f",
-  "picker": "b901429e6e5a55b6c64813158fd9a4dae38d37bb"
+  "click": "f0db6014017ef8a784727e54219128630604e766",
+  "picker": "58fdf6e94f7af907f9aca5714cabb1dbcdb529b5"
  },
  "checking, no space": {
-  "init": "6def7fd78e7ffad83485324d9b8c3c893a24f1f0",
+  "init": "a4239267b0ac98c152501c409bca8510c2492776",
   "rows": "7358b4d0db08a122a9c56242e3e2f0351ab97e47",
   "create": "f5e845674183b16d49a971ccc17f7bda6bc8eae7",
-  "render": "8c19198cb2417fc049d4aa6ea729d64e7b0a65cc",
+  "render": "09e0f78a248b56e27b76e360a505384ce67c0935",
   "choose": "7191da5ba58f02e2f914b7e4098a80a5c1c635f2",
   "keys": "3e899cc332df8577be7d0b0f25bff4e774475e9c",
   "wheel": "fada31b3906e9e33d22f6892945d5a54d65045e7",
@@ -104,10 +104,10 @@
   "picker": "bf21a9e8fbc5a3846fb05b4fa0859e0917b2202f"
  },
  "inventory says freebuff but manager disabled it": {
-  "init": "0148c62ea4d8f5a3c96402c4fdffb741f73c1395",
+  "init": "375a63524e72817221e1d56c5481496d17aef4cd",
   "rows": "8c0a084a98c0fc6d7dfb1b4eb60674d39491e610",
   "create": "f5e845674183b16d49a971ccc17f7bda6bc8eae7",
-  "render": "64f554776feb5db6882cf23172e2147a4333b9ae",
+  "render": "faa1a5360dc68d1f069e3f46db5dbca95a4ba580",
   "choose": "c5131f881fc7abb5c1b34a3e211b986f18d7b3a5",
   "keys": "2b0c80c8c474663a0d16c81e883686b838dda181",
   "wheel": "822ad5edaf89dbad4da7562dfcc909454233f159",

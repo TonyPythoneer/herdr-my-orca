@@ -57,9 +57,9 @@ test("the real repo loads and every managed destination is under its mod", () =>
   const { table, features: loaded, shared } = loadManifests();
   assert.deepEqual([...loaded.keys()], ["orca-ui/features/right-sidebar/header/manifest.json"]);
   assert.equal(shared.files.length, 10);
-  assert.equal(table.size, 38);
+  assert.equal(table.size, 31);
   const feature = [...table].filter(([, row]) => row.kind === "feature").map(([dest]) => dest);
-  assert.equal(feature.length, 11);
+  assert.equal(feature.length, 4);
   for (const dest of feature) assert.match(dest, /^mods\/orca-right-sidebar-header\/[^/]+$/);
   assert.equal([...table.values()].filter(r => r.kind === "shared").length, 27);
 });

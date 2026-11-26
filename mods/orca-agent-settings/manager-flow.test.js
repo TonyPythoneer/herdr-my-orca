@@ -124,7 +124,7 @@ test("keyboard navigation wraps across Global and both rail groups and dispatche
   tasks.shift();
   page.refreshing = false;
   const press = key => page.onKey({ key }, cx);
-  for (const [key, selection] of [["up", "freebuff"], ["down", "global"], ["end", "freebuff"], ["home", "global"], ["down", "claude"]]) {
+  for (const [key, selection] of [["up", "providers"], ["up", "freebuff"], ["down", "providers"], ["end", "providers"], ["home", "global"], ["down", "claude"]]) {
     assert.equal(press(key), true);
     assert.equal(page.railSelection, selection);
   }
@@ -154,6 +154,7 @@ test("keyboard navigation wraps across Global and both rail groups and dispatche
 test("uninstall revalidates the confirmed npm location before exec and rechecks after success", async (t) => {
   const { page, cx, tasks, drain } = harness(t);
   tasks.shift();
+  page.freshInstallCheck = async () => new Map([["claude", true]]);
   const row = agents[0];
   const status = { managed: true, method: { kind: "npm", package: "@anthropic-ai/claude-code" }, path: "/bin/claude", real: "/npm/cli", root: "/npm", npm: "/bin/npm" };
   let current = status;
@@ -231,15 +232,17 @@ test("provider cards render new, saved and replacement fields and dispatch their
     return buildButton(id, label, theme, click, options);
   };
   const draw = () => JSON.stringify(page.render(cx).__node);
-  assert.match(draw(), /Add provider/);
+  assert.match(draw(), /Choose a provider from the left rail, or add one with \+/);
   const card = { id: null, open: true, name: field(""), host: field("http:\/\/127.0.0.1:8000/v1"), link: field(""), key: field(""), fetched: { path: "", link: "" } };
   page.adding = card;
-  assert.match(draw(), /am-key-eye-new/);
+  assert.match(draw(), /Add model provider/);
+  assert.match(draw(), /Test and save/);
   buttons.get("am-cancel-new")({}, cx);
   assert.equal(page.adding, null);
   card.id = "demo";
   page.cards.set("demo", card);
   page.providers.demo = { name: "Demo", host: "https://example.org", apiKey: "test", models: [], verifiedAt: 0 };
+  page.selectedProviderId = "demo";
   assert.match(draw(), /am-key-replace-demo/);
   buttons.get("am-key-replace-demo")({}, cx);
   assert.equal(card.replacing, true);

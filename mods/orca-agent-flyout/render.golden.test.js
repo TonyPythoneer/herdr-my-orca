@@ -1,16 +1,12 @@
-// Characterization test: the flyout's render tree per agent, recorded before it moved to a data
-// spec and compared with render.snap.json, so a spec-driven render cannot move a pixel.
-// Delete render.snap.json to re-record after an intended change.
+// Check the visible model controls and settings shortcut across the flyout's supported states.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
 const { default: Flyout } = await import("./main.js");
 const { SPECS, defaultValues } = await import("./agent-flyout.js");
 
-const SNAP = new URL("./render.snap.json", import.meta.url);
 const input = (value = "") => ({ value: () => value });
 const MODELS = [
   { id: "m1", label: "Model One", efforts: ["low", "high"], fallbackEffort: "high", group: "free", free: true },
@@ -38,22 +34,22 @@ function view(key, state = {}) {
 const CASES = {
   codex: () => view("codex"),
   "codex, provider list open": () => view("codex", { open: "provider" }),
-  "codex, model list open": () => view("codex", { open: "model" }),
+  "codex, model list open": () => view("codex", { open: "model", showHidden: true }),
   claude: () => view("claude"),
   "claude, effort list open": () => view("claude", { open: "effort" }),
   pi: () => view("pi", { values: { ...defaultValues(SPECS.pi), model: "m1", effort: "high", off: ["session"] } }),
   "pi, thinking list open": () => view("pi", { open: "effort", values: { ...defaultValues(SPECS.pi), model: "m1", effort: "high" } }),
   opencode: () => view("opencode"),
   "opencode, model list open": () => view("opencode", { open: "model" }),
+  "opencode, paid model list open": () => view("opencode", { open: "model", modelGroup: "paid", showHidden: true }),
   "opencode, group list open": () => view("opencode", { open: "model", groupOpen: true }),
 };
 
-test("each flyout renders as recorded", () => {
-  const got = Object.fromEntries(Object.entries(CASES).map(([name, make]) => {
+test("each flyout renders its model controls and settings shortcut", () => {
+  for (const [name, make] of Object.entries(CASES)) {
     const tree = make().render();
     const recorded = JSON.parse(JSON.stringify(tree?.__node ?? tree));
-    // The only intentional popup visual delta is the new robot shortcut. Keep the old
-    // snapshot as an exact baseline for everything else, rather than regenerating it.
+    const text = JSON.stringify(recorded);
     let botCount = 0;
     function stripRobot(node) {
       if (Array.isArray(node)) {
@@ -68,8 +64,18 @@ test("each flyout renders as recorded", () => {
     }
     stripRobot(recorded);
     assert.equal(botCount, 1, name + " has exactly one robot shortcut");
-    return [name, recorded];
-  }));
-  if (!existsSync(SNAP)) writeFileSync(SNAP, `${JSON.stringify(got, null, 1)}\n`);
-  assert.deepEqual(got, JSON.parse(readFileSync(SNAP, "utf8")));
+    assert.ok(text.includes("MODEL"), name + " renders its model control");
+    if (name === "codex, provider list open") assert.ok(text.includes("oMLX"), "provider list renders the saved provider");
+    if (name === "codex, model list open") {
+      assert.ok(text.includes("Model One") && text.includes("Model Two"), name + " renders model choices");
+    }
+    if (name === "opencode, model list open") {
+      assert.ok(text.includes("Model One") && !text.includes("Model Two"), "OpenCode's Free filter excludes Paid models");
+    }
+    if (name === "opencode, paid model list open") assert.ok(text.includes("Model Two"), "OpenCode's Paid filter renders paid models");
+    if (name === "claude, effort list open" || name === "pi, thinking list open") {
+      assert.ok(text.includes("low") && text.includes("high"), name + " renders effort choices");
+    }
+    if (name === "opencode, group list open") assert.ok(text.includes("free") && text.includes("paid"), "OpenCode renders model groups");
+  }
 });

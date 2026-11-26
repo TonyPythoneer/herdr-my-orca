@@ -18,7 +18,7 @@ test("visual assets have one canonical config path and a consumer manifest", () 
   }
   assert.equal(SPIN_PERIOD_MS, 1000);
   const manifest = JSON.parse(readFileSync(new URL("mods/orca-assets/resources.json", root), "utf8"));
-  assert.deepEqual(manifest[asset], ["orca-agent-settings", "orca-files", "orca-status-bar"]);
+  assert.deepEqual(manifest[asset], ["orca-agent-settings", "orca-assets", "orca-files", "orca-status-bar"]);
   assert.equal(existsSync(new URL("mods/orca-assets/ui-settings.js", root)), false);
   const walk = (dir) => readdirSync(new URL(dir, root), { withFileTypes: true }).flatMap((entry) => {
     const path = `${dir}/${entry.name}`;

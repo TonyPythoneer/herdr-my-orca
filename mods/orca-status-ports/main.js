@@ -21,7 +21,7 @@ const OVERLAY_KEY = "orca-status-ports.overlay";
 // reused for a first paint.
 const SCAN_EVERY_MS = 30_000;
 const CACHE_FRESH_MS = 30_000;
-const ICON = "mods/orca-status-ports";
+const ICON = "mods/orca-assets";
 
 /** `#rrggbbaa` from a theme colour: Orca's `border-border/40` separators. */
 function fade(hex, alpha) {
@@ -112,7 +112,7 @@ export default class Ports extends View {
           .child(
             this.scanning
               ? svg(`${ICON}/loader-circle.svg`).size(11).flex_none().text_color(t.muted).spin(1000)
-              : svg(`${ICON}/plug.svg`).size(11).flex_none().text_color(t.muted)
+              : svg(`${ICON}/plug--orca-right-sidebar-placeholders.svg`).size(11).flex_none().text_color(t.muted)
           )
           .child(div().text_size(10).text_color(t.muted).child(String(view.workspaceCount)))
       );
@@ -216,7 +216,7 @@ export default class Ports extends View {
       .border_b(1).border_color(t.border)
       .child(
         h_flex().items_center().gap(6).min_w(0)
-          .child(svg(`${ICON}/plug.svg`).size(12).flex_none().text_color(t.muted))
+          .child(svg(`${ICON}/plug--orca-right-sidebar-placeholders.svg`).size(12).flex_none().text_color(t.muted))
           .child(div().min_w(0).truncate().text_size(11).font_medium().text_color(t.foreground).child("Ports"))
       )
       .child(
@@ -246,7 +246,7 @@ export default class Ports extends View {
   }
 
   externalHeader(t, view) {
-    const chevron = this.externalOpen ? "chevron-down" : "chevron-right";
+    const chevron = this.externalOpen ? "chevron-down--orca-files" : "chevron-right--orca-files";
     return h_flex().id("external-ports-toggle").w_full().h(PANEL.group).flex_none().items_center().gap(6).px(12)
       .border_t(1).border_color(fade(t.border, 0.6))
       .role("button").cursor_pointer().hover((style) => style.bg(t.hover))

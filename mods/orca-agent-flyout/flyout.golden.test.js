@@ -75,6 +75,7 @@ const GROUPED = [
 ];
 const catalog = (key, models, checkedAt = NOW, schema = 3) => ({ catalog: { [key]: { models, checkedAt, schema, version: "v1" } } });
 const json = x => `${JSON.stringify(x, null, 2)}\n`;
+const withManagerEnvironment = argv => ["env", "HERDR_ENV=1", ...argv];
 const record = (name, over = {}) => ({ name, host: "http://127.0.0.1:8000/v1", apiKey: "k", githubOwner: "", iconPath: "", verifiedAt: "x", models: ["pm1", "pm2"], selectedModel: { codex: "pm2" }, ...over });
 const PROVIDERS = json({ omlx: record("oMLX", { iconPath: "/home/omlx.png" }), outside: record("Elsewhere", { iconPath: "/x/y.png" }), plain: record("Plain"), bad: record("Bad", { host: "nope" }) });
 const CLAUDE_REPLY = JSON.stringify({ type: "control_response", response: { response: { models: [{ value: "opus", displayName: "Opus", supportedEffortLevels: ["low", "high"] }, { value: "haiku", displayName: "Haiku" }] } } });
@@ -318,7 +319,7 @@ test("the settings controller loads a real catalog, previews current argv, and l
   assert.match(drawSettings(w), /Building command/);
   await settle(w);
   const argv = Array.from(w.menu.previewResult.argv);
-  assert.deepEqual(argv, Array.from((await w.menu.buildLaunch({ argv: w.props.argv })).argv));
+  assert.deepEqual(argv, withManagerEnvironment(Array.from((await w.menu.buildLaunch({ argv: w.props.argv })).argv)));
   const tree = drawSettings(w);
   assert.match(tree, /am-copy-command/);
   assert.match(tree, /am-launch-from-settings/);
@@ -397,7 +398,7 @@ test("remote settings are local-only, and OpenCode variant preview is read-only"
   assert.match(drawSettings(w), /stored separately as its model variant/);
   assert.ok(!w.log.some(entry => entry[0] === "write" && entry[1].includes("model.json")));
   const preview = Array.from(w.menu.previewResult.argv);
-  assert.deepEqual(preview, Array.from((await w.menu.buildLaunch({ argv: w.props.argv })).argv));
+  assert.deepEqual(preview, withManagerEnvironment(Array.from((await w.menu.buildLaunch({ argv: w.props.argv })).argv)));
   await w.menu.launch(w.cx);
   await settle(w);
   assert.ok(w.log.some(entry => entry[0] === "run" && entry[1] === "tab.new"));

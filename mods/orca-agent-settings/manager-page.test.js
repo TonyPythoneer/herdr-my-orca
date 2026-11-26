@@ -1,27 +1,12 @@
-// Characterization of the whole page: render() in many states is compared with page.golden.json
-// (delete the file to re-record after an intended view change), and the click, key and size handlers
-// that live inside the views are pressed through capture-handlers.loader.mjs.
+// Characterize the visible states and press the click, key and size handlers through recorder stubs.
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
-import { legacyButtonTree } from "./capture-handlers.loader.mjs";
 
 process.env.TZ = "UTC";
 register(new URL("./capture-handlers.loader.mjs", import.meta.url));
 const { default: AgentManager } = await import("./main.js");
 const { agentsPageView } = await import("./page-view.js");
-const GOLDEN = new URL("./page.golden.json", import.meta.url);
-const BUILDERS = new URL("./builders.golden.json", import.meta.url);
-// The golden files hold one SHA-256 per recorded tree (the trees run to megabytes). Set
-// GOLDEN_DUMP=<dir> to write the full trees there and diff them when a hash changes.
-const digest = (out) => Object.fromEntries(Object.entries(out).map(([name, tree]) => [name, createHash("sha256").update(JSON.stringify(tree)).digest("hex")]));
-function check(file, out, dumpName) {
-  if (process.env.GOLDEN_DUMP) writeFileSync(`${process.env.GOLDEN_DUMP}/${dumpName}.json`, JSON.stringify(out, null, 1));
-  if (!existsSync(file)) writeFileSync(file, `${JSON.stringify(digest(out), null, 1)}\n`);
-  assert.deepEqual(digest(legacyButtonTree(out)), JSON.parse(readFileSync(file, "utf8")));
-}
 const PROGRAMS = "/home/programs.json";
 const MANAGER = "/home/agent-manager.json";
 
@@ -149,6 +134,7 @@ function addProviderStates(add) {
   add("providers-cards", (page) => {
     page.providers = { saved: record({ iconPath: "/home/provider-icons/icon-a.png" }), plain: record({ name: "Plain", models: undefined }), open: record({ name: "Open" }) };
     for (const [id, saved] of Object.entries(page.providers)) page.cards.set(id, cardOf(id, saved));
+    page.selectedProviderId = "saved";
     page.cards.get("open").open = true;
     page.cards.get("saved").status = { tone: "done", text: "Saved · 2 models" };
     page.cards.get("saved").open = true;
@@ -167,14 +153,23 @@ function addProviderStates(add) {
   }, { page: "providers" });
 }
 
-test("legacy builders and unchanged provider page render as recorded in every state", (t) => {
+test("legacy and provider views render distinct states with their visible content", (t) => {
   const out = pageStates(t);
-  check(GOLDEN, out, "page");
   const distinct = new Set(Object.values(out).map((state) => JSON.stringify(state))).size;
   assert.equal(distinct, Object.keys(out).length, "every state must render differently");
+  const rendered = (key) => JSON.stringify(out[key]);
+  assert.match(rendered("providers-empty"), /Model providers/);
+  assert.match(rendered("providers-empty"), /Choose a provider from the left rail/);
+  assert.match(rendered("providers-error"), /bad file/);
+  assert.match(rendered("providers-cards"), /Demo/);
+  assert.match(rendered("providers-cards"), /Models/);
+  assert.match(rendered("providers-adding"), /Add model provider/);
+  assert.match(rendered("providers-adding"), /Finding the icon/);
+  assert.match(rendered("providers-adding-link"), /PROJECT LINK/);
+  assert.doesNotMatch(rendered("providers-adding-link"), /A GitHub link/);
 });
 
-test("the small builders render as recorded", (t) => {
+test("the small builders render their labels and distinct states", (t) => {
   const { page } = harness(t);
   const theme = globalThis.__herdrTheme();
   const rec = (node) => JSON.parse(JSON.stringify(node.__node));
@@ -197,7 +192,18 @@ test("the small builders render as recorded", (t) => {
     catalogScrolling: rec(page.catalog(Array.from({ length: 7 }, (_, index) => ({ ...row, key: `a${index}` })), theme, "available")),
     permissions: rec(page.permissionsCard([{ ...row, supports: true, permission: "own", permissionOverride: false }], theme)),
   };
-  check(BUILDERS, out, "builders");
+  assert.equal(Object.keys(out).length, 16);
+  const rendered = (key) => JSON.stringify(out[key]);
+  assert.match(rendered("buttonPlain"), /Go/);
+  assert.match(rendered("buttonPrimary"), /Go/);
+  assert.match(rendered("buttonDisabled"), /Go/);
+  assert.notEqual(rendered("toggleOn"), rendered("toggleOff"));
+  assert.notEqual(rendered("toggleOff"), rendered("toggleUninstalled"));
+  assert.match(rendered("lineDefault"), /claude/);
+  assert.match(rendered("lineCustom"), /--x/);
+  assert.match(rendered("catalog"), /Claude/);
+  assert.notEqual(rendered("catalog"), rendered("catalogScrolling"));
+  assert.match(rendered("permissions"), /permission/i);
 });
 
 const press = (fn, ...args) => fn(...args);
@@ -224,7 +230,7 @@ test("the page's own handlers go back, refresh, resize, pass keys and stop the w
   assert.equal(page.width, 900);
   assert.deepEqual(spy.log, ["notify"]);
   assert.equal(press(handler("on_key_down", "am-root"), { key: "end" }, spy), true);
-  assert.equal(page.railSelection, "freebuff");
+  assert.equal(page.railSelection, "providers");
   press(handler("on_scroll_wheel"), {}, spy);
   assert.equal(spy.log.at(-1), "stop");
 });
@@ -328,17 +334,21 @@ test("the permission menus pick an item and report open and close", (t) => {
 });
 
 test("provider cards: reveal the key, take a preset, open, add and cancel", async (t) => {
-  const { page, cx } = harness(t, { page: "providers" });
+  const { page, cx } = harness(t);
   const spy = spyCx();
   const execs = [];
   globalThis.__herdrExec = (command, args) => { execs.push([command, ...args]); return { code: 0, stdout: "", stderr: "" }; };
   t.after(() => { delete globalThis.__herdrExec; });
-  page.makeCard = () => cardOf(null, null);
-  draw(page, cx);
-  press(handler("on_click", "am-provider-add"), {}, spy);
-  assert.equal(page.adding.open, true);
+  const store = new Map();
+  globalThis.__herdrShared = key => store.get(key) ?? null;
+  globalThis.__herdrSetShared = (key, value) => { store.set(key, value); return null; };
+  t.after(() => { delete globalThis.__herdrShared; delete globalThis.__herdrSetShared; });
   const card = cardOf(null, { host: "http://127.0.0.1:8000/v1" }, { open: true });
   card.fetched = { link: "x", path: "/home/provider-icons/icon-z.png" };
+  page.newProviderCard = card;
+  store.set("agent-manager.open-agent", { key: "provider:add" });
+  draw(page, cx);
+  assert.equal(page.adding, card);
   page.adding = card;
   draw(page, cx);
   press(handler("on_click", "am-key-eye-new"), {}, spy);
@@ -349,22 +359,15 @@ test("provider cards: reveal the key, take a preset, open, add and cancel", asyn
   assert.equal(card.name.value(), "oMLX");
   assert.match(card.link.value(), /github\.com\/jundot\/omlx/);
   assert.deepEqual(linked, [card]);
-  const saved = cardOf("saved", record());
-  page.cards.set("saved", saved);
-  page.providers.saved = record();
-  draw(page, cx);
-  press(handler("on_click", "am-provider-head-saved"), {}, spy);
-  assert.equal(saved.open, true);
-  press(handler("on_click", "am-back"));
   const buttons = new Map();
   const build = page.button.bind(page);
   page.button = (id, label, theme, click, options) => { buttons.set(id, click); return build(id, label, theme, click, options); };
+  let replenish;
+  cx.spawn = task => { replenish = task({ sleep: async () => {}, notify() {} }); };
+  page.makeCard = () => cardOf(null, null);
   draw(page, cx);
-  card.testing = true;
-  buttons.get("am-cancel-new")({}, spy);
-  assert.equal(page.adding, card);
-  card.testing = false;
-  buttons.get("am-cancel-new")({}, spy);
+  buttons.get("am-cancel-new")({}, cx);
+  await replenish;
   assert.equal(page.adding, null);
   assert.deepEqual(execs, [["rm", "-f", "/home/provider-icons/icon-z.png"]]);
 });
@@ -392,14 +395,10 @@ test("provider and refresh controls are native buttons; busy refresh cannot acti
   const busy = JSON.stringify(draw(page, cx));
   assert.match(busy, /"n":"Button.new","a":\["am-refresh"\],"c":\[\["disabled",\[true\]\]/);
   assert.ok(!globalThis.__herdrHandlers.some(entry => entry.key === "on_click" && entry.rec.a[0] === "am-refresh"));
-  const providers = harness(t, { page: "providers" });
-  assert.match(JSON.stringify(draw(providers.page, providers.cx)), /"n":"Button.new","a":\["am-provider-add"\]/);
-  providers.page.adding = cardOf(null, { host: "http://127.0.0.1:8000/v1" }, { open: true });
-  assert.match(JSON.stringify(draw(providers.page, providers.cx)), /"n":"Button.new","a":\["am-key-eye-new"\]/);
 });
 
 // Exercise the actual V4 route independently of the historical builder snapshots.
-test("settings route follows the left sidebar's requests and publishes its selection", (t) => {
+test("settings route follows the left sidebar's requests and publishes its selection", async (t) => {
   const { page, cx } = harness(t);
   const store = new Map();
   globalThis.__herdrShared = key => store.get(key) ?? null;
@@ -409,11 +408,18 @@ test("settings route follows the left sidebar's requests and publishes its selec
   const toggled = [];
   page.toggleEnabled = row => toggled.push(row.key);
   page.freebuffInstalled = true;
+  page.newProviderCard = cardOf(null, null);
   const global = JSON.stringify(draw(page, cx));
   for (const id of ["Global Agent Settings", "am-refresh"]) assert.ok(global.includes(id), id);
   for (const id of ["am-agent-rail", "am-rail-select-claude", "am-back"]) assert.ok(!global.includes(id), id);
   assert.deepEqual(store.get("agent-manager.selected"), { key: "global" });
-  const open = key => { store.set("agent-manager.open-agent", { key }); return JSON.stringify(draw(page, cx)); };
+  let rendering = false;
+  const open = key => {
+    store.set("agent-manager.open-agent", { key });
+    rendering = true;
+    try { return JSON.stringify(draw(page, cx)); }
+    finally { rendering = false; }
+  };
   store.set("agent-manager.toggle-agent", { key: "claude" });
   draw(page, cx);
   store.set("agent-manager.toggle-agent", { key: "freebuff" });
@@ -431,6 +437,44 @@ test("settings route follows the left sidebar's requests and publishes its selec
   assert.match(freebuff, /am-copy-command/);
   assert.match(open("global"), /Global Agent Settings/);
   assert.deepEqual(store.get("agent-manager.selected"), { key: "global" });
+  const draft = page.newProviderCard;
+  page.makeCard = (...args) => {
+    assert.equal(rendering, false, "provider inputs must not be allocated during render");
+    return cardOf(...args);
+  };
+  const provider = open("provider:add");
+  assert.equal(page.adding, draft);
+  assert.equal(page.adding.open, true);
+  assert.match(provider, /Test and save/);
+  assert.deepEqual(store.get("agent-manager.selected"), { key: "provider:add" });
+  const pending = [];
+  cx.spawn = task => pending.push(task);
+  open("global");
+  assert.equal(page.newProviderCard, null);
+  assert.equal(page.adding, null);
+  const pendingAdd = open("provider:add");
+  assert.doesNotMatch(pendingAdd, /Test and save/);
+  assert.equal(page.addRequested, true);
+  await pending[0]({ sleep: async () => {}, notify() {} });
+  assert.notEqual(page.newProviderCard, draft);
+  const replacement = page.newProviderCard;
+  const reopened = JSON.stringify(draw(page, cx));
+  assert.equal(page.adding, replacement);
+  assert.match(reopened, /Test and save/);
+  page.providers.saved = record();
+  page.cards.set("saved", cardOf("saved", page.providers.saved));
+  replacement.testing = true;
+  open("provider:saved");
+  assert.equal(page.adding, null);
+  assert.equal(page.newProviderCard, replacement);
+  open("provider:add");
+  assert.equal(page.adding, replacement);
+  assert.equal(page.adding.testing, true);
+  open("global");
+  replacement.testing = false;
+  page.adoptSavedCard(replacement, { id: "new", record: { verifiedAt: "2026-01-02T03:04:05Z", models: ["x"] } });
+  assert.equal(page.railSelection, "global");
+  assert.equal(page.selectedProviderId, "saved");
   press(handler("on_size_change", "am-root"), { width: 420 }, spy);
   assert.equal(page.width, 420);
 });

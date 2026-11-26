@@ -42,19 +42,20 @@ function flyout(key, argv, state = {}, files = new Map()) {
   return { view, runs, files };
 }
 const argvOf = (runs) => runs.find((call) => call[0] === "tab.new")?.[1]?.argv;
+const withManagerEnvironment = (argv) => ["env", "HERDR_ENV=1", ...argv];
 
 const CLAUDE = ["claude", "--dangerously-skip-permissions"];
 
 test("claude: model and effort only, nothing else when the advanced options are at rest", async () => {
   const { view, runs } = flyout("claude", CLAUDE, { model: "sonnet", effort: "high" });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), [...CLAUDE, "--model", "sonnet", "--effort", "high"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment([...CLAUDE, "--model", "sonnet", "--effort", "high"]));
 });
 
 test("claude: a model without effort passes no --effort", async () => {
   const { view, runs } = flyout("claude", CLAUDE, { model: "haiku", effort: "" });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), [...CLAUDE, "--model", "haiku"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment([...CLAUDE, "--model", "haiku"]));
 });
 
 test("claude: advisor, style, agents and prompt come last, in that order", async () => {
@@ -67,7 +68,7 @@ test("claude: advisor, style, agents and prompt come last, in that order", async
     promptInput: input("You are the primary agent."),
   });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), [
+  assert.deepEqual(argvOf(runs), withManagerEnvironment([
     ...CLAUDE,
     "--model", "opus",
     "--effort", "max",
@@ -75,13 +76,13 @@ test("claude: advisor, style, agents and prompt come last, in that order", async
     "--settings", '{"outputStyle":"eli5"}',
     "--agents", '{"scout":{"description":"d"}}',
     "--append-system-prompt", "You are the primary agent.",
-  ]);
+  ]));
 });
 
 test("claude: advisor none and style default add nothing; blank agents and prompt add nothing", async () => {
   const { view, runs } = flyout("claude", CLAUDE, { model: "opus", effort: "low", agentsInput: input("  \n"), promptInput: input("   ") });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), [...CLAUDE, "--model", "opus", "--effort", "low"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment([...CLAUDE, "--model", "opus", "--effort", "low"]));
 });
 
 test("claude: invalid agents JSON blocks the launch and names the line", async () => {
@@ -101,26 +102,26 @@ test("codex: --disable per ticked flag in catalog order, then one -c per config.
     new Map([["/home/.codex/config.toml", toml]]),
   );
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), [
+  assert.deepEqual(argvOf(runs), withManagerEnvironment([
     "codex", "--no-daemon",
     "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=high",
     "--disable", "plugins",
     "--disable", "apps",
     "-c", "mcp_servers.foo.enabled=false",
     "-c", 'mcp_servers."bar baz".enabled=false',
-  ]);
+  ]));
 });
 
 test("codex: nothing ticked adds nothing, and a missing config.toml disables no server", async () => {
   const { view, runs } = flyout("codex", ["codex"], { model: "gpt-5.6-sol", effort: "low", codexOff: new Set(["mcp"]) });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), ["codex", "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=low"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment(["codex", "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=low"]));
 });
 
 test("opencode: the model rides in the environment and the TUI runs its own server", async () => {
   const { view, runs, files } = flyout("opencode", ["opencode"], { model: "opencode/big-pickle", effort: "high" });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), ["env", 'OPENCODE_CONFIG_CONTENT={"model":"opencode/big-pickle"}', "opencode", "--standalone"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment(["env", 'OPENCODE_CONFIG_CONTENT={"model":"opencode/big-pickle"}', "opencode", "--standalone"]));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(JSON.parse(files.get("/home/.local/state/opencode/model.json")), { variant: { "opencode/big-pickle": "high" } });
 });
@@ -129,19 +130,19 @@ test("pi: --model, --thinking, the ticked --no-* switches and the appended promp
   const { view, runs } = flyout("pi", ["pi"], { model: "radius/balanced", effort: "high", promptInput: input("Be brief.") });
   view.values.off = ["session", "extensions"];
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), ["pi", "--model", "radius/balanced", "--thinking", "high", "--no-extensions", "--no-session", "--append-system-prompt", "Be brief."]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment(["pi", "--model", "radius/balanced", "--thinking", "high", "--no-extensions", "--no-session", "--append-system-prompt", "Be brief."]));
 });
 
 test("pi: the Default entry starts pi on its own model, with no model or thinking flag", async () => {
   const { view, runs } = flyout("pi", ["pi"], { model: "", effort: "", promptInput: input("") });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), ["pi"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment(["pi"]));
 });
 
 test("pi: a model that does not think gets no --thinking", async () => {
   const { view, runs } = flyout("pi", ["pi"], { model: "omlx/x", effort: "", promptInput: input("") });
   await view.launch(cx);
-  assert.deepEqual(argvOf(runs), ["pi", "--model", "omlx/x"]);
+  assert.deepEqual(argvOf(runs), withManagerEnvironment(["pi", "--model", "omlx/x"]));
 });
 
 test("pi: when the model list cannot be read, the Default entry is still there to launch", async () => {

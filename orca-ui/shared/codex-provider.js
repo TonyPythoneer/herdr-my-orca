@@ -98,7 +98,11 @@ export function launchOpenCodeArgv(baseArgv, provider, model) {
     const info = provider.modelInfo && Object.hasOwn(provider.modelInfo, id) ? provider.modelInfo[id] : {};
     const context = Number.isSafeInteger(info?.contextWindow) && info.contextWindow > 0 ? info.contextWindow : undefined;
     // shortcut: OpenCode requires both limits; cap unknown output at 8K or the known context until /models reports it.
-    const output = context ? (Number.isSafeInteger(info?.maxTokens) && info.maxTokens > 0 ? Math.min(info.maxTokens, context) : Math.min(UNKNOWN_OUTPUT_CAP, context)) : undefined;
+    let output;
+    if (context) {
+      const reported = Number.isSafeInteger(info?.maxTokens) && info.maxTokens > 0 ? info.maxTokens : UNKNOWN_OUTPUT_CAP;
+      output = Math.min(reported, context);
+    }
     return [`model-${index + 1}`, {
       name: id,
       modelID: id,
@@ -166,6 +170,38 @@ export function linkInfo(text) {
   return { link: `https://${url.host}`, name: host.split(".").at(-2), iconUrl: `https://${url.host}/favicon.ico` };
 }
 
+/**
+ * From a site's fetched HTML, the icon URL to use: an SVG link icon first
+ * (`<link rel="icon" type="image/svg+xml" href="...">`), then any other `rel` holding `icon`,
+ * taking the first one only. `href` is resolved against the site origin so a relative path works.
+ * Returns null when the HTML has none; the caller then falls back to `/favicon.ico`.
+ */
+export function iconFromHtml(html, baseUrl) {
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const resolve = (href) => {
+    try { return new URL(href, base).href; } catch { return null; }
+  };
+  const hrefOf = (tag) => {
+    const m = tag.match(/href\s*=\s*"([^"]*)"/i);
+    return m ? resolve(m[1]) : null;
+  };
+  // All link tags whose rel mentions icon, in document order.
+  const links = [...html.matchAll(/<link[^>]*?\brel="[^"]*icon[^"]*"[^>]*?>/gi)];
+  // 1. SVG icon first: <link rel="icon" type="image/svg+xml" href="...">
+  for (const [tag] of links) {
+    if (/\btype="image\/svg\+xml"/i.test(tag)) {
+      const resolved = hrefOf(tag);
+      if (resolved) return resolved;
+    }
+  }
+  // 2. Any other rel=icon link: the first one wins, nothing beyond it.
+  for (const [tag] of links) {
+    const resolved = hrefOf(tag);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
 /** The link a saved record stands for. Older records kept only a GitHub owner. */
 export function recordLink(record) {
   return record?.link ?? (record?.githubOwner ? `https://github.com/${record.githubOwner}` : "");
@@ -213,47 +249,73 @@ export function keyHint(key) {
  * What a `GET <host>/models` answer means: `{ ok: true, models }` or `{ ok: false, error }` with
  * one of TEST_ERRORS. `status` is the HTTP status, 0 when the request never reached a server.
  */
+const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const positiveInteger = (...values) => values.find((value) => Number.isSafeInteger(value) && value > 0);
+const stringList = (value) => Array.isArray(value) ? value.filter((item) => typeof item === "string") : undefined;
+
+function modelCapabilities(entry) {
+  const architecture = isRecord(entry.architecture) ? entry.architecture : {};
+  const inputModalities = stringList(entry.input_modalities ?? architecture.input_modalities);
+  const outputModalities = stringList(entry.output_modalities ?? architecture.output_modalities);
+  const info = {};
+  if (inputModalities) info.inputModalities = inputModalities;
+  if (outputModalities) info.outputModalities = outputModalities;
+  let features;
+  if (Array.isArray(entry.supported_features)) features = entry.supported_features.filter((value) => typeof value === "string");
+  else if (Array.isArray(entry.supported_parameters)) features = entry.supported_parameters.includes("tools") ? ["tools"] : [];
+  if (features) info.supportedFeatures = features;
+  return info;
+}
+
+function modelMetadata(entry) {
+  const topProvider = isRecord(entry.top_provider) ? entry.top_provider : {};
+  const contextWindow = positiveInteger(entry.context_window, entry.contextWindow, entry.max_model_len, entry.context_length, topProvider.context_length);
+  const maxTokens = positiveInteger(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens, entry.max_output_length, topProvider.max_completion_tokens);
+  const info = {};
+  if (contextWindow) info.contextWindow = contextWindow;
+  if (maxTokens) info.maxTokens = maxTokens;
+  Object.assign(info, modelCapabilities(entry));
+  return Object.keys(info).length ? info : null;
+}
+
+function modelInfoFor(entries, models) {
+  const modelInfo = Object.create(null);
+  for (const entry of entries) {
+    if (typeof entry === "string" || !models.includes(entry.id)) continue;
+    const info = modelMetadata(entry);
+    if (info) modelInfo[entry.id] = info;
+  }
+  return modelInfo;
+}
+
+function modelsFromAnswer(answer) {
+  if (!Array.isArray(answer?.data)) return null;
+  const entries = answer.data.filter((entry) => typeof entry === "string" || isRecord(entry));
+  const models = [...new Set(entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== ""))];
+  return { entries, models };
+}
+
+function modelResponseError(code) {
+  if (code === 401 || code === 403) return TEST_ERRORS.key;
+  if (code === 404) return TEST_ERRORS.models;
+  return TEST_ERRORS.connect;
+}
+
 export function judgeModels(status, body) {
   const code = Number(status);
-  if (code === 200) {
-    let answer;
-    try {
-      answer = JSON.parse(String(body ?? ""));
-    } catch {
-      return { ok: false, error: TEST_ERRORS.notModelServer };
-    }
-    const data = answer?.data;
-    if (!Array.isArray(data)) return { ok: false, error: TEST_ERRORS.notModelServer };
-    const entries = data.filter((entry) => typeof entry === "string" || (entry && typeof entry === "object" && !Array.isArray(entry)));
-    const models = [...new Set(entries.map((entry) => (typeof entry === "string" ? entry : entry.id)).filter((id) => typeof id === "string" && id !== ""))];
-    if (models.length === 0) return { ok: false, error: TEST_ERRORS.empty };
-    const modelInfo = Object.create(null);
-    for (const entry of entries) {
-      if (typeof entry === "string" || !models.includes(entry.id)) continue;
-      const positive = (...values) => values.find((value) => typeof value === "number" && Number.isSafeInteger(value) && value > 0);
-      const topProvider = entry.top_provider && typeof entry.top_provider === "object" ? entry.top_provider : {};
-      const architecture = entry.architecture && typeof entry.architecture === "object" ? entry.architecture : {};
-      const contextWindow = positive(entry.context_window, entry.contextWindow, entry.max_model_len, entry.context_length, topProvider.context_length);
-      const maxTokens = positive(entry.max_completion_tokens, entry.max_tokens, entry.maxTokens, entry.max_output_length, topProvider.max_completion_tokens);
-      const inputValues = entry.input_modalities ?? architecture.input_modalities;
-      const outputValues = entry.output_modalities ?? architecture.output_modalities;
-      const inputModalities = Array.isArray(inputValues) ? inputValues.filter((value) => typeof value === "string") : undefined;
-      const outputModalities = Array.isArray(outputValues) ? outputValues.filter((value) => typeof value === "string") : undefined;
-      const features = Array.isArray(entry.supported_features) ? entry.supported_features.filter((value) => typeof value === "string")
-        : Array.isArray(entry.supported_parameters) ? (entry.supported_parameters.includes("tools") ? ["tools"] : []) : undefined;
-      if (contextWindow || maxTokens || inputModalities || outputModalities || features) modelInfo[entry.id] = {
-        ...(contextWindow ? { contextWindow } : {}),
-        ...(maxTokens ? { maxTokens } : {}),
-        ...(inputModalities ? { inputModalities } : {}),
-        ...(outputModalities ? { outputModalities } : {}),
-        ...(features ? { supportedFeatures: features } : {}),
-      };
-    }
-    return { ok: true, models, ...(Object.keys(modelInfo).length ? { modelInfo } : {}) };
+  if (code !== 200) return { ok: false, error: modelResponseError(code) };
+  let answer;
+  try {
+    answer = JSON.parse(String(body ?? ""));
+  } catch {
+    return { ok: false, error: TEST_ERRORS.notModelServer };
   }
-  if (code === 401 || code === 403) return { ok: false, error: TEST_ERRORS.key };
-  if (code === 404) return { ok: false, error: TEST_ERRORS.models };
-  return { ok: false, error: TEST_ERRORS.connect };
+  const result = modelsFromAnswer(answer);
+  if (!result) return { ok: false, error: TEST_ERRORS.notModelServer };
+  const { entries, models } = result;
+  if (models.length === 0) return { ok: false, error: TEST_ERRORS.empty };
+  const modelInfo = modelInfoFor(entries, models);
+  return { ok: true, models, ...(Object.keys(modelInfo).length ? { modelInfo } : {}) };
 }
 
 /**
@@ -315,27 +377,9 @@ export function serializeProviderFile(providers) {
 }
 
 /** Compare and replace the key file under one persistent lock inode. */
-export async function writeProviderFile({ appHome, exec, writeTextFile }, text, expected) {
-  const home = typeof appHome === "function" ? appHome() : appHome;
-  const file = `${home}/${PROVIDER_FILE}`;
-  const lock = `${file}.lock`;
-  const made = await exec("mktemp", ["-d", `${home}/.provider-write.XXXXXX`]);
-  const dir = String(made?.stdout ?? "").trim();
-  if (made?.code !== 0 || !dir.startsWith(`${home}/.provider-write.`)) throw new Error("Could not create private provider staging directory.");
-  const staged = `${dir}/${PROVIDER_FILE}`;
-  const expectedFile = `${dir}/expected`;
-  try {
-    const privateDir = await exec("chmod", ["700", dir]);
-    if (privateDir?.code !== 0) throw new Error("Could not secure provider staging directory.");
-    await writeTextFile(staged, text, null);
-    const privateFile = await exec("chmod", ["600", staged]);
-    if (privateFile?.code !== 0) throw new Error("Could not secure staged provider file.");
-    if (expected !== null) {
-      await writeTextFile(expectedFile, expected, null);
-      const privateExpected = await exec("chmod", ["600", expectedFile]);
-      if (privateExpected?.code !== 0) throw new Error("Could not secure provider snapshot.");
-    }
-    const python = [
+async function replaceProviderFile(exec, paths, expected) {
+  const { lock, file, staged, expectedFile } = paths;
+  const python = [
       "import fcntl, os, sys",
       "lock_path, target, staged, expected_path, absent = sys.argv[1:]",
       "fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)",
@@ -351,9 +395,35 @@ export async function writeProviderFile({ appHome, exec, writeTextFile }, text, 
       "        with open(expected_path, 'rb') as expected_file: previous = expected_file.read()",
       "        if current != previous: raise SystemExit('provider file changed')",
       "    os.replace(staged, target)",
-    ].join("\n");
-    const replaced = await exec("python3", ["-c", python, lock, file, staged, expected === null ? "" : expectedFile, expected === null ? "1" : "0"]);
-    if (replaced?.code !== 0) throw new Error("Provider file changed or could not be installed.");
+  ].join("\n");
+  const replaced = await exec("python3", ["-c", python, lock, file, staged, expected == null ? "" : expectedFile, expected == null ? "1" : "0"]);
+  if (replaced?.code !== 0) throw new Error("Provider file changed or could not be installed.");
+}
+
+async function requireProviderMode(exec, mode, path, message) {
+  const result = await exec("chmod", [mode, path]);
+  if (result?.code !== 0) throw new Error(message);
+}
+
+/** Compare and replace the key file under one persistent lock inode. */
+export async function writeProviderFile({ appHome, exec, writeTextFile }, text, expected) {
+  const home = typeof appHome === "function" ? appHome() : appHome;
+  const file = `${home}/${PROVIDER_FILE}`;
+  const lock = `${file}.lock`;
+  const made = await exec("mktemp", ["-d", `${home}/.provider-write.XXXXXX`]);
+  const dir = String(made?.stdout ?? "").trim();
+  if (made?.code !== 0 || !dir.startsWith(`${home}/.provider-write.`)) throw new Error("Could not create private provider staging directory.");
+  const staged = `${dir}/${PROVIDER_FILE}`;
+  const expectedFile = `${dir}/expected`;
+  try {
+    await requireProviderMode(exec, "700", dir, "Could not secure provider staging directory.");
+    await writeTextFile(staged, text, null);
+    await requireProviderMode(exec, "600", staged, "Could not secure staged provider file.");
+    if (expected != null) {
+      await writeTextFile(expectedFile, expected, null);
+      await requireProviderMode(exec, "600", expectedFile, "Could not secure provider snapshot.");
+    }
+    await replaceProviderFile(exec, { lock, file, staged, expectedFile }, expected);
   } finally {
     await exec("rm", ["-rf", dir]).catch(() => {});
   }
