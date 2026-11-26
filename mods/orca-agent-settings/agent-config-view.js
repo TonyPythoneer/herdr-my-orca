@@ -890,7 +890,7 @@ class AgentConfigCore {
 
   // Model source: an expanded list of the default origin source (the agent itself, shown with its
   // icon) plus any saved providers. Replaces the old MODEL SOURCE select: it now sits on the same
-  // layer as MODEL and EFFORT.
+  // layer as MODEL and EFFORT. Fixed width so the row leaves room for the model dropdown.
   providerRow(t) {
     const ids = Object.keys(this.providers ?? {});
     const space = launchSpace(this.context());
@@ -898,19 +898,13 @@ class AgentConfigCore {
     const enabled = !remote;
     const label = this.providerId === "none" ? "Origin source" : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
-      .gap(4)
-      .child(
-        h_flex()
-          .id("provider-wrap")
-          .items_center()
-          .gap(6)
-          .when(!enabled, (el) => el.opacity(0.5))
-          .role("group")
-          .accessibility_label(`Model source: ${label}`)
-          .tooltip(providerTooltip(remote, ids.length))
-          .child(div().text_size(9).text_color(t.dim).child("MODEL SOURCE"))
-          .child(div().flex_1())
-      )
+      .gap(2)
+      .w(170)
+      .when(!enabled, (el) => el.opacity(0.5))
+      .role("group")
+      .accessibility_label(`Model source: ${label}`)
+      .tooltip(providerTooltip(remote, ids.length))
+      .child(div().text_size(9).text_color(t.dim).child("MODEL SOURCE"))
       .child(this.sourceList(t, enabled));
   }
 
