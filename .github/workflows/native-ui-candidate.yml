@@ -1,10 +1,17 @@
-name: Native UI candidate acceptance
+name: Native UI snapshot acceptance
 on:
   pull_request:
     branches: [main]
     paths:
       - 'ui-snapshot/**'
       - '.github/workflows/native-ui-candidate.yml'
+  workflow_dispatch:
+    inputs:
+      expanded:
+        description: Run the full exploratory scenario inventory
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -12,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   acceptance:
-    name: Expanded native custom UI acceptance
+    name: Native custom UI snapshot acceptance
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -42,7 +49,14 @@ jobs:
       - name: Check observer tests
         run: python3 -m unittest discover -s target/ui-snapshot -p 'test_*.py'
       - name: Observe candidate custom UI
-        run: python3 target/ui-snapshot/capture.py --target target --out "$RUNNER_TEMP/ui-snapshot"
+        env:
+          EXPANDED: ${{ inputs.expanded || 'false' }}
+        run: |
+          args=()
+          if [[ "$EXPANDED" != "true" ]]; then
+            args+=(--case "Status ports: open popover, then dismiss")
+          fi
+          python3 target/ui-snapshot/capture.py --target target --out "$RUNNER_TEMP/ui-snapshot" "${args[@]}"
       - name: Build gallery
         if: always() && !cancelled()
         run: python3 target/ui-snapshot/gallery.py --input "$RUNNER_TEMP/ui-snapshot" --output "$RUNNER_TEMP/ui-gallery"

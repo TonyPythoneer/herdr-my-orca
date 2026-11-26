@@ -1,22 +1,6 @@
 name: Native page benchmark
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'scripts/benchmark-*.py'
-      - 'scripts/benchmark-*.mjs'
-      - 'scripts/benchmark-*.test.js'
-      - 'mods/**'
-      - 'orca-ui/**'
-      - 'scripts/ci-impact*.py'
-      - 'layouts/**'
-      - 'themes/**'
-      - 'shared/**'
-      - 'settings.json'
-      - 'programs.json'
-      - 'keys.json'
-      - '.github/workflows/benchmark-native.yml'
   workflow_dispatch:
 
 permissions:
