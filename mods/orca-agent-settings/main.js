@@ -168,6 +168,9 @@ export default class AgentManager extends View {
     // Model providers share this page's rail and workspace with the agent catalog.
     this.providers = {};
     this.providersError = null;
+    this.gatewayLogging = false;
+    this.gatewayLoggingBusy = false;
+    this.gatewayLoggingError = null;
     this.cards = new Map();
     this.selectedProviderId = null;
     this.selectedProviderBeforeAdd = null;
@@ -197,6 +200,7 @@ export default class AgentManager extends View {
     this.newProviderCard = this.makeCard(null, null);
     cx.spawn(async (taskCx) => {
       this.applyProviders(await readFile(PROVIDERS));
+      try { this.gatewayLogging = JSON.parse(await readFile(`${appHome()}/model-gateway.json`) ?? "{}").enabled === true; } catch { this.gatewayLoggingError = "Invalid gateway setting."; }
       taskCx.notify();
     });
     this.refresh(cx);
@@ -1736,7 +1740,31 @@ export default class AgentManager extends View {
   }
 
   modelProvidersCard(t) {
-    return modelProvidersView(this, t);
+    return v_flex().w_full().gap(8)
+      .child(h_flex().w_full().items_center().gap(8)
+        .child(div().flex_1().text_color(t.foreground).child("Enable Logging"))
+        .child(this.button("am-gateway-logging", this.gatewayLogging ? "On" : "Off", t,
+          (_event, cx) => this.toggleGatewayLogging(cx), { disabled: this.gatewayLoggingBusy, height: 26, px: 10 })))
+      .when(Boolean(this.gatewayLoggingError), el => el.child(div().text_color(t.blocked).child(this.gatewayLoggingError)))
+      .child(modelProvidersView(this, t));
+  }
+
+  async toggleGatewayLogging(cx) {
+    if (this.gatewayLoggingBusy) return;
+    this.gatewayLoggingBusy = true;
+    this.gatewayLoggingError = null;
+    cx.notify();
+    try {
+      const result = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`,
+        appHome(), this.gatewayLogging ? "disable" : "enable"]);
+      if (result?.code !== 0) throw new Error("Could not save logging setting.");
+      this.gatewayLogging = JSON.parse(result.stdout).enabled === true;
+    } catch {
+      this.gatewayLoggingError = "Could not save logging setting.";
+    } finally {
+      this.gatewayLoggingBusy = false;
+      cx.notify();
+    }
   }
 
   // Cancel on the card being added: an icon it already fetched goes with it.

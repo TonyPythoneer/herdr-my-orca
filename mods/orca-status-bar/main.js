@@ -6,7 +6,8 @@
 // visibility-menu trigger last.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand, panes, spaces, hc, setShared, checking, notify } from "herdr";
+import { machines, updates, theme, run, exec, knownAgents, home, shared, keys, watchFolder, nextCommand, panes, spaces, hc, setShared, checking, notify, appHome, readTextFile } from "herdr";
+import { gatewayReadings } from "./gateway-usage.js";
 import { probeLocal } from "./local-usage.js";
 import { SPIN_PERIOD_MS } from "./ui-settings.js";
 import { FOLLOW_EVERY_MS, FOLLOW_STATE_KEY, planFollow, parseCheckout } from "./wt-follow.js";
@@ -192,7 +193,10 @@ function detailChip(t, reading) {
 }
 
 function chip(t, reading) {
-  if (reading.detail) return detailChip(t, reading);
+  if (reading.detail) {
+    const view = detailChip(t, reading);
+    return reading.tooltip ? view.tooltip(reading.tooltip) : view;
+  }
   const tightest = reading.status === "ok" ? getTightestUsageBucket(reading.buckets) : null;
   if (tightest) {
     const label = formatBucketChipLabel(tightest);
@@ -224,6 +228,9 @@ export default class OrcaStatus extends View {
   init(_props, cx) {
     // Null is "not read yet", distinct from "read, and nothing is signed in".
     this.readings = null;
+    this.gatewayUsage = [];
+    this.refreshGatewayUsage(cx);
+    cx.timer.every(15000, tickCx => this.refreshGatewayUsage(tickCx));
     this.isRefreshing = false;
     this.lastRefresh = 0;
     this.refreshUsage(cx);
@@ -347,6 +354,19 @@ export default class OrcaStatus extends View {
     finishMove(move, tabId, spareTab, before);
   }
 
+  refreshGatewayUsage(cx) {
+    if (this.gatewayRefreshing) return;
+    this.gatewayRefreshing = true;
+    cx.spawn(async jobCx => {
+      try {
+        const root = `${appHome()}/litellm-gateway/events.jsonl`;
+        const texts = await Promise.all([root + ".1", root].map(path => readTextFile(path).catch(() => null)));
+        this.gatewayUsage = gatewayReadings(texts);
+      } catch { /* keep previous observation on read failure */ }
+      finally { this.gatewayRefreshing = false; jobCx.notify(); }
+    });
+  }
+
   refreshUsage(cx, force = false) {
     if (this.isRefreshing) return;
     if (!force && Date.now() - this.lastRefresh < MIN_REFRESH_MS) return;
@@ -375,7 +395,7 @@ export default class OrcaStatus extends View {
     // (StatusBarProviderSegment.tsx:267-274); an empty array is a finished probe that found
     // nothing signed in, and then the cluster shows only "Used" with no chips at all.
     const readings = this.readings;
-    const drawn = (readings ?? [])
+    const drawn = [...(readings ?? []), ...(this.gatewayUsage ?? [])]
       // Antigravity's error chip is dropped: its CLI (agy) is not installed here.
       .filter(r => r.text || (r.status === "error" && r.provider !== "antigravity") || (r.status === "ok" && r.buckets.length > 0))
       .sort((a, b) => rank(a.provider) - rank(b.provider));

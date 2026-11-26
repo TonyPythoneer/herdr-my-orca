@@ -620,8 +620,30 @@ class AgentConfigCore {
       if (!preview) { this.providerId = "none"; this.open = null; }
       return { error: "Model provider is no longer set up." };
     }
-    const provider = { ...record, id: providerId, configPath: file };
-    const model = preview ? values.model : this.model;
+    let provider = { ...record, id: providerId, configPath: file };
+    let model = preview ? values.model : this.model;
+    // Only this explicit Model Provider launch can enter the gateway. Preview must not start it.
+    if (!preview) {
+      const gatewaySetting = await readTextFile(`${appHome()}/model-gateway.json`).catch(() => null);
+      if (gatewaySetting) {
+        let enabled;
+        try { enabled = JSON.parse(gatewaySetting).enabled === true; }
+        catch { return { error: "Invalid model gateway setting." }; }
+        if (enabled) {
+          const result = await exec("python3", [`${appHome()}/mods/orca-agent-flyout/litellm_gateway.py`,
+            appHome(), "prepare", providerId, model, record.host, this.key], { timeout: 180000 }).catch(() => null);
+          let route;
+          try { route = JSON.parse(result?.stdout ?? ""); } catch { /* fail closed */ }
+          if (result?.code !== 0 || !route?.host || !route?.model || !route?.aliases) {
+            return { error: route?.error ?? "Local LiteLLM gateway is unavailable." };
+          }
+          provider = { ...provider, host: route.host, configPath: route.configPath, id: route.id,
+            models: Object.values(route.aliases),
+            modelInfo: Object.fromEntries(Object.entries(route.aliases).map(([id, alias]) => [alias, record.modelInfo?.[id] ?? {}])) };
+          model = route.model;
+        }
+      }
+    }
     const argv = buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] });
     return this.providerLaunchArgv(provider, model, argv);
   }
