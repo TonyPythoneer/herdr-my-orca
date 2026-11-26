@@ -1,19 +1,8 @@
 name: Native retention (100 interactions)
 on:
   pull_request:
-    branches: [main]
-    paths:
-      - 'mods/orca-sidebar-projects/main.js'
-      - 'mods/orca-files/main.js'
-      - 'mods/orca-status-bar/main.js'
-      - 'scripts/benchmark-resources.py'
-      - '.github/workflows/performance-retention.yml'
-  workflow_dispatch:
-    inputs:
-      page:
-        type: choice
-        options: [main-terminals, files]
-        default: main-terminals
+    branches: [ci/main-with-full-process]
+    types: [opened, synchronize, reopened, edited]
 permissions:
   contents: read
 concurrency:
@@ -31,29 +20,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: routes
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          MANUAL: ${{ inputs.page }}
         run: |
-          python3 - <<'PY'
-          import json, os, subprocess
-          base = os.environ["BASE"]
-          files = subprocess.check_output(["git","diff","--name-only","--no-renames",base,"HEAD"],text=True).splitlines() if base else []
-          pages = set()
-          if not base:
-              pages.add(os.environ.get("MANUAL") or "main-terminals")
-          if any(p in files for p in ("mods/orca-sidebar-projects/main.js","mods/orca-status-bar/main.js","scripts/benchmark-resources.py",".github/workflows/performance-retention.yml")):
-              pages.add("main-terminals")
-          if "mods/orca-files/main.js" in files:
-              pages.add("files")
-          matrix = {"include":[{"page":p,"stack":"main" if p=="main-terminals" else "panel-body"} for p in sorted(pages)]}
-          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
-              f.write("matrix="+json.dumps(matrix)+"\n")
-              f.write("has_routes="+str(bool(pages)).lower()+"\n")
-          PY
+          echo 'matrix={"include":[{"page":"main-terminals","stack":"main"},{"page":"files","stack":"panel-body"}]}' >> "$GITHUB_OUTPUT"
+          echo 'has_routes=true' >> "$GITHUB_OUTPUT"
   measure:
     needs: select
-    if: needs.select.outputs.has_routes == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: needs.select.outputs.has_routes == 'true'
     runs-on: macos-15
     timeout-minutes: 20
     strategy:
@@ -101,3 +73,14 @@ jobs:
           name: retention-${{ matrix.page }}
           path: ${{ runner.temp }}/retention/
           retention-days: 14
+
+  checks:
+    name: Full retention checks
+    needs: [select, measure]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      SELECT_RESULT: ${{ needs.select.result }}
+      MEASURE_RESULT: ${{ needs.measure.result }}
+    steps:
+      - run: test "$SELECT_RESULT" = success && test "$MEASURE_RESULT" = success
