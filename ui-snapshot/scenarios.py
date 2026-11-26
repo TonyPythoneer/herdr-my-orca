@@ -3,6 +3,8 @@ import json
 
 LEFT=(0,0,.28,1)
 MAIN=(.28,.04,.66,.97)
+# Tasks spans the full content pane, including the right-aligned JSON toggle.
+TASK_PAGE=(.28,.04,.99,.97)
 RIGHT=(.66,.04,1,.97)
 DETAIL=(.18,.06,.9,.94)
 
@@ -81,11 +83,11 @@ CASES = [
     case("Agent manager: global permissions dropdown","orca-agent-settings",PERM,visible=True,region=DETAIL,page="main-agents",popover=True,afterText=["Ask for approval","Approve for me"],closedText=[PERM],closedAbsent=["Approve for me"],allowSetupRuntimeErrors=["can't render at a zero size"],allowTransientRuntimeErrors=["can't render at a zero size"]),
     case("Agent manager: provider editor","orca-agent-settings","Add model provider",(38,625),page="main-agents",prepare=[scroll(40,560),scroll(40,560)],afterText=["Add model provider","Test and save"],allowSetupRuntimeErrors=["can't render at a zero size"]),
     case("Task management footer","orca-status-footer orca-tasks","Tasks",(43,671),mouse_only=True,afterText=["Task management"],pageAfter="main-tasks",allowSetupRuntimeErrors=["can't render at a zero size"],allowTransientRuntimeErrors=["can't render at a zero size"]),
-    case("Task management: JSON editor","orca-tasks","Edit JSON",visible=True,region=(.28,.04,.99,.97),page="main-tasks",afterText=["Close JSON","Save","Cancel"],allowSetupRuntimeErrors=["can't render at a zero size"],follow=[
+    case("Task management: JSON editor","orca-tasks","Edit JSON",visible=True,region=TASK_PAGE,page="main-tasks",afterText=["Close JSON","Save","Cancel"],evidenceRegion=TASK_PAGE,allowSetupRuntimeErrors=["can't render at a zero size"],follow=[
         {"kind":"paste","label":"version","region":(.30,.29,.64,.76),"occurrence":"bottom","value":cancel_fixture_json,"afterText":["snapshot-cancel"],"evidenceRegion":(.30,.29,.64,.76)},
-        text("Cancel",MAIN,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]),
-        {**text("Edit JSON",MAIN,scroll=True,afterText=["Close JSON"]),"checks":[{"required":["Claude reset ping"],"absent":["Snapshot cancel draft"],"region":(.30,.29,.64,.76)}]},
-        text("Cancel",MAIN,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]),
+        text("Cancel",TASK_PAGE,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]),
+        {**text("Edit JSON",TASK_PAGE,scroll=True,afterText=["Close JSON","Save","Cancel"]),"checks":[{"required":["Claude reset ping"],"absent":["Snapshot cancel draft"],"region":(.30,.29,.64,.76)}]},
+        text("Cancel",TASK_PAGE,scroll=True,afterText=["Edit JSON"],absentText=["Close JSON"]),
     ],fileAssert={"file":"tasks.json","path":[],"equals":safe_tasks_fixture}),
     case("Task management: back to terminals","orca-tasks","Back to terminals",(318,68),page="main-tasks",beforeText=["Task management"],afterText=["Projects"],absentText=["Task management"],pageAfter="main-terminals"),
     case("Sidebar collapse","orca-header","Collapse sidebar",(91,15),files="names",beforeText=["Projects","Find files"],afterText=["Find files"],absentText=["Projects"]),
@@ -104,8 +106,8 @@ CASES = [
     case("Permissions: select ask for approval and persist fixture","orca-agent-settings",PERM,visible=True,region=DETAIL,page="main-agents",popover=True,afterText=["Ask for approval","Approve for me"],allowSetupRuntimeErrors=["can't render at a zero size"],follow=[
         text("Ask for approval",afterText=["Ask for approval"],absentText=["Approve for me"])
     ],fileAssert={"file":"agent-manager.json","path":["permissions","default"],"equals":"ask"}),
-    case("Tasks: edit JSON and save synthetic configuration","orca-tasks","Edit JSON",(963,253),visible=True,region=(.28,.04,.99,.97),page="main-tasks",afterText=["Save","Cancel"],allowSetupRuntimeErrors=["can't render at a zero size"],follow=[
+    case("Tasks: edit JSON and save synthetic configuration","orca-tasks","Edit JSON",(963,253),visible=True,region=TASK_PAGE,page="main-tasks",afterText=["Save","Cancel"],allowSetupRuntimeErrors=["can't render at a zero size"],follow=[
         {"kind":"paste","label":"version","region":(.30,.29,.64,.76),"occurrence":"bottom","value":fixture_json},
-        text("Save",(.28,.04,.99,.97),scroll=True,afterText=["Saved"])
+        text("Save",TASK_PAGE,scroll=True,afterText=["Saved"])
     ],fileAssert={"file":"tasks.json","path":["tasks",0,"name"],"equals":"Snapshot edited task"}),
 ]

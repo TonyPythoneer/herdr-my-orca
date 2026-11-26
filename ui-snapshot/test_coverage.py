@@ -52,6 +52,21 @@ class CoverageGate(unittest.TestCase):
                 unknown.extend(f"{case['title']} action: {key}" for key in action if key not in ACTION_KEYS)
         self.assertEqual(unknown, [], "scenario fields ignored by the runner")
 
+    def test_task_cancel_observes_full_width_page(self):
+        case = next(c for c in scenarios.CASES if c["title"] == "Task management: JSON editor")
+        # Native run 45774606816 located Edit JSON at x=963 in a 1024px window.
+        toggle_x = 963 / 1024
+        self.assertLessEqual(case["control"]["region"][0], toggle_x)
+        self.assertGreaterEqual(case["control"]["region"][2], toggle_x)
+        for action in case["follow"]:
+            if action.get("label") not in {"Cancel", "Edit JSON"}:
+                continue
+            with self.subTest(action=action["label"]):
+                self.assertEqual(action["region"], case["control"]["region"])
+                self.assertEqual(action.get("evidenceRegion", action["region"]), case["control"]["region"])
+                self.assertEqual(action.get("absentRegion", action["region"]), case["control"]["region"])
+        self.assertEqual(case["fileAssert"]["equals"], scenarios.safe_tasks_fixture)
+
     def test_every_manifest_mod_has_a_case(self):
         covered = {m for c in scenarios.CASES for m in c["mods"]}
         missing = sorted(m for m in manifest_mods() if m not in covered and m not in EXEMPT)
