@@ -261,3 +261,45 @@ test("stale asynchronous previews cannot replace a newer draft, even after A-B-A
   await Promise.all(tasks);
   assert.deepEqual(view.previewResult,{argv:["latest"]});
 });
+
+test("managed model provider launches use the hidden gateway; native and failed launches never bypass policy", async () => {
+  const file = providersFile({ omlx: record() });
+  const settings = ["/home/model-gateway.json", '{"enabled":true}'];
+  const files = () => new Map([[PROVIDERS, file], settings]);
+  let prepares = 0;
+  const previousExec = globalThis.__herdrExec;
+  globalThis.__herdrExec = async (command, args) => {
+    if (command === "python3" && args?.[0]?.endsWith("/litellm_gateway.py")) {
+      prepares++;
+      assert.deepEqual(args.slice(1), ["/home", "prepare", "omlx", OMLX_MODEL, record().host, "codex"]);
+      return { code: 0, stdout: JSON.stringify({ host: "http://127.0.0.1:12345/v1",
+        configPath: "/home/litellm-gateway/credentials.json", id: "openai",
+        aliases: { [OMLX_MODEL]: "herdr-fixture" }, model: "herdr-fixture" }) };
+    }
+    return previousExec?.(command, args) ?? { code: 0, stdout: "", stderr: "" };
+  };
+  try {
+    const managed = flyout({ providerId: "omlx", providers: { omlx: record() }, model: OMLX_MODEL, files: files() });
+    await managed.view.launch(cx);
+    const argv = argvOf(managed.runs);
+    assert.ok(argv.includes('model_providers.omlx.base_url="http://127.0.0.1:12345/v1"'));
+    assert.ok(argv.includes("herdr-fixture"));
+    assert.equal(argv[4], "/home/litellm-gateway/credentials.json");
+    assert.equal(managed.view.providerId, "omlx");
+    assert.equal(managed.view.model, OMLX_MODEL);
+    assert.equal(prepares, 1);
+
+    const native = flyout({ files: files() });
+    await native.view.launch(cx);
+    assert.deepEqual(argvOf(native.runs), [...CODEX, "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=high"]);
+    assert.equal(prepares, 1);
+
+    globalThis.__herdrExec = async () => ({ code: 1, stdout: '{"error":"Gateway unavailable"}' });
+    const failed = flyout({ providerId: "omlx", providers: { omlx: record() }, model: OMLX_MODEL, files: files() });
+    await failed.view.launch(cx);
+    assert.equal(argvOf(failed.runs), undefined);
+    assert.equal(failed.view.error, "Gateway unavailable");
+  } finally {
+    globalThis.__herdrExec = previousExec;
+  }
+});

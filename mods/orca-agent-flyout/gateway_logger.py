@@ -17,9 +17,13 @@ def mapping(value):
 
 def route_for(data):
     params = mapping(data.get("litellm_params"))
-    meta = mapping(data.get("metadata")) or mapping(params.get("metadata"))
-    info = mapping(data.get("model_info")) or mapping(params.get("model_info")) or mapping(meta.get("model_info"))
-    for alias in (info.get("id"), meta.get("model_group"), data.get("model"), params.get("model")):
+    metas = [mapping(data.get(name)) for name in ("metadata", "litellm_metadata")]
+    metas += [mapping(params.get(name)) for name in ("metadata", "litellm_metadata")]
+    infos = [mapping(data.get("model_info")), mapping(params.get("model_info"))]
+    infos += [mapping(meta.get("model_info")) for meta in metas]
+    candidates = [info.get("id") for info in infos] + [meta.get("model_group") for meta in metas]
+    candidates += [data.get("model"), params.get("model")]
+    for alias in candidates:
         if isinstance(alias, str) and alias in ROUTES:
             return ROUTES[alias]
     return None
@@ -29,8 +33,10 @@ def event(data, kind, status=None, response=None, latency_ms=None):
     if route is None:
         return
     params = mapping(data.get("litellm_params"))
-    meta = mapping(data.get("metadata")) or mapping(params.get("metadata"))
-    request_id = data.get("litellm_call_id") or meta.get("litellm_call_id") or str(uuid.uuid4())
+    metas = [mapping(data.get(name)) for name in ("metadata", "litellm_metadata")]
+    metas += [mapping(params.get(name)) for name in ("metadata", "litellm_metadata")]
+    request_id = data.get("litellm_call_id") or params.get("litellm_call_id")
+    request_id = request_id or next((meta["litellm_call_id"] for meta in metas if meta.get("litellm_call_id")), None) or str(uuid.uuid4())
     usage = getattr(response, "usage", None)
     def number(*names):
         for name in names:

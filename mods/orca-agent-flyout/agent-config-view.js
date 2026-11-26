@@ -629,7 +629,9 @@ class AgentConfigCore {
     let model = preview ? values.model : this.model;
     // Only this explicit Model Provider launch can enter the gateway. Preview must not start it.
     if (!preview) {
-      const gatewaySetting = await readTextFile(`${appHome()}/model-gateway.json`).catch(() => null);
+      let gatewaySetting;
+      try { gatewaySetting = await readTextFile(`${appHome()}/model-gateway.json`); }
+      catch { return { error: "Could not read model gateway setting." }; }
       if (gatewaySetting) {
         let enabled;
         try { enabled = JSON.parse(gatewaySetting).enabled === true; }
