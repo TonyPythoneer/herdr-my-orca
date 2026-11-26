@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="840" viewBox="0 0 840 840">
+<rect width="840" height="840" rx="22" fill="#171819"/>
+<g font-family="Arial,sans-serif">
+<text x="34" y="48" fill="#f2f2f3" font-size="23" font-weight="700">Agent Settings · folder with medal badges</text>
+<text x="34" y="76" fill="#a4a6aa" font-size="13">Folder remains the control; Unicode medal hangs at its lower-right corner</text>
+<rect x="263" y="101" width="314" height="677" rx="42" fill="#202123" stroke="#343639"/>
+<!-- Official group -->
+<rect x="278" y="116" width="284" height="458" rx="34" fill="#2a2c2f"/>
+<rect x="385" y="129" width="70" height="67" rx="21" fill="#35383e"/>
+<path d="M402 156v-12q0-4 4-4h11l7 7h19q4 0 4 4v21q0 4-4 4h-37q-4 0-4-4z" fill="#626bf2"/>
+<path d="M526 151l5 5 5-5" fill="none" stroke="#979ba3" stroke-width="2"/>
+<circle cx="447" cy="181" r="15" fill="#222426" stroke="#35383e" stroke-width="2"/>
+<text x="447" y="189" text-anchor="middle" font-family="Apple Color Emoji, Noto Color Emoji, sans-serif" font-size="25">🥇</text>
+<!-- Official agents -->
+<rect x="375" y="207" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="215" width="50" height="50" rx="14" fill="#d9845e"/><path d="M406 232h7v13h-7zm17 0h7v13h-7z" fill="#251e1b"/><rect x="433" y="254" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="265" r="8" fill="#eee"/>
+<rect x="375" y="293" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="301" width="50" height="50" rx="14" fill="#fafafa"/><circle cx="420" cy="326" r="16" fill="#7774ec"/><rect x="433" y="340" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="351" r="8" fill="#eee"/>
+<rect x="375" y="379" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="387" width="50" height="50" rx="14" fill="#151a2d"/><path d="M405 412q14-22 29 0-14 19-29 0z" fill="#b4a4ff"/><rect x="433" y="426" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="437" r="8" fill="#eee"/>
+<rect x="375" y="465" width="90" height="77" rx="22" fill="#151617"/><rect x="395" y="473" width="50" height="50" rx="14" fill="#25272a"/><path d="M406 510l14-24 14 24z" fill="#a4a6aa"/><rect x="433" y="512" width="28" height="22" rx="11" fill="#4d7ff3"/><circle cx="450" cy="523" r="8" fill="#eee"/>
+<!-- Unofficial group -->
+<rect x="278" y="591" width="284" height="171" rx="34" fill="#2a2c2f"/>
+<rect x="385" y="602" width="70" height="67" rx="21" fill="#35383e"/>
+<path d="M402 629v-12q0-4 4-4h11l7 7h19q4 0 4 4v21q0 4-4 4h-37q-4 0-4-4z" fill="#626bf2"/>
+<circle cx="447" cy="654" r="15" fill="#222426" stroke="#35383e" stroke-width="2"/>
+<text x="447" y="662" text-anchor="middle" font-family="Apple Color Emoji, Noto Color Emoji, sans-serif" font-size="25">🥉</text>
+<path d="M526 624l5 5 5-5" fill="none" stroke="#979ba3" stroke-width="2"/>
+<rect x="375" y="680" width="90" height="66" rx="20" fill="#151617"/><rect x="395" y="686" width="50" height="50" rx="14" fill="#fafafa"/><path d="M407 727v-27h27v27m-20 0v-18h27v18" fill="none" stroke="#111" stroke-width="3"/>
+<text x="75" y="810" fill="#a4a6aa" font-size="12">🥇 Official · 🥉 Unofficial</text>
+<text x="75" y="832" fill="#a4a6aa" font-size="12">Medal badge is decorative; folder remains the click target.</text>
+</g></svg>

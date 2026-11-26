@@ -163,7 +163,7 @@ Read ~/.config/herdr-app/AGENTS.md, then add this layout: https://github.com/Ton
 
 In short: copy `layouts/`, `mods/`, `programs.json`, `keys.json`, `settings.json` and `themes/` into `~/.config/herdr-app/`, then switch to the `orca` layout.
 
-`mods/orca-assets/` is a static, config-relative resource directory, not an installable mod. Copy it before the dependent mods. Shared SVGs are referenced by their canonical path (no runtime copy, symlink or subprocess); immutable shared UI policy is authored in `orca-ui/shared/ui-settings.js` and delivered as generated mod-local modules because Herdr isolates JavaScript imports. Native `shared()`/`setShared()` remains the channel for mutable cross-mod state. Individual consumer mods now need this directory when installed outside the full config. The initial migration covers the refresh icon and spinner timing; identical-looking icons with different bytes are not interchangeable.
+`mods/orca-assets/` holds the shared SVG and PNG assets used by the mods. It is a static, config-relative resource directory, not an installable mod; copy it before the dependent mods. Each icon and image uses one canonical path, and `resources.json` lists its consumers. Mods cannot import JavaScript from one another, so the small lookup for dynamic icon names stays with each caller; the asset files themselves do not. Shared assets load directly from their canonical path, with no runtime copy, symlink or subprocess. Individual consumer mods need this directory when installed outside the full config. Only byte-identical assets share a file; similar-looking icons with different bytes remain separate.
 
 ## Not included
 

@@ -36,7 +36,7 @@ export default class WorkspaceChrome extends View {
     // `active` inverts the button while its page is open; no hover tint then, or the inverted text would vanish.
     const row = (id, icon, label, action, active = false) => {
       const base = div().id(id).size(18).flex_none().flex().items_center().justify_center().rounded(8).cursor_pointer()
-        .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(`mods/orca-status-footer/${icon}.svg`).size(14));
+        .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(sharedAsset(`mods/orca-status-footer/${icon}.svg`)).size(14));
       return active ? base.bg(t.foreground).text_color(t.background) : base.text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground));
     };
     const onAgents = find(layout(), "main")?.active === "main-agents";
@@ -46,7 +46,6 @@ export default class WorkspaceChrome extends View {
         // The Agent Settings is part of this layout's navigation: Settings is Herdr's native pane,
         // while the Agents page lives in the `main` stack (`main-agents`).
         .child(row("agents", "bot", "Agents", () => run("orca-header.agent-settings"), onAgents))
-        .child(row("providers", "hard-drive", "Model providers", () => run("layout.select", { stack: "main", child: "main-providers" })))
         // Schedules: the reset ping and anything else the person adds (orca-tasks).
         .child(row("tasks", "clock", "Tasks", () => run("layout.select", { stack: "main", child: "main-tasks" })))
         .child(row("settings", "settings", "Settings", () => run("app.settings")))
@@ -63,4 +62,11 @@ export default class WorkspaceChrome extends View {
   render() {
     return this.footer(theme());
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

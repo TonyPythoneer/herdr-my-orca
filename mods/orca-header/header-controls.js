@@ -19,7 +19,7 @@ export function addSidebarToggle(row, view, { t, sidebar, w, leftPad }) {
     .on_mouse_down("left", stop).on_click(action).child(glyph);
   return row
     // Same x (75, or 8 in full screen) in every state so the button does not jump on collapse.
-    .child(sidebarToggle(svg(`mods/orca-header/panel-left-${sidebar?.hidden ? "open" : "close"}.svg`).size(16), (_e, ecx) => {
+    .child(sidebarToggle(svg(sharedAsset(`mods/orca-header/panel-left-${sidebar?.hidden ? "open" : "close"}.svg`)).size(16), (_e, ecx) => {
       // Same route as the `toggle-sidebar` command: the render consumes the flag with a live render
       // context. The `cx` captured by this render is dead once the click arrives.
       view.wantToggle = (view.wantToggle ?? 0) + 1;
@@ -36,14 +36,14 @@ export function addSidebarToggle(row, view, { t, sidebar, w, leftPad }) {
 
 export function addTabTrack(row, view, frame) {
   const { t, geometry, shown } = frame;
-  // Orca's chevrons (`tab-bar-surface.tsx:124-146`, `:189-211`): a ghost `icon-xs` button, so
-  // `mx-0.5 my-auto h-6 w-5` (2px sides, 24x20) around a 14px `ChevronLeft/Right`, shown only
-  // while the track overflows and disabled only at that end of it. They live outside the
-  // viewport, so the active tab is never behind them (§5).
+  // Orca's chevrons (`tab-bar-surface.tsx:124-146`, `:189-211`): a ghost 20x24 button around a
+  // 14px `ChevronLeft/Right`, shown only while the track overflows and disabled only at that end.
+  // The 14px gutter beside each arrow lets an active edge fillet clear the clipped viewport.
   const tabScrollButton = (direction, disabled) => {
     const label = direction === "start" ? "Scroll tabs left" : "Scroll tabs right";
-    const glyph = `mods/orca-header/chevron-${direction === "start" ? "left" : "right"}.svg`;
-    return div().id(`tab-scroll-${direction}`).mx(2).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+    const glyph = sharedAsset(`mods/orca-header/chevron-${direction === "start" ? "left" : "right"}.svg`);
+    return div().id(`tab-scroll-${direction}`).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+      .when(direction === "start", el => el.ml(2).mr(16)).when(direction === "end", el => el.ml(16).mr(2))
       .text_color(disabled ? t.dim : t.muted)
       .when(!disabled, el => el.hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground)).on_mouse_down("left", stop))
       .role("button").accessibility_label(label).tooltip(label)
@@ -51,6 +51,11 @@ export function addTabTrack(row, view, frame) {
       .child(svg(glyph).size(14).flex_none());
   };
   const item = (tab, index, mode) => renderTabItem(view, frame, tab, index, mode);
+  const edgeFillet = (side, tab) => div().id(`tab-active-${side}-${tab.id}`).w(14).h_full().flex_none().relative()
+    .when(side === "left", el => el.ml(-14)).when(side === "right", el => el.mr(-14))
+    .child(div().absolute().bottom(0).size(14).overflow_hidden()
+      .child(div().absolute().top(-28).when(side === "left", el => el.left(-28)).when(side === "right", el => el.left(-14))
+        .size(56).rounded_full().border(14).border_color(t.background)));
   return row
     // Orca hides the strip's native scrollbar (`tab-bar-surface.tsx:164-175`) and paints only
     // its 3px hover thumb (`TabStripScrollIndicator.tsx:196-215`), which Herdr has no
@@ -66,6 +71,7 @@ export function addTabTrack(row, view, frame) {
     // the clamped left — which is what keeps `contentWidth` and the scroll limits independent of
     // the dock (§4). The arrows sit outside this box, so the pinned tab can never slide under them.
     .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("start", geometry.arrows.leftDisabled).id("tab-scroll-start").relative()))
+    .when(geometry.arrows.hasOverflow && geometry.activeTab && geometry.slot.visualLeft <= 1, el => el.child(edgeFillet("left", geometry.activeTab)))
     .child(div().id("tab-viewport").relative().flex_shrink(1).min_w(0).h_full().overflow_hidden()
       .on_size_change((size, cx) => {
         if (Math.abs(size.width - view.viewportWidth) < 0.5) return;
@@ -77,6 +83,8 @@ export function addTabTrack(row, view, frame) {
         .when(view.sliding(), el => el.transition("left", { duration: TAB_STRIP_SLIDE_MS, easing: "ease-out" }))
         .children(shown.map((c, i) => item(c, i, { hidden: geometry.docked && i === geometry.activeIndex }))))
       .when(geometry.docked, el => el.child(item(geometry.activeTab, geometry.activeIndex, { overlay: { ...geometry.slot, width: geometry.activeWidth }, sliding: view.sliding() }))))
+    .when(geometry.activeTab && geometry.slot.visualLeft + geometry.activeWidth >= geometry.slot.viewportWidth - 1, el =>
+      el.child(edgeFillet("right", geometry.activeTab)))
     .when(geometry.arrows.hasOverflow, el => el.child(tabScrollButton("end", geometry.arrows.rightDisabled).id("tab-scroll-end").relative()));
 }
 
@@ -90,21 +98,19 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
     .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
     .role("button").accessibility_label("New tab").tooltip("New tab")
     .on_mouse_down("left", (e, cx) => { view.plusBounds = e.bounds; stop(e, cx); }).on_click(action)
-    .child(svg("mods/orca-header/plus.svg").size(14).flex_none());
+    .child(svg("mods/orca-assets/plus--orca-header.svg").size(14).flex_none());
   const winBtn = (id, label, glyph, action, close) => div().id(id).w(46).h_full().flex_none().flex().items_center().justify_center()
     .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : tint(t.foreground, 0.1)).text_color(close ? "#ffffff" : t.foreground))
     .role("button").accessibility_label(label).tooltip(label)
     .on_mouse_down("left", stop).on_click(action).child(glyph);
-  // TitlebarMainStrip.tsx:12-33,76 — `RightSidebarToggle`: `.sidebar-toggle mr-2`
-  // (main.css:1213-1230 = 4px/8px padding around the 16px `PanelRight`, so 32x24, radius 4,
-  // muted, hover --accent + foreground). `orca-header` runs the panel drawer when it is pressed.
-  // The panel's own icon state: this copy only ever draws while the panel is hidden, so it always
-  // offers `PanelRightOpen` (the arrow points back in), and `orca-right-sidebar-header` offers the close one.
+  // Keep the right-sidebar toggle in the tab header in both states, like the left-sidebar toggle.
+  // The glyph names the action: open when hidden, close when visible.
+  const panelHidden = Boolean(find(layout(), "panel")?.hidden);
   const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
     .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-    .role("button").accessibility_label("Expand right sidebar").tooltip("Expand right sidebar")
+    .role("button").accessibility_label(panelHidden ? "Expand right sidebar" : "Collapse right sidebar").tooltip(panelHidden ? "Expand right sidebar" : "Collapse right sidebar")
     .on_mouse_down("left", stop).on_click(action)
-    .child(svg("mods/orca-header/panel-right-open.svg").size(16));
+    .child(svg(panelHidden ? "mods/orca-assets/panel-right-open.svg" : "mods/orca-assets/panel-right-close--orca-right-sidebar-header.svg").size(16));
   return row
     // Orca terminal-tab-strip-drop-target.ts:39-52 — visual drop indicator when a pane is dragged to the tab strip.
     .when(Boolean(paneDrag?.inTabStrip), el =>
@@ -138,17 +144,27 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
         const z = (panes() ?? []).find(p => p.tab === shown[0].id && p.zoomed);
         if (z) run("pane.zoom", { pane: z.pane });
       })
-      .child(svg("mods/orca-header/minimize-2.svg").size(14))))
-    // TitlebarMainStrip.tsx:76 — Orca's `RightSidebarToggle` moves into the panel header
-    // while the panel is open (`right-sidebar/index.tsx:124-144`); `orca-right-sidebar-header` draws it
-    // there, so this copy shows only while the panel is hidden (a hidden node draws nothing).
-    .when(find(layout(), "panel")?.hidden, el => el.child(panelToggle((_e, cx) => { view.wantPanelToggle = (view.wantPanelToggle ?? 0) + 1; cx.notify(); })))
+      .child(svg("mods/orca-assets/minimize-2--orca-header.svg").size(14))))
+    // Keep one right-sidebar toggle in the tab header for both open and closed states.
+    .child(panelToggle((_e, cx) => { view.wantPanelToggle = (view.wantPanelToggle ?? 0) + 1; cx.notify(); }))
     // WindowControls.tsx:27-30,42-49,60-67 — Orca replaces native chrome on Linux and Windows
     // with the same 10x10 SVG paths; only macOS keeps its traffic lights. Herdr reports
     // `buttons: false` here (the compositor owns decorations) but draws none of its own, so
     // the strip is the only place these actions exist — draw them on every non-macOS window.
     .when(w.platform !== "macos", el => el.child(h_flex().h_full().items_center()
-      .child(winBtn("minimize", "Minimize", svg("mods/orca-header/win-min.svg").size(10), () => run("window.minimize"), false))
-      .child(winBtn("maximize", "Maximize", svg(`mods/orca-header/${w.maximized ? "win-restore" : "win-max"}.svg`).size(10), () => run("window.maximize"), false))
-      .child(winBtn("close-window", "Close window", svg("mods/orca-header/win-close.svg").size(10), () => run("window.close"), true))));
+      .child(winBtn("minimize", "Minimize", svg("mods/orca-assets/win-min.svg").size(10), () => run("window.minimize"), false))
+      .child(winBtn("maximize", "Maximize", svg(sharedAsset(`mods/orca-header/${w.maximized ? "win-restore" : "win-max"}.svg`)).size(10), () => run("window.maximize"), false))
+      .child(winBtn("close-window", "Close window", svg("mods/orca-assets/win-close.svg").size(10), () => run("window.close"), true))));
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-header/chevron-left.svg": "mods/orca-assets/chevron-left--orca-header.svg",
+  "mods/orca-header/chevron-right.svg": "mods/orca-assets/chevron-right--orca-header.svg",
+  "mods/orca-header/close.svg": "mods/orca-assets/close--orca-header.svg",
+  "mods/orca-header/git-branch.svg": "mods/orca-assets/git-branch--orca-header.svg",
+  "mods/orca-header/minimize-2.svg": "mods/orca-assets/minimize-2--orca-header.svg",
+  "mods/orca-header/plus.svg": "mods/orca-assets/plus--orca-header.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

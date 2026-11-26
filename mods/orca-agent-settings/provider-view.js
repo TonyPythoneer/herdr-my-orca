@@ -6,7 +6,7 @@ import { appHome, theme } from "herdr";
 import { keyHint, linkInfo, presetFor } from "./codex-provider.js";
 import { backButton, icon } from "./parts.js";
 
-const HARD_DRIVE = "mods/orca-agent-settings/hard-drive.svg";
+const HARD_DRIVE = "mods/orca-assets/hard-drive.svg";
 // An icon is drawn from its path inside this app's folder.
 const iconSrc = (path) => (String(path).startsWith(`${appHome()}/`) ? String(path).slice(appHome().length + 1) : path);
 // A saved provider's picture, or the generic drive when it has none.
@@ -41,55 +41,81 @@ export function providersPageView(owner) {
         .min_h(0)
         .flex_1()
         .overflow_y_scrollbar()
-        .child(v_flex().w_full().max_w(760).mx_auto().px(24).pb(24).child(owner.modelProvidersCard(t))),
+        .child(
+          v_flex()
+            .w_full()
+            .max_w(760)
+            .mx_auto()
+            .px(24)
+            .pb(24)
+            .gap(8)
+            .child(div().text_size(11).line_height("16px").text_color(t.muted).child("Setup checks whether /models returns a model list; it does not confirm the key was accepted or verify that each agent can chat."))
+            .child(owner.modelProvidersCard(t)),
+        ),
     );
 }
 
-/** The providers: a card for each saved one, then a dashed card that starts a new one. */
+/** Provider list, provider detail, or the add form. */
 export function modelProvidersView(owner, t) {
-  const cards = [...owner.cards.values()];
+  if (owner.adding) return addProviderView(owner, t);
+  if (owner.selectedProviderId && owner.providers[owner.selectedProviderId]) {
+    return providerDetailView(owner, owner.selectedProviderId, t);
+  }
   return v_flex()
     .w_full()
-    .gap(10)
-    .when(owner.providersError, (el) => el.child(div().text_size(11).text_color(t.blocked).child(owner.providersError)))
-    .when(cards.length === 0 && !owner.adding, (el) =>
-      el.child(
-        div()
-          .text_size(12)
-          .line_height("18px")
-          .text_color(t.muted)
-          .child("Codex can start against a model server you run, such as oMLX. A provider is saved only after its test passes; the key is kept in this app's folder, readable by your user."),
-      ),
-    )
-    .children(cards.map((card) => owner.providerCard(card, t)))
-    .when(owner.adding, (el) => el.child(owner.providerCard(owner.adding, t)))
-    .when(!owner.adding, (el) => el.child(addProviderButton(owner, t)));
-}
-
-function addProviderButton(owner, t) {
-  return Button.new("am-provider-add")
-    .disabled(false)
     .w_full()
-    .h(44)
-    .gap(8)
+    .max_w(520)
     .items_center()
     .justify_center()
-    .rounded(10)
+    .min_h(240)
+    .rounded(12)
     .border_1()
-    .border_dashed()
     .border_color(t.border)
-    .text_size(12)
-    .text_color(t.muted)
-    .cursor_pointer()
-    .hover((s) => s.border_color(t.accent).text_color(t.accent))
-    .role("button")
-    .accessibility_label("Add provider")
-    .on_click((_event, cx) => {
-      owner.adding = owner.makeCard(null, null);
-      owner.adding.open = true;
-      cx.notify();
-    })
-    .child("＋ Add provider");
+    .bg(t.surface)
+    .child(div().text_size(13).text_color(t.muted).child(owner.providersError ?? "Choose a provider from the left rail, or add one with +."));
+}
+
+function addProviderView(owner, t) {
+  return v_flex().w_full().gap(10)
+    .child(div().text_size(17).font_semibold().text_color(t.foreground).child("Add model provider"))
+    .child(div().text_size(11).text_color(t.dim).child("A provider is added after its /models endpoint returns a model list."))
+    .child(owner.providerCard(owner.adding, t));
+}
+
+function providerDetailView(owner, id, t) {
+  const record = owner.providers[id];
+  const card = owner.cards.get(id);
+  const health = owner.providerHealthState(id);
+  const healthTone = { healthy: t.done, checking: t.accent, unhealthy: t.blocked, unknown: t.dim }[health.state] ?? t.dim;
+  const healthLabel = { healthy: "Healthy", checking: "Checking…", unhealthy: "Unhealthy", unknown: "Not checked" }[health.state] ?? "Not checked";
+  const models = health.models?.length ? health.models : (record.models ?? []);
+  return v_flex().w_full().gap(12)
+    .child(
+      h_flex().w_full().gap(12).items_center().p(12).rounded(10).border_1().border_color(t.border).bg(t.raised)
+        .child(icon(providerIcon(record.iconPath), 40, t))
+        .child(v_flex().flex_1().min_w(0).gap(3)
+          .child(div().min_w(0).truncate().text_size(16).font_semibold().text_color(t.foreground).child(record.name || "Provider"))
+          .child(div().min_w(0).truncate().text_size(11).text_color(t.muted).child(record.host ?? "")))
+        .child(div().size(9).flex_none().rounded_full().bg(healthTone).tooltip(healthLabel))
+        .child(div().flex_none().text_size(11).text_color(healthTone).child(healthLabel)),
+    )
+    .child(
+      h_flex().w_full().gap(8).items_center()
+        .child(owner.button(`am-provider-check-${id}`, "Check health", t, (_event, cx) => owner.refreshProviderHealth(id, cx), { height: 26, px: 10, color: t.muted, disabled: health.state === "checking" }))
+        .child(owner.button(`am-provider-edit-${id}`, card?.open ? "Done editing" : "Edit provider", t, (_event, cx) => {
+          if (card) card.open = !card.open;
+          cx.notify();
+        }, { height: 26, px: 10, color: t.accent })),
+    )
+    .when(health.error, (el) => el.child(div().text_size(11).text_color(t.blocked).child(health.error)))
+    .when(card?.open, (el) => el.child(owner.providerCard(card, t)))
+    .child(v_flex().w_full().gap(6)
+      .child(h_flex().w_full().items_center().gap(8)
+        .child(div().text_size(13).font_semibold().text_color(t.foreground).child("Models"))
+        .child(div().text_size(11).text_color(t.muted).child(`${models.length}`)))
+      .when(models.length === 0, (el) => el.child(div().text_size(11).text_color(t.dim).child("No model list available.")))
+      .children(models.map((model, index) => div().id(`am-provider-model-${id}-${index}`).w_full().px(10).py(7).rounded(6).bg(t.raised)
+        .text_size(12).text_color(t.foreground).child(String(model)))));
 }
 
 // One saved provider, or the one being added (`card.id` is null): a header that opens an editor.
@@ -197,7 +223,7 @@ function revealButton(card, t) {
       card.key.set_masked(!card.reveal);
       cx.notify();
     })
-    .child(svg(card.reveal ? "mods/orca-agent-settings/eye-off.svg" : "mods/orca-agent-settings/eye.svg").size(14).text_color(t.muted));
+    .child(svg(card.reveal ? "mods/orca-assets/eye-off.svg" : "mods/orca-assets/eye--orca-agent-flyout.svg").size(14).text_color(t.muted));
 }
 
 // "Looks like <preset>" when the host is a known server and the name or link is still empty.

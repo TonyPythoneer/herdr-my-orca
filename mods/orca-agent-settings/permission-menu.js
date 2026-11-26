@@ -13,7 +13,7 @@ const ICONS = {
 };
 
 const permissionIcon = (choice, color, size = 14) =>
-  svg(`mods/orca-agent-settings/${ICONS[choice] ?? ICONS.own}.svg`).size(size).flex_none().text_color(color);
+  svg(sharedAsset(`mods/orca-agent-settings/${ICONS[choice] ?? ICONS.own}.svg`)).size(size).flex_none().text_color(color);
 
 const AGENT_OWN = "Terminals and chats follow the agent's own permission settings.";
 
@@ -95,7 +95,7 @@ export function permissionSelect(spec, t) {
       el.child(div().text_size(12).font_medium().text_color(t.muted).child(`${spec.prefix} ·`)),
     )
     .child(div().text_size(12).font_medium().text_color(tone).child(spec.label))
-    .child(svg("mods/orca-agent-settings/chevron-down.svg").size(12).flex_none().text_color(t.muted));
+    .child(svg("mods/orca-assets/chevron-down--orca-agent-settings.svg").size(12).flex_none().text_color(t.muted));
   return Popover.new(`am-perm-pop-${spec.id}`)
     .open(spec.open)
     .anchor("top_right")
@@ -242,4 +242,15 @@ export function permissionRow(owner, row, t) {
         )
         .child(div().flex_1().min_w(140).text_size(11).text_color(t.muted).child(note)),
     );
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-agent-settings/chevron-down.svg": "mods/orca-assets/chevron-down--orca-agent-settings.svg",
+  "mods/orca-agent-settings/chevron-left.svg": "mods/orca-assets/chevron-left--orca-agent-settings.svg",
+  "mods/orca-agent-settings/chevron-right.svg": "mods/orca-assets/chevron-right--orca-agent-settings.svg",
+  "mods/orca-agent-settings/eye.svg": "mods/orca-assets/eye--orca-agent-flyout.svg",
+  "mods/orca-agent-settings/square-terminal.svg": "mods/orca-assets/square-terminal--orca-agent-settings.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

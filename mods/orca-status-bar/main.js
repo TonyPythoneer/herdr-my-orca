@@ -127,7 +127,7 @@ function segment(t, id, iconName, label, opts = {}) {
     .text_color(opts.muted ? t.muted : t.foreground)
     .when(Boolean(opts.on), el => el.role("button").accessibility_label(label).tooltip(label)
       .cursor_pointer().hover(s => s.bg("#404040b3").text_color(t.foreground)).on_click(opts.on))
-    .child(svg(iconName === "refresh-cw" ? "mods/orca-assets/refresh-cw.svg" : `mods/orca-status-bar/${iconName}.svg`).size(10).flex_none()
+    .child(svg(iconName === "refresh-cw" ? "mods/orca-assets/refresh-cw.svg" : sharedAsset(`mods/orca-status-bar/${iconName}.svg`)).size(10).flex_none()
       .text_color(opts.iconColor ?? t.muted)
       .when(Boolean(opts.spin), el => el.spin(SPIN_PERIOD_MS)))
     .child(label);
@@ -153,7 +153,7 @@ function floatToggle(t) {
     .accessibility_label(floatAttention ? `${floatLabel}, new activity` : floatLabel)
     .tooltip(floatChord ? `${floatLabel} (${floatChord})` : floatLabel)
     .on_click(() => run("orca-float-workspace.toggle"))
-    .child(svg("mods/orca-status-bar/panels-top-left.svg").size(14).flex_none())
+    .child(svg("mods/orca-assets/panels-top-left.svg").size(14).flex_none())
     .when(floatAttention, el => el.child(div().absolute().top(2).right(2).size(5).rounded_full().flex_none()
       .bg("#f59e0b").border_1().border_color(t.raised)));
 }
@@ -163,8 +163,8 @@ function floatToggle(t) {
 // tightest window stands for the whole provider (getTightestUsageSection, UsageRosterPanel.tsx).
 function mark(t, provider, size) {
   const m = MARKS[provider];
-  if (m?.image) return image(`mods/orca-status-bar/${m.path}`).w(size).h(size).flex_none().rounded(2);
-  if (m) return svg(`mods/orca-status-bar/${m.path}`).size(size).flex_none();
+  if (m?.image) return image(sharedAsset(`mods/orca-status-bar/${m.path}`)).w(size).h(size).flex_none().rounded(2);
+  if (m) return svg(sharedAsset(`mods/orca-status-bar/${m.path}`)).size(size).flex_none();
   return div().size(size).flex_none().flex().items_center().justify_center()
     .text_size(9).text_color(t.muted).child(letterFor(provider));
 }
@@ -204,7 +204,7 @@ function chip(t, reading) {
   // (StatusBarProviderSegment.tsx:297-305; the copy is usage-error-copy.ts:131).
   return h_flex().gap(3).items_center().text_color(t.muted)
     .child(mark(t, reading.provider, 11))
-    .child(svg("mods/orca-status-bar/triangle-alert.svg").size(9).flex_none().text_color(t.muted))
+    .child(svg("mods/orca-assets/triangle-alert.svg").size(9).flex_none().text_color(t.muted))
     .child(div().text_size(11).child(reading.label));
 }
 
@@ -447,4 +447,11 @@ export default class OrcaStatus extends View {
       .when(hostsKnown, el => el.child(segment(t, "st-hosts", "server", `${connected} host${connected === 1 ? "" : "s"}`, { muted: true, on: openSettings("machines") })))
       .child(floatToggle(t));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-status-bar/codex.svg": "mods/orca-assets/codex--orca-status-bar.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

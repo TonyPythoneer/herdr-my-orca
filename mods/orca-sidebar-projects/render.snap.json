@@ -1433,7 +1433,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/agent-working-spinner.svg"
+                       "mods/orca-assets/agent-working-spinner.svg"
                       ],
                       "c": [
                        [
@@ -1952,7 +1952,7 @@
                                   {
                                    "n": "svg",
                                    "a": [
-                                    "mods/orca-sidebar-projects/agent-working-spinner.svg"
+                                    "mods/orca-assets/agent-working-spinner.svg"
                                    ],
                                    "c": [
                                     [
@@ -2109,7 +2109,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/chevron-right.svg"
+                       "mods/orca-assets/chevron-right--orca-files.svg"
                       ],
                       "c": [
                        [
@@ -3327,7 +3327,7 @@
                              {
                               "n": "svg",
                               "a": [
-                               "mods/orca-sidebar-projects/git-pull-request.svg"
+                               "mods/orca-assets/git-pull-request.svg"
                               ],
                               "c": [
                                [
@@ -3661,7 +3661,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-sidebar-projects/bell-filled.svg"
+                   "mods/orca-assets/bell-filled.svg"
                   ],
                   "c": [
                    [
@@ -4182,7 +4182,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-sidebar-projects/bell.svg"
+                   "mods/orca-assets/bell--orca-context-menu.svg"
                   ],
                   "c": [
                    [
@@ -4691,7 +4691,7 @@
                                   {
                                    "n": "svg",
                                    "a": [
-                                    "mods/orca-sidebar-projects/agent-working-spinner.svg"
+                                    "mods/orca-assets/agent-working-spinner.svg"
                                    ],
                                    "c": [
                                     [
@@ -4848,7 +4848,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/chevron-right.svg"
+                       "mods/orca-assets/chevron-right--orca-files.svg"
                       ],
                       "c": [
                        [
@@ -5755,7 +5755,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/message-circle-question.svg"
+                       "mods/orca-assets/message-circle-question.svg"
                       ],
                       "c": [
                        [
@@ -7380,7 +7380,7 @@
                                   {
                                    "n": "svg",
                                    "a": [
-                                    "mods/orca-sidebar-projects/agent-working-spinner.svg"
+                                    "mods/orca-assets/agent-working-spinner.svg"
                                    ],
                                    "c": [
                                     [
@@ -7570,7 +7570,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/chevron-right.svg"
+                       "mods/orca-assets/chevron-right--orca-files.svg"
                       ],
                       "c": [
                        [
@@ -8424,7 +8424,7 @@
                                   {
                                    "n": "svg",
                                    "a": [
-                                    "mods/orca-sidebar-projects/message-circle-question.svg"
+                                    "mods/orca-assets/message-circle-question.svg"
                                    ],
                                    "c": [
                                     [
@@ -8639,7 +8639,7 @@
                                   {
                                    "n": "svg",
                                    "a": [
-                                    "mods/orca-sidebar-projects/agent-working-spinner.svg"
+                                    "mods/orca-assets/agent-working-spinner.svg"
                                    ],
                                    "c": [
                                     [
@@ -8893,7 +8893,7 @@
                                   {
                                    "n": "svg",
                                    "a": [
-                                    "mods/orca-sidebar-projects/circle-check.svg"
+                                    "mods/orca-assets/circle-check.svg"
                                    ],
                                    "c": [
                                     [
@@ -9077,7 +9077,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/chevron-right.svg"
+                       "mods/orca-assets/chevron-right--orca-files.svg"
                       ],
                       "c": [
                        [
@@ -9883,7 +9883,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-files.svg"
                       ],
                       "c": [
                        [
@@ -10057,7 +10057,7 @@
                               {
                                "n": "svg",
                                "a": [
-                                "mods/orca-sidebar-projects/agent-working-spinner.svg"
+                                "mods/orca-assets/agent-working-spinner.svg"
                                ],
                                "c": [
                                 [
@@ -10276,7 +10276,7 @@
                               {
                                "n": "svg",
                                "a": [
-                                "mods/orca-sidebar-projects/circle-check.svg"
+                                "mods/orca-assets/circle-check.svg"
                                ],
                                "c": [
                                 [
@@ -11124,7 +11124,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-sidebar-projects/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-files.svg"
                       ],
                       "c": [
                        [
@@ -11298,7 +11298,7 @@
                               {
                                "n": "svg",
                                "a": [
-                                "mods/orca-sidebar-projects/agent-working-spinner.svg"
+                                "mods/orca-assets/agent-working-spinner.svg"
                                ],
                                "c": [
                                 [

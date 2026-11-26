@@ -147,7 +147,7 @@ function searchButton() {
     .role("button").accessibility_label("Search worktrees")
     .hover(s => s.bg("#f0f0f014"))
     .on_click(() => run("mod.open", { name: "picker" }))
-    .child(svg("mods/orca-sidebar-top/search.svg").size(16).flex_none().text_color("#f0f0f04d"))
+    .child(svg("mods/orca-assets/search--orca-right-sidebar-agents.svg").size(16).flex_none().text_color("#f0f0f04d"))
     .child(div().flex_1().child("Search"));
 }
 
@@ -158,7 +158,7 @@ function collapseAllButton(t, allCollapsed) {
     .on_click(() => run(allCollapsed ? "orca-sidebar-projects.expand-all" : "orca-sidebar-projects.collapse-all"))
     // ProjectsCollapseAllButton.tsx:51 renders a bare `<Icon />`, so the icon-xs
     // `[&_svg:not([class*='size-'])]:size-3` rule (button.tsx:59) applies: 12px.
-    .child(svg(allCollapsed ? "mods/orca-sidebar-top/chevrons-up-down.svg" : "mods/orca-sidebar-top/chevrons-down-up.svg").size(12));
+    .child(svg(allCollapsed ? "mods/orca-assets/chevrons-up-down.svg" : "mods/orca-assets/chevrons-down-up.svg").size(12));
 }
 
 // SidebarWorkspaceOptionsMenu.tsx:43-68 — a ghost icon-xs button (24x24) holding
@@ -177,7 +177,7 @@ function optionsButton(t) {
     .role("button").tooltip(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"})` : "Workspace options")
     .accessibility_label(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"} active)` : "Workspace options")
     .on_click(() => openOverlay({ mod: "orca-sidebar-top", kind: "popup", width: 288, height: 560, props: { navMenu: "workspace-options" } }))
-    .child(svg("mods/orca-sidebar-top/sliders-horizontal.svg").size(14).flex_none())
+    .child(svg("mods/orca-assets/sliders-horizontal.svg").size(14).flex_none())
     .when(filters > 0, el => el.child(div().absolute().top(-2).right(-2).h(12).min_w(12).px(2).rounded_full().bg(t.accent).flex().items_center().justify_center()
       .text_size(9).line_height("9px").text_color(t.accent_foreground).child(filters > 9 ? "9+" : String(filters))));
 }
@@ -204,7 +204,7 @@ function addProjectButton(t) {
     // herdr.d.ts:39 — the folder picker is async: `Promise<string | null>`.
     // Taking the promise as a value stored "[object Promise]" as the folder.
     .on_click(() => { void pickFolder().then(addProject); })
-    .child(svg("mods/orca-sidebar-top/folder-plus.svg").size(14));
+    .child(svg("mods/orca-assets/folder-plus--orca-sidebar-top.svg").size(14));
 }
 
 // NewWorkspaceButton (:60-64) — Plus `size-3.5`, same 2.25 stroke. Orca's header
@@ -215,7 +215,7 @@ function newWorkspaceButton(t) {
     .role("button").accessibility_label("New workspace")
     // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
     .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }))
-    .child(svg("mods/orca-sidebar-top/plus.svg").size(14));
+    .child(svg("mods/orca-assets/plus--orca-sidebar-top.svg").size(14));
 }
 
 // Activating one of these rows writes one option patch and redraws. A `null` patch is the one
@@ -477,4 +477,15 @@ export default class Nav extends View {
         .on_click((_e, clickCx) => { writeOptions({ groupBy: value }); clickCx.notify(); })
         .child(label)));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-sidebar-top/bell.svg": "mods/orca-assets/bell--orca-sidebar-top.svg",
+  "mods/orca-sidebar-top/folder-plus.svg": "mods/orca-assets/folder-plus--orca-sidebar-top.svg",
+  "mods/orca-sidebar-top/list-checks.svg": "mods/orca-assets/list-checks--orca-sidebar-top.svg",
+  "mods/orca-sidebar-top/plus.svg": "mods/orca-assets/plus--orca-sidebar-top.svg",
+  "mods/orca-sidebar-top/search.svg": "mods/orca-assets/search--orca-right-sidebar-agents.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? sharedAsset(`mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`);
 }

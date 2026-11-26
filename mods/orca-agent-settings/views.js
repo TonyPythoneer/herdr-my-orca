@@ -137,7 +137,7 @@ function editToggle(owner, row, t, open) {
       cx.stop_propagation();
       owner.toggleExpand(row, cx);
     })
-    .child(svg(`mods/orca-agent-settings/${open ? "chevron-down" : "chevron-right"}.svg`).size(14));
+    .child(svg(sharedAsset(`mods/orca-agent-settings/${open ? "chevron-down" : "chevron-right"}.svg`)).size(14));
 }
 
 function rowActions(owner, row, t, open) {
@@ -437,4 +437,15 @@ function progressRow(request, t) {
     .items_center()
     .child(div().text_size(11).text_color(t.accent).frames(["◐", "◓", "◑", "◒"], 120))
     .child(note(t.muted, request.phase === "checking" ? "Checking the installation method…" : "Uninstalling…"));
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-agent-settings/chevron-down.svg": "mods/orca-assets/chevron-down--orca-agent-settings.svg",
+  "mods/orca-agent-settings/chevron-left.svg": "mods/orca-assets/chevron-left--orca-agent-settings.svg",
+  "mods/orca-agent-settings/chevron-right.svg": "mods/orca-assets/chevron-right--orca-agent-settings.svg",
+  "mods/orca-agent-settings/eye.svg": "mods/orca-assets/eye--orca-agent-flyout.svg",
+  "mods/orca-agent-settings/square-terminal.svg": "mods/orca-assets/square-terminal--orca-agent-settings.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

@@ -116,5 +116,5 @@ export function repoMark(size, avatarUrl) {
   return h_flex().size(size).flex_none().items_center().justify_center().rounded(4).overflow_hidden()
     .child(file
       ? image(file).size(size)
-      : svg("mods/orca-sidebar-projects/folder.svg").size(14).text_color(REPO_BADGE_COLOR));
+      : svg("mods/orca-assets/folder--orca-sidebar-projects.svg").size(14).text_color(REPO_BADGE_COLOR));
 }

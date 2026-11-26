@@ -14,7 +14,7 @@ test("global and every agent indicator are centered on the rounded-square avatar
   assert.equal(railGeometry().indicatorHeight, RAIL.idleHeight);
   assert.equal(railGeometry(true).indicatorTop, 10);
   assert.equal(RAIL.avatarRadius, 13);
-  assert.equal(RAIL.groupLeft - RAIL.indicatorWidth, 8);
+  assert.equal(RAIL.groupLeft + RAIL.groupWidth / 2, RAIL.width / 2);
 });
 test("each group caps independently at five and a half rows", () => {
   for (const count of [0,1,5,6,22]) assert.deepEqual(railViewport(count), {

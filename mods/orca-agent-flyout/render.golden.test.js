@@ -61,7 +61,7 @@ test("each flyout renders as recorded", () => {
           const call = node[i];
           const child = Array.isArray(call) && call[0] === "child" ? call[1]?.[0] : null;
           const bot = child?.c?.some(method => method[0] === "id" && method[1]?.[0] === "agent-full-settings");
-          if (bot) { assert.ok(JSON.stringify(child).includes("mods/orca-new-menu/bot.svg")); botCount++; node.splice(i, 1); }
+          if (bot) { assert.ok(JSON.stringify(child).includes("mods/orca-assets/bot.svg")); botCount++; node.splice(i, 1); }
           else stripRobot(call);
         }
       } else if (node && typeof node === "object") Object.values(node).forEach(stripRobot);

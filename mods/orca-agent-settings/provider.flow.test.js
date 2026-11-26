@@ -1,6 +1,5 @@
-// Flow test: runs the real model-provider handlers of main.js with answer-controlled curl, chmod,
-// stat and sips (scripts/gpui-stub-loader.mjs), so the save order, the file mode, the icon work and
-// the delete are checked without the app or a live model server.
+// Flow test: runs the real model-provider handlers of main.js with answer-controlled curl, mktemp,
+// chmod, stat and sips (scripts/gpui-stub-loader.mjs), without the app or a live model server.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -11,7 +10,7 @@ const { default: AgentManager } = await import("./main.js");
 const PROVIDERS = "/home/model-providers.json";
 const ICON_DIR = "/home/provider-icons/";
 const KEY = "test-key-ab12";
-const MODELS = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM2-VL-450M-4bit" }, { id: "b" }] });
+const MODELS = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM2-VL-450M-4bit", context_window: 65536, max_completion_tokens: 8192 }, { id: "b" }] });
 const PNG = "89504e470d0a1a0a";
 const OMLX_LINK = "https://github.com/jundot/omlx";
 
@@ -20,8 +19,7 @@ const field = (value) => {
   return state;
 };
 
-// The programs this page runs: the /models curl, the icon curl, chmod, stat, xxd, sips and the file
-// moves. `answers` decides what the server and the icon host say.
+// `answers` controls the /models and icon responses; file and process APIs use an in-memory harness.
 function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, magic = PNG, mode = "600" } = {}) {
   const files = new Map();
   if (file !== null) files.set(PROVIDERS, file);
@@ -29,6 +27,7 @@ function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, m
   const calls = [];
   globalThis.__herdrExec = async (command, args) => {
     calls.push([command, ...args]);
+    if (command === "mktemp") return { code: 0, stdout: `${args.at(-1).replace(/XXXXXX$/, "fixture")}\n`, stderr: "" };
     if (command === "curl" && args.includes("-o")) {
       if (iconStatus === 200) files.set(args[args.indexOf("-o") + 1], "image");
       return { code: 0, stdout: `\n${iconStatus}`, stderr: "" };
@@ -44,7 +43,12 @@ function harness({ file = null, status = 200, body = MODELS, iconStatus = 200, m
       files.set(args.at(-1), files.get(args.at(-2)));
       files.delete(args.at(-2));
     }
-    if (command === "rm") for (const path of args.slice(1)) files.delete(path);
+    if (command === "rm") {
+      for (const path of args.slice(1).filter((part) => !part.startsWith("-"))) {
+        files.delete(path);
+        for (const saved of files.keys()) if (saved.startsWith(`${path}/`)) files.delete(saved);
+      }
+    }
     return { code: 0, stdout: "", stderr: "" };
   };
   const cx = { notify() {} };
@@ -105,6 +109,11 @@ test("a passing test writes the record, fixes the mode and saves the icon under 
   assert.equal(record.apiKey, KEY);
   assert.equal(record.link, OMLX_LINK);
   assert.deepEqual(record.models, ["mlx-community--LFM2-VL-450M-4bit", "b"]);
+  assert.deepEqual(record.modelInfo, { "mlx-community--LFM2-VL-450M-4bit": { contextWindow: 65536, maxTokens: 8192 } });
+  const testRequest = calls.find((call) => call[0] === "curl" && call.includes("-H"));
+  assert.ok(testRequest);
+  assert.equal(testRequest[1], "-q");
+  assert.equal(testRequest.some((arg) => arg.includes(KEY)), false, "the API key is not a process argument");
   assert.match(record.iconPath, /^\/home\/provider-icons\/icon-[a-z0-9]+\.png$/);
   assert.ok(files.has(record.iconPath));
   assert.equal(card.status.tone, "done");
@@ -122,7 +131,8 @@ test("a failed test writes nothing", async () => {
     assert.equal(files.get(PROVIDERS), "{}\n", `status ${status} must not write`);
     assert.equal(card.status.tone, "blocked");
     assert.ok(["Key rejected", "No /models at this host", "Cannot connect"].includes(card.status.text));
-    assert.equal(calls.some((call) => call[0] === "chmod"), false);
+    assert.ok(calls.some((call) => call[0] === "chmod" && call[2]?.endsWith("/headers")), "the temporary curl headers are private");
+    assert.equal(calls.some((call) => call[0] === "chmod" && call[2] === PROVIDERS), false, "a failed test never writes the provider file");
     assert.equal(calls.some((call) => call[0] === "xxd"), false, "no icon is fetched for a server that failed");
   }
 });

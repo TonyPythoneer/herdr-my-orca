@@ -243,12 +243,12 @@ export function writeRunOverride(text, key, run) {
 }
 
 /**
- * `agent-manager.json`: the agents the person turned off, and the permission choices. A missing
- * `permissions` block means every agent uses its own settings.
+ * `agent-manager.json`: agent availability, permissions and the environment marker for dropdown launches.
+ * Missing permissions and `herdrEnv` keep their backward-compatible defaults.
  */
 export function parseManagerConfig(text) {
   if (text == null || String(text).trim() === "") {
-    return { disabled: new Set(), permissions: { default: "own", overrides: {} } };
+    return { disabled: new Set(), permissions: { default: "own", overrides: {} }, herdrEnv: true };
   }
   let root;
   try {
@@ -261,12 +261,15 @@ export function parseManagerConfig(text) {
   }
   const permissions = normalizePermissions(root.permissions);
   if (permissions.error) return { error: permissions.error };
+  if (root.herdrEnv !== undefined && typeof root.herdrEnv !== "boolean") {
+    return { error: "agent-manager.json's `herdrEnv` must be a boolean." };
+  }
   if (root.disabled !== undefined) {
     if (!Array.isArray(root.disabled) || root.disabled.some((key) => typeof key !== "string")) {
       return { error: "agent-manager.json's `disabled` must be an array of agent keys." };
     }
   }
-  return { disabled: new Set(root.disabled ?? []), permissions };
+  return { disabled: new Set(root.disabled ?? []), permissions, herdrEnv: root.herdrEnv !== false };
 }
 
 // Plain code-unit order, so the file reads the same on every machine.
@@ -275,9 +278,10 @@ function compareKeys(left, right) {
   return left > right ? 1 : 0;
 }
 
-export function serializeManagerConfig(disabled, permissions = { default: "own", overrides: {} }) {
+export function serializeManagerConfig(disabled, permissions = { default: "own", overrides: {} }, herdrEnv = true) {
   const keys = [...disabled].filter((key) => typeof key === "string").sort();
   const root = { version: 1, disabled: keys };
+  if (!herdrEnv) root.herdrEnv = false;
   const overrides = Object.fromEntries(
     Object.entries(permissions.overrides ?? {})
       .filter(([, choice]) => typeof choice === "string")

@@ -479,7 +479,7 @@ export default class Changes extends View {
       .when(enabled, (s) => s.cursor_pointer().hover((x) => x.bg(t.chrome))
         .on_click((_e, eventCx) => { eventCx.stop_propagation(); onClick(); }))
       .when(!enabled, (s) => s.opacity(0.5))
-      .child(svg(`mods/orca-changes/${icon}`).size(14).text_color(t.muted));
+      .child(svg(sharedAsset(`mods/orca-changes/${icon}`)).size(14).text_color(t.muted));
   }
 
   // Per-file commands match Orca: stage `git add --` (src/main/git/source-control/staging.ts:23-31), unstage
@@ -525,7 +525,7 @@ export default class Changes extends View {
           props: { tab: "entry-menu", entry: f, target: this.operationTarget() }
         });
       })
-      .child(svg("mods/orca-changes/file.svg").size(14).flex_none().text_color(gitTone(f.status, t)))
+      .child(svg("mods/orca-assets/file.svg").size(14).flex_none().text_color(gitTone(f.status, t)))
       .child(h_flex().flex_1().min_w(0).items_center()
         .child(div().flex_none().max_w(260).truncate().text_color(t.foreground).child(name))
         .when(parts.length > 0, (e) => e.child(div().ml(6).flex_1().min_w(0).truncate().text_size(11).text_color(t.muted).child(parts.join("/")))))
@@ -679,7 +679,7 @@ export default class Changes extends View {
         h_flex().rounded(6).pr(4).gap(4).items_center()
           .child(div().id(`section-${sectionKey}`).flex_1().min_w(0).flex().items_center().gap(4).cursor_pointer()
             .on_click((_e, eventCx) => { this.collapsed[sectionKey] = !collapsed; eventCx.notify(); })
-            .child(svg(`mods/orca-changes/${collapsed ? "chevron-right.svg" : "chevron-down.svg"}`).size(14).flex_none().text_color(t.muted))
+            .child(svg(sharedAsset(`mods/orca-changes/${collapsed ? "chevron-right.svg" : "chevron-down.svg"}`)).size(14).flex_none().text_color(t.muted))
             .child(div().truncate().text_size(12).font_weight(600).text_color(t.muted).child(label.toUpperCase()))
             .child(div().flex_none().text_size(11).text_color(t.muted).child(String(items.length))))
           .child(h_flex().flex_none().items_center().gap(6).children(bulk)
@@ -720,7 +720,7 @@ export default class Changes extends View {
               this.menuOpen = !this.menuOpen;
               eventCx.notify();
             })
-            .child(svg("mods/orca-changes/chevron-down.svg").size(12).text_color(t.muted))))
+            .child(svg("mods/orca-assets/chevron-down--orca-agent-settings.svg").size(12).text_color(t.muted))))
         .when(Boolean(action.reason), (e) => e.child(div().text_size(11).text_color(t.dim).child(action.reason))))
       .when(this.menuOpen, (e) => e.child(this.actionMenu(t, action, cx)));
   }
@@ -749,8 +749,8 @@ export default class Changes extends View {
       .child(div().h(1).my(2).bg(t.border))
       .child(item("Push · destination binding unavailable", false, () => {}))
       .child(item("Force Push · destination binding unavailable", false, () => {}))
-      .child(item("Create PR…", Boolean(this.root), (eventCx) => this.openCreatePrDialog(eventCx), "mods/orca-changes/git-pull-request.svg"))
-      .child(item("Push & Create PR · target unavailable", false, () => {}, "mods/orca-changes/git-pull-request.svg"))
+      .child(item("Create PR…", Boolean(this.root), (eventCx) => this.openCreatePrDialog(eventCx), "mods/orca-assets/git-pull-request.svg"))
+      .child(item("Push & Create PR · target unavailable", false, () => {}, "mods/orca-assets/git-pull-request.svg"))
       .child(item("Pull", Boolean(this.root), (eventCx) => this.runPull(eventCx)))
       .child(item("Sync · target unavailable", false, () => {}))
       .child(item("Rebase · base unavailable", false, () => {}))
@@ -770,7 +770,7 @@ export default class Changes extends View {
     const item = (i, label, icon, onClick, enabled = true) => h_flex().id(`scm-${i}`).h(28).flex_none().px(8).gap(8).items_center().rounded(6)
       .when(enabled, s => s.cursor_pointer().hover(x => x.bg(t.hover)).on_click((_e, clickCx) => { onClick(clickCx); close(); }))
       .when(!enabled, s => s.opacity(0.5))
-      .child(svg(`mods/orca-changes/${icon}.svg`).size(14).flex_none().text_color(t.muted))
+      .child(svg(sharedAsset(`mods/orca-changes/${icon}.svg`)).size(14).flex_none().text_color(t.muted))
       .child(div().child(label));
     const sep = () => div().h(1).my(3).mx(4).bg(t.border);
 
@@ -859,7 +859,7 @@ export default class Changes extends View {
     return v_flex().id("too-many-changes").mx(12).mb(8).gap(6).rounded(6).border_1()
       .border_color("#f59e0b40").bg("#f59e0b0d").px(12).py(8)
       .child(h_flex().items_start().gap(8)
-        .child(svg("mods/orca-changes/triangle-alert.svg").size(16).flex_none().text_color(amber))
+        .child(svg("mods/orca-assets/triangle-alert.svg").size(16).flex_none().text_color(amber))
         .child(div().flex_1().min_w(0).text_size(12).text_color(t.foreground)
           .child(`Too many changes detected. Only the first ${MAX_STATUS_ENTRIES.toLocaleString()} changes are shown.`)))
       .child(h_flex().justify_end().gap(8)
@@ -880,4 +880,15 @@ export default class Changes extends View {
       // No branch base ref is exposed, so this uses Orca's own 'base' fallback (content-status.tsx:139-150).
       .child(div().mt(4).text_size(12).text_color(t.muted).child("This workspace is clean and this branch has no changes ahead of base"));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-changes/chevron-down.svg": "mods/orca-assets/chevron-down--orca-agent-settings.svg",
+  "mods/orca-changes/chevron-right.svg": "mods/orca-assets/chevron-right--orca-changes.svg",
+  "mods/orca-changes/eye.svg": "mods/orca-assets/eye--orca-changes.svg",
+  "mods/orca-changes/minus.svg": "mods/orca-assets/minus--orca-changes.svg",
+  "mods/orca-changes/plus.svg": "mods/orca-assets/plus--orca-changes.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

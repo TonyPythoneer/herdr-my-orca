@@ -64,7 +64,7 @@ export default class Landing extends View {
         .cursor_pointer().role("button").accessibility_label(label)
         .hover(s => s.bg("#f0f0f01f"))
         .on_click(onClick)
-        .child(svg(`mods/orca-landing/${icon}.svg`).size(14).flex_none())
+        .child(svg(sharedAsset(`mods/orca-landing/${icon}.svg`)).size(14).flex_none())
         .child(label);
 
     // A shortcut row (:302-312): `grid grid-cols-[1fr_auto] items-center gap-3`, label
@@ -108,4 +108,12 @@ export default class Landing extends View {
             .child(shortcutRow("Move up workspace", "space.prev"))
             .child(shortcutRow("Move down workspace", "space.next")))));
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-landing/folder-plus.svg": "mods/orca-assets/folder-plus--orca-landing.svg",
+  "mods/orca-landing/git-branch-plus.svg": "mods/orca-assets/git-branch-plus--orca-landing.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

@@ -61,7 +61,7 @@ import { settingsPageView, permissionsCardView } from "./page-view.js";
 import { modelProvidersView, providerCardView, providersPageView } from "./provider-view.js";
 import { rowView, editorView, uninstallSectionView } from "./views.js";
 import { agentPermissionItems, defaultPermissionItems, permissionRow } from "./permission-menu.js";
-import { PROVIDER_FILE, judgeModels, linkInfo, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost } from "./codex-provider.js";
+import { PROVIDER_FILE, judgeModels, linkInfo, parseProviderFile, recordLink, serializeProviderFile, slugId, validateHost, writeProviderFile } from "./codex-provider.js";
 
 import { railRows } from "./agent-rail.js";
 import { createAgentConfigClass } from "./agent-config-view.js";
@@ -134,6 +134,8 @@ export default class AgentManager extends View {
     // Permission intent lives here; programs.json's `run` is what launchers read, so every change
     // is written into it. `overrides` is re-derived from the commands on every read (run wins).
     this.permissions = { default: "own", overrides: {} };
+    this.herdrEnv = true;
+    this.herdrEnvSaving = false;
     this.permissionOpen = null;
     this.permissionNotice = null;
     this.expanded = new Set();
@@ -157,10 +159,14 @@ export default class AgentManager extends View {
     this.refreshGen = 0;
     this.action = null; // { key, kind, phase, message }
     this.uninstall = null; // { key, phase, status, message }
-    // Model providers (their own page): the saved records and one card for each, see makeCard.
+    // Model providers share this page's rail and workspace with the agent catalog.
     this.providers = {};
     this.providersError = null;
     this.cards = new Map();
+    this.selectedProviderId = null;
+    this.selectedProviderBeforeAdd = null;
+    this.providerHealth = new Map();
+    this.providerChecks = new Set();
     this.adding = null; // the card for a provider being added
     this.providerText = undefined; // model-providers.json as read, so a write can replace it safely
     this.providerWrittenAt = 0; // when this page last wrote it, so a slower refresh cannot roll it back
@@ -170,19 +176,21 @@ export default class AgentManager extends View {
     const expand = props()?.expand;
     if (typeof expand === "string") { this.railSelection = expand; this.focusKey = expand; }
 
-    // The Model providers page is the same mod with `props.page`: only the provider card, no detection.
+    // Keep the old route as a shortcut into the integrated Agent Settings provider section.
     this.providersPage = props()?.page === "providers";
     if (this.providersPage) {
       if (!checking()) {
-        cx.spawn(async (taskCx) => {
-          this.applyProviders(await readFile(PROVIDERS));
-          taskCx.notify();
-        });
+        setShared("agent-manager.open-agent", { key: "providers" });
+        run("layout.select", { stack: "main", child: "main-agents" });
       }
       return;
     }
     this.restoreCache();
     if (checking()) return;
+    cx.spawn(async (taskCx) => {
+      this.applyProviders(await readFile(PROVIDERS));
+      taskCx.notify();
+    });
     this.refresh(cx);
     cx.timer.every(POLL_MS, (tickCx) => this.poll(tickCx));
   }
@@ -227,6 +235,7 @@ export default class AgentManager extends View {
     if (!parsed.error) {
       this.disabled = parsed.disabled;
       this.permissions = parsed.permissions;
+      this.herdrEnv = parsed.herdrEnv;
     }
     this.writeError = null;
     return true;
@@ -429,7 +438,7 @@ export default class AgentManager extends View {
   // programs.json or agent-manager.json changed outside this page. Dirty drafts are never
   // replaced; they get a conflict banner and an explicit overwrite action instead.
   poll(cx) {
-    if (this.refreshing || this.persisting) return;
+    if (this.refreshing || this.persisting || this.herdrEnvSaving) return;
     cx.spawn((taskCx) => this.readOutsideChanges(taskCx));
   }
 
@@ -459,6 +468,7 @@ export default class AgentManager extends View {
         at: Date.now(),
         agents: this.allRows().all,
         disabled: [...this.disabled],
+        herdrEnv: this.herdrEnv,
         // The left sidebar's agent list (orca-sidebar-projects) draws these below the official rows.
         unofficial: this.unofficialRows(),
       });
@@ -859,7 +869,7 @@ export default class AgentManager extends View {
 
   toggleEnabled(row, cx) {
     // An uninstalled CLI has no availability to change; its switch is locked until it is installed.
-    if (!row.installed) return;
+    if (!row.installed || this.herdrEnvSaving) return;
     if (this.managerError) return;
     cx.spawn(async (taskCx) => {
       const latest = await readTextFile(MANAGER).catch(() => this.managerText);
@@ -873,7 +883,7 @@ export default class AgentManager extends View {
       const next = new Set(parsed.disabled);
       if (next.has(row.key)) next.delete(row.key);
       else next.add(row.key);
-      const text = serializeManagerConfig(next, this.permissions);
+      const text = serializeManagerConfig(next, parsed.permissions, parsed.herdrEnv);
       try {
         await writeTextFile(MANAGER, text, base ?? null);
       } catch (error) {
@@ -884,9 +894,41 @@ export default class AgentManager extends View {
       this.managerText = text;
       this.managerError = null;
       this.disabled = next;
+      this.permissions = parsed.permissions;
+      this.herdrEnv = parsed.herdrEnv;
       this.writeError = null;
       this.shareInventory();
       taskCx.notify();
+    });
+  }
+
+  setHerdrEnv(enabled, cx) {
+    if (this.herdrEnvSaving || this.persisting || this.managerError || this.herdrEnv === enabled) return;
+    this.herdrEnvSaving = true;
+    cx.spawn(async (taskCx) => {
+      try {
+        const latest = await readTextFile(MANAGER).catch(() => this.managerText);
+        const base = latest === undefined ? this.managerText : latest;
+        const parsed = parseManagerConfig(base);
+        if (parsed.error) {
+          this.managerError = parsed.error;
+          return;
+        }
+        const text = serializeManagerConfig(parsed.disabled, parsed.permissions, enabled);
+        await writeTextFile(MANAGER, text, base ?? null);
+        this.managerText = text;
+        this.disabled = parsed.disabled;
+        this.permissions = parsed.permissions;
+        this.herdrEnv = enabled;
+        this.managerError = null;
+        this.writeError = null;
+        this.shareInventory();
+      } catch (error) {
+        this.writeError = `Could not save agent-manager.json: ${errorText(error)}`;
+      } finally {
+        this.herdrEnvSaving = false;
+        taskCx.notify();
+      }
     });
   }
 
@@ -914,6 +956,10 @@ export default class AgentManager extends View {
 
   /** A permission change writes both files, so neither may be damaged when it starts. */
   permissionReady(cx) {
+    if (this.herdrEnvSaving) {
+      this.flashPermission("Wait for the agent environment setting to save first.", "blocked", cx);
+      return false;
+    }
     if (this.programsError) {
       this.flashPermission("programs.json is invalid; fix it before changing permissions.", "blocked", cx);
       return false;
@@ -985,7 +1031,12 @@ export default class AgentManager extends View {
   async writePermissions(next, cx) {
     const latest = await readTextFile(MANAGER).catch(() => this.managerText);
     const base = latest === undefined ? this.managerText : latest;
-    const text = serializeManagerConfig(this.disabled, next);
+    const parsed = parseManagerConfig(base);
+    if (parsed.error) {
+      this.writeError = `agent-manager.json is invalid: ${parsed.error}`;
+      return false;
+    }
+    const text = serializeManagerConfig(parsed.disabled, next, parsed.herdrEnv);
     try {
       await writeTextFile(MANAGER, text, base ?? null);
     } catch (error) {
@@ -994,6 +1045,8 @@ export default class AgentManager extends View {
     }
     this.managerText = text;
     this.managerError = null;
+    this.disabled = parsed.disabled;
+    this.herdrEnv = parsed.herdrEnv;
     if (!this.pendingPermissions) this.permissions = next;
     this.writeError = null;
     return true;
@@ -1174,13 +1227,48 @@ export default class AgentManager extends View {
     const parsed = parseProviderFile(text);
     this.providers = parsed.providers ?? {};
     this.providersError = parsed.error ?? null;
-    for (const id of [...this.cards.keys()]) if (!Object.hasOwn(this.providers, id)) this.cards.delete(id);
+    for (const id of [...this.cards.keys()]) {
+      if (!Object.hasOwn(this.providers, id)) {
+        this.cards.delete(id);
+        this.providerHealth.delete(id);
+      }
+    }
+    if (this.selectedProviderId && !Object.hasOwn(this.providers, this.selectedProviderId)) this.selectedProviderId = null;
     for (const [id, record] of Object.entries(this.providers)) {
       const card = this.cards.get(id);
       if (!card) this.cards.set(id, this.makeCard(id, record));
       else if (!card.touched) this.fillCard(card, record);
     }
+    if (!this.selectedProviderId && this.railSelection === "providers" && !this.adding) this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
     return true;
+  }
+
+  providerHealthState(id) {
+    return this.providerHealth.get(id) ?? (this.providers[id]?.verifiedAt
+      ? { state: "healthy", checkedAt: this.providers[id].verifiedAt, models: this.providers[id].models }
+      : { state: "unknown", models: this.providers[id]?.models ?? [] });
+  }
+
+  selectProvider(id, cx) {
+    this.selectedProviderId = id;
+    this.refreshProviderHealth(id, cx);
+    cx?.notify();
+  }
+
+  async refreshProviderHealth(id, cx) {
+    const record = this.providers[id];
+    if (!record || this.providerChecks.has(id)) return;
+    this.providerChecks.add(id);
+    const previous = this.providerHealthState(id);
+    this.providerHealth.set(id, { ...previous, state: "checking" });
+    cx?.notify();
+    const result = await this.testProvider(record.host, record.apiKey);
+    this.providerChecks.delete(id);
+    if (this.providers[id] !== record) return;
+    this.providerHealth.set(id, result.ok
+      ? { state: "healthy", checkedAt: new Date().toISOString(), models: result.models }
+      : { state: "unhealthy", checkedAt: new Date().toISOString(), models: previous.models ?? record.models ?? [], error: result.error });
+    cx?.notify();
   }
 
   showCardStatus(card, cx, tone, text) {
@@ -1231,7 +1319,7 @@ export default class AgentManager extends View {
     const verdict = await this.testProvider(input.host, input.key);
     if (!verdict.ok) return this.showCardStatus(card, cx, "blocked", verdict.error);
     await this.refreshIcon(card, input.info);
-    const saved = await this.saveProvider(card, { name: input.name, host: input.host, key: input.key, link: input.info.link, models: verdict.models });
+    const saved = await this.saveProvider(card, { name: input.name, host: input.host, key: input.key, link: input.info.link, models: verdict.models, modelInfo: verdict.modelInfo ?? {} });
     card.testing = false;
     if (saved) this.adoptSavedCard(card, saved);
     cx?.notify();
@@ -1243,7 +1331,10 @@ export default class AgentManager extends View {
       this.adding = null;
       this.cards.set(saved.id, card);
       card.id = saved.id;
+      this.selectedProviderId = saved.id;
+      this.selectedProviderBeforeAdd = null;
     }
+    this.providerHealth.set(card.id, { state: "healthy", checkedAt: saved.record.verifiedAt, models: saved.record.models });
     card.touched = false;
     card.replacing = false;
     card.reveal = false;
@@ -1252,13 +1343,20 @@ export default class AgentManager extends View {
     card.status = saved.error ? { tone: "blocked", text: saved.error } : { tone: "done", text: `Saved · ${saved.record.models.length} models` };
   }
 
-  // `GET <host>/models` with the key in the header; the answer is judged into a fixed message.
-  // The key is an argument of this one call, for five seconds (see the design's risks).
+  // `GET <host>/models`; curl reads the key from a private header file, not process arguments.
   async testProvider(host, key) {
+    if (/[\r\n]/.test(key)) return judgeModels(0, "");
+    const made = await exec("mktemp", ["-d", `${appHome()}/.provider-test.XXXXXX`], { timeout: CURL_TIMEOUT_MS }).catch(() => null);
+    const dir = String(made?.stdout ?? "").trim();
+    if (made?.code !== 0 || !dir.startsWith(`${appHome()}/.provider-test.`)) return judgeModels(0, "");
+    const headers = `${dir}/headers`;
     try {
+      await writeTextFile(headers, `Authorization: Bearer ${key}\n`, null);
+      const privateFile = await exec("chmod", ["600", headers], { timeout: CURL_TIMEOUT_MS });
+      if (privateFile.code !== 0) return judgeModels(0, "");
       const result = await exec(
         "curl",
-        ["-sS", "--max-time", String(CURL_MAX_SECONDS), "-w", "\n%{http_code}", "-H", `Authorization: Bearer ${key}`, `${host}/models`],
+        ["-q", "-sS", "--max-time", String(CURL_MAX_SECONDS), "-w", "\n%{http_code}", "-H", `@${headers}`, `${host}/models`],
         { timeout: CURL_TIMEOUT_MS },
       );
       const text = result.stdout ?? "";
@@ -1267,10 +1365,12 @@ export default class AgentManager extends View {
       return judgeModels(Number.isFinite(status) ? status : 0, text.slice(0, cut));
     } catch {
       return judgeModels(0, "");
+    } finally {
+      await exec("rm", ["-rf", dir]).catch(() => {});
     }
   }
 
-  async saveProvider(card, { name, host, key, link, models }) {
+  async saveProvider(card, { name, host, key, link, models, modelInfo }) {
     const text = await readTextFile(PROVIDERS).catch(() => null);
     const parsed = parseProviderFile(text);
     if (parsed.error) return this.showCardStatus(card, null, "blocked", parsed.error);
@@ -1286,25 +1386,24 @@ export default class AgentManager extends View {
       iconPath,
       verifiedAt: new Date().toISOString(),
       models,
+      modelInfo,
       // The model Codex had chosen for this provider survives a re-test.
       selectedModel: previous?.selectedModel ?? {},
     };
     parsed.providers[id] = record;
     const next = serializeProviderFile(parsed.providers);
     try {
-      await writeTextFile(PROVIDERS, next, text);
+      await writeProviderFile({ appHome, exec, readTextFile, writeTextFile }, next, text);
     } catch {
       return this.showCardStatus(card, null, "blocked", "Could not write model-providers.json.");
     }
     this.providerText = next;
     this.providerWrittenAt = Date.now();
     this.providers = parsed.providers;
-    // The record is written by now, so a mode that did not take is reported but the card still owns it.
-    const error = (await this.secureProviderFile()) ? null : "model-providers.json is not private to your user.";
     // The replaced icon is deleted too, but only when it is one of ours.
     const stale = ownedIcon(previous?.iconPath);
     if (stale && stale !== iconPath) await removeFile(stale);
-    return { id, record, error };
+    return { id, record, error: null };
   }
 
   async deleteProvider(card, cx) {
@@ -1317,14 +1416,15 @@ export default class AgentManager extends View {
     delete parsed.providers[card.id];
     const next = serializeProviderFile(parsed.providers);
     try {
-      await writeTextFile(PROVIDERS, next, text);
+      await writeProviderFile({ appHome, exec, readTextFile, writeTextFile }, next, text);
     } catch {
       return this.showCardStatus(card, cx, "blocked", "Could not write model-providers.json.");
     }
     this.providerText = next;
     this.providerWrittenAt = Date.now();
     this.providers = parsed.providers;
-    await this.secureProviderFile();
+    this.providerHealth.delete(card.id);
+    if (this.selectedProviderId === card.id) this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
     // Only a file this page could have written is removed, and an unsaved preview goes with it.
     for (const path of new Set([record.iconPath, card.fetched.path])) {
       const stale = ownedIcon(path);
@@ -1332,17 +1432,6 @@ export default class AgentManager extends View {
     }
     this.cards.delete(card.id);
     cx?.notify();
-  }
-
-  // writeTextFile replaces the file, which can reset the mode, and the key is in it.
-  async secureProviderFile() {
-    try {
-      await exec("chmod", ["600", PROVIDERS]);
-      const mode = await exec("stat", ["-f", "%Lp", PROVIDERS]);
-      return mode.stdout.trim() === "600";
-    } catch {
-      return false;
-    }
   }
 
   // Looks for the icon of `info.link` unless that is the one already on the card. Work on one card
@@ -1398,7 +1487,7 @@ export default class AgentManager extends View {
     if (this.typing) return false;
     const key = String(event.key ?? "");
     if (this.permissionOpen && this.onPermissionKey(key, cx)) return true;
-    const rows = [{ key: "global" }, ...railRows(this.allRows().all), ...this.unofficialRows()];
+    const rows = [{ key: "global" }, ...railRows(this.allRows().all), ...this.unofficialRows(), { key: "providers" }];
     const at = Math.max(0, rows.findIndex(row => row.key === this.railSelection));
     const move = Object.hasOwn(ROW_MOVES, key) ? ROW_MOVES[key] : null;
     if (move) this.selectRail(rows[move(at, rows.length)].key, cx);
@@ -1529,7 +1618,7 @@ export default class AgentManager extends View {
     return div().w_full().flex_none().rounded(10).border_1().border_color(t.border).bg(t.surface).child(
       h_flex().w_full().h(LIST_ROW_HEIGHT - 12).my(6).px(18).gap(12).items_center()
         .child(h_flex().w(32).h(32).flex_none().items_center().justify_center().rounded(8).border_1().border_color(t.border)
-          .child(icon({ name: "freebuff", icon: "mods/orca-new-menu/freebuff.png" }, 18, t)))
+          .child(icon({ name: "freebuff", icon: "mods/orca-assets/freebuff--orca-new-menu.png" }, 18, t)))
         .child(v_flex().flex_1().min_w(0).gap(3)
           .child(div().text_size(13).font_medium().text_color(t.foreground).child("freebuff"))
           .child(div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted).child("freebuff")))
@@ -1583,6 +1672,8 @@ export default class AgentManager extends View {
     const path = ownedIcon(card.fetched.path);
     if (path) removeFile(path);
     this.adding = null;
+    this.selectedProviderId = this.selectedProviderBeforeAdd;
+    this.selectedProviderBeforeAdd = null;
     cx.notify();
   }
 
@@ -1609,7 +1700,7 @@ export default class AgentManager extends View {
     const configured = this.programsText === undefined ? null : readRunOverride(this.programsText, "freebuff").run;
     const installed = typeof this.freebuffInstalled === "boolean" ? this.freebuffInstalled : agent?.installed;
     return [{
-      key: "freebuff", name: "FreeBuff CLI", icon: "mods/orca-new-menu/freebuff.png",
+      key: "freebuff", name: "FreeBuff CLI", icon: "mods/orca-assets/freebuff--orca-new-menu.png",
       homepage: "https://github.com/CodebuffAI/freebuff#quick-start",
       // Match the existing Start an agent integration, including a configured command.
       run: configured ?? agent?.run ?? ["zsh", "-lic", "exec freebuff"],
@@ -1648,13 +1739,15 @@ export default class AgentManager extends View {
   }
 
   readonlyCommand(argv, t) {
-    const command = formatArgv(argv);
+    const previewArgv = this.herdrEnv ? ["env", "HERDR_ENV=1", ...argv] : argv;
+    const command = formatArgv(previewArgv);
     return v_flex().w_full().gap(6)
       .child(h_flex().items_center().gap(8)
         .child(div().flex_1().font_semibold().text_color(t.foreground).child("Preview command"))
         .child(this.button("am-copy-command", "Copy", t, (_e,cx) => copyText(command,cx), { height: 24, px: 8 })))
       .child(div().w_full().p(10).rounded(8).border_1().border_color(t.border).bg(t.surface)
-        .font_family(settings()?.font_family ?? "JetBrains Mono").text_size(11).text_color(t.foreground).child(command));
+        .font_family(settings()?.font_family ?? "JetBrains Mono").text_size(11).text_color(t.foreground).child(command))
+      .child(div().text_size(10).text_color(this.herdrEnv ? t.done : t.dim).child(this.herdrEnv ? "HERDR_ENV=1" : "HERDR_ENV: not set"));
   }
 
   installationStatus(row) {
@@ -1705,6 +1798,7 @@ export default class AgentManager extends View {
     const harness = this.harnessFor(row, cx);
     if (!harness) return empty("Loading harness settings…", t);
     if (harness.initError) return empty(harness.initError, t);
+    harness.settingsContext.herdrEnv = this.herdrEnv;
     return harness.renderSettings(t, cx, { argv: row.run, format: formatArgv, copy: copyText, enabled: row.enabled });
   }
 
@@ -1713,11 +1807,28 @@ export default class AgentManager extends View {
     if (this.providersPage) return this.providersView();
     const requestedAgent = shared("agent-manager.open-agent");
     if (requestedAgent && typeof requestedAgent.key === "string") {
-      this.railSelection = requestedAgent.key;
-      this.focusKey = requestedAgent.key === "global" ? null : requestedAgent.key;
+      const key = requestedAgent.key;
+      if (key !== "provider:add" && this.adding) this.cancelNewCard(this.adding, cx);
+      if (key === "provider:add") {
+        this.railSelection = "providers";
+        if (!this.adding) this.selectedProviderBeforeAdd = this.selectedProviderId;
+        this.selectedProviderId = null;
+        this.adding ??= this.makeCard(null, null);
+        this.adding.open = true;
+      } else if (key.startsWith("provider:")) {
+        const id = key.slice("provider:".length);
+        this.railSelection = "providers";
+        this.selectedProviderId = Object.hasOwn(this.providers, id) ? id : Object.keys(this.providers)[0] ?? null;
+        this.adding = null;
+        this.selectedProviderBeforeAdd = null;
+      } else {
+        this.railSelection = key;
+        if (key === "providers") this.selectedProviderId = Object.keys(this.providers)[0] ?? null;
+      }
+      this.focusKey = this.railSelection === "global" || this.railSelection === "providers" ? null : this.railSelection;
       this.permissionOpen = null;
       // Reload saved options on a new entry unless the page owns an unsaved draft.
-      const prior = this.harnesses.get(requestedAgent.key);
+      const prior = this.harnesses.get(this.railSelection);
       if (prior && !Object.values(prior.editors ?? {}).some(editor => editor.dirty)) this.harnesses.delete(requestedAgent.key);
       setShared("agent-manager.open-agent", null);
     }
@@ -1729,7 +1840,14 @@ export default class AgentManager extends View {
       if (row) this.toggleEnabled(row, cx);
     }
     // The left sidebar highlights this row; write only on change, because setShared re-renders every mod.
-    if (shared("agent-manager.selected")?.key !== this.railSelection) setShared("agent-manager.selected", { key: this.railSelection });
+    const selectedKey = this.railSelection === "providers"
+      ? this.adding ? "provider:add" : this.selectedProviderId ? `provider:${this.selectedProviderId}` : "provider:add"
+      : this.railSelection;
+    if (shared("agent-manager.selected")?.key !== selectedKey) setShared("agent-manager.selected", { key: selectedKey });
+    const providerRail = Object.entries(this.providers).map(([id, record]) => ({
+      id, name: record.name, iconPath: record.iconPath, health: this.providerHealthState(id).state,
+    }));
+    if (JSON.stringify(shared("agent-manager.providers") ?? []) !== JSON.stringify(providerRail)) setShared("agent-manager.providers", providerRail);
     return settingsPageView(this, theme(), cx);
   }
 }

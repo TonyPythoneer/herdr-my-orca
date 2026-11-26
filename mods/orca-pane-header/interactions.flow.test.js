@@ -138,9 +138,9 @@ test("agent marks preserve source, size, tint and full-color rendering", async (
   for (const [term, expected, source] of [
     [null, null], [{ report: { app: "codex" } }, null],
     [{ report: { app: "codex" }, program }, "svg", "mine.svg"],
-    [{ report: { app: "omp" } }, "image", "mods/orca-pane-header/agent-icons/omp.svg"],
-    [{ report: { app: "gemini" } }, "image", "mods/orca-pane-header/agent-icons/gemini.png"],
-    [{ report: { app: "aider" } }, "svg", "mods/orca-pane-header/agent-icons/aider.svg"],
+    [{ report: { app: "omp" } }, "image", "mods/orca-assets/omp.svg"],
+    [{ report: { app: "gemini" } }, "image", "mods/orca-assets/gemini.png"],
+    [{ report: { app: "aider" } }, "svg", "mods/orca-assets/aider.svg"],
     [{ program }, "svg", "mine.svg"], [{ program: { ...program, tint: false } }, "image", "mine.svg"],
   ]) {
     const mark = agentMark(term, 15, { muted: "grey" })?.__node;

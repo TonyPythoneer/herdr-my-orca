@@ -938,7 +938,7 @@ export default class Spaces extends View {
         this.notify(cx);
       })
       // -1: the glyph's own inset, so its edge meets the heading and the spaces' marks.
-      .child(svg(`mods/orca-sidebar-projects/${m ? "server" : "monitor"}.svg`).size(14).ml(-1).flex_none())
+      .child(svg(sharedAsset(`mods/orca-sidebar-projects/${m ? "server" : "monitor"}.svg`)).size(14).ml(-1).flex_none())
       // The dot describes the machine, so it follows its name, however short.
       .child(h_flex().flex_1().min_w(0).gap(6).items_center()
         .child(div().min_w(0).truncate().child(m ?? "This computer"))
@@ -957,7 +957,7 @@ export default class Spaces extends View {
         // to collapse (`row.count > 0`).
         .when(count > 0, el => el.child(div().id(`machine-fold-${slug}`).w(26).flex_none().flex().items_center().justify_center()
           .opacity(this.overMachine === `machine-${slug}` ? 1 : 0)
-          .child(svg(`mods/orca-sidebar-projects/chevron-${folded ? "right" : "down"}.svg`).size(12).flex_none()))));
+          .child(svg(sharedAsset(`mods/orca-sidebar-projects/chevron-${folded ? "right" : "down"}.svg`)).size(12).flex_none()))));
     // `host-section-rows.ts:236-246`: a host header exists only for a host with rows, and a
     // host with no rows draws no section — and no placeholder beneath it.
     return stop(this, t, `machine-${slug}`, head, { radius: 8 });
@@ -981,7 +981,7 @@ export default class Spaces extends View {
     return tip({ hot: this.hot, t, id, label: "New space here", trigger: stop(this, t, id, div().id(id).w(26).h(20).flex_none().flex().items_center().justify_center().rounded(4)
       .text_color(this.hot === id ? t.foreground : t.dim).on_hover(this.glow(id))
       .role("button").accessibility_label("New space here")
-      .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); }).child(svg("mods/orca-sidebar-projects/plus.svg").size(12)), { radius: 4 }),
+      .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); run("layout.select", { stack: "main", child: "main-terminals" }); }).child(svg("mods/orca-assets/plus--orca-float-workspace.svg").size(12)), { radius: 4 }),
       // The key makes a space on the current space's machine: it names this + only on that one.
       action: (spaces().find(s => s.active)?.machine ?? null) === m ? "space.new" : null });
   }
@@ -1016,12 +1016,12 @@ export default class Spaces extends View {
     return div().flex_none().flex().items_center().justify_center().pr(6)
       .child(tip({
         hot: this.hot, t, id: `pr-${id}`, label: `Open PR #${pr.number}`,
-        trigger: stop(this, t, `pr-${id}`, div().id(`pr-${id}`)
-          .cursor_pointer()
+        trigger: stop(this, t, `pr-${id}`, div().id(`pr-${id}`).size(20).flex_none().flex().items_center().justify_center().rounded(6)
+          .cursor_pointer().hover(s => s.bg("#404040b3"))
           // The badge is an action, not decoration: it opens the pull request's own page.
           // The card under it switches spaces, so the click must not reach that handler.
           .on_click((_e, cx) => { cx.stop_propagation(); this.openPR(pr, info); })
-          .child(svg(`mods/orca-sidebar-projects/${icon}.svg`).size(14).flex_none().text_color(tone)),
+          .child(svg(sharedAsset(`mods/orca-sidebar-projects/${icon}.svg`)).size(14).flex_none().text_color(tone)),
           { enter: () => this.openPR(pr, info) }),
       }));
   }
@@ -1113,7 +1113,7 @@ export default class Spaces extends View {
           .role("button").accessibility_label(folded ? "Expand group" : "Collapse group")
           .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
           .on_click((_e, cx) => { cx.stop_propagation(); this.toggleRepo(key, cx); })
-          .child(svg(`mods/orca-sidebar-projects/chevron-${folded ? "right" : "down"}.svg`).size(14).flex_none()),
+          .child(svg(sharedAsset(`mods/orca-sidebar-projects/chevron-${folded ? "right" : "down"}.svg`)).size(14).flex_none()),
         { radius: 6, enter: () => this.toggleRepo(key, null) })))
       .child(stop(this, t, `space-more-${w.id}`,
         div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
@@ -1127,14 +1127,14 @@ export default class Spaces extends View {
             this.openGroupMenu(w, g, groupSpaces);
             this.notify(cx);
           })
-          .child(svg("mods/orca-sidebar-projects/ellipsis.svg").size(14).flex_none()),
+          .child(svg("mods/orca-assets/ellipsis--orca-pane-header.svg").size(14).flex_none()),
         { radius: 6, enter: () => { this.menuKey = key; this.openGroupMenu(w, g, groupSpaces); } }))
       .child(stop(this, t, `space-new-${w.id}`,
         div().size(20).flex_none().flex().items_center().justify_center().rounded(6)
           .role("button").accessibility_label("New space")
           .text_color(t.muted).hover((s) => s.bg("#404040b3").text_color(t.foreground))
           .on_click((_e, cx) => { cx.stop_propagation(); newSpaceIn(w, g); })
-          .child(svg("mods/orca-sidebar-projects/plus.svg").size(12).flex_none()),
+          .child(svg("mods/orca-assets/plus--orca-float-workspace.svg").size(12).flex_none()),
         { radius: 6, enter: () => { newSpaceIn(w, g); } }));
   }
 
@@ -1193,7 +1193,7 @@ export default class Spaces extends View {
           run("space.new", { folder }); run("layout.select", { stack: "main", child: "main-terminals" });
         });
       })
-      .child(svg("mods/orca-sidebar-projects/folder.svg").size(14).flex_none())
+      .child(svg("mods/orca-assets/folder--orca-sidebar-projects.svg").size(14).flex_none())
       .child(div().flex_1().truncate().text_size(13).child(basename))
       .when(missing, el => el.child(div().flex_none().text_size(11).text_color(t.dim).child("missing")))
       .child(div()
@@ -1216,7 +1216,7 @@ export default class Spaces extends View {
           localStorage.setItem("projects.saved.v1", JSON.stringify(filtered));
           this.notify(clickCx);
         })
-        .child(svg("mods/orca-sidebar-projects/trash.svg").size(10)));
+        .child(svg("mods/orca-assets/trash.svg").size(10)));
   }
 
   // While the agent settings page is open the left sidebar carries the agent rail instead of projects.
@@ -1282,7 +1282,7 @@ export default class Spaces extends View {
             // StartupWorktreeRefreshStatus.tsx:14-16 delays 200ms before showing; omitted because Herdr has no frame timer.
             .when(!this.loaded || this.refreshingAll, el => el.child(h_flex().flex_none().mx(12).mb(8).gap(8).items_center()
               .text_size(12).text_color(t.muted)
-              .child(svg("mods/orca-sidebar-projects/loader-circle.svg").size(16).flex_none().spin(1000))
+              .child(svg("mods/orca-assets/loader-circle.svg").size(16).flex_none().spin(1000))
               .child(div().child(this.loaded ? "Refreshing workspaces\u2026" : "Loading workspaces\u2026"))))
             // EmptyState.tsx:22-27 renders "No workspaces found" when rows are empty.
             // EmptyState.tsx:14 and WorktreeList.tsx:285-287 gate this on startupWorktreeRefreshCompleted.
@@ -1309,4 +1309,19 @@ class WorkspaceRow extends View {
     const data = this.owner.retainedPending.get(this.key);
     return data ? v_flex().w_full().flex_none().children(this.owner.rowElements(data)) : div();
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-sidebar-projects/bell.svg": "mods/orca-assets/bell--orca-context-menu.svg",
+  "mods/orca-sidebar-projects/chevron-down.svg": "mods/orca-assets/chevron-down--orca-files.svg",
+  "mods/orca-sidebar-projects/chevron-right.svg": "mods/orca-assets/chevron-right--orca-files.svg",
+  "mods/orca-sidebar-projects/ellipsis.svg": "mods/orca-assets/ellipsis--orca-pane-header.svg",
+  "mods/orca-sidebar-projects/folder-plus.svg": "mods/orca-assets/folder-plus--orca-sidebar-projects.svg",
+  "mods/orca-sidebar-projects/folder.svg": "mods/orca-assets/folder--orca-sidebar-projects.svg",
+  "mods/orca-sidebar-projects/git-branch.svg": "mods/orca-assets/git-branch--orca-header.svg",
+  "mods/orca-sidebar-projects/plus.svg": "mods/orca-assets/plus--orca-float-workspace.svg",
+  "mods/orca-sidebar-projects/square-pen.svg": "mods/orca-assets/square-pen--orca-sidebar-projects.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

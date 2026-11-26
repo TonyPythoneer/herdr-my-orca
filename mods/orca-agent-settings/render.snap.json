@@ -724,7 +724,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -1464,7 +1464,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -2234,7 +2234,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -3165,7 +3165,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -5321,7 +5321,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-down.svg"
+                   "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -5572,7 +5572,7 @@
                          {
                           "n": "svg",
                           "a": [
-                           "mods/orca-agent-settings/shield-alert.svg"
+                           "mods/orca-assets/shield-alert.svg"
                           ],
                           "c": [
                            [
@@ -5634,7 +5634,7 @@
                          {
                           "n": "svg",
                           "a": [
-                           "mods/orca-agent-settings/chevron-down.svg"
+                           "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                           ],
                           "c": [
                            [
@@ -5953,7 +5953,7 @@
                                           {
                                            "n": "svg",
                                            "a": [
-                                            "mods/orca-agent-settings/square-terminal.svg"
+                                            "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                            ],
                                            "c": [
                                             [
@@ -6231,7 +6231,7 @@
                                           {
                                            "n": "svg",
                                            "a": [
-                                            "mods/orca-agent-settings/hand.svg"
+                                            "mods/orca-assets/hand.svg"
                                            ],
                                            "c": [
                                             [
@@ -6515,7 +6515,7 @@
                                           {
                                            "n": "svg",
                                            "a": [
-                                            "mods/orca-agent-settings/shield-check.svg"
+                                            "mods/orca-assets/shield-check.svg"
                                            ],
                                            "c": [
                                             [
@@ -6799,7 +6799,7 @@
                                           {
                                            "n": "svg",
                                            "a": [
-                                            "mods/orca-agent-settings/shield-alert.svg"
+                                            "mods/orca-assets/shield-alert.svg"
                                            ],
                                            "c": [
                                             [
@@ -7116,7 +7116,7 @@
                                           {
                                            "n": "svg",
                                            "a": [
-                                            "mods/orca-agent-settings/square-terminal.svg"
+                                            "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                            ],
                                            "c": [
                                             [
@@ -8866,7 +8866,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -9618,7 +9618,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -10370,7 +10370,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -11043,7 +11043,7 @@
                  {
                   "n": "svg",
                   "a": [
-                   "mods/orca-agent-settings/chevron-right.svg"
+                   "mods/orca-assets/chevron-right--orca-agent-settings.svg"
                   ],
                   "c": [
                    [
@@ -11293,7 +11293,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/shield-alert.svg"
+                       "mods/orca-assets/shield-alert.svg"
                       ],
                       "c": [
                        [
@@ -11355,7 +11355,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -11674,7 +11674,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -11952,7 +11952,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -12236,7 +12236,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -12520,7 +12520,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -12837,7 +12837,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -14519,7 +14519,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/shield-alert.svg"
+                       "mods/orca-assets/shield-alert.svg"
                       ],
                       "c": [
                        [
@@ -14581,7 +14581,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -14900,7 +14900,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -15178,7 +15178,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -15462,7 +15462,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -15746,7 +15746,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -16063,7 +16063,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -17463,7 +17463,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/shield-alert.svg"
+                       "mods/orca-assets/shield-alert.svg"
                       ],
                       "c": [
                        [
@@ -17525,7 +17525,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -17844,7 +17844,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -18122,7 +18122,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -18406,7 +18406,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -18690,7 +18690,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -19007,7 +19007,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -20520,7 +20520,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/shield-alert.svg"
+                       "mods/orca-assets/shield-alert.svg"
                       ],
                       "c": [
                        [
@@ -20582,7 +20582,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -20901,7 +20901,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -21179,7 +21179,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -21463,7 +21463,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -21747,7 +21747,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -22064,7 +22064,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -23625,7 +23625,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/shield-alert.svg"
+                       "mods/orca-assets/shield-alert.svg"
                       ],
                       "c": [
                        [
@@ -23687,7 +23687,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -24006,7 +24006,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -24284,7 +24284,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -24568,7 +24568,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -24852,7 +24852,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -25169,7 +25169,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -26670,7 +26670,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/shield-alert.svg"
+                       "mods/orca-assets/shield-alert.svg"
                       ],
                       "c": [
                        [
@@ -26732,7 +26732,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -27051,7 +27051,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -27329,7 +27329,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -27613,7 +27613,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -27897,7 +27897,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -28214,7 +28214,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -29257,7 +29257,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/shield-alert.svg"
+                       "mods/orca-assets/shield-alert.svg"
                       ],
                       "c": [
                        [
@@ -29319,7 +29319,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -29638,7 +29638,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -29916,7 +29916,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -30200,7 +30200,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -30484,7 +30484,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -30801,7 +30801,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -32124,7 +32124,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/square-terminal.svg"
+                       "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -32219,7 +32219,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -32538,7 +32538,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -32816,7 +32816,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -33100,7 +33100,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -33384,7 +33384,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -33701,7 +33701,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -35024,7 +35024,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/square-terminal.svg"
+                       "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -35086,7 +35086,7 @@
                      {
                       "n": "svg",
                       "a": [
-                       "mods/orca-agent-settings/chevron-down.svg"
+                       "mods/orca-assets/chevron-down--orca-agent-settings.svg"
                       ],
                       "c": [
                        [
@@ -35405,7 +35405,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [
@@ -35683,7 +35683,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/hand.svg"
+                                        "mods/orca-assets/hand.svg"
                                        ],
                                        "c": [
                                         [
@@ -35967,7 +35967,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-check.svg"
+                                        "mods/orca-assets/shield-check.svg"
                                        ],
                                        "c": [
                                         [
@@ -36251,7 +36251,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/shield-alert.svg"
+                                        "mods/orca-assets/shield-alert.svg"
                                        ],
                                        "c": [
                                         [
@@ -36568,7 +36568,7 @@
                                       {
                                        "n": "svg",
                                        "a": [
-                                        "mods/orca-agent-settings/square-terminal.svg"
+                                        "mods/orca-assets/square-terminal--orca-agent-settings.svg"
                                        ],
                                        "c": [
                                         [

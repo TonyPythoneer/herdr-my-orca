@@ -21,6 +21,8 @@ export function agentRailOwner() {
     railHover: null,
     officialRailScroll: ScrollHandle.new(),
     unofficialRailScroll: ScrollHandle.new(),
+    providerRailScroll: ScrollHandle.new(),
+    providerRailOpen: true,
     get railSelection() { return shared("agent-manager.selected")?.key ?? "global"; },
     selectRail: (key) => setShared("agent-manager.open-agent", { key }),
     toggleEnabled: (row) => setShared("agent-manager.toggle-agent", { key: row.key }),
@@ -33,5 +35,6 @@ export function leftSidebarAgentRail(host, t) {
   // Until the manager publishes, the rail shows Global alone, as the page did before its first scan.
   const official = Array.isArray(inventory?.agents) ? inventory.agents : [];
   const unofficial = Array.isArray(inventory?.unofficial) ? inventory.unofficial : [];
-  return v_flex().size_full().min_h(0).items_start().child(railView(host.agentRail, official, unofficial, t).h_full());
+  const providers = Array.isArray(shared("agent-manager.providers")) ? shared("agent-manager.providers") : [];
+  return v_flex().size_full().min_h(0).items_start().child(railView(host.agentRail, official, unofficial, providers, t).h_full());
 }

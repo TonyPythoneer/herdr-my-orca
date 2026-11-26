@@ -10,7 +10,7 @@
 import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
-import { PROVIDER_FILE, launchArgv, parseProviderFile, serializeProviderFile, validateHost } from "./codex-provider.js";
+import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, piModelLimits, serializeProviderFile, supportsCodingModel, validateHost, writeProviderFile } from "./codex-provider.js";
 import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
 
@@ -58,12 +58,15 @@ function formatJson(text) {
 
 // JSON.parse messages differ between engines. Try "line N" first, then
 // "position N" and count newlines. Fall back to line 1.
-function managerDisabled(text) {
+function parseManagerSettings(text) {
   try {
     const saved = JSON.parse(text ?? "{}");
-    return new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []);
+    return {
+      disabled: new Set(Array.isArray(saved.disabled) ? saved.disabled.filter((key) => typeof key === "string") : []),
+      herdrEnv: saved.herdrEnv !== false,
+    };
   } catch {
-    return new Set();
+    return { disabled: new Set(), herdrEnv: true };
   }
 }
 
@@ -88,11 +91,11 @@ function normalizeJson(text, fallback) {
 }
 
 function providerGlyph(record, t) {
-  if (!record) return svg("mods/orca-agent-flyout/circle.svg").size(13).text_color(t.muted);
+  if (!record) return svg("mods/orca-assets/circle.svg").size(13).text_color(t.muted);
   const appDir = `${appHome()}/`;
   const path = String(record.iconPath ?? "");
   if (path.startsWith(appDir)) return image(path.slice(appDir.length)).w(20).h(20).rounded(4);
-  return svg("mods/orca-agent-flyout/hard-drive.svg").size(14).text_color(t.muted);
+  return svg("mods/orca-assets/hard-drive.svg").size(14).text_color(t.muted);
 }
 
 function providerTooltip(remote, providerCount) {
@@ -124,6 +127,7 @@ class AgentConfigCore {
     this.modelGroup = this.groupOption()?.group ?? null; // a model list filter, when the spec has groups
     this.groupOpen = false;
     this.showHidden = false; // the "-- hidden --" section stays collapsed until clicked
+    this.collapsedAdvanced = true;
     this.snapshot = null; // the settings file as read, for a safe write
     this.open = null; // the option whose select list is open: one at a time, inline below its row
 
@@ -193,6 +197,7 @@ class AgentConfigCore {
   // The values, hidden models, providers and group this agent saved last time.
   async applySaved(saved, cx) {
     this.values = { ...this.values, ...readValues(this.spec, saved) };
+    this.collapsedAdvanced = saved.advancedArgumentsCollapsed !== false;
     for (const [id, editor] of Object.entries(this.editors)) {
       if (this.spec.options[id].language === "json") this.values[id] = normalizeJson(this.values[id], this.spec.options[id].default);
       editor.input.set_value(this.values[id]);
@@ -252,7 +257,7 @@ class AgentConfigCore {
   // The option of a type the spec has once: its groups option is the model's.
   groupOption() {
     const model = this.spec.options.model;
-    return model?.groups ? model : null;
+    return this.providerId === "none" && model?.groups ? model : null;
   }
 
   hasSource(source) {
@@ -304,7 +309,9 @@ class AgentConfigCore {
   activeModels() {
     if (!this.spec.options.provider || this.providerId === "none") return this.models;
     const record = this.providers[this.providerId];
-    return (record?.models ?? []).map((id) => ({ id, label: id, efforts: [] }));
+    return (record?.models ?? [])
+      .filter((id) => this.key === "pi" ? supportsCodingModel(record.modelInfo?.[id]) && piModelLimits(record.modelInfo?.[id]) !== null : this.key !== "opencode" || supportsCodingModel(record.modelInfo?.[id]))
+      .map((id) => ({ id, label: id, efforts: [] }));
   }
 
   // None keeps the agent's model; a provider keeps its model in the provider's own record.
@@ -333,8 +340,7 @@ class AgentConfigCore {
       if (!record) return; // deleted while this flyout was open
       record.selectedModel = { ...(record.selectedModel ?? {}), [key]: model };
       try {
-        await writeTextFile(file, serializeProviderFile(parsed.providers), text);
-        await exec("chmod", ["600", file]); // the key is in this file
+        await writeProviderFile({ appHome, exec, readTextFile, writeTextFile }, serializeProviderFile(parsed.providers), text);
       } catch { /* the provider file could not be saved: the choice is kept in memory only */ }
     });
   }
@@ -384,6 +390,15 @@ class AgentConfigCore {
       all[key] = { ...all[key], hidden, ...(viaProvider ? {} : { model, effort }) };
     });
     if (viaProvider) this.rememberProviderModel();
+  }
+
+  toggleAdvanced(cx) {
+    this.collapsedAdvanced = !this.collapsedAdvanced;
+    const collapsed = this.collapsedAdvanced;
+    this.persist((all) => {
+      all[this.key] = { ...all[this.key], advancedArgumentsCollapsed: collapsed };
+    });
+    cx.notify();
   }
 
   // The model list filter (opencode's group) is a list preference, saved with the model and effort.
@@ -605,16 +620,32 @@ class AgentConfigCore {
       if (!preview) { this.providerId = "none"; this.open = null; }
       return { error: "Model provider is no longer set up." };
     }
-    // oMLX wraps the agent in sh so the key comes from the provider file, never from argv, and adds
-    // no effort flag; its model flag is placed by launchArgv.
     const provider = { ...record, id: providerId, configPath: file };
+    if (this.key === "pi") {
+      const model = preview ? values.model : this.model;
+      const info = record.modelInfo?.[model];
+      if (!supportsCodingModel(info)) return { error: "Pi needs a text model with tool support." };
+      if (!piModelLimits(info)) {
+        return { error: "Pi needs a known context limit above 16,384 tokens and an output limit that fits it." };
+      }
+      return { argv: launchPiArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model, `${appHome()}/mods/orca-agent-flyout/pi-provider.mjs`) };
+    }
+    if (this.key === "claude") {
+      return { argv: launchClaudeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
+    }
+    if (this.key === "opencode") {
+      const model = preview ? values.model : this.model;
+      if (!supportsCodingModel(record.modelInfo?.[model])) return { error: "OpenCode needs a text model with tool support." };
+      return { argv: launchOpenCodeArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, model) };
+    }
+    // Codex adds no effort flag; its model flag is placed by launchArgv.
     return { argv: launchArgv(buildArgv(this.spec, p.argv, values, { expansions, skip: ["model", "effort"] }), provider, preview ? values.model : this.model) };
   }
 
   // The flyout is sticky; availability may have changed while it was open. Local settings only.
-  async disabledInManager(p) {
+  async readManagerSettings() {
     const manager = await readTextFile(`${appHome()}/agent-manager.json`).catch(() => null);
-    return managerDisabled(manager).has(p.key);
+    return parseManagerSettings(manager);
   }
 
   // Stops a launch: shows the reason, if there is one, and lets the next click try again.
@@ -630,7 +661,8 @@ class AgentConfigCore {
     this.launching = true; // the mcp listing awaits; a second click must not launch twice
     const space = launchSpace(p);
     if (this.settingsContext && (!space || space.machine)) { this.failLaunch(null, cx); return; }
-    if (!space?.machine && await this.disabledInManager(p)) {
+    const manager = await this.readManagerSettings();
+    if (!space?.machine && manager.disabled.has(p.key)) {
       this.failLaunch(`${p.name ?? p.key} is disabled in Agent Settings.`, cx);
       return;
     }
@@ -641,7 +673,8 @@ class AgentConfigCore {
       return;
     }
 
-    await this.startTerminal(p, space, built.argv, cx);
+    const argv = manager.herdrEnv ? ["env", "HERDR_ENV=1", ...built.argv] : built.argv;
+    await this.startTerminal(p, space, argv, cx);
   }
 
   async startTerminal(p, space, argv, cx) {
@@ -708,7 +741,7 @@ class AgentConfigCore {
             this.toggleHidden(m.id);
             cx.notify();
           })
-          .child(svg(hidden ? "mods/orca-agent-flyout/eye-off.svg" : "mods/orca-agent-flyout/eye.svg").size(14).text_color(t.muted)),
+          .child(svg(hidden ? "mods/orca-assets/eye-off.svg" : "mods/orca-assets/eye--orca-agent-flyout.svg").size(14).text_color(t.muted)),
       );
   }
 
@@ -865,7 +898,12 @@ class AgentConfigCore {
   // The flyout's rhythm: a block is a label, 8px of air, then its controls. Blocks are 14px apart
   // with a hairline between, and the label sits 12px under it (6px under the title for the first).
   sectionHead(title, t, first = false) {
-    return div().mx(8).mt(first ? 6 : 12).mb(8).text_size(10).font_medium().text_color(t.dim).child(title);
+    const advanced = title === "HARNESS CLI ADVANCED ARGUMENTS";
+    return h_flex().mx(8).mt(first ? 6 : 12).mb(8).items_center().gap(6).text_size(10).font_medium().text_color(t.dim)
+      .when(advanced, el => el.role("button").accessibility_label(`${title}, ${this.collapsedAdvanced ? "collapsed" : "expanded"}`).cursor_pointer()
+        .on_click((_e, cx) => this.toggleAdvanced(cx)))
+      .child(div().flex_1().child(title))
+      .when(advanced, el => el.child(div().flex_none().text_size(12).child(this.collapsedAdvanced ? "›" : "⌄")));
   }
 
   divider(t) {
@@ -888,7 +926,7 @@ class AgentConfigCore {
         // The way to a new provider: the Model providers page, with this menu and flyout closed.
         this.listRow("provider-add", t)
           .on_click(() => this.openProviders())
-          .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/orca-agent-flyout/plus.svg").size(13).text_color(t.muted)))
+          .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/orca-assets/plus--orca-agent-flyout.svg").size(13).text_color(t.muted)))
           .child(div().flex_1().min_w(0).truncate().child("Add More")),
       ));
   }
@@ -1109,7 +1147,7 @@ class AgentConfigCore {
       .tooltip("Save")
       .accessibility_label("Save")
       .on_click((_e, cx) => this.saveEditor(id, cx))
-      .child(svg("mods/orca-agent-flyout/save.svg").size(14));
+      .child(svg("mods/orca-assets/save.svg").size(14));
     const head = h_flex()
       .mx(6)
       .mt(2)
@@ -1200,26 +1238,28 @@ class AgentConfigCore {
           .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => this.resetPreset(cx))
           .child(div().text_size(10).text_color(t.muted).child("Reset defaults"))
-          .child(svg("mods/orca-agent-flyout/rotate-ccw.svg").size(14).text_color(t.muted)),
+          .child(svg("mods/orca-assets/rotate-ccw--orca-agent-flyout.svg").size(14).text_color(t.muted)),
       ))
       .when(this.showSettingsShortcut(), el => el.child(div().id("agent-full-settings").size(26).flex().items_center().justify_center()
         .role("button").accessibility_label("Open " + this.spec.label + " settings")
         .tooltip("Open agent settings on this computer")
         .text_color(t.muted).cursor_pointer().hover(s => s.text_color(t.foreground))
         .on_click((_e,cx) => { cx.stop_propagation(); this.openAgentSettings(); })
-        .child(svg("mods/orca-new-menu/bot.svg").size(19))));
+        .child(svg("mods/orca-assets/bot.svg").size(19))));
   }
 
   // Page preview is strictly read-only. Rebuild with the same argv path as launch, including
   // provider wrappers and async expansions. A stale completion must not overwrite a newer draft.
   previewSignature(argv) {
     return JSON.stringify([argv, this.values, this.providerId, Boolean(this.current()),
+      this.settingsContext?.herdrEnv !== false,
       Object.entries(this.editors ?? {}).map(([id, editor]) => [id, editor.input.value()])]);
   }
 
   async buildPreview(argv) {
     if (!this.settingsLoaded || !this.current()) return { error: "Choose an available model before previewing the command." };
     const result = await this.buildLaunch({ argv }, { preview: true });
+    if (result.argv && this.settingsContext?.herdrEnv !== false) result.argv = ["env", "HERDR_ENV=1", ...result.argv];
     return result.argv ? result : { error: result.error ?? "Fix invalid JSON to preview the command." };
   }
 
@@ -1249,7 +1289,8 @@ class AgentConfigCore {
       .when(Boolean(this.error), el => el.child(div().px(8).py(6).text_color(t.blocked).child(this.error)))
       .when(Boolean(this.settingsSaveError), el => el.child(div().px(8).text_color(t.blocked).child("Could not save: " + this.settingsSaveError)))
       .when(this.settingsLoaded, el => el.children(sectionsOf(this.spec).flatMap((section, at) => [
-        ...(at ? [this.divider(t)] : []), this.sectionHead(section.title,t,at===0), this.sectionBody(section,t),
+        ...(at ? [this.divider(t)] : []), this.sectionHead(section.title,t,at===0),
+        ...(section.title === "HARNESS CLI ADVANCED ARGUMENTS" && this.collapsedAdvanced ? [] : [this.sectionBody(section,t)]),
       ])))
       .child(this.divider(t))
       .child(this.settingsPreview(t, { command, argv, copy }))
@@ -1268,6 +1309,8 @@ class AgentConfigCore {
       .child(div().w_full().p(10).rounded(8).bg(t.surface).border_1().border_color(t.border)
         .font_family(settings()?.font_family ?? "JetBrains Mono").text_size(11).text_color(command ? t.foreground : t.muted)
         .child(command ?? this.previewResult?.error ?? unavailable))
+      .when(Boolean(command), el => el.child(div().text_size(10).text_color(this.settingsContext?.herdrEnv === false ? t.dim : t.done)
+        .child(this.settingsContext?.herdrEnv === false ? "HERDR_ENV: not set" : "HERDR_ENV=1")))
       .when(this.spec.wrap?.after === "opencodeVariant" && Boolean(command), el => el.child(div().text_size(11).text_color(t.muted)
         .child("OpenCode effort is stored separately as its model variant; it is not an argv flag.")));
   }
@@ -1308,7 +1351,7 @@ class AgentConfigCore {
         el.children(sections.flatMap((section, at) => [
           ...(at > 0 ? [this.divider(t)] : []),
           this.sectionHead(section.title, t, at === 0),
-          this.sectionBody(section, t),
+          ...(section.title === "HARNESS CLI ADVANCED ARGUMENTS" && this.collapsedAdvanced ? [] : [this.sectionBody(section, t)]),
         ])),
       )
       .child(
@@ -1325,7 +1368,7 @@ class AgentConfigCore {
           .bg(t.accent)
           .text_color(t.background)
           .on_click((_e, cx) => this.launch(cx))
-          .child(svg("mods/orca-agent-flyout/square-terminal.svg").size(16).flex_none())
+          .child(svg("mods/orca-assets/square-terminal--orca-agent-flyout.svg").size(16).flex_none())
           .child(div().flex_1().child("Launch terminal"))
           .child(div().flex_none().text_size(13).child("↵")),
       );

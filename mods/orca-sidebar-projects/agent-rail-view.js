@@ -2,6 +2,7 @@
 // Global and every agent use the same coordinate system.
 import { div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Link } from "gpui-base";
+import { appHome } from "herdr";
 import { RAIL, railGeometry, railViewport, railRows, railControl } from "./agent-rail.js";
 
 const MOTION = { duration: 200, easing: "ease-out" };
@@ -42,9 +43,60 @@ export function railItem(owner, row, t, tile = t.raised) {
     .on_click((_e,cx) => owner.selectRail(row.key,cx))
     .child(div().id("am-rail-tile-" + row.key).absolute().inset_0().rounded(RAIL.avatarRadius)
       .bg(t.hover).opacity(selected || tileHovered ? 1 : 0).transition("opacity", MOTION))
-    .child(div().relative().child(global ? svg("mods/orca-new-menu/bot.svg").size(25).text_color(t.foreground)
+    .child(div().relative().child(global ? svg("mods/orca-assets/bot.svg").size(25).text_color(t.foreground)
       : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))));
   return item.child(railAction(owner, row, t, control, label));
+}
+
+function providerItem(owner, provider, t) {
+  const key = `provider:${provider.id}`;
+  const selected = owner.railSelection === key;
+  const hovered = owner.railHover === key;
+  const g = railGeometry(selected, hovered);
+  const health = provider.health ?? "unknown";
+  const tone = { healthy: t.done, checking: t.accent, unhealthy: t.blocked, unknown: t.dim }[health] ?? t.dim;
+  const label = `${provider.name || "Model provider"} · ${{ healthy: "Healthy", checking: "Checking", unhealthy: "Unhealthy", unknown: "Not checked" }[health] ?? "Not checked"}`;
+  const src = String(provider.iconPath ?? "").startsWith(`${appHome()}/`) ? String(provider.iconPath).slice(appHome().length + 1) : provider.iconPath;
+  return div().id(`am-rail-${key}`).relative().w(RAIL.width).h(RAIL.row).flex_none()
+    .on_hover((inside, cx) => {
+      if (!inside && owner.railHover !== key) return;
+      const next = inside ? key : null;
+      if (next === owner.railHover) return;
+      owner.railHover = next;
+      cx.notify();
+    })
+    .child(div().absolute().left(g.indicatorLeft).top(0).bottom(0).w(RAIL.indicatorWidth).flex().items_center()
+      .child(div().id(`am-rail-pill-${key}`).w_full().h(g.indicatorHeight).rounded_r(RAIL.indicatorWidth).bg(t.foreground).transition("height", MOTION)))
+    .child(div().id(`am-rail-select-${key}`).absolute().left(g.avatarLeft).top(g.avatarTop).size(RAIL.avatar).rounded(RAIL.avatarRadius).bg(t.surface)
+      .flex().items_center().justify_center().cursor_pointer().role("button").accessibility_label(label).tooltip(label)
+      .on_click((_e,cx) => owner.selectRail(key,cx))
+      .child(div().id(`am-rail-tile-${key}`).absolute().inset_0().rounded(RAIL.avatarRadius).bg(t.hover)
+        .opacity(selected || hovered ? 1 : 0).transition("opacity", MOTION))
+      .child(div().relative().child(src ? image(src).w(28).h(28).rounded(6) : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted)))
+      .child(div().absolute().right(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label)));
+}
+
+function providerAddItem(owner, t) {
+  const key = "provider:add";
+  const selected = owner.railSelection === key;
+  const hovered = owner.railHover === key;
+  const g = railGeometry(selected, hovered);
+  return div().id("am-rail-provider-add").relative().w(RAIL.width).h(RAIL.row).flex_none()
+    .on_hover((inside, cx) => {
+      if (!inside && owner.railHover !== key) return;
+      const next = inside ? key : null;
+      if (next === owner.railHover) return;
+      owner.railHover = next;
+      cx.notify();
+    })
+    .child(div().absolute().left(g.indicatorLeft).top(0).bottom(0).w(RAIL.indicatorWidth).flex().items_center()
+      .child(div().w_full().h(g.indicatorHeight).rounded_r(RAIL.indicatorWidth).bg(t.foreground).transition("height", MOTION)))
+    .child(div().id("am-rail-select-provider-add").absolute().left(g.avatarLeft).top(g.avatarTop).size(RAIL.avatar).rounded_full()
+      .border_1().border_dashed().border_color(t.border).bg(t.surface).flex().items_center().justify_center().cursor_pointer()
+      .role("button").accessibility_label("Add model provider").tooltip("Add model provider")
+      .on_click((_e,cx) => owner.selectRail(key,cx))
+      .hover(s => s.bg(t.hover).border_color(t.accent))
+      .text_size(23).line_height("23px").text_color(selected || hovered ? t.accent : t.muted).child("+"));
 }
 
 // The switch and install sit over the avatar; their hover must not light the avatar too.
@@ -56,15 +108,18 @@ function controlHover(owner, key, hovered, cx) {
 }
 
 function railAction(owner, row, t, control, label) {
+  const avatarRight = (RAIL.width + RAIL.avatar) / 2;
   if (row.key === "global") {
-    return div().absolute().left(48).top(39).size(20).rounded_full().bg(t.raised)
+    return div().absolute().left(avatarRight - 20).top(39).size(20).rounded_full().bg(t.raised)
       .border_1().border_color(t.border).flex().items_center().justify_center()
       .cursor_pointer().tooltip(label).on_click((_e,cx) => owner.selectRail(row.key,cx))
-      .child(svg("mods/orca-sidebar-projects/settings.svg").size(12).text_color(t.muted));
+      .child(svg("mods/orca-assets/settings.svg").size(12).text_color(t.muted));
   }
   if (control?.kind === "switch") {
     // t.input is translucent in the dark theme; the off track must stay opaque.
-    return div().id("am-rail-toggle-" + row.key).absolute().left(40).top(33)
+    // Center the visible switch in its hit area, then align its right edge with the avatar.
+    const hitLeft = avatarRight - (RAIL.hitWidth + RAIL.switchWidth) / 2;
+    return div().id("am-rail-toggle-" + row.key).absolute().left(hitLeft).top(33)
       .w(RAIL.hitWidth).h(RAIL.hitHeight).flex().items_center().justify_center()
       .role("switch").checked(control.checked).accessibility_label("Enable " + row.name)
       .on_hover((hovered, cx) => controlHover(owner, row.key, hovered, cx))
@@ -78,7 +133,7 @@ function railAction(owner, row, t, control, label) {
   if (control?.kind === "install") {
     const glyph = div().size(22).rounded_full().bg(t.raised).border_1().border_color(t.border).hover((s) => s.border_color(t.foreground))
       .flex().items_center().justify_center().text_color(t.accent)
-      .child(svg("mods/orca-agent-settings/download.svg").size(14));
+      .child(svg("mods/orca-assets/download.svg").size(14));
     // Keep the install affordance visible even if a community CLI has no known guide.
     // A missing guide opens that agent's details, never a guessed shell command.
     const hit = h_flex().w(30).h(27).items_center().justify_center().child(glyph);
@@ -88,32 +143,77 @@ function railAction(owner, row, t, control, label) {
         .tooltip("Install " + row.name).cursor_pointer().on_click((_e,cx) => {
           cx.stop_propagation(); owner.selectRail(row.key,cx);
         }).child(hit);
-    return div().absolute().left(43).top(33).w(30).h(27).flex().items_center().justify_center()
+    // The 22px install glyph is centered in this 30px hit target.
+    return div().absolute().left(avatarRight - 26).top(33).w(30).h(27).flex().items_center().justify_center()
       .on_hover((hovered, cx) => controlHover(owner, row.key, hovered, cx)).child(action);
   }
   return div().size(0);
 }
 
-// A group is a rounded box (Discord's folder) holding its title and its rows. The pills stay on the
-// rail's left edge, outside the box.
+// A Discord-style rounded group has a folder toggle at the top and agent tiles beneath it.
 function groupView(owner, title, rows, scroll, t) {
+  const key = title === "Official" ? "officialRailOpen" : "unofficialRailOpen";
+  const open = owner[key] !== false;
+  const action = `${open ? "Collapse" : "Expand"} ${title}`;
+  const medal = title === "Official" ? "🥇" : "🥉";
   const {height,scroll:overflow} = railViewport(rows.length);
   const id = "am-rail-list-" + title.toLowerCase();
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
     .child(v_flex().w(RAIL.width)
-      .child(div().h(23).w_full().flex().items_center().justify_center().text_size(10).text_color(t.muted).child(title))
-      .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
+      .child(div().id("am-rail-folder-" + title.toLowerCase()).relative().w(RAIL.width).h(RAIL.row).flex_none()
+        .flex().items_center().justify_center().cursor_pointer().role("button")
+        .accessibility_label(action).tooltip(action)
+        .on_click((_e,cx) => { owner[key] = !open; cx.notify(); })
+        .child(div().relative().size(32).flex().items_center().justify_center()
+          .child(svg("mods/orca-assets/folder--orca-sidebar-projects.svg").size(25).text_color(t.accent))
+          .child(div().absolute().right(-7).bottom(-6).text_size(14).child(medal))))
+      .child(div().relative().w(RAIL.width).h(open ? height : 0).overflow_hidden().transition("height", MOTION)
+        .opacity(open ? 1 : 0).transition("opacity", MOTION)
+        .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
         .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
-          .when(overflow, el => el.absolute().inset_0().overflow_y_scroll())
-          .children(railRows(rows).map(row => railItem(owner,row,t,t.surface))))));
+          .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
+          .children(railRows(rows).map(row => railItem(owner,row,t,t.surface)))))));
 }
 
-export function railView(owner, official, unofficial, t) {
+function providerGroupView(owner, providers, t) {
+  const open = owner.providerRailOpen !== false;
+  const action = `${open ? "Collapse" : "Expand"} Model providers`;
+  const {height,scroll:overflow} = railViewport(providers.length + 1);
+  return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
+    .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
+    .child(v_flex().w(RAIL.width)
+      .child(div().id("am-rail-folder-model-providers").relative().w(RAIL.width).h(RAIL.row).flex_none()
+        .flex().items_center().justify_center().cursor_pointer().role("button")
+        .accessibility_label(action).tooltip(action)
+        .on_click((_e,cx) => { owner.providerRailOpen = !open; cx.notify(); })
+        .child(div().relative().size(32).flex().items_center().justify_center()
+          .child(svg("mods/orca-assets/folder--orca-sidebar-projects.svg").size(25).text_color(t.accent))
+          .child(div().absolute().right(-7).bottom(-6).size(20).rounded_full().bg(t.raised).border_1().border_color(t.border)
+            .flex().items_center().justify_center().child(svg("mods/orca-assets/hard-drive.svg").size(12).text_color(t.muted)))))
+      .child(
+        div().relative().w(RAIL.width).h(open ? height : 0).overflow_hidden().transition("height", MOTION)
+          .opacity(open ? 1 : 0).transition("opacity", MOTION)
+          .child(
+            div().relative().w(RAIL.width).h(height).overflow_hidden()
+              .child(
+                v_flex().id("am-rail-list-model-providers").w(RAIL.width).track_scroll(owner.providerRailScroll)
+                  .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
+                  .children(providers.map(provider => providerItem(owner,provider,t)))
+                  .child(providerAddItem(owner,t)),
+              ),
+          ),
+      ),
+    );
+}
+
+export function railView(owner, official, unofficial, providers, t) {
   return v_flex().id("am-agent-rail").w(RAIL.width).flex_none().min_h(0)
     .bg(t.surface).overflow_y_scrollbar()
     .child(railItem(owner,{key:"global"},t))
     .child(div().w_full().h(12).flex().items_center().justify_center().child(div().w(32).h(2).rounded_full().bg(t.border)))
     .child(groupView(owner,"Official",official,owner.officialRailScroll,t))
-    .child(groupView(owner,"Unofficial",unofficial,owner.unofficialRailScroll,t));
+    .child(groupView(owner,"Unofficial",unofficial,owner.unofficialRailScroll,t))
+    .child(div().w_full().h(12).flex().items_center().justify_center().child(div().w(32).h(2).rounded_full().bg(t.border)))
+    .child(providerGroupView(owner,providers,t));
 }

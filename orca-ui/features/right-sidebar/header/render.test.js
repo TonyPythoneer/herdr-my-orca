@@ -61,8 +61,11 @@ function arrange({ spaces = [], panes = [], focused, active = "files", answers =
 }
 
 const view = () => Object.create(PanelHead.prototype);
-const rec = (node) => JSON.parse(JSON.stringify(node.__node));
-const toolIds = (node) => rec(node).c.find(([key]) => key === "children")[1][0].map((child) => child.a[0].replace(/^panel-/, ""));
+const rec = (node) => (node?.__node ? JSON.parse(JSON.stringify(node.__node)) : node);
+// The segmented view switcher is the row's first child; its `children` call holds the buttons.
+const toolButtons = (node) => rec(node).c.find(([key]) => key === "child")[1][0]
+  .c.find(([key]) => key === "children")[1][0];
+const toolIds = (node) => toolButtons(node).map((child) => child.a[0].replace(/^panel-/, ""));
 
 // Renders once and runs the probe, so the second render sees the resolved git state.
 async function settle(cx) {
@@ -290,10 +293,11 @@ test("panel tools use native accessible buttons and report their selected state"
   arrange({ active: "changes", spaces: [folderOf("s1", "/proj")], answers: [REPO] });
   const v = await settle(makeCx());
   const root = rec(v.render(makeCx()));
-  const buttons = root.c.find(([key]) => key === "children")[1][0];
+  const buttons = toolButtons(root);
   assert.ok(buttons.every(button => button.n === "Button.new"));
+  assert.ok(buttons.every(button => button.c.some(([key]) => key === "flex_1")));
   const selected = buttons.filter(button => button.c.some(([key, args]) => key === "selected" && args[0]));
   assert.deepEqual(selected.map(button => button.a[0]), ["panel-changes"]);
   assert.ok(buttons.every(button => button.c.some(([key]) => key === "on_click")));
-  assert.ok(root.c.some(([key, args]) => key === "child" && args[0]?.n === "Button.new" && args[0].a[0] === "panel-toggle"));
+  assert.ok(!root.c.some(([key, args]) => key === "child" && args[0]?.n === "Button.new" && args[0].a[0] === "panel-toggle"));
 });

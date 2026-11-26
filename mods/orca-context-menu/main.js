@@ -353,7 +353,7 @@ function toList(ids) {
 }
 
 // Orca's lucide glyph for each row, taken from the component named in the citation.
-const iconPath = (name) => `mods/orca-context-menu/${name}.svg`;
+const iconPath = (name) => sharedAsset(`mods/orca-context-menu/${name}.svg`);
 const arrowIcon = (args) => `arrow-${args?.direction ?? "right"}`;
 const WORKTREE_ICONS = { new: "git-branch-plus", open: "workflow", switch: "git-fork" };
 const ICON_BY_COMMAND = new Map([
@@ -515,7 +515,7 @@ function contextHeader(p, t) {
       // Pinned: Herdr's `settled`, the state the Pin/Unpin row below toggles.
       .when(Boolean(tab.settled), (el) => el.child(h_flex().flex_none().items_center().justify_center()
         .p(4).rounded(5).border_1().border_color(t.border)
-        .child(svg("mods/orca-context-menu/pin.svg").size(10).text_color(t.muted)))))
+        .child(svg("mods/orca-assets/pin.svg").size(10).text_color(t.muted)))))
     .when(Boolean(where), (el) => el.child(div().truncate().text_size(10).text_color(t.muted).child(where)));
 }
 
@@ -909,4 +909,19 @@ export default class Menu extends View {
         ...list.map((_it, i) => this.row(p, list, i, look)),
       ]);
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-context-menu/bell.svg": "mods/orca-assets/bell--orca-context-menu.svg",
+  "mods/orca-context-menu/git-branch-plus.svg": "mods/orca-assets/git-branch-plus--orca-context-menu.svg",
+  "mods/orca-context-menu/minimize-2.svg": "mods/orca-assets/minimize-2--orca-context-menu.svg",
+  "mods/orca-context-menu/panel-right-close.svg": "mods/orca-assets/panel-right-close--orca-context-menu.svg",
+  "mods/orca-context-menu/pencil.svg": "mods/orca-assets/pencil--orca-context-menu.svg",
+  "mods/orca-context-menu/plus.svg": "mods/orca-assets/plus--orca-agent-flyout.svg",
+  "mods/orca-context-menu/rotate-ccw.svg": "mods/orca-assets/rotate-ccw--orca-context-menu.svg",
+  "mods/orca-context-menu/workflow.svg": "mods/orca-assets/workflow--orca-context-menu.svg",
+  "mods/orca-context-menu/x.svg": "mods/orca-assets/x--orca-context-menu.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }

@@ -34,8 +34,8 @@ test("validateHost rejects what a base URL cannot be", () => {
 });
 
 test("judgeModels passes a 200 with a non-empty data array", () => {
-  const body = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM2-VL-450M-4bit" }, { id: "b" }] });
-  assert.deepEqual(judgeModels(200, body), { ok: true, models: ["mlx-community--LFM2-VL-450M-4bit", "b"] });
+  const body = JSON.stringify({ object: "list", data: [{ id: "mlx-community--LFM2-VL-450M-4bit", max_model_len: 65536 }, { id: "b" }] });
+  assert.deepEqual(judgeModels(200, body), { ok: true, models: ["mlx-community--LFM2-VL-450M-4bit", "b"], modelInfo: { "mlx-community--LFM2-VL-450M-4bit": { contextWindow: 65536 } } });
 });
 
 test("judgeModels maps every failure to its fixed message", () => {
@@ -64,6 +64,15 @@ test("launchArgv keeps today's argv when no provider is chosen", () => {
   assert.notEqual(launchArgv(baseArgv, null, "gpt-5"), baseArgv);
 });
 
+test("launchArgv passes a known model context limit and leaves unknown limits alone", () => {
+  const known = launchArgv(baseArgv, { ...provider, modelInfo: { m: { contextWindow: 131072 } } }, "m");
+  assert.ok(known.includes("model_context_window=131072"));
+  for (const contextWindow of [undefined, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    const argv = launchArgv(baseArgv, { ...provider, modelInfo: { m: { contextWindow } } }, "m");
+    assert.equal(argv.some((part) => part.startsWith("model_context_window=")), false);
+  }
+});
+
 test("launchArgv wraps Codex for oMLX and keeps the flag order from the design", () => {
   const argv = launchArgv(baseArgv, provider, "mlx-community--LFM2-VL-450M-4bit");
   assert.deepEqual(argv, [
@@ -73,6 +82,7 @@ test("launchArgv wraps Codex for oMLX and keeps the flag order from the design",
     "--",
     provider.configPath,
     "omlx",
+    provider.host,
     "codex",
     "--disable",
     "shell_snapshot",
@@ -92,7 +102,7 @@ test("launchArgv wraps Codex for oMLX and keeps the flag order from the design",
   ]);
   // The wrapper reads the key from the file: no argument carries one.
   assert.equal(argv.filter((part) => part.includes("apiKey=") || part.startsWith("sk-")).length, 0);
-  assert.ok(WRAPPER.includes("$1") && WRAPPER.includes("$2") && WRAPPER.includes('"$@"') && WRAPPER.includes("shift 2"));
+  assert.ok(WRAPPER.includes("$1") && WRAPPER.includes("$2") && WRAPPER.includes("$3") && WRAPPER.includes('"$@"') && WRAPPER.includes("shift 3"));
   assert.equal(OMLX, "omlx");
 });
 
@@ -101,6 +111,7 @@ test("the wrapper reads the key of the record the host came from", () => {
   const other = { id: "myllm", host: "http://127.0.0.1:9000/v1", configPath: provider.configPath };
   const argv = launchArgv(baseArgv, other, "m");
   assert.equal(argv[5], "myllm", "the record id is what the wrapper looks the key up by");
+  assert.equal(argv[6], other.host, "the wrapper checks that the record still has the selected host");
   assert.ok(argv.includes('model_providers.omlx.base_url="http://127.0.0.1:9000/v1"'));
   // A record without an id is the oMLX record.
   assert.equal(launchArgv(baseArgv, { ...provider, id: undefined }, "m")[5], "omlx");

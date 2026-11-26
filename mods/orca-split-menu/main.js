@@ -202,7 +202,7 @@ export default class SplitMenu extends View {
           })
           .on_click((_e, cx) => this.choose(i, cx))
           .child(
-            svg(`mods/orca-split-menu/${it.icon}`)
+            svg(sharedAsset(`mods/orca-split-menu/${it.icon}`))
               .size(14)
               .flex_none()
               .text_color(isRed ? bad : t.muted)
@@ -263,4 +263,16 @@ export default class SplitMenu extends View {
         ...list.map((_it, i) => this.row(list, i, look)),
       ]);
   }
+}
+
+const SHARED_ASSET_PATHS = Object.freeze({
+  "mods/orca-split-menu/file-text.svg": "mods/orca-assets/file-text--orca-split-menu.svg",
+  "mods/orca-split-menu/folder.svg": "mods/orca-assets/folder--orca-files.svg",
+  "mods/orca-split-menu/git-branch.svg": "mods/orca-assets/git-branch--orca-header.svg",
+  "mods/orca-split-menu/minimize-2.svg": "mods/orca-assets/minimize-2--orca-context-menu.svg",
+  "mods/orca-split-menu/panel-right-close.svg": "mods/orca-assets/panel-right-close--orca-context-menu.svg",
+  "mods/orca-split-menu/x.svg": "mods/orca-assets/x--orca-context-menu.svg"
+});
+function sharedAsset(path) {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
 }
