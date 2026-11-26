@@ -85,6 +85,17 @@ test('menu actions persist options, preserve the final host and notify only on a
   assert.equal(cx.calls, 9);
 });
 
+test('changing workspace options pings orca-sidebar-projects so the sidebar re-sorts', () => {
+  const { nav, cx, saved } = fixture();
+  const ran = [];
+  globalThis.__herdrRun = (command) => ran.push(command);
+  nav.act({ kind: 'radio', key: 'sortBy', value: 'name' }, cx);
+  assert.deepEqual(saved().sortBy, 'name');
+  assert.ok(ran.includes('orca-sidebar-projects.options-changed'), ran);
+  nav.act({ kind: 'groupby', value: 'none' }, cx);
+  assert.ok(ran.includes('orca-sidebar-projects.options-changed'), ran);
+});
+
 test('click, hover and keyboard operate on the same popup pages', () => {
   const { nav, cx, saved } = fixture();
   globalThis.__herdrProps = () => ({ navMenu: 'workspace-options' });

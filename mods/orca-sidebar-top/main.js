@@ -48,11 +48,11 @@ function readOptions() {
 function writeOptions(patch) {
   const next = { ...readOptions(), ...patch };
   localStorage.setItem(OPTIONS_KEY, JSON.stringify(next));
-  // orca-sidebar-projects re-reads the key inside ordered(), so nothing has to be sent to it. An
-  // invented cross-mod command is not a notification: an unregistered name is a warn and an
-  // error (`window.rs:2763`), and `setShared` does not notify (AGENTS.md rule 10). The sidebar
-  // repaints when this popup closes, because removing an overlay notifies the window
-  // (`window.rs:3642-3664`), and the reopened popup always re-reads the stored options.
+  // orca-sidebar-projects re-reads the key inside ordered(), but it never re-renders unless
+  // something notifies it. Ping it so a sort/group/filter pick takes effect immediately instead
+  // of waiting for the next unrelated status or git refresh. `options-changed` is handled in
+  // orca-sidebar-projects' command loop (`main.js:232`).
+  run("orca-sidebar-projects.options-changed");
   return next;
 }
 
