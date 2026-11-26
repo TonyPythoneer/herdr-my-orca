@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -114,7 +115,7 @@ def prepare(app, provider, model, expected_host, kind):
         else:
             binary = root / "venv/bin/litellm"
             if not binary.is_file():
-                raise RuntimeError("Install the local LiteLLM environment: python3 -m venv <appHome>/litellm-gateway/venv; <appHome>/litellm-gateway/venv/bin/pip install 'litellm[proxy]==" + VERSION + "'.")
+                raise RuntimeError("Local LiteLLM is not installed. See the local gateway setup in docs/designs/litellm-local-provider-observability.md.")
             version = subprocess.run([str(root / "venv/bin/python"), "-c",
                                       "import importlib.metadata as m; print(m.version('litellm'))"],
                                      capture_output=True, text=True, timeout=10)
@@ -130,7 +131,9 @@ def prepare(app, provider, model, expected_host, kind):
                                                     "kilo": urllib.parse.urlsplit(r["host"]).hostname == "ai-gateway.kilo.ai"}
                                                   for a, r in routes.items()})
             env = dict(os.environ, HERDR_GATEWAY_DIR=str(root), LITELLM_TELEMETRY="False",
-                       PYTHONPATH=str(Path(__file__).resolve().parent))
+                       PYTHONPATH=str(Path(__file__).resolve().parent),
+                       LITELLM_RUST_FIRST="false", LITELLM_RUST="false")
+            env.pop("_LITELLM_GATEWAY_SUPERVISED", None)
             process = subprocess.Popen([str(binary), "--config", str(root / "config.json"),
                                         "--host", "127.0.0.1", "--port", str(port), "--num_workers", "1"],
                                        cwd=root, env=env, stdin=subprocess.DEVNULL,
@@ -159,16 +162,43 @@ def prepare(app, provider, model, expected_host, kind):
         return {"host": state["url"] + ("" if kind == "claude" else "/v1"),
                 "configPath": str(credentials), "id": credential_id, "aliases": selected, "model": alias}
 
+def stop(app):
+    """Explicit operator action only, after managed agents have been closed."""
+    root = app / "litellm-gateway"
+    if not root.exists():
+        return {"stopped": True}
+    with open(root / "lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state_file = root / "state.json"
+        if not state_file.exists():
+            return {"stopped": True}
+        state = read(state_file)
+        pid = state.get("pid")
+        if alive(pid):
+            if not ready(state, read(root / "routes.json")) or os.getpgid(pid) != pid:
+                raise RuntimeError("Cannot verify gateway ownership; inspect the saved process manually.")
+            os.kill(pid, signal.SIGTERM)
+            for _ in range(50):
+                if not ready(state, []):
+                    break
+                time.sleep(.2)
+            else:
+                raise RuntimeError("Gateway did not stop.")
+        state_file.unlink(missing_ok=True)
+        return {"stopped": True}
+
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser()
     parser.add_argument("app", type=Path)
-    parser.add_argument("action", choices=["prepare", "enable", "disable"])
+    parser.add_argument("action", choices=["prepare", "enable", "disable", "stop"])
     parser.add_argument("args", nargs="*")
     ns = parser.parse_args()
     try:
         if ns.action == "prepare":
             result = prepare(ns.app, *ns.args)
+        elif ns.action == "stop":
+            result = stop(ns.app)
         else:
             private_write(ns.app / "model-gateway.json", {"enabled": ns.action == "enable"})
             result = {"enabled": ns.action == "enable"}
