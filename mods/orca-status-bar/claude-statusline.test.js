@@ -64,3 +64,18 @@ test('a payload without rate_limits writes nothing', () => {
     rmSync(cache, { recursive: true, force: true });
   }
 });
+
+test('a payload without rate_limits still draws the status line', () => {
+  const cache = fresh();
+  try {
+    const out = execFileSync('sh', [script], {
+      input: JSON.stringify({ session_id: 'no-limits' }),
+      env: { ...process.env, HERDR_USAGE_CACHE: cache, HERDR_STATUSLINE: 'echo DRAWN' },
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore']
+    });
+    assert.equal(out.trim(), 'DRAWN');
+  } finally {
+    rmSync(cache, { recursive: true, force: true });
+  }
+});

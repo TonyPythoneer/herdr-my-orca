@@ -24,11 +24,11 @@ if [ -z "$payload" ]; then
   exit 0
 fi
 
-# rate_limits appears only for Claude.ai-subscriber sessions after the first API response;
-# the status line ticks several times a second while streaming, so skip the rest otherwise.
+# rate_limits appears only for Claude.ai-subscriber sessions after the first API response.
+# Without it, skip only the cache write below; the status line still draws.
+has_limits=0
 case "$payload" in
-  *'"rate_limits"'*) ;;
-  *) exit 0 ;;
+  *'"rate_limits"'*) has_limits=1 ;;
 esac
 
 cache_dir="${HERDR_USAGE_CACHE:-$HOME/.cache/herdr-usage}"
@@ -70,7 +70,7 @@ MERGE='
           end))
   | with_entries(select(.value != null))'
 
-if [ "$due" = "1" ]; then
+if [ "$has_limits" = "1" ] && [ "$due" = "1" ]; then
   mkdir -p "$cache_dir" 2>/dev/null
   # Keep only the windows.
   windows=$(printf '%s' "$payload" | jq -c '.rate_limits // empty' 2>/dev/null)
