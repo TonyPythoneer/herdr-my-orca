@@ -65,7 +65,7 @@ test("every control of an open panel does its one job and hides the panel where 
   view.open = true;
   log.length = 0;
   click(byId(view.render().__node, "orca-float-start-agent"), cx);
-  assert.deepEqual(log, [["open", { mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }]]);
+  assert.deepEqual(log, [["open", { mod: "orca-new-menu", kind: "popup", width: 288 }]]);
   assert.equal(view.open, true, "starting an agent leaves the panel up");
 });
 

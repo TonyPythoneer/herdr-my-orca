@@ -3,7 +3,6 @@
   "overlay": {
     "kind": "popup",
     "at": "center",
-    "width": 288,
-    "height": 512
+    "width": 288
   }
 }

@@ -4,10 +4,10 @@
 // (TabBarCreateEntry.tsx:317-350) and static create rows (tab-bar-static-create-menu.tsx).
 // Opened by orca-header, orca-landing and orca-sidebar-top.
 import { View, div, svg, image } from "gpui-kit";
-import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { checking, theme, spaces, panes, knownAgents, run, props, closeOverlay, openOverlay, pickFolder, keys, window as appWindow, shared, setShared, appHome, readTextFile, exec } from "herdr";
+import { v_flex, h_flex, InputState, Input, HoverCard } from "gpui-base";
+import { checking, theme, spaces, knownAgents, run, props, closeOverlay, openOverlay, keys, window as appWindow, shared, setShared, appHome, readTextFile, exec } from "herdr";
 import { MODELS } from "./models.js";
-import { currentInventory, emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory } from "./rows.js";
+import { agentWindow, currentInventory, emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory } from "./rows.js";
 import { detectFreebuff } from "./freebuff.js";
 
 // Keep one inventory per machine for the first paint, then always ask again on open. The Agent
@@ -60,19 +60,22 @@ function rememberModels(key, models) {
   } catch { /* storage is unavailable or full: the list is asked for again next time */ }
 }
 
-// Visible row counts follow the 288x512 popup and its 32px rows (orca-header/main.js:343).
-// Menu padding (4) plus a small gap, so the flyout clears the menu's outer edge.
+// The model picker keeps 11 rows in view; the palette sizes itself to its content.
+// Menu padding (6) plus a small gap, so the flyout clears the menu's outer edge.
 const FLYOUT_GAP = 6;
-const FIT = { list: 13, models: 11 };
-const CHEVRON_W = 32;
-// orca-agent-flyout's content width, a guessed height (it sets none) and the window margin the flyout keeps.
-const FLYOUT_W = 300;
+const FIT = { models: 11 };
+// orca-agent-flyout's content width (four controls: source, model, effort, fast on one row),
+// a guessed height (it sets none) and the window margin the flyout keeps.
+const FLYOUT_W = 600;
 const FLYOUT_H = 440;
 const WINDOW_MARGIN = 8;
-// The menu's own padding plus the divider: how far a flipped flyout sits from the row's left edge.
-const MENU_EDGE = 4;
-const WORKTREE_NEW_DIALOG = { width: 440, height: 260 };
-const WORKTREE_OPEN_DIALOG = { width: 560, height: 480 };
+// The menu's own padding: how far a flipped flyout sits from the agent row's left edge.
+const MENU_EDGE = 6;
+// The agent bar shows five full icons and half of the next, with one arrow per side.
+const AGENT_FULL = 5;
+const AGENT_GAP = 4;
+const AGENT_VIEW = AGENT_FULL * 36 + AGENT_FULL * AGENT_GAP + 18;
+const AGENT_ARROW = 20;
 
 // The agent to launch, or none when Settings removed it since the menu opened.
 function launchTarget(agent, unofficial, state) {
@@ -123,6 +126,8 @@ export default class NewMenu extends View {
   init(_props, cx) {
     this.at = 0;
     this.backAt = 0;
+    this.agentAt = 0;
+    this.tipHot = null;
     this.picking = null;
     this.models = null;
     this.modelsFailed = false;
@@ -243,28 +248,12 @@ export default class NewMenu extends View {
 
   createRows() {
     const space = spaces().find((s) => s.active);
-    const pane = panes().find((p) => p.focused);
-    const folder = pane?.cwd;
+    // tab-bar-static-create-menu.tsx:213-225 — New Terminal (TerminalSquare).
+    // Pinned to the space's work directory: `tab.new` alone follows the focused shell's cwd.
+    // The palette keeps this one operation; worktree and file rows live in their own surfaces.
     return [
-      // tab-bar-static-create-menu.tsx:213-225 — New Terminal (TerminalSquare).
-      // Pinned to the space's work directory: `tab.new` alone follows the focused shell's cwd.
-      { label: "New Terminal", icon: "square-terminal", hint: shortcut("orca-header.new-tab"),
+      { label: "New Terminal", icon: "square-terminal", hint: shortcut("orca-header.new-tab"), tip: "new-terminal",
         run: () => run("tab.new", space ? { space: space.id, ...(space.folder ? { folder: space.folder } : {}) } : {}) },
-      // Unsupported: omnibox (TabBarCreateEntry.tsx:317-350), browser and Markdown rows
-      // (tab-bar-static-create-menu.tsx:227,239,283), plugins, and emulator (:266).
-      ...(pane ? [{ label: "New File Browser", icon: "folder-open",
-        run: () => run("pane.split", { direction: "right", pane: pane.pane, mod: "orca-files" }) }] : []),
-      // Orca's "Open Markdown..." (:283) opens a file; Herdr opens folders as terminals.
-      { label: "New Terminal in Folder…", icon: "folder-open", pick: true },
-      // Orca has no worktree rows here; the stock Herdr menu did, and orca-landing's
-      // "Create workspace" button opens this menu for them.
-      { label: "New worktree…", icon: "git-branch-plus", sep: true,
-        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", ...WORKTREE_NEW_DIALOG, props: { space: space?.id, folder, action: "new" } }) },
-      { label: "Open worktree…", icon: "workflow",
-        run: () => openOverlay({ mod: "orca-worktree", kind: "dialog", ...WORKTREE_OPEN_DIALOG, props: { space: space?.id, folder, action: "open" } }) },
-      // Agent Settings is reached from the empty agent state and from the sidebar's Agents
-      // button. Keeping a permanent "Manage agents…" row here would give the empty state two
-      // settings actions instead of the one required action.
     ];
   }
 
@@ -289,8 +278,10 @@ export default class NewMenu extends View {
       const freebuff = { key: "freebuff", name: "FreeBuff CLI", run: freebuffRun(state.agents) };
       rows.push({
         label: "FreeBuff CLI",
+        hint: "",
         image: "freebuff.png",
         section: "Unofficial",
+        tip: "freebuff",
         run: () => this.launch(freebuff, null, true),
       });
     }
@@ -298,6 +289,7 @@ export default class NewMenu extends View {
       return [{
         label: "Open Agent Settings",
         icon: "bot",
+        settings: true,
         run: () => run("layout.select", { stack: "main", child: "main-agents" }),
       }];
     }
@@ -426,15 +418,6 @@ export default class NewMenu extends View {
       cx.notify();
       return;
     }
-    if (row.pick) {
-      cx.spawn(async () => {
-        const folder = await pickFolder({ prompt: "Choose a folder for the terminal" });
-        if (!folder) return;
-        this.closeMenu();
-        run("terminal.open", { folder });
-      });
-      return;
-    }
     this.closeMenu();
     row.run();
   }
@@ -506,13 +489,24 @@ export default class NewMenu extends View {
     closeOverlay(props()?.overlay);
   }
 
-  // Row's left/right edges and top, in window coordinates, so the flyout sits level with the row: the
-  // pointer is `position`, `local_position` is its offset inside the row, `bounds.width` the row's
-  // width. Falls back to the pointer when no move over the row has been seen yet.
-  trackRow(agent, e) {
+  // The agent row's left/right edges, in window coordinates, keep the flyout against the menu's
+  // outer edge instead of covering the icons. The icon's top gives the flyout its y.
+  trackMenu(e) {
     if (!e.local_position || !e.bounds) return;
     const left = e.position.x - e.local_position.x;
-    this.rowEdge = { key: agent.key, left, right: left + e.bounds.width, y: e.position.y - e.local_position.y };
+    this.menuEdge = { left, right: left + e.bounds.width };
+    this.openHover();
+  }
+
+  openHover() {
+    if (!this.hoverAgent || !this.menuEdge || this.iconY == null) return;
+    this.rowEdge = {
+      key: this.hoverAgent.key,
+      left: this.menuEdge.left,
+      right: this.menuEdge.right,
+      y: this.iconY,
+    };
+    this.hoverConfig(this.hoverAgent, true);
   }
 
   // Flip to the menu's left when the right side overflows the window (Orca does the same); y stays inside it.
@@ -527,24 +521,141 @@ export default class NewMenu extends View {
     return { x: flyoutX(rightX, leftX, vp.width), y: Math.max(WINDOW_MARGIN, Math.min(r.y, vp.height - FLYOUT_H - WINDOW_MARGIN)) };
   }
 
-  chevron(agent, t) {
-    // Orca's setup button is a bordered zone at the row's right edge (AgentLaunchSetupButton.tsx),
-    // so the divider shows how far the hover reaches.
-    return div()
-      .id(`cfg-${agent.key}`)
-      .h_full()
-      .w(CHEVRON_W)
-      .flex()
+  // One square action in the palette: the operation row's New Terminal and every agent icon.
+  iconButton(row, i, t) {
+    return h_flex()
+      .id(`new-${i}`)
+      .size(36)
       .flex_none()
       .items_center()
       .justify_center()
-      .rounded_r(7)
-      .border_l(1)
-      .border_color(t.border)
+      .rounded(7)
+      .cursor_pointer()
+      .when(i === this.at, (el) => el.bg(t.selected))
       .hover((s) => s.bg(t.hover))
-      .child(svg("mods/orca-assets/chevron-right--orca-agent-settings.svg").size(14).text_color(t.muted));
+      .role("button")
+      .accessibility_label(row.label)
+      // A flyout agent names itself in the flyout; New Terminal draws its own HTML tooltip.
+      .when(!row.config && !row.tip, (el) => el.tooltip(row.hint ? `${row.label}  ${row.hint}` : row.label))
+      .on_mouse_move((e, cx) => {
+        if (!e.local_position || !e.bounds) return;
+        this.iconY = e.position.y - e.local_position.y;
+        this.hoverAgent = row.config ?? null;
+        if (this.at !== i) {
+          this.at = i;
+          cx.notify();
+        }
+        this.openHover();
+      })
+      .on_hover((hovered, cx) => {
+        if (row.tip) {
+          const next = hovered ? row.tip : null;
+          if (this.tipHot !== next) { this.tipHot = next; cx.notify(); }
+        }
+        if (!hovered && this.hoverAgent === (row.config ?? null)) this.hoverAgent = null;
+      })
+      .on_click((_e, cx) => this.choose(i, cx))
+      .child(this.icon(row, 18, t));
   }
 
+  // The operation bar starts with New Terminal; future operations join the same row.
+  operationBar(t) {
+    const row = this.createRows()[0];
+    return h_flex().items_center().child(this.tipButton(row, 0, t));
+  }
+
+  // The card is emptied as soon as the icon loses hover, so it is never a hover target of its own.
+  tipButton(row, i, t) {
+    const button = this.iconButton(row, i, t);
+    if (!row.tip) return button;
+    return HoverCard.new(`tip-${row.tip}`)
+      .flex_none()
+      .anchor("top_center")
+      .open_delay(150)
+      .close_delay(0)
+      .trigger(button)
+      .content(this.tipHot === row.tip ? this.terminalTip(row) : div());
+  }
+
+  // Orca's HTML tooltip: light card with a small pointer and one keycap per shortcut key.
+  terminalTip(row) {
+    const caps = row.hint ? (row.hint.includes("+") ? row.hint.split("+") : [...row.hint]) : [];
+    const card = h_flex()
+      .h(34)
+      .px(10)
+      .gap(10)
+      .items_center()
+      .rounded(8)
+      .border_1()
+      .border_color("#e4e4e7")
+      .bg("#f4f4f5")
+      .shadow_md()
+      .child(div().text_size(13).font_medium().text_color("#18181b").child(row.label))
+      .when(caps.length > 0, (el) => el.child(h_flex().gap(4).children(caps.map((key) => div()
+        .size(20)
+        .rounded(4)
+        .bg("#a1a1aa")
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(12)
+        .text_color("#18181b")
+        .child(key)))));
+    return div().relative().mt(4).pt(7)
+      .child(card)
+      .child(div().absolute().top(0).left(0).right(0).flex().justify_center()
+        .child(svg("mods/orca-assets/tip-arrow--orca-new-menu.svg").w(14).h(8).flex_none()));
+  }
+
+  agentGroups() {
+    const rows = this.agentRows();
+    if (rows.length === 1 && rows[0].settings) return { settings: rows[0] };
+    return {
+      official: rows.filter((row) => !row.section),
+      unofficial: rows.filter((row) => row.section === "Unofficial"),
+    };
+  }
+
+  // Agent Settings order: official installed-and-enabled first, then the unofficial integration.
+  agentBar(t) {
+    const groups = this.agentGroups();
+    if (groups.settings) {
+      return h_flex().w_full().items_center().on_mouse_move((e) => this.trackMenu(e))
+        .child(this.iconButton(groups.settings, 1, t));
+    }
+    const rows = [...groups.official, ...groups.unofficial];
+    const win = agentWindow(rows.length, this.agentAt);
+    const visible = rows.slice(win.start, win.start + win.count);
+    const icons = h_flex().items_center().gap(AGENT_GAP)
+      .when(win.left || win.right, (el) => el.w(AGENT_VIEW).flex_none().overflow_x_hidden())
+      .children(visible.map((row, n) => this.tipButton(row, 1 + win.start + n, t)));
+    return h_flex().w_full().items_center().justify_center().gap(AGENT_GAP)
+      .on_mouse_move((e) => this.trackMenu(e))
+      .when(win.left || win.right, (el) => el
+        .child(this.agentArrow(-1, win.left, t))
+        .child(icons)
+        .child(this.agentArrow(1, win.right, t)))
+      .when(!(win.left || win.right), (el) => el.child(icons));
+  }
+
+  agentArrow(dir, enabled, t) {
+    return div()
+      .size(AGENT_ARROW)
+      .flex_none()
+      .flex()
+      .items_center()
+      .justify_center()
+      .rounded(5)
+      .role("button")
+      .accessibility_label(dir < 0 ? "Previous agents" : "More agents")
+      .when(enabled, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover))
+        .on_click((_e, cx) => { this.agentAt += dir; cx.notify(); }))
+      .opacity(enabled ? 1 : 0.35)
+      .child(svg(dir < 0 ? "mods/orca-assets/chevron-left--orca-header.svg" : "mods/orca-assets/chevron-right--orca-header.svg")
+        .size(14).flex_none().text_color(t.muted));
+  }
+
+  // The model picker row, used only after choosing an agent that has no setup flyout.
   row(row, i, t, onClick) {
     return v_flex()
       .when(row.sep, (el) => el.child(div().mx(6).my(5).h(1).bg(t.border)))
@@ -556,7 +667,6 @@ export default class NewMenu extends View {
         .px(8)
         .gap(8)
         .rounded(7)
-        .when(Boolean(row.config), (el) => el.pr(0))
         .items_center()
         .whitespace_nowrap()
         .font_medium()
@@ -573,20 +683,12 @@ export default class NewMenu extends View {
         .child(div().flex_1().min_w(0).truncate().child(row.label))
         // Shortcut: ml-auto pl-4 text-muted-foreground (dropdown-menu.tsx:219). A model id can
         // be longer than the row, so the hint keeps a ceiling instead of crushing the label.
-        .child(div().flex_none().pl(16).max_w(110).truncate().text_color(t.muted).child(row.hint ?? ""))
-        .when(Boolean(row.config), (el) => el
-          // Track and open in one event: the chevron's own on_hover fires before the row has seen
-          // the move, so it would place the flyout from the previous row's position.
-          .on_mouse_move((e) => {
-            this.trackRow(row.config, e);
-            if (e.local_position && e.bounds && e.local_position.x >= e.bounds.width - CHEVRON_W) this.hoverConfig(row.config, true);
-          })
-          .child(this.chevron(row.config, t))));
+        .child(div().flex_none().pl(16).max_w(110).truncate().text_color(t.muted).child(row.hint ?? "")));
   }
 
   onKey(e, cx, picking) {
-    if (e.key === "down") this.move(1);
-    else if (e.key === "up") this.move(-1);
+    if (e.key === "down" || e.key === "right") this.move(1);
+    else if (e.key === "up" || e.key === "left") this.move(-1);
     else if (e.key === "home") this.edge(false);
     else if (e.key === "end") this.edge(true);
     else if (e.key === "enter" || e.key === "space") this.choose(this.at, cx);
@@ -599,18 +701,37 @@ export default class NewMenu extends View {
 
   render() {
     const t = theme();
+    return this.picking ? this.renderPicker(t) : this.renderPalette(t);
+  }
+
+  renderPalette(t) {
+    return v_flex()
+      .id("orca-new-menu")
+      .track_focus(this.handle)
+      .w_full()
+      .p(6)
+      .gap(6)
+      .bg(t.popover)
+      .text_size(12)
+      .on_key_down((e, cx) => this.onKey(e, cx, false))
+      .on_scroll_wheel((e, cx) => {
+        if (!e.delta.y) return;
+        this.move(e.delta.y > 0 ? 1 : -1);
+        cx.notify();
+      })
+      .child(this.operationBar(t))
+      .child(div().w_full().h(1).bg(t.border))
+      .child(this.agentBar(t));
+  }
+
+  renderPicker(t) {
     const picking = this.picking;
-    const agentRows = this.agentRows();
-    const headingAt = this.createRows().length;
-    const showAgentHeading = agentRows.length > 0;
-    const page = this.wheel(picking ? FIT.models : FIT.list);
+    const page = this.wheel(FIT.models);
     return v_flex()
       .id("orca-new-menu")
       .track_focus(this.handle)
       .w_full()
       .min_h(0)
-      // Content: w-72 p-1 rounded-[11px] border-border/80 shadow-[0_16px_36px_rgba(0,0,0,0.24)]
-      // (tab-bar-surface.tsx:232). The overlay frame owns radius, border and shadow.
       .p(4)
       .bg(t.popover)
       .text_size(12)
@@ -620,19 +741,11 @@ export default class NewMenu extends View {
         this.move(e.delta.y > 0 ? 1 : -1);
         cx.notify();
       })
-      .when(picking, (el) => el.child(this.heading(picking.name, t)).child(this.filterRow(t)))
-      .children(page.rows.flatMap((row, j) => {
-        const i = page.start + j;
-        const node = this.row(row, i, t);
-        const sectioned = row.section
-          ? [div().mx(6).my(5).h(1).bg(t.border), this.heading(row.section, t), node]
-          : [node];
-        return !picking && i === headingAt && showAgentHeading
-          ? [this.heading("Start an agent", t), ...sectioned]
-          : sectioned;
-      }))
-      .when(picking, (el) => el.child(this.row({ label: "Back", icon: "chevron-left", sep: true }, -1, t,
-        (clickCx) => { this.back(); clickCx.notify(); })));
+      .child(this.heading(picking.name, t))
+      .child(this.filterRow(t))
+      .children(page.rows.map((row, j) => this.row(row, page.start + j, t)))
+      .child(this.row({ label: "Back", icon: "chevron-left", sep: true }, -1, t,
+        (clickCx) => { this.back(); clickCx.notify(); }));
   }
 }
 

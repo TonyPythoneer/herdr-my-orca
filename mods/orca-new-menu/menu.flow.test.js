@@ -34,7 +34,7 @@ test("flyout prefers right, then left, then clamps to the viewport", () => {
   const menu = new Menu();
   const agent = { key: "codex" };
   assert.equal(menu.flyoutAt(agent), "pointer");
-  for (const [width, left, right, x] of [[900, 100, 200, 206], [700, 380, 480, 70], [350, 30, 140, 42]]) {
+  for (const [width, left, right, x] of [[900, 100, 200, 206], [700, 380, 480, 92], [350, 30, 140, 8]]) {
     globalThis.window = { viewport_size: () => ({ width, height: 600 }) };
     menu.rowEdge = { key: agent.key, left, right, y: 230 };
     assert.deepEqual(menu.flyoutAt(agent), { x, y: 152 });

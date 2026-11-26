@@ -217,7 +217,7 @@ export default class FloatWorkspace extends View {
           .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground)
           .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
           .role("button").accessibility_label("Start an agent")
-          .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }))
+          .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }))
           .child(svg("mods/orca-assets/plus--orca-float-workspace.svg").size(14).flex_none()))
         // Minimize's `icon-xs` outline button: `size-6 rounded-md` (`button.tsx:41`),
         // `border-border bg-secondary hover:bg-accent` (`FloatingTerminalWindowControls.tsx:25-26`).

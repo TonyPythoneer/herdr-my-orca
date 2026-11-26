@@ -100,7 +100,7 @@ export default class Landing extends View {
           .child(h_flex().items_center().justify_center().gap(10)
             .child(button("landing-add", "folder-plus", "Add project", () => run("space.new")))
             .child(button("landing-create", "git-branch-plus", "Create workspace",
-              () => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, height: 512 }))))
+              () => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }))))
           // The shortcut list: `mt-6 w-full max-w-xs space-y-2` (:302) — mt-6 = 24px,
           // space-y-2 = 8px between rows.
           .child(v_flex().mt(24).gap(8).items_center()

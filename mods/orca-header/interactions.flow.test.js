@@ -658,7 +658,7 @@ test("the header's buttons act on the sidebar, the panel, the new-tab menu and t
   assert.deepEqual(w.log, [["stop", "handler"]]);
   w.log.length = 0;
   click("tab-new");
-  assert.deepEqual(w.log, [["openOverlay", { mod: "orca-new-menu", kind: "popup", width: 288, height: 512, at: "pointer" }]]);
+  assert.deepEqual(w.log, [["openOverlay", { mod: "orca-new-menu", kind: "popup", width: 288, at: "pointer" }]]);
   viewport();
   w.log.length = 0;
   click("tab-new");

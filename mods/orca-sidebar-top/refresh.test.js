@@ -149,7 +149,7 @@ test('the options and new-workspace buttons open their popups', () => {
   handler(byId(root, 'proj-new'), 'on_click')();
   assert.deepEqual(opened, [
     { mod: 'orca-sidebar-top', kind: 'popup', width: 288, height: 560, props: { navMenu: 'workspace-options' } },
-    { mod: 'orca-new-menu', kind: 'popup', width: 288, height: 512 },
+    { mod: 'orca-new-menu', kind: 'popup', width: 288 },
   ]);
 });
 

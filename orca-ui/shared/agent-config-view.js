@@ -899,7 +899,7 @@ class AgentConfigCore {
     const label = this.providerId === "none" ? "Origin source" : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
       .gap(2)
-      .w(170)
+      .w(160)
       .when(!enabled, (el) => el.opacity(0.5))
       .role("group")
       .accessibility_label(`Model source: ${label}`)
@@ -1267,7 +1267,8 @@ class AgentConfigCore {
       .gap(2)
       .child(div().text_size(9).text_color(t.dim).child("MODEL"))
       .child(this.listBox(this.modelList(t), t))
-      .flex_1();
+      .flex_1()
+      .min_w(0);
   }
 
   // Effort control drawn narrower than model.
@@ -1281,12 +1282,37 @@ class AgentConfigCore {
           ? this.listBox(this.effortList(t), t)
           : div().px(4).py(2).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).child("—")
       )
-      .w(130);
+      .w(96);
   }
 
-  // FAST on/off toggle on effort's right hand side.
+  // FAST is a bordered button with a lightning mark; the accent fill is its on state.
   fastControl(t) {
-    return this.toggleControl("fast", this.spec.options.fast, t);
+    const option = this.spec.options.fast;
+    const on = Boolean(this.values.fast);
+    const enabled = this.fastSupported === true;
+    const fg = on && enabled ? t.accent_foreground : t.foreground;
+    return v_flex()
+      .gap(2)
+      .child(div().text_size(9).text_color(t.dim).child(option.label))
+      .child(
+        h_flex()
+          .h(24)
+          .px(8)
+          .gap(5)
+          .rounded(6)
+          .border_1()
+          .border_color(enabled ? (on ? t.accent : t.input) : t.border)
+          .bg(on && enabled ? t.accent : t.raised)
+          .text_size(10)
+          .when(enabled, (el) => el.cursor_pointer().on_click((_e, cx) => {
+            this.values.fast = !on;
+            this.rememberPreset();
+            cx.notify();
+          }))
+          .when(!enabled, (el) => el.opacity(0.5))
+          .child(svg("mods/orca-assets/zap--orca-agent-flyout.svg").size(12).text_color(fg))
+          .child(div().flex_none().text_color(fg).child("fast"))
+      );
   }
 
   // An on/off toggle for a boolean option. Only enabled when the CLI supports the flag (fast).
