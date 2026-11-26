@@ -50,8 +50,8 @@ class ImpactTest(unittest.TestCase):
 
     def test_files_page(self):
         p = self.plan("mods/orca-files/main.js")
-        self.assertEqual(p["native_routes"], 2)
-        self.assertTrue(all(row["pages"] == ["files"] for row in p["native_matrix"]["include"]))
+        self.assertEqual(p["native_routes"], 1)
+        self.assertEqual(p["native_matrix"]["include"], [{"layout": "orca", "stack": "panel-body", "pages": ["files"]}])
         self.assertFalse(p["git_benchmark"])
 
     def test_layout(self):
@@ -60,7 +60,7 @@ class ImpactTest(unittest.TestCase):
 
     def test_shared_static_assets(self):
         p = self.plan("mods/orca-assets/refresh-cw.svg")
-        self.assertEqual(p["direct_mods"], ["orca-agent-settings", "orca-files", "orca-status-bar"])
+        self.assertEqual(p["direct_mods"], ["orca-agent-settings", "orca-assets", "orca-files", "orca-status-bar"])
         self.assertFalse(p["full"])
         self.assertIn("scripts/shared-config-assets.test.mjs", [f for row in p["test_matrix"]["include"] for f in row["files"]])
 
