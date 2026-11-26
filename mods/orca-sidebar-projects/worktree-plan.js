@@ -248,7 +248,12 @@ export function applyWorkspaceOptions(rows, o = {}) {
     const last = blocks[blocks.length - 1];
     if (last?.key === k) last.rows.push(r); else blocks.push({ key: k, rows: [r] });
   }
-  if (o.projectOrderBy === "recent") blocks.sort((a, b) => recentOf(b.rows[0]) - recentOf(a.rows[0]));
+  if (o.projectOrderBy === "name") {
+    const title = (block) => block.rows[0].g?.name ?? optionTitle(block.rows[0]);
+    blocks.sort((a, b) => title(a).localeCompare(title(b)));
+  } else if (o.projectOrderBy === "recent") {
+    blocks.sort((a, b) => recentOf(b.rows[0]) - recentOf(a.rows[0]));
+  }
   const out = [];
   for (const b of blocks) {
     // Only the block's first row heads it, so filtering the head row promotes the next one.

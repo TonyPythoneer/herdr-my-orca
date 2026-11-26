@@ -19,6 +19,8 @@ test('spaces instances do not share mutable cached state', async () => {
 
 test('stored reads and workspace options invalidate when another mod writes', async () => {
   const values = new Map();
+  let published = null;
+  globalThis.__herdrShared = key => key === 'workspace.options.v1' ? published : undefined;
   globalThis.localStorage = { getItem: key => values.get(key) ?? null };
   const view = await import('./storage.js');
   const initial = view.workspaceOptions();
@@ -26,10 +28,16 @@ test('stored reads and workspace options invalidate when another mod writes', as
   values.set('workspace.options.v1', '{"groupBy":"none"}');
   assert.equal(view.workspaceOptions().groupBy, 'none');
   assert.notEqual(view.workspaceOptions(), initial);
+  published = { groupBy: 'workspace-status', sortBy: 'name' };
+  assert.equal(view.workspaceOptions().groupBy, 'workspace-status');
+  assert.equal(view.workspaceOptions().sortBy, 'name');
+  values.set('workspace.options.v1', '{"groupBy":"repo"}');
+  assert.equal(view.workspaceOptions().groupBy, 'workspace-status');
   values.set('projects.saved.v1', '["/one"]');
   assert.deepEqual(view.stored('projects.saved.v1', []), ['/one']);
   values.set('projects.saved.v1', '["/two"]');
   assert.deepEqual(view.stored('projects.saved.v1', []), ['/two']);
+  published = null;
   values.delete('workspace.options.v1');
   assert.equal(view.workspaceOptions().groupBy, 'repo');
 });

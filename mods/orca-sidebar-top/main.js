@@ -4,7 +4,7 @@
 // stack. Bare rows rather than an omission: each page states its own gap (ADR 0004).
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { theme, run, openOverlay, closeOverlay, shared, window, layout, pickFolder, props, spaces, machines } from "herdr";
+import { theme, run, openOverlay, closeOverlay, shared, setShared, window, layout, pickFolder, props, spaces, machines } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -17,15 +17,15 @@ function find(node, id) {
 
 // Orca keeps the Workspace options in PersistedUIState (`persisted-ui-state-types.ts:39-89`):
 // groupBy, sortBy, projectOrderBy, filterRepoIds, visibleWorkspaceHostIds, the hide* filters and
-// worktreeCardProperties. Herdr mods have no shared store, so the menu writes this versioned
-// object and orca-sidebar-projects reads it in its row projection — the same one-way handoff as
-// `projects.saved.v1`. Defaults are Orca's NO_WORKSPACE_ROW_FILTERS
+// worktreeCardProperties. Herdr localStorage is scoped by mod and props, so it cannot hand
+// options from this popup to orca-sidebar-projects or a later popup with a different overlay id.
+// Use the persisted app-wide shared store instead. Defaults are Orca's NO_WORKSPACE_ROW_FILTERS
 // (`workspace-row-filters.ts:45-56`) plus repo grouping and manual sort.
 const OPTIONS_KEY = "workspace.options.v1";
 const OPTIONS_DEFAULTS = {
   groupBy: "repo",              // none | workspace-status | repo
   sortBy: "manual",             // name | smart | recent | repo | manual
-  projectOrderBy: "manual",     // manual | recent
+  projectOrderBy: "manual",     // manual | name | recent
   filterRepoIds: [],
   visibleWorkspaceHostIds: null,
   hideSleepingWorkspaces: false,
@@ -38,8 +38,10 @@ const OPTIONS_DEFAULTS = {
 };
 
 function readOptions() {
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? "null"); } catch { saved = null; } // a hand-edited or truncated value falls back to the defaults
+  let saved = shared(OPTIONS_KEY);
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) {
+    try { saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? "null"); } catch { saved = null; } // a hand-edited or truncated value falls back to the defaults
+  }
   return saved && typeof saved === "object" && !Array.isArray(saved)
     ? { ...OPTIONS_DEFAULTS, ...saved }
     : { ...OPTIONS_DEFAULTS };
@@ -48,11 +50,8 @@ function readOptions() {
 function writeOptions(patch) {
   const next = { ...readOptions(), ...patch };
   localStorage.setItem(OPTIONS_KEY, JSON.stringify(next));
-  // orca-sidebar-projects re-reads the key inside ordered(), so nothing has to be sent to it. An
-  // invented cross-mod command is not a notification: an unregistered name is a warn and an
-  // error (`window.rs:2763`), and `setShared` does not notify (AGENTS.md rule 10). The sidebar
-  // repaints when this popup closes, because removing an overlay notifies the window
-  // (`window.rs:3642-3664`), and the reopened popup always re-reads the stored options.
+  // Shared state is persisted and re-renders every mod, including the sidebar's row projection.
+  setShared(OPTIONS_KEY, next);
   return next;
 }
 
@@ -105,6 +104,7 @@ const SORT_CHOICES = [
 ];
 const PROJECT_ORDER_CHOICES = [
   ["manual", "Manual"],
+  ["name", "Name"],
   ["recent", "Recent"],
 ];
 const GROUP_BY_CHOICES = [
@@ -166,8 +166,8 @@ function collapseAllButton(t, allCollapsed) {
 // corner filter badge. `sidebar-header-actions.tsx:92` places it before AddProject.
 // Herdr has no Radix DropdownMenu, so the menu is this mod's own popup overlay, opened
 // with the same openOverlay({kind:"popup"}) call orca-context-menu and new-menu use; the props
-// select optionsView in render(). Choices persist in "workspace.options.v1" and
-// orca-sidebar-projects reads that key in ordered().
+// select optionsView in render(). Choices persist in shared state as "workspace.options.v1" and
+// orca-sidebar-projects reads them in ordered().
 function optionsButton(t) {
   // `OptionsFilterCountBadge` (options-filter-count-badge.tsx): a corner badge on the trigger,
   // 12px tall, 9px text, primary fill; 9+ past nine.
@@ -387,9 +387,9 @@ export default class Nav extends View {
     push({ kind: "groupby" });
     // Arrange — no heading in WORKSPACE_VIEW_SECTION_LABELS (:89-94).
     push({ kind: "separator" });
-    push({ kind: "page", page: "sort", label: "Sort by", value: labelOf(SORT_CHOICES, o.sortBy) });
+    push({ kind: "page", page: "sort", label: "Worktree sort", value: labelOf(SORT_CHOICES, o.sortBy) });
     // projectOrderBy is shown only under repo grouping (workspace-view-options.ts:133).
-    if (o.groupBy === "repo") push({ kind: "page", page: "projectOrder", label: "Project order", value: labelOf(PROJECT_ORDER_CHOICES, o.projectOrderBy) });
+    if (o.groupBy === "repo") push({ kind: "page", page: "projectOrder", label: "Project sort", value: labelOf(PROJECT_ORDER_CHOICES, o.projectOrderBy) });
     // Card layout and Show properties exist in Orca's legacy card surface; Herdr's
     // worktree-card-surface port has one fixed shape, so these keep Orca's disabled-row
     // geometry (`data-[disabled]:opacity-40`, dropdown-menu.tsx:115) and name the gap.

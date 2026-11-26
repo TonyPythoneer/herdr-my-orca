@@ -227,8 +227,8 @@ export default class Spaces extends View {
           localStorage.setItem("repos.folded", JSON.stringify([...this.foldedRepos]));
           this.notify(taskCx);
         }
-        // The options menu writes "workspace.options.v1" and pings this loop; ordered() re-reads
-        // the key on the next render. setShared alone does not wake another mod (AGENTS.md rule 10).
+        // Explicit callers can still request a repaint; normal workspace-option writes publish
+        // through Herdr's shared store, which already re-renders every mod.
         else if (cmd === "options-changed") this.notify(taskCx);
         // Workspace options' Refresh (orca-sidebar-top): re-read git now, not on the 60s fallback or a
         // filesystem wake. Orca reads a repo's worktrees when a dialog asks; a person who just
@@ -351,7 +351,7 @@ export default class Spaces extends View {
     this.retainedSynced = null;
   }
 
-  rowSignature({ r, t, mine, groupBy }, focused = onStop(this), keyboardMode = Boolean(shared("t3-focus"))) {
+  rowSignature({ r, t, mine, groupBy, sortBy }, focused = onStop(this), keyboardMode = Boolean(shared("t3-focus"))) {
     const key = r.w.id;
     const fold = foldKey(r);
     // The plan already projects the sibling catalog into row/head/count changes.
@@ -359,7 +359,7 @@ export default class Spaces extends View {
     delete git.worktrees;
     return JSON.stringify([
       r.w, Boolean(r.g), git, r.also?.map(row => row.w), r.head, r.count, r.unopened, r.pos,
-      t, mine, groupBy, this.reviewOf(r.g), avatarFile(r.g?.owner),
+      t, mine, groupBy, sortBy, this.reviewOf(r.g), avatarFile(r.g?.owner),
       this.foldedRepos.has(fold), this.expandedAgents.has(key), this.unread.has(key),
       this.hot?.endsWith(key) ? this.hot : null, this.hoveredRepo === fold, this.menuKey === fold,
       this.laneHot === key, this.pressed === key, this.over === key,
@@ -368,9 +368,9 @@ export default class Spaces extends View {
     ]);
   }
 
-  retainedRow(r, t, ps, mine, groupBy) {
+  retainedRow(r, t, ps, mine, groupBy, sortBy) {
     const key = r.w.id;
-    const data = { r, t, ps, mine, groupBy };
+    const data = { r, t, ps, mine, groupBy, sortBy };
     const keyboardMode = this.retainedKeyboardMode ?? Boolean(shared("t3-focus"));
     const signature = data.signature = this.rowSignature(data, this.retainedFocus, keyboardMode);
     this.retainedPending.set(key, data);
@@ -883,9 +883,10 @@ export default class Spaces extends View {
     // Group by None draws cards only; Status adds its own section heads; only Project (repo)
     // draws the project header row (`group-sections.ts:119-130`; WORKSPACE_GROUP_BY_CHOICES).
     const groupBy = workspaceOptions().groupBy;
+    const sortBy = workspaceOptions().sortBy;
     const draw = (r, i) => {
       const pos = this.rowIndex?.get(r.w.id) ?? i;
-      return this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps, rowAgents.get(r), groupBy);
+      return this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps, rowAgents.get(r), groupBy, sortBy);
     };
     // The descriptors reference row positions, so equal signatures can reuse them with fresh row data.
     const repairing = new Set([...Object.keys(this.reconnecting), ...this.machines.filter(m => this.rebuilt(m)).map(m => m.name)]);

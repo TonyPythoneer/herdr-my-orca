@@ -1,3 +1,5 @@
+import { shared } from "herdr";
+
 // Safely read a stored JSON value of the expected shape; a mangled key never throws.
 // Memoized by the raw string so repeated renders skip re-parsing; an external write
 // changes the raw string and invalidates the entry automatically.
@@ -15,15 +17,15 @@ export function stored(key, fallback) {
 }
 
 // Workspace options written by orca-sidebar-top's options popup (SidebarWorkspaceOptionsMenu.tsx:23-100).
-// Orca persists these in PersistedUIState (`persisted-ui-state-types.ts:39-89`); Herdr mods have
-// no shared store, so this is the same read-only handoff as `projects.saved.v1`: orca-sidebar-top writes
-// "workspace.options.v1", this projection reads it. Defaults are NO_WORKSPACE_ROW_FILTERS
+// Orca persists these in PersistedUIState (`persisted-ui-state-types.ts:39-89`). The options popup
+// publishes them in Herdr's app-wide shared store; localStorage is a fallback for older versions.
+// Defaults are NO_WORKSPACE_ROW_FILTERS
 // (`workspace-row-filters.ts:45-56`) plus repo grouping and manual sort.
 const WORKSPACE_OPTIONS_KEY = "workspace.options.v1";
 const WORKSPACE_OPTIONS_DEFAULTS = {
   groupBy: "repo",              // none | workspace-status | repo
   sortBy: "manual",             // name | smart | recent | repo | manual
-  projectOrderBy: "manual",     // manual | recent
+  projectOrderBy: "manual",     // manual | name | recent
   filterRepoIds: [],
   visibleWorkspaceHostIds: null,
   hideSleepingWorkspaces: false,
@@ -36,7 +38,10 @@ const WORKSPACE_OPTIONS_DEFAULTS = {
 };
 let _workspaceOptionsCache = { src: undefined, value: null };
 export function workspaceOptions() {
-  const saved = stored(WORKSPACE_OPTIONS_KEY, null);
+  const published = shared(WORKSPACE_OPTIONS_KEY);
+  const saved = published && typeof published === "object" && !Array.isArray(published)
+    ? published
+    : stored(WORKSPACE_OPTIONS_KEY, null);
   if (_workspaceOptionsCache.src === saved) return _workspaceOptionsCache.value;
   const value = saved && !Array.isArray(saved) ? { ...WORKSPACE_OPTIONS_DEFAULTS, ...saved } : { ...WORKSPACE_OPTIONS_DEFAULTS };
   _workspaceOptionsCache = { src: saved, value };
