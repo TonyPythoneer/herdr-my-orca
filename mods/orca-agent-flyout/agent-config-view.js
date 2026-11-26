@@ -98,11 +98,6 @@ function providerGlyph(record, t) {
   return svg("mods/orca-assets/hard-drive.svg").size(14).text_color(t.muted);
 }
 
-function providerTooltip(remote, providerCount) {
-  if (remote) return "A model provider is set up on this computer only";
-  return providerCount > 0 ? "Choose which model source Codex starts with" : "Add a model provider";
-}
-
 // The validity badge of a JSON editor: invalid, edited since the last save, or fine.
 function jsonBadge(editor, danger, t) {
   if (editor.error) return { text: `Invalid JSON · line ${editor.error.line}`, color: danger, bg: "#ef444414", border: "#ef444440" };
@@ -890,7 +885,7 @@ class AgentConfigCore {
 
   // Model source: an expanded list of the default origin source (the agent itself, shown with its
   // icon) plus any saved providers. Replaces the old MODEL SOURCE select: it now sits on the same
-  // layer as MODEL and EFFORT. Fixed width so the row leaves room for the model dropdown.
+  // layer as MODEL and EFFORT. Icon-only and narrow, so the model list gets the row's width.
   providerRow(t) {
     const ids = Object.keys(this.providers ?? {});
     const space = launchSpace(this.context());
@@ -899,31 +894,34 @@ class AgentConfigCore {
     const label = this.providerId === "none" ? "Origin source" : this.providers[this.providerId]?.name ?? "None";
     return v_flex()
       .gap(2)
-      .w(160)
+      .w(80)
       .when(!enabled, (el) => el.opacity(0.5))
       .role("group")
       .accessibility_label(`Model source: ${label}`)
-      .tooltip(providerTooltip(remote, ids.length))
       .child(div().text_size(9).text_color(t.dim).child("MODEL SOURCE"))
       .child(this.sourceList(t, enabled));
   }
 
   // The expanded model source list: the origin source (agent icon) first, then saved providers.
+  // Each row is only its icon; the tooltip names it.
   sourceList(t, enabled) {
     const rows = [
-      { id: "none", label: "Origin source", icon: this.agentIcon(t) },
+      { id: "none", label: "Origin source", icon: div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(this.agentIcon(t)) },
       ...Object.entries(this.providers ?? {}).map(([id, record]) => ({ id, label: record?.name ?? id, icon: this.providerIcon(record, t) })),
     ];
     return v_flex()
       .gap(2)
       .child(this.scrollList("source-list",
         rows.map((option) =>
-          this.listRow(`source-${option.id}`, t)
+          this.listRow(`source-${option.id}`, t, 0)
+            .w_full()
+            .justify_center()
+            .tooltip(option.label)
+            .accessibility_label(option.label)
             .when(!enabled, (el) => el.opacity(0.5))
             .when(enabled, (el) => el.on_click((_e, cx) => this.setProvider(option.id, cx)))
-            .child(option.icon)
-            .child(div().flex_1().min_w(0).truncate().child(option.label))
-            .when(this.providerId === option.id, (el) => el.child(div().flex_none().text_color(t.accent).child("✓"))),
+            .when(this.providerId === option.id, (el) => el.bg(t.selected))
+            .child(option.icon),
         )
       ));
   }
@@ -1271,18 +1269,22 @@ class AgentConfigCore {
       .min_w(0);
   }
 
-  // Effort control drawn narrower than model.
+  // Effort control sized to its labels, not a fixed column. GPUI has no text measurement here, so
+  // the width follows the longest rendered label (7px per character plus padding).
+  // shortcut: an estimated width; measure the label if the theme's font changes much.
   effortControl(t) {
     const efforts = (this.current()?.efforts ?? []);
+    const longest = Math.max(0, ...efforts.map((e) => (EFFORT_LABEL[e] ?? e).length));
     return v_flex()
       .gap(2)
+      .flex_none()
+      .w(Math.max(64, 30 + longest * 7))
       .child(div().text_size(9).text_color(t.dim).child("EFFORT"))
       .child(
         efforts.length
           ? this.listBox(this.effortList(t), t)
           : div().px(4).py(2).rounded(4).bg(t.raised).text_size(10).text_color(t.muted).child("—")
-      )
-      .w(96);
+      );
   }
 
   // FAST is a bordered button with a lightning mark; the accent fill is its on state.
@@ -1293,6 +1295,7 @@ class AgentConfigCore {
     const fg = on && enabled ? t.accent_foreground : t.foreground;
     return v_flex()
       .gap(2)
+      .flex_none()
       .child(div().text_size(9).text_color(t.dim).child(option.label))
       .child(
         h_flex()
@@ -1304,6 +1307,8 @@ class AgentConfigCore {
           .border_color(enabled ? (on ? t.accent : t.input) : t.border)
           .bg(on && enabled ? t.accent : t.raised)
           .text_size(10)
+          .role("button")
+          .accessibility_label(`Fast: ${on ? "on" : "off"}`)
           .when(enabled, (el) => el.cursor_pointer().on_click((_e, cx) => {
             this.values.fast = !on;
             this.rememberPreset();
@@ -1311,7 +1316,7 @@ class AgentConfigCore {
           }))
           .when(!enabled, (el) => el.opacity(0.5))
           .child(svg("mods/orca-assets/zap--orca-agent-flyout.svg").size(12).text_color(fg))
-          .child(div().flex_none().text_color(fg).child("fast"))
+          .child(div().flex_none().text_color(fg).child("Fast"))
       );
   }
 

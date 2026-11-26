@@ -1,42 +1,42 @@
 {
  "codex, fresh cache, providers, saved choices": {
-  "init": "096c93d48edebba31dd306bd70127ad2d335102b",
-  "render": "e7edb399312c8fe721bd8ae5e50db4c8c0d8cc45",
+  "init": "3c3687a4b34316658b1fe18f975e66a90f039537",
+  "render": "8b754289bb137ac0441d7efb9e473162385073d2",
   "handlers": "43d1357ada8bf8fbe346ef0d381f3dfee0c2af8e",
   "clicks": "dcd7bc40e44404bfb96e5d15b4db2b25bab3bedc",
   "ops": "e346767a347a63e3143539fd6928463db4e7eeb6"
  },
  "codex, fresh cache, launch now": {
-  "init": "b84ff22c9208a93e6085147b8a0493a22fb95b09",
-  "render": "065c870528ef27c547cf0a001a358abc7c5a07ee",
+  "init": "748791dfcac8e3e1c24e58c684d7c303e1ae515d",
+  "render": "d0aa5ac651e4f517f413fe5afbe243609f054efc",
   "handlers": "43d1357ada8bf8fbe346ef0d381f3dfee0c2af8e",
   "clicks": "263c0e2d91b6c6df82a7fa4ecc80367c30e6d16d",
   "ops": "9ad6e63e3089a5c05ced6b2732f577aef575c37a"
  },
  "codex, launch now but disabled in the manager": {
-  "init": "5cc334357fafaa8ea879f886ad6b22236de31995",
-  "render": "038c252f72e792ea1086a4a1e0570edf598a3420",
+  "init": "6c8a1ac58fa9d0eac2f7d14734c657dad9fa5d45",
+  "render": "12d8710c2835b3e30eea482174465b5dc211b262",
   "handlers": "70708f5295d572ee4504d5c8a9f9678357b6b29a",
   "clicks": "ba505b3f678a65fa501625dd697ba27a7b87b0cc",
   "ops": "3678ab4491602775b754c1d3629cd2b88c844d9a"
  },
  "codex, stale cache, list changed": {
-  "init": "063e3116ec280d6b6e9db30718d7604f98314780",
-  "render": "b3bacd7d5a9e475664f4747a2b0b94cee7604786",
+  "init": "74d0598b9fe148368f0d13e47988096034dcf54f",
+  "render": "23bab844848abc2220c1b55d898f2abeafeade07",
   "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
   "clicks": "9ab76db3c943d4ab803356fb240b942f211bbc42",
   "ops": "df74c005549650af2f489882eb1840feb8f6ff82"
  },
  "codex, stale cache, same list, version fails": {
-  "init": "9e7ef1a32d9a28cf704f18cf9a2330a0665bbe3a",
-  "render": "b3bacd7d5a9e475664f4747a2b0b94cee7604786",
+  "init": "3bd44bb43fbadfef6d479a20937a2e31a4dee889",
+  "render": "23bab844848abc2220c1b55d898f2abeafeade07",
   "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
   "clicks": "7b9567b91d7ce0e883d99496a4d23e614d520aab",
   "ops": "7754426a30fe3ab4a492875e34da2f519745aff7"
  },
  "codex, stale cache, nothing listed": {
-  "init": "915bebfa14ea738602707429f298af9120c40351",
-  "render": "857cd9fe36acc9c8f21be54cf20466c1538d6d2a",
+  "init": "f501a1b3f783497b5fcf4126d3a9d67c2c4c26ee",
+  "render": "afd092ed97e0f0744c7b1dd67f25409cb8462032",
   "handlers": "70708f5295d572ee4504d5c8a9f9678357b6b29a",
   "clicks": "2d2261a4e9a0eb84c3d3b6b51f47dd6240980330",
   "ops": "2d02d1eec1e3e20492df9cac580269cee7036d3a"
@@ -49,8 +49,8 @@
   "ops": "c16886e4427b88cd5adc8e390e8be7dc6fa90903"
  },
  "codex, no settings file": {
-  "init": "6cf7443c17ee4917cf815ffb56f9e7e2c8d29f13",
-  "render": "b3bacd7d5a9e475664f4747a2b0b94cee7604786",
+  "init": "d1f1bfde589ab0eae15fc436ab12133523b15d67",
+  "render": "23bab844848abc2220c1b55d898f2abeafeade07",
   "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
   "clicks": "282f2604cd3fa90e9b946b77234dc01b7f252f5e",
   "ops": "ae406e20fa28f1f36790eedf4421462123b4f0a6"
@@ -63,64 +63,64 @@
   "ops": "06a1c2a9d7b684e086e75ed73ea22b9df77e4690"
  },
  "codex, remote machine": {
-  "init": "1134201ab7e0b9ec3c05ad84c7d13f14481c5ff7",
-  "render": "5a56c110256ad3bba25bcd92c122f967c42f3744",
+  "init": "b1a753d979b7f24470fb8565f69d3110f29cc780",
+  "render": "2ab9c3853dbf75d1441a327dfa2f2bece40d6f4d",
   "handlers": "b7557095d53915522460ee80dcb01e84601e0af1",
   "clicks": "516eb9a37db7f74aca8a5cbce3e0e6d2c42b0960",
   "ops": "bd0e99f7fb2535898c9d455c30697e32da53c58b"
  },
  "claude, styles and editors": {
-  "init": "1ccb296e5d54059d01159b54389628b12f20fed8",
-  "render": "affe19527f352893c70986b2dea711b1de89a85d",
+  "init": "f0607eedf6b2afb9e09ff526f8bcdbb55a588aed",
+  "render": "8ea74f2a6bc87fb86ea5c78dbfcf1b1373c724ca",
   "handlers": "ab7752bc3aee7170b351f3703ae40b8519fb20cc",
   "clicks": "9607eb12c3e1abb57f11945b5e5f32f40c77ea17",
   "ops": "b9f404bb9b34e3ecef04db1dd2e8c647f92b1d3c"
  },
  "claude, valid agents json": {
-  "init": "30336c6a2308af641f2ba4bf233acaadbe01e158",
-  "render": "79bf03dd82e78eb35369141fe5706495b7f66991",
+  "init": "467098d30085426a3eaa19520f1da92b6803831d",
+  "render": "493cb8633a87a0773b4b592ddc282c837d65a278",
   "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
   "clicks": "3cecce5d3583d072f714024fb1880b45c539b60f",
   "ops": "15f03dc907f4f898fa87174a60afd916456180c3"
  },
  "claude, no cache": {
-  "init": "f9a61f5f96e822151730b034dc7cbd8efc5a3303",
-  "render": "9eeb576900b80c3186759b6b430868bfcbcf9ff1",
+  "init": "0ba78db0f6d964f7bf467de8d9addb8d31f2871a",
+  "render": "628f5af88c87628bfc3fc0c60419cf16d8d5ecbc",
   "handlers": "b7557095d53915522460ee80dcb01e84601e0af1",
   "clicks": "9376113200c0ab0005dfee9df3262f5ca3cef63c",
   "ops": "f31a4a305c4fd0e7690ef7b94efba19e6c5ebf72"
  },
  "opencode, groups, hidden models, variant file": {
-  "init": "a5509bc2d47f81884ffe1d72db19931854192d7e",
-  "render": "b5c83b915168cf0ebf4c54b76e4426cf02d970a2",
+  "init": "f0a9952339c82b49d6d41d375f9506ff39e031e5",
+  "render": "85777ab28b115f38f6f34d7d4ce10de5d55f1259",
   "handlers": "6487da08e81df321280a80c07c51888ada2db0cd",
   "clicks": "a4f3d32f51dfd4750a1139056de72deef45faa7f",
   "ops": "021e80716670f7b5d95bf63d172c354ee5cc758f"
  },
  "opencode, all group, variant file missing": {
-  "init": "2642a8005845787984836f385d3b611ea56fca46",
-  "render": "f552014e1c1c1269d15393beaaa4529d343454c4",
+  "init": "ac3808442d2c888b4d71e2b98c7aee570be7d413",
+  "render": "f5c940d415bee5f68ecd5ccb5063ff220dc97ba6",
   "handlers": "e33b71fef43a29c2ea0f4f5ee016bd192d49380a",
   "clicks": "7e80464e96c375abe7088fb125c1b9fbecf50756",
   "ops": "bc2e9c85c89e0f3a5a4dc08d3a046c0b14389d1b"
  },
  "pi, no cache": {
-  "init": "27055cb741c3c761fe3a7cb0e144a73aed461069",
-  "render": "c3a760f7af2c8577a44d069253c2725c867d370b",
+  "init": "6904641573acae951c2dc82765267721be2aaf5d",
+  "render": "28b4335a05f725ebc14ac822dad520d63278120c",
   "handlers": "e33b71fef43a29c2ea0f4f5ee016bd192d49380a",
   "clicks": "097a439695b4aff8c6b3f8e5557072642ed0fa0b",
   "ops": "f986be268e6c5b6c138304b961522015779df836"
  },
  "pi, no cache, cli lists nothing": {
-  "init": "75bbfa0b0d3c8352ffaff7e4d9f96162a29ef4f0",
-  "render": "e37d406b99e1017b35158c56200505488a968450",
+  "init": "c733972f4fecfe621adbdf44e37f0d0cd340e196",
+  "render": "96a6b5762ad717a93a9124ee77faae82fae7f6f2",
   "handlers": "2e4e7a9d80f953243b5f60fbb327b804ab48716c",
   "clicks": "83426028d3ab1763188ec0969f0927a71c006153",
   "ops": "3f990b9524be024637dcfd21e1837956e273d169"
  },
  "pi, saved presets": {
-  "init": "78e3248d133c519fc4a8485cc8ed23c2764f1bd2",
-  "render": "c6151564b874a683a07ac3efae004b97553f7813",
+  "init": "58928106d3ef9c55dbf8d09376be7fdb603d38ad",
+  "render": "65b961095cdb4913fd1a8638aabbd8920f3423c2",
   "handlers": "e33b71fef43a29c2ea0f4f5ee016bd192d49380a",
   "clicks": "7ebb6bac7eb19e89602dcdd92b7093c8eaa804a6",
   "ops": "8b6fbd246e90685b336bc0589e108f843d906f3b"

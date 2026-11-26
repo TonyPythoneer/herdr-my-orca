@@ -69,8 +69,8 @@ const FIT = { models: 11 };
 const FLYOUT_W = 600;
 const FLYOUT_H = 440;
 const WINDOW_MARGIN = 8;
-// The menu's own padding: how far a flipped flyout sits from the agent row's left edge.
-const MENU_EDGE = 6;
+// The menu's own padding: the flyout starts this far under the menu's last row.
+const MENU_PAD = 6;
 // The agent bar shows five full icons and half of the next, with one arrow per side.
 const AGENT_FULL = 5;
 const AGENT_GAP = 4;
@@ -83,11 +83,9 @@ function launchTarget(agent, unofficial, state) {
   return installedEnabledAgents(state.agents, state.disabled).find((item) => item.key === agent.key);
 }
 
-// Right of the row when it fits, else left of it, else pushed inside the window.
-function flyoutX(rightX, leftX, windowWidth) {
-  if (rightX + FLYOUT_W <= windowWidth - WINDOW_MARGIN) return rightX;
-  if (leftX >= WINDOW_MARGIN) return leftX;
-  return Math.max(WINDOW_MARGIN, Math.min(rightX, windowWidth - FLYOUT_W - WINDOW_MARGIN));
+// Centered under the menu, then pushed inside the window at either edge.
+function flyoutX(left, right, windowWidth) {
+  return Math.max(WINDOW_MARGIN, Math.min((left + right) / 2 - FLYOUT_W / 2, windowWidth - FLYOUT_W - WINDOW_MARGIN));
 }
 
 // Herdr keys are dash-joined (herdr's own keys.json ships "ctrl-shift-t"); Orca's menu shows
@@ -285,15 +283,15 @@ export default class NewMenu extends View {
         run: () => this.launch(freebuff, null, true),
       });
     }
-    if (emptyAgentState(official.length, showFreebuff)) {
-      return [{
-        label: "Open Agent Settings",
-        icon: "bot",
-        settings: true,
-        run: () => run("layout.select", { stack: "main", child: "main-agents" }),
-      }];
-    }
-    return rows;
+    // The gear stays at the end of the row, after every agent; it is the only row in the empty state.
+    const settings = {
+      label: "Agent Settings",
+      icon: "sliders-horizontal",
+      settings: true,
+      run: () => run("layout.select", { stack: "main", child: "main-agents" }),
+    };
+    if (emptyAgentState(official.length, showFreebuff)) return [settings];
+    return [...rows, settings];
   }
 
   // What a click on an agent's row does: a flyout agent launches with its saved setup, one with a
@@ -489,36 +487,36 @@ export default class NewMenu extends View {
     closeOverlay(props()?.overlay);
   }
 
-  // The agent row's left/right edges, in window coordinates, keep the flyout against the menu's
-  // outer edge instead of covering the icons. The icon's top gives the flyout its y.
+  // The menu's left/right/bottom edges, in window coordinates, let the flyout sit centered under
+  // the whole menu. The agent bar's bounds are the last row, so its bottom plus the menu padding is
+  // the menu's bottom.
   trackMenu(e) {
     if (!e.local_position || !e.bounds) return;
     const left = e.position.x - e.local_position.x;
-    this.menuEdge = { left, right: left + e.bounds.width };
+    this.menuEdge = { left, right: left + e.bounds.width, bottom: e.position.y - e.local_position.y + e.bounds.height + MENU_PAD };
     this.openHover();
   }
 
   openHover() {
-    if (!this.hoverAgent || !this.menuEdge || this.iconY == null) return;
+    if (!this.hoverAgent || !this.menuEdge) return;
     this.rowEdge = {
       key: this.hoverAgent.key,
       left: this.menuEdge.left,
       right: this.menuEdge.right,
-      y: this.iconY,
+      bottom: this.menuEdge.bottom,
     };
     this.hoverConfig(this.hoverAgent, true);
   }
 
-  // Flip to the menu's left when the right side overflows the window (Orca does the same); y stays inside it.
+  // Centered below the menu, kept inside the window at the edges.
   // shortcut: 440 is a guessed flyout height (orca-agent-flyout sets none); pass `height` to openOverlay if it is wrong.
   flyoutAt(agent) {
     const r = this.rowEdge;
     if (r?.key !== agent.key) return "pointer";
     const vp = typeof window !== "undefined" ? window.viewport_size() : null;
-    const rightX = r.right + FLYOUT_GAP;
-    if (!vp) return { x: rightX, y: r.y };
-    const leftX = r.left - MENU_EDGE - FLYOUT_GAP - FLYOUT_W;
-    return { x: flyoutX(rightX, leftX, vp.width), y: Math.max(WINDOW_MARGIN, Math.min(r.y, vp.height - FLYOUT_H - WINDOW_MARGIN)) };
+    const y = r.bottom + FLYOUT_GAP;
+    if (!vp) return { x: flyoutX(r.left, r.right, Number.MAX_SAFE_INTEGER), y };
+    return { x: flyoutX(r.left, r.right, vp.width), y: Math.max(WINDOW_MARGIN, Math.min(y, vp.height - FLYOUT_H - WINDOW_MARGIN)) };
   }
 
   // One square action in the palette: the operation row's New Terminal and every agent icon.
@@ -539,7 +537,6 @@ export default class NewMenu extends View {
       .when(!row.config && !row.tip, (el) => el.tooltip(row.hint ? `${row.label}  ${row.hint}` : row.label))
       .on_mouse_move((e, cx) => {
         if (!e.local_position || !e.bounds) return;
-        this.iconY = e.position.y - e.local_position.y;
         this.hoverAgent = row.config ?? null;
         if (this.at !== i) {
           this.at = i;
@@ -609,21 +606,18 @@ export default class NewMenu extends View {
 
   agentGroups() {
     const rows = this.agentRows();
-    if (rows.length === 1 && rows[0].settings) return { settings: rows[0] };
     return {
-      official: rows.filter((row) => !row.section),
+      official: rows.filter((row) => !row.section && !row.settings),
       unofficial: rows.filter((row) => row.section === "Unofficial"),
+      settings: rows.find((row) => row.settings),
     };
   }
 
-  // Agent Settings order: official installed-and-enabled first, then the unofficial integration.
+  // Agent Settings order: official installed-and-enabled first, then the unofficial integration,
+  // then the settings gear. The gear counts toward the five-and-a-half window.
   agentBar(t) {
     const groups = this.agentGroups();
-    if (groups.settings) {
-      return h_flex().w_full().items_center().on_mouse_move((e) => this.trackMenu(e))
-        .child(this.iconButton(groups.settings, 1, t));
-    }
-    const rows = [...groups.official, ...groups.unofficial];
+    const rows = [...groups.official, ...groups.unofficial, ...(groups.settings ? [groups.settings] : [])];
     const win = agentWindow(rows.length, this.agentAt);
     const visible = rows.slice(win.start, win.start + win.count);
     const icons = h_flex().items_center().gap(AGENT_GAP)
@@ -709,7 +703,7 @@ export default class NewMenu extends View {
       .id("orca-new-menu")
       .track_focus(this.handle)
       .w_full()
-      .p(6)
+      .p(MENU_PAD)
       .gap(6)
       .bg(t.popover)
       .text_size(12)

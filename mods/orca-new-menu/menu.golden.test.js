@@ -296,7 +296,8 @@ test("the agent bar arrow steps one icon", async () => {
   const w = await opened(HOSTS["local, fresh inventory, freebuff on"], []);
   view(w);
   const clicks = w.handlers.filter(([name]) => name === "on_click");
-  clicks[clicks.length - 1][1]({}, w.cx);
+  const arrow = clicks.find(([, handler]) => handler.toString().includes("this.agentAt += dir"));
+  arrow[1]({}, w.cx);
   assert.equal(w.menu.agentAt, 1);
 });
 
