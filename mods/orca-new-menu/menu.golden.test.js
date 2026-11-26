@@ -301,6 +301,19 @@ test("the agent bar arrow steps one icon", async () => {
   assert.equal(w.menu.agentAt, 1);
 });
 
+test("the agent bar scrolls its icon window with the wheel", async () => {
+  const w = await opened(HOSTS["local, fresh inventory, freebuff on"], []);
+  view(w);
+  const scroll = w.handlers.filter(([name]) => name === "on_scroll_wheel")
+    .find(([, handler]) => handler.toString().includes("this.agentAt = Math.max"));
+  const cx = { ...w.cx, stop_propagation() {} };
+  w.menu.agentAt = 0;
+  scroll[1]({ delta: { y: 1 } }, cx);
+  assert.equal(w.menu.agentAt, 1);
+  scroll[1]({ delta: { y: -1 } }, cx);
+  assert.equal(w.menu.agentAt, 0);
+});
+
 test("New Terminal and FreeBuff use the light pointer tooltip and release it on leave", async () => {
   const w = await opened(HOSTS["local, fresh inventory, freebuff on"], []);
   for (const [tip, label, start] of [["new-terminal", "New Terminal", 0], ["freebuff", "FreeBuff CLI", 99]]) {

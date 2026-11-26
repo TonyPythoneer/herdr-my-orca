@@ -283,10 +283,10 @@ export default class NewMenu extends View {
         run: () => this.launch(freebuff, null, true),
       });
     }
-    // The gear stays at the end of the row, after every agent; it is the only row in the empty state.
+    // The settings action stays at the end of the row, after every agent; it is the only row in the empty state.
     const settings = {
       label: "Agent Settings",
-      icon: "sliders-horizontal",
+      icon: "bot",
       settings: true,
       run: () => run("layout.select", { stack: "main", child: "main-agents" }),
     };
@@ -625,6 +625,12 @@ export default class NewMenu extends View {
       .children(visible.map((row, n) => this.tipButton(row, 1 + win.start + n, t)));
     return h_flex().w_full().items_center().justify_center().gap(AGENT_GAP)
       .on_mouse_move((e) => this.trackMenu(e))
+      .on_scroll_wheel((e, cx) => {
+        if (!e.delta.y || rows.length <= AGENT_FULL) return;
+        this.agentAt = Math.max(0, Math.min(this.agentAt + (e.delta.y > 0 ? 1 : -1), rows.length - AGENT_FULL));
+        cx.stop_propagation();
+        cx.notify();
+      })
       .when(win.left || win.right, (el) => el
         .child(this.agentArrow(-1, win.left, t))
         .child(icons)
