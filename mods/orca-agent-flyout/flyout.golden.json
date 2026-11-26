@@ -1,45 +1,45 @@
 {
  "codex, fresh cache, providers, saved choices": {
-  "init": "3c3687a4b34316658b1fe18f975e66a90f039537",
-  "render": "8b754289bb137ac0441d7efb9e473162385073d2",
-  "handlers": "43d1357ada8bf8fbe346ef0d381f3dfee0c2af8e",
-  "clicks": "dcd7bc40e44404bfb96e5d15b4db2b25bab3bedc",
-  "ops": "e346767a347a63e3143539fd6928463db4e7eeb6"
+  "init": "8debbcb0ce2befff221b0f940d9bf1607a712ab8",
+  "render": "df47fbdc95bdea8c512879984ed9a60ebe881dc1",
+  "handlers": "f133f534c91c1146627c449abe693d8a406b7fac",
+  "clicks": "f3bb7282a5d217622561340cfbad5cc017875429",
+  "ops": "53e2e322f366d8479018bcd281cba8a4a197a1a2"
  },
  "codex, fresh cache, launch now": {
-  "init": "748791dfcac8e3e1c24e58c684d7c303e1ae515d",
-  "render": "d0aa5ac651e4f517f413fe5afbe243609f054efc",
-  "handlers": "43d1357ada8bf8fbe346ef0d381f3dfee0c2af8e",
-  "clicks": "263c0e2d91b6c6df82a7fa4ecc80367c30e6d16d",
-  "ops": "9ad6e63e3089a5c05ced6b2732f577aef575c37a"
+  "init": "03d7d90b03c26175495bf31caecb9ced7ec7a935",
+  "render": "fb4d8024f6368a19ba8bfd36c85198e2a6ee967c",
+  "handlers": "118dedf0d6e0e89174b0e482bb90c92a928500e0",
+  "clicks": "7cd8cedc23527d46d7ad7d7db69e3631c43989b6",
+  "ops": "7fb5640baf5fa1017ec2c00cce852df0bf5d3e27"
  },
  "codex, launch now but disabled in the manager": {
-  "init": "6c8a1ac58fa9d0eac2f7d14734c657dad9fa5d45",
-  "render": "12d8710c2835b3e30eea482174465b5dc211b262",
-  "handlers": "70708f5295d572ee4504d5c8a9f9678357b6b29a",
-  "clicks": "ba505b3f678a65fa501625dd697ba27a7b87b0cc",
-  "ops": "3678ab4491602775b754c1d3629cd2b88c844d9a"
+  "init": "f97859a1caeb01c56016ce7d29878e34015eb48b",
+  "render": "e598df179ff2c2064ed5cc5c9e373eec3fcbad2f",
+  "handlers": "b82d5b787f4d4eae0e811ce183dab92404889686",
+  "clicks": "d08189363eaead2d02bbc00d544ac53cab038a1f",
+  "ops": "2cc0266a7c98f82dfdad60ac697363b41a9beb8a"
  },
  "codex, stale cache, list changed": {
-  "init": "74d0598b9fe148368f0d13e47988096034dcf54f",
-  "render": "23bab844848abc2220c1b55d898f2abeafeade07",
-  "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
-  "clicks": "9ab76db3c943d4ab803356fb240b942f211bbc42",
-  "ops": "df74c005549650af2f489882eb1840feb8f6ff82"
+  "init": "d42b1f4bd7e0d9d42b786235f2c4aa5a4c2c10e5",
+  "render": "44a0bd2b970033f3893ed77b23496b7227e0ae3c",
+  "handlers": "788ee197afbaabea125fb3851fd9447db005908c",
+  "clicks": "45a33f83a1a225367977fb2b0170d976d5a5426e",
+  "ops": "04beee8601d1132c95a36e8e7ed155025fff48f1"
  },
  "codex, stale cache, same list, version fails": {
-  "init": "3bd44bb43fbadfef6d479a20937a2e31a4dee889",
-  "render": "23bab844848abc2220c1b55d898f2abeafeade07",
-  "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
-  "clicks": "7b9567b91d7ce0e883d99496a4d23e614d520aab",
-  "ops": "7754426a30fe3ab4a492875e34da2f519745aff7"
+  "init": "a5b7a9783e601e525b4f6dc2cee0b28e87eac3c0",
+  "render": "44a0bd2b970033f3893ed77b23496b7227e0ae3c",
+  "handlers": "788ee197afbaabea125fb3851fd9447db005908c",
+  "clicks": "079a432292bac7127a18419dffac4edf29caa26b",
+  "ops": "4f09ea1d08da518a1c0bee5debeb9ab369f6c8b1"
  },
  "codex, stale cache, nothing listed": {
-  "init": "f501a1b3f783497b5fcf4126d3a9d67c2c4c26ee",
-  "render": "afd092ed97e0f0744c7b1dd67f25409cb8462032",
-  "handlers": "70708f5295d572ee4504d5c8a9f9678357b6b29a",
-  "clicks": "2d2261a4e9a0eb84c3d3b6b51f47dd6240980330",
-  "ops": "2d02d1eec1e3e20492df9cac580269cee7036d3a"
+  "init": "a63f573530191cd24580bbacb86add4d8024e29b",
+  "render": "a6e99c106d4f7e06b0b2e31f4a5d14296f808f9c",
+  "handlers": "b82d5b787f4d4eae0e811ce183dab92404889686",
+  "clicks": "8c7359c2ccd8b7099e0b9d89ca2950e0df79622b",
+  "ops": "9aa9713f8491f710d2a976df163dd253a0d0d5a7"
  },
  "codex, old schema, cli fails": {
   "init": "a144662195305541dfea47824f9c2a0a078eda9b",
@@ -49,81 +49,81 @@
   "ops": "c16886e4427b88cd5adc8e390e8be7dc6fa90903"
  },
  "codex, no settings file": {
-  "init": "d1f1bfde589ab0eae15fc436ab12133523b15d67",
-  "render": "23bab844848abc2220c1b55d898f2abeafeade07",
-  "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
-  "clicks": "282f2604cd3fa90e9b946b77234dc01b7f252f5e",
-  "ops": "ae406e20fa28f1f36790eedf4421462123b4f0a6"
+  "init": "f69c090a9d7dd5b32def62f0a8845206083582c6",
+  "render": "44a0bd2b970033f3893ed77b23496b7227e0ae3c",
+  "handlers": "788ee197afbaabea125fb3851fd9447db005908c",
+  "clicks": "71ad718ca8726e6080e3b0325e8f6fb28a34330f",
+  "ops": "358bdf65b997a87882c6ccb4f13b9e26d1cc5e5d"
  },
  "codex, settings not json": {
   "init": "ca29ed04e9af8a2daeb05458cdf808e0d08dacbb",
   "render": "ea145139096e6229d559fb495cd277a019183720",
   "handlers": "21f855b1b808c694c70ffa8b1ddd5dc96a2e40a3",
   "clicks": "d08f4e6194617d3daf4386f038e491d744b7409f",
-  "ops": "06a1c2a9d7b684e086e75ed73ea22b9df77e4690"
+  "ops": "a108812d5eb715402cb7bf2037f7abecc94e8d24"
  },
  "codex, remote machine": {
-  "init": "b1a753d979b7f24470fb8565f69d3110f29cc780",
-  "render": "2ab9c3853dbf75d1441a327dfa2f2bece40d6f4d",
-  "handlers": "b7557095d53915522460ee80dcb01e84601e0af1",
-  "clicks": "516eb9a37db7f74aca8a5cbce3e0e6d2c42b0960",
-  "ops": "bd0e99f7fb2535898c9d455c30697e32da53c58b"
+  "init": "0cc01e0a01320630f5df2ec03ab8202b4525b983",
+  "render": "13ec7301320629b97fc7b151f4d87bfb0a4ec0cd",
+  "handlers": "250b55f254b3cdf93218e3f15ec8b5ec9151f26f",
+  "clicks": "c8d5ad2f5f5b7a3f2424a7859116d7902a45fec5",
+  "ops": "14389d16738e95ec38f664671f24258cbe8b4724"
  },
  "claude, styles and editors": {
-  "init": "f0607eedf6b2afb9e09ff526f8bcdbb55a588aed",
-  "render": "8ea74f2a6bc87fb86ea5c78dbfcf1b1373c724ca",
-  "handlers": "ab7752bc3aee7170b351f3703ae40b8519fb20cc",
-  "clicks": "9607eb12c3e1abb57f11945b5e5f32f40c77ea17",
-  "ops": "b9f404bb9b34e3ecef04db1dd2e8c647f92b1d3c"
+  "init": "2adfb2f84ee48d5ee73c741602ccffb26221d05c",
+  "render": "6a0a69dcd68eaea578a4d15fc6ef438beaffbb59",
+  "handlers": "ee9543e7244b99932d4ca8a30b40b63d90f1fabc",
+  "clicks": "115c0acdfc59b859a9d4173fb108bfc5b4dcb3a2",
+  "ops": "6a0fe61460b817c350622bb29688c9e3043151ac"
  },
  "claude, valid agents json": {
-  "init": "467098d30085426a3eaa19520f1da92b6803831d",
-  "render": "493cb8633a87a0773b4b592ddc282c837d65a278",
-  "handlers": "c681dd52855974a9435dce7c2e6380ae4b3ce7f5",
-  "clicks": "3cecce5d3583d072f714024fb1880b45c539b60f",
-  "ops": "15f03dc907f4f898fa87174a60afd916456180c3"
+  "init": "7333794ed458f3cca647bf833eee903e298c9eaf",
+  "render": "78755680358e184186957b53da2917e81c8eb54d",
+  "handlers": "53bf7ad5f3101c6cfceff7fc9a8632241283de93",
+  "clicks": "ffe3f65de0998c83e172d0059430cd3fcc933504",
+  "ops": "953a6e0ab01ea0b359715c2f0a064931bba8a13e"
  },
  "claude, no cache": {
-  "init": "0ba78db0f6d964f7bf467de8d9addb8d31f2871a",
-  "render": "628f5af88c87628bfc3fc0c60419cf16d8d5ecbc",
-  "handlers": "b7557095d53915522460ee80dcb01e84601e0af1",
-  "clicks": "9376113200c0ab0005dfee9df3262f5ca3cef63c",
-  "ops": "f31a4a305c4fd0e7690ef7b94efba19e6c5ebf72"
+  "init": "79f296f355bab62fca7c9e64c4c232adba07c566",
+  "render": "b9e147697523e5fb77f5b0034f56ff56bc5386a7",
+  "handlers": "03404cb1cc8bc40044ebaba695ccf57c74f20e63",
+  "clicks": "a24c8c93c9d85160bdfcf6ad23b824899ed749de",
+  "ops": "e7d4f51bc7cd19d9438039d23bdcd2735181b54b"
  },
  "opencode, groups, hidden models, variant file": {
-  "init": "f0a9952339c82b49d6d41d375f9506ff39e031e5",
-  "render": "85777ab28b115f38f6f34d7d4ce10de5d55f1259",
-  "handlers": "6487da08e81df321280a80c07c51888ada2db0cd",
-  "clicks": "a4f3d32f51dfd4750a1139056de72deef45faa7f",
-  "ops": "021e80716670f7b5d95bf63d172c354ee5cc758f"
+  "init": "7bccc41735c782be0248731133c25cf4472646ea",
+  "render": "c4b15ad94c9cffc1051b7f45d43f7dad50f80d3f",
+  "handlers": "508bd26ebe949908169581016d70f26975888d37",
+  "clicks": "807145d4a6903c49a04b367871a3d42cf93f15c3",
+  "ops": "6c32d6486e4e550bc33c4664b5701d0877a4cb03"
  },
  "opencode, all group, variant file missing": {
-  "init": "ac3808442d2c888b4d71e2b98c7aee570be7d413",
-  "render": "f5c940d415bee5f68ecd5ccb5063ff220dc97ba6",
-  "handlers": "e33b71fef43a29c2ea0f4f5ee016bd192d49380a",
-  "clicks": "7e80464e96c375abe7088fb125c1b9fbecf50756",
-  "ops": "bc2e9c85c89e0f3a5a4dc08d3a046c0b14389d1b"
+  "init": "000dd2f6c3cac60e2ff3192931192cf50732fef1",
+  "render": "295a726cf113b73167ac65b9de660647db87f252",
+  "handlers": "035669ca5e44fbb3fa9899385208516c8de8897e",
+  "clicks": "e3f64b1a5ec8acf5a4d4d8927a73860940f0d48c",
+  "ops": "07fbf0af6601dfcdfc96bd53e236483302b5c4e6"
  },
  "pi, no cache": {
-  "init": "6904641573acae951c2dc82765267721be2aaf5d",
-  "render": "28b4335a05f725ebc14ac822dad520d63278120c",
-  "handlers": "e33b71fef43a29c2ea0f4f5ee016bd192d49380a",
-  "clicks": "097a439695b4aff8c6b3f8e5557072642ed0fa0b",
-  "ops": "f986be268e6c5b6c138304b961522015779df836"
+  "init": "82adf164572fb7e778a43fd01268bbb528152c47",
+  "render": "937a53344b40402e989f6a768fe470410c9766a0",
+  "handlers": "f1d7e0090e66804590210822c034b5a50059e6a8",
+  "clicks": "96141895c481e4a35dece2b447d087a0c65d1181",
+  "ops": "cfd9f87390e648609e082d2bfb1195234766429e"
  },
  "pi, no cache, cli lists nothing": {
-  "init": "c733972f4fecfe621adbdf44e37f0d0cd340e196",
-  "render": "96a6b5762ad717a93a9124ee77faae82fae7f6f2",
-  "handlers": "2e4e7a9d80f953243b5f60fbb327b804ab48716c",
-  "clicks": "83426028d3ab1763188ec0969f0927a71c006153",
-  "ops": "3f990b9524be024637dcfd21e1837956e273d169"
+  "init": "0b81cedabf2aea120e6f3d3ff0c06fa8bdc64657",
+  "render": "d5937e2957ebec146bb017c6ffdb123653de719d",
+  "handlers": "85d2794513d5df05109bfbff2bd19603feb64034",
+  "clicks": "31d2c95ab95837a2c562a82fe15528411169621f",
+  "ops": "761b8421e9c0ff58a87257de01fd8b50f8b322a7"
  },
  "pi, saved presets": {
-  "init": "58928106d3ef9c55dbf8d09376be7fdb603d38ad",
-  "render": "65b961095cdb4913fd1a8638aabbd8920f3423c2",
-  "handlers": "e33b71fef43a29c2ea0f4f5ee016bd192d49380a",
-  "clicks": "7ebb6bac7eb19e89602dcdd92b7093c8eaa804a6",
-  "ops": "8b6fbd246e90685b336bc0589e108f843d906f3b"
+  "init": "c4739b348536a840bce707cda7b4ab3ad868cff9",
+  "render": "f40a44b65f51e71a39c9d45221a471d611d781f2",
+  "handlers": "3b0a5222f5eb2144e25c34f99be59807ce765c52",
+  "clicks": "a6bc5075283eb07371f576e92ebe0b4b9b42e92c",
+  "ops": "f14214074db0971a23a5428feaaa4f6b73b507d9"
  },
  "checking: no loading": {
   "init": "1e8b75d657bd73eba895fc6b89ce076a4489cc4f",

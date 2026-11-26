@@ -9,7 +9,7 @@ test("a fresh catalog restores the selection without probing, and explicit refre
   const models = [{ id: "saved", label: "Saved", efforts: ["low", "high"], fallbackEffort: "low" }];
   globalThis.__herdrProps = () => ({ key: "codex" });
   globalThis.__herdrFiles = new Map([["/home/agent-config.json", JSON.stringify({
-    codex: { model: "saved", effort: "high" }, catalog: { codex: { models, checkedAt: Date.now(), schema: 3 } },
+    codex: { model: "saved", effort: "high" }, catalog: { codex: { models, checkedAt: Date.now(), schema: 4 } },
   })]]);
   const probes = [];
   globalThis.__herdrExec = command => { probes.push(command); return { stdout: "v1" }; };

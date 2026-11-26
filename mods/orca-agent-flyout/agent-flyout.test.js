@@ -36,6 +36,7 @@ const FIXTURES = {
         "slug": "gpt-6.2-sol",
         "display_name": "GPT-6.2-Sol",
         "visibility": "list",
+        "service_tiers": [{ "id": "priority", "name": "Fast" }],
         "default_reasoning_level": "low",
         "supported_reasoning_levels": [
           {
@@ -304,7 +305,7 @@ test("sections: Codex has its own, the others get ARGUMENTS and ADVANCED from th
     { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 },
     { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["advisorModel", "outputStyle", "agents", "systemPrompt"] },
   ]);
-  assert.deepEqual(sectionsOf(SPECS.opencode), [{ title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 }]);
+  assert.deepEqual(sectionsOf(SPECS.opencode), [{ title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort"], gap: 4 }]);
 });
 
 test("claude argv: model and effort, then advisor, style, agents and prompt in launch order", () => {
@@ -386,6 +387,8 @@ test("codex catalog: visible models with their efforts", () => {
   assert.equal(models[0].label, "GPT-6.2-Sol");
   assert.ok(models[0].efforts.includes("low") && models[0].efforts.includes("max"));
   assert.equal(models[0].fallbackEffort, "low");
+  assert.equal(models[0].fast, true);
+  assert.equal(models[1].fast, false);
   // A notice before the JSON does not matter.
   assert.equal(parseModels("codexCatalog", `update available\n${JSON.stringify(FIXTURES.codex)}`).length, 2);
 });
@@ -411,7 +414,7 @@ test("pi table: provider/model ids, thinking models get the levels, others none"
 
 test("claude initialize: the models of the control response, and an error when there is none", () => {
   const line = JSON.stringify({ type: "control_response", response: { response: { models: [{ value: "sonnet", displayName: "Sonnet 5.5", supportedEffortLevels: ["low", "high"] }] } } });
-  assert.deepEqual(parseModels("claudeInitialize", `noise\n${line}\n`), [{ id: "sonnet", label: "Sonnet 5.5", efforts: ["low", "high"], fallbackEffort: "high" }]);
+  assert.deepEqual(parseModels("claudeInitialize", `noise\n${line}\n`), [{ id: "sonnet", label: "Sonnet 5.5", efforts: ["low", "high"], fallbackEffort: "high", fast: false }]);
   assert.throws(() => parseModels("claudeInitialize", "nothing"), /did not list/);
   assert.throws(() => parseModels("nope", ""), /no model parser/);
 });

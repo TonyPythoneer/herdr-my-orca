@@ -328,6 +328,18 @@ test("New Terminal and FreeBuff use the light pointer tooltip and release it on 
   assert.doesNotMatch(JSON.stringify(w.menu.render(w.cx).__node), /tip-arrow--orca-new-menu\.svg/);
 });
 
+test("crossing onto a non-agent action drops the open agent flyout", async () => {
+  const log = [];
+  const w = await opened(HOSTS["local, fresh inventory, freebuff on"], log);
+  const claude = w.menu.agents.find(a => a.key === "claude");
+  w.menu.hoverConfig(claude, true, false);
+  view(w);
+  const move = w.handlers.find(([name, handler]) => name === "on_mouse_move" && handler.toString().includes("row.config"));
+  move[1]({ local_position: { x: 1, y: 1 }, bounds: {} }, w.cx);
+  assert.equal(w.menu.hoverAgent, null);
+  assert.deepEqual(plain(log.at(-1)), ["setShared", "orca-agent-flyout", null]);
+});
+
 test("the flyout opens through the orca-agent-flyout popup and swaps for another agent", async () => {
   const log = [];
   const w = await opened(HOSTS["local, fresh inventory, freebuff on"], log);

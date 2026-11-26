@@ -35,9 +35,9 @@ test("flyout centers under the menu, then clamps to the viewport", () => {
   const agent = { key: "codex" };
   assert.equal(menu.flyoutAt(agent), "pointer");
   for (const [width, left, right, bottom, x, y] of [
-    [1200, 400, 600, 60, 200, 66],
+    [1200, 400, 600, 60, 260, 66],
     [900, 100, 200, 80, 8, 86],
-    [700, 380, 480, 90, 92, 96],
+    [700, 380, 480, 90, 190, 96],
     [350, 30, 140, 100, 8, 106],
   ]) {
     globalThis.window = { viewport_size: () => ({ width, height: 600 }) };

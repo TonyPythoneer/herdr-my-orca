@@ -172,8 +172,8 @@ const text = (node) => JSON.stringify(node.__node ?? node);
 test("zero providers: the row shows Origin source and still opens, for Add More; on another machine it is greyed out", () => {
   const { view } = flyout({ providers: {} });
   const row = text(view.providerRow(t));
-  assert.ok(row.includes("MODEL SOURCE"));
-  assert.ok(row.includes('"Origin source"'));
+  assert.ok(row.includes("Model source: Codex"));
+  assert.ok(row.includes('"Codex"'));
   assert.equal(row.includes('["opacity",[0.5]]'), false);
   assert.ok(row.includes("on_click"));
   const remote = flyout({ providers: {}, machine: "m1" }).view;
@@ -199,23 +199,23 @@ test("a saved provider is selectable, and a model without efforts shows no effor
   // oMLX models have no effort variants, so effort renders as none.
   const args = sectionsOf(SPECS.codex).find((s) => s.title === "HARNESS CLI ARGUMENTS");
   const picker = text(view.sectionBody(args, t));
-  assert.ok(picker.includes("MODEL"));
-  assert.ok(picker.includes("EFFORT"));
-  assert.ok(picker.includes("FAST"));
+  assert.ok(picker.includes('"Model"'));
+  assert.ok(picker.includes('"Effort"'));
+  assert.ok(picker.includes("Fast:"));
 });
 
 test("the flyout shows model source on the same layer as model and effort", () => {
   const codex = text(flyout({ providers: {} }).view.render());
-  for (const head of ["MODEL SOURCE", "HARNESS CLI ARGUMENTS", "HARNESS CLI ADVANCED ARGUMENTS"]) assert.ok(codex.includes(head), head);
+  for (const head of ["Model source: Codex", "HARNESS CLI ARGUMENTS", "HARNESS CLI ADVANCED ARGUMENTS"]) assert.ok(codex.includes(head), head);
   // model source sits inside the arguments section, not in its own section above it
-  assert.ok(codex.indexOf("HARNESS CLI ARGUMENTS") < codex.indexOf("MODEL SOURCE"));
-  assert.ok(codex.indexOf("MODEL SOURCE") < codex.indexOf("HARNESS CLI ADVANCED ARGUMENTS"));
+  assert.ok(codex.indexOf("HARNESS CLI ARGUMENTS") < codex.indexOf("Model source: Codex"));
+  assert.ok(codex.indexOf("Model source: Codex") < codex.indexOf("HARNESS CLI ADVANCED ARGUMENTS"));
   const view = flyout({ providers: {} }).view;
   const input = { value: () => "", set_value() {}, set_soft_wrap() {}, on() {} };
   Object.assign(view, { key: "claude", spec: SPECS.claude, values: { ...defaultValues(SPECS.claude), model: "m", effort: "high" }, styles: ["default"], naming: false, nameError: false, styleInput: input, editors: { agents: { input, dirty: false, error: null }, systemPrompt: { input, dirty: false, error: null } } });
   const claude = text(view.render());
-  assert.ok(claude.includes("MODEL SOURCE"));
-  assert.ok(claude.indexOf("HARNESS CLI ARGUMENTS") < claude.indexOf("MODEL SOURCE"));
+  assert.ok(claude.includes("Model source: Claude"));
+  assert.ok(claude.indexOf("HARNESS CLI ARGUMENTS") < claude.indexOf("Model source: Claude"));
   assert.ok(claude.includes("HARNESS CLI ARGUMENTS") && claude.includes("HARNESS CLI ADVANCED ARGUMENTS"));
 });
 

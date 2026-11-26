@@ -1827,7 +1827,7 @@ export default class AgentManager extends View {
         // A spawned callback can start in render; the harness allocates native input state.
         await taskCx.sleep(1);
         const controller = new Harness();
-        controller.settingsContext = { key: row.key, name: row.name, argv: row.run };
+        controller.settingsContext = { key: row.key, name: row.name, argv: row.run, icon: row.icon, tint: row.tint };
         controller.init({}, taskCx);
         this.harnesses.set(row.key, controller);
       } catch (e) {

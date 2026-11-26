@@ -7,7 +7,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, HoverCard } from "gpui-base";
 import { checking, theme, spaces, knownAgents, run, props, closeOverlay, openOverlay, keys, window as appWindow, shared, setShared, appHome, readTextFile, exec } from "herdr";
 import { MODELS } from "./models.js";
-import { agentWindow, currentInventory, emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory } from "./rows.js";
+import { currentInventory, emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory } from "./rows.js";
 import { detectFreebuff } from "./freebuff.js";
 
 // Keep one inventory per machine for the first paint, then always ask again on open. The Agent
@@ -66,7 +66,7 @@ const FLYOUT_GAP = 6;
 const FIT = { models: 11 };
 // orca-agent-flyout's content width (four controls: source, model, effort, fast on one row),
 // a guessed height (it sets none) and the window margin the flyout keeps.
-const FLYOUT_W = 600;
+const FLYOUT_W = 480;
 const FLYOUT_H = 440;
 const WINDOW_MARGIN = 8;
 // The menu's own padding: the flyout starts this far under the menu's last row.
@@ -467,6 +467,8 @@ export default class NewMenu extends View {
         name: agent.name,
         key: agent.key,
         argv: agent.run,
+        icon: agent.icon,
+        tint: agent.tint,
         launchNow,
       },
     });
@@ -537,12 +539,19 @@ export default class NewMenu extends View {
       .when(!row.config && !row.tip, (el) => el.tooltip(row.hint ? `${row.label}  ${row.hint}` : row.label))
       .on_mouse_move((e, cx) => {
         if (!e.local_position || !e.bounds) return;
-        this.hoverAgent = row.config ?? null;
+        // Only an official agent has a setup flyout. FreeBuff, settings and New Terminal are not
+        // hover targets: crossing onto one closes the flyout the previous agent opened.
+        if (!row.config) {
+          this.hoverAgent = null;
+          this.closeFlyout();
+        } else {
+          this.hoverAgent = row.config;
+          this.openHover();
+        }
         if (this.at !== i) {
           this.at = i;
           cx.notify();
         }
-        this.openHover();
       })
       .on_hover((hovered, cx) => {
         if (row.tip) {
@@ -614,28 +623,43 @@ export default class NewMenu extends View {
   }
 
   // Agent Settings order: official installed-and-enabled first, then the unofficial integration,
-  // then the settings gear. The gear counts toward the five-and-a-half window.
+  // then the settings gear. The gear counts toward the five-and-a-half window. The whole row is
+  // rendered once and slid by 'left', so a wheel or arrow step is one smooth move and no icon
+  // remounts under the pointer. GPUI's ScrollHandle only takes requests (no offset read-back), so
+  // this is the native transition the header tab strip uses for the same job.
   agentBar(t) {
     const groups = this.agentGroups();
     const rows = [...groups.official, ...groups.unofficial, ...(groups.settings ? [groups.settings] : [])];
-    const win = agentWindow(rows.length, this.agentAt);
-    const visible = rows.slice(win.start, win.start + win.count);
-    const icons = h_flex().items_center().gap(AGENT_GAP)
-      .when(win.left || win.right, (el) => el.w(AGENT_VIEW).flex_none().overflow_x_hidden())
-      .children(visible.map((row, n) => this.tipButton(row, 1 + win.start + n, t)));
+    const last = Math.max(0, rows.length - AGENT_FULL);
+    const at = Math.max(0, Math.min(this.agentAt, last));
+    const overflow = rows.length > AGENT_FULL;
+    const icons = h_flex()
+      .relative()
+      .flex_none()
+      .items_center()
+      .gap(AGENT_GAP)
+      .left(-at * (36 + AGENT_GAP))
+      .transition("left", { duration: 150, easing: "ease-out" })
+      .children(rows.map((row, n) => this.tipButton(row, 1 + n, t)));
+    const viewport = div()
+      .w(AGENT_VIEW)
+      .flex_none()
+      .overflow_x_hidden()
+      .child(icons);
     return h_flex().w_full().items_center().justify_center().gap(AGENT_GAP)
       .on_mouse_move((e) => this.trackMenu(e))
       .on_scroll_wheel((e, cx) => {
-        if (!e.delta.y || rows.length <= AGENT_FULL) return;
-        this.agentAt = Math.max(0, Math.min(this.agentAt + (e.delta.y > 0 ? 1 : -1), rows.length - AGENT_FULL));
+        if (!e.delta.y || !overflow) return;
+        this.agentAt = Math.max(0, Math.min(this.agentAt + (e.delta.y > 0 ? 1 : -1), last));
         cx.stop_propagation();
         cx.notify();
       })
-      .when(win.left || win.right, (el) => el
-        .child(this.agentArrow(-1, win.left, t))
-        .child(icons)
-        .child(this.agentArrow(1, win.right, t)))
-      .when(!(win.left || win.right), (el) => el.child(icons));
+      .when(overflow, (el) => el
+        .child(this.agentArrow(-1, at > 0, t))
+        .child(viewport)
+        .child(this.agentArrow(1, at < last, t)))
+      .when(!overflow, (el) => el.child(h_flex().items_center().gap(AGENT_GAP)
+        .children(rows.map((row, n) => this.tipButton(row, 1 + n, t)))));
   }
 
   agentArrow(dir, enabled, t) {
@@ -648,8 +672,18 @@ export default class NewMenu extends View {
       .rounded(5)
       .role("button")
       .accessibility_label(dir < 0 ? "Previous agents" : "More agents")
+      .on_hover((hovered) => {
+        // The arrow is not an agent: pointing at it drops the agent flyout, as any non-agent does.
+        if (!hovered) return;
+        this.hoverAgent = null;
+        this.closeFlyout();
+      })
       .when(enabled, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover))
-        .on_click((_e, cx) => { this.agentAt += dir; cx.notify(); }))
+        .on_click((_e, cx) => {
+          this.agentAt += dir;
+          this.agentAt = Math.max(0, Math.min(this.agentAt, Math.max(0, this.agentRows().length - AGENT_FULL)));
+          cx.notify();
+        }))
       .opacity(enabled ? 1 : 0.35)
       .child(svg(dir < 0 ? "mods/orca-assets/chevron-left--orca-header.svg" : "mods/orca-assets/chevron-right--orca-header.svg")
         .size(14).flex_none().text_color(t.muted));

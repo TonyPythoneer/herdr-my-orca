@@ -89,7 +89,7 @@ export const SPECS = {
       provider: { type: "provider", label: "MODEL SOURCE" },
       model: { type: "model", label: "MODEL", argv: ["--model", "{v}"] },
       effort: { type: "effort", label: "EFFORT", argv: ["--effort", "{v}"], omit: [""] },
-      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
+      fast: { type: "toggle", label: "FAST", argv: ["--fast-mode"], default: false },
       advisorModel: { type: "select", label: "ADVISOR", choices: ["none", "opus", "haiku", "fable", "sonnet"], default: "opus", argv: ["--advisor", "{v}"], omit: ["none"] },
       outputStyle: { type: "select", label: "OUTPUT STYLE", source: "claudeOutputStyles", default: "default", argv: ["--settings", { json: { outputStyle: "{v}" } }], omit: ["default"] },
       agents: { type: "editor", label: "Agents", language: "json", default: DEFAULT_AGENTS_TEXT, argv: ["--agents", "{v}"] },
@@ -114,7 +114,8 @@ export const SPECS = {
       provider: { type: "provider", label: "MODEL SOURCE" },
       model: { type: "model", label: "MODEL", argv: ["-m", "{v}"] },
       effort: { type: "effort", label: "EFFORT", argv: ["-c", "model_reasoning_effort={v}"], omit: ["", null] },
-      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
+      // Codex names the speed tier in config; `priority` is its Fast tier in the model catalog.
+      fast: { type: "toggle", label: "FAST", argv: ["-c", "service_tier=\"priority\""], default: false },
       codexOff: { type: "checklist", label: "DISABLE", bulk: true, items: [...CODEX_ITEMS, { id: "mcp", expand: "codexMcp" }] },
     },
     launch: ["model", "effort", "fast", "codexOff"],
@@ -148,18 +149,16 @@ export const SPECS = {
         group: "free", // a paid model just answers 402, so the list starts on free
       },
       effort: { type: "effort", label: "EFFORT" },
-      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
     },
-    launch: ["model", "effort", "fast"],
+    launch: ["model", "effort"],
     // The TUI takes no --model flag: the model goes in through its config env var, and it must run
     // its own server (--standalone), since the background service keeps its own config and a TUI
     // that connects to it ignores OPENCODE_CONFIG_CONTENT. Its effort is its own state file.
     wrap: { env: { OPENCODE_CONFIG_CONTENT: { json: { model: "{model}" } } }, suffix: ["--standalone"], after: "opencodeVariant" },
     ui: {
       sections: [
-        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort"], gap: 4 },
       ],
-      rows: [["effort", "fast"]],
     },
   },
   pi: {
@@ -173,17 +172,15 @@ export const SPECS = {
       provider: { type: "provider", label: "MODEL SOURCE" },
       model: { type: "model", label: "MODEL", argv: ["--model", "{v}"] },
       effort: { type: "effort", label: "THINKING", argv: ["--thinking", "{v}"], omit: [""] },
-      fast: { type: "toggle", label: "FAST", argv: ["--fast"], default: false },
       off: { type: "checklist", label: "TURN OFF", bulk: true, items: PI_ITEMS },
       systemPrompt: { type: "editor", label: "Append system prompt", default: "", argv: ["--append-system-prompt", "{v}"] },
     },
-    launch: ["model", "effort", "fast", "off", "systemPrompt"],
+    launch: ["model", "effort", "off", "systemPrompt"],
     ui: {
       sections: [
-        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort", "fast"], gap: 4 },
+        { title: "HARNESS CLI ARGUMENTS", options: ["provider", "model", "effort"], gap: 4 },
         { title: "HARNESS CLI ADVANCED ARGUMENTS", options: ["off", "systemPrompt"] },
       ],
-      rows: [["effort", "fast"]],
     },
   },
 };
@@ -344,6 +341,7 @@ export const PARSERS = {
         label: m.displayName,
         efforts: m.supportedEffortLevels ?? [],
         fallbackEffort: DEFAULT_FALLBACK_EFFORT,
+        fast: Boolean(m.supportsFastMode),
       }));
     }
     throw new Error("claude did not list its models");
@@ -357,6 +355,7 @@ export const PARSERS = {
         label: m.display_name,
         efforts: m.supported_reasoning_levels.map((r) => r.effort),
         fallbackEffort: m.default_reasoning_level,
+        fast: (m.service_tiers ?? []).some((tier) => tier.id === "priority"),
       }));
   },
 
