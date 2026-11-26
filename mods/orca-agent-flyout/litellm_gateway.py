@@ -11,6 +11,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 import urllib.parse
@@ -21,13 +22,15 @@ def read(path):
     return json.loads(path.read_text())
 
 def private_write(path, value):
-    tmp = path.with_name(path.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as out:
-        os.fchmod(out.fileno(), 0o600)
-        json.dump(value, out)
-        out.write("\n")
-    os.replace(tmp, path)
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as out:
+            os.fchmod(out.fileno(), 0o600)
+            json.dump(value, out)
+            out.write("\n")
+        os.replace(tmp, path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
 
 def alias_for(provider, model):
     return "herdr-" + hashlib.sha256(json.dumps([provider, model], ensure_ascii=False).encode()).hexdigest()[:32]
@@ -126,7 +129,7 @@ def prepare(app, provider, model, expected_host, kind):
                 port = sock.getsockname()[1]
             key = "sk-" + secrets.token_hex(32)
             state = {"url": "http://127.0.0.1:" + str(port), "key": key, "fingerprint": fingerprint}
-            private_write(root / "config.json", config_for(routes, key))
+            private_write(root / "config.yaml", config_for(routes, key))
             private_write(root / "routes.json", {a: {"provider": r["provider"], "model": r["model"],
                                                     "kilo": urllib.parse.urlsplit(r["host"]).hostname == "ai-gateway.kilo.ai"}
                                                   for a, r in routes.items()})
@@ -134,7 +137,7 @@ def prepare(app, provider, model, expected_host, kind):
                        PYTHONPATH=str(Path(__file__).resolve().parent),
                        LITELLM_RUST_FIRST="false", LITELLM_RUST="false")
             env.pop("_LITELLM_GATEWAY_SUPERVISED", None)
-            process = subprocess.Popen([str(binary), "--config", str(root / "config.json"),
+            process = subprocess.Popen([str(binary), "--config", str(root / "config.yaml"),
                                         "--host", "127.0.0.1", "--port", str(port), "--num_workers", "1"],
                                        cwd=root, env=env, stdin=subprocess.DEVNULL,
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
