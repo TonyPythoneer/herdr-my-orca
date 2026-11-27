@@ -110,6 +110,11 @@ class ImpactTest(unittest.TestCase):
         p = self.plan("mods/orca-status-bar/main.js")
         self.assertEqual(p["lint_paths"], ["mods/orca-status-bar/main.js"])
 
+    def test_typescript_changes_select_lint(self):
+        p = self.plan("orca-ui/shared/future.ts")
+        self.assertTrue(p["full"])
+        self.assertIn("orca-ui", p["lint_paths"])
+
     def test_fallback(self):
         p = self.plan("unknown-source.rs")
         self.assertTrue(p["full"])

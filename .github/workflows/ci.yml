@@ -66,6 +66,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install pinned Vite+ for quality checks
+        if: needs.plan.outputs.lint != '[]'
+        run: npm ci --no-audit --no-fund
       - name: Check Python and shell availability
         run: |
           python3 --version
@@ -101,7 +106,10 @@ jobs:
           LINT_PATHS: ${{ needs.plan.outputs.lint }}
         run: |
           mapfile -t paths < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["LINT_PATHS"])))')
-          npx --yes eslint@9 -c eslint.config.mjs --max-warnings 0 --no-warn-ignored --no-error-on-unmatched-pattern "${paths[@]}"
+          ./node_modules/.bin/vp lint --max-warnings 0 --no-error-on-unmatched-pattern "${paths[@]}"
+      - name: Type check migrated source (complete TS project)
+        if: needs.plan.outputs.lint != '[]'
+        run: npm run check:pilot
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
       - name: Paired Git branch-header microbenchmark

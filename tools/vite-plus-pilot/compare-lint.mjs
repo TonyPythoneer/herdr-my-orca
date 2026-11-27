@@ -1,18 +1,12 @@
-// Candidate-only diagnostic comparison; existing ESLint remains authoritative.
+// Temporary migration-only parity check against the legacy gate; remove once cutover is verified.
 import { spawnSync } from "node:child_process";
-import { writeFileSync, unlinkSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { relative } from "node:path";
 import { performance } from "node:perf_hooks";
-import eslintConfig from "../../eslint.config.mjs";
+import assert from "node:assert/strict";
+import { normalizeOxlint } from "../../scripts/metrics.mjs";
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const config = eslintConfig[0];
-const candidateConfig = new URL("../../.oxlintrc-vite-plus-candidate.json", import.meta.url);
-writeFileSync(candidateConfig, JSON.stringify({
-  categories: { correctness: "off" },
-  rules: Object.fromEntries(Object.entries(config.rules).map(([name, value]) => [`eslint/${name}`, value])),
-  ignorePatterns: config.ignores,
-}, null, 2), { flag: "wx" });
-try {
 const paths = ["mods", "scripts", "orca-ui"];
 const vp = fileURLToPath(new URL("../../node_modules/.bin/vp", import.meta.url));
 function run(label, command, args) {
@@ -22,19 +16,19 @@ function run(label, command, args) {
   if (result.error) throw result.error;
   writeFileSync(new URL("./dist/" + label + ".json", import.meta.url), result.stdout);
   writeFileSync(new URL("./dist/" + label + ".log", import.meta.url), result.stderr);
+  assert.ok([0, 1].includes(result.status), result.stderr);
   let parsed;
-  try { parsed = JSON.parse(result.stdout); } catch { parsed = null; }
-  if (parsed === null) console.error(`${label}: ${result.stderr || result.stdout || "no diagnostic output"}`);
+  try { parsed = JSON.parse(result.stdout); } catch { throw new Error(`${label}: ${result.stderr || result.stdout || "no diagnostic output"}`); }
   return { elapsedMs, exitCode: result.status, parsed };
 }
+function keys(files) {
+  return files.flatMap(f => f.messages.map(d => `${relative(root, f.filePath)}:${d.line}:${d.ruleId ?? "parse"}`)).sort();
+}
 const legacy = run("eslint", "npx", ["--yes", "eslint@9", "-c", "eslint.config.mjs", "--format", "json", ...paths]);
-const next = run("oxlint", vp, ["lint", "-c", fileURLToPath(candidateConfig), "--format", "json", ...paths]);
-const oldCount = Array.isArray(legacy.parsed) ? legacy.parsed.reduce((n, f) => n + f.messages.length, 0) : null;
-const newCount = Array.isArray(next.parsed?.diagnostics) ? next.parsed.diagnostics.length : null;
-const summary = { eslint: { elapsedMs: legacy.elapsedMs, exitCode: legacy.exitCode, findings: oldCount }, oxlint: { elapsedMs: next.elapsedMs, exitCode: next.exitCode, findings: newCount }, note: "Includes process startup; ESLint npx may include dependency setup. Inspect raw diagnostics; counts alone are not parity." };
+const next = run("oxlint", vp, ["lint", "--format", "json", ...paths]);
+const a = keys(legacy.parsed), b = keys(normalizeOxlint(next.parsed, root));
+const equal = JSON.stringify(a) === JSON.stringify(b);
+const summary = { eslint: { elapsedMs: legacy.elapsedMs, exitCode: legacy.exitCode, findings: a.length }, oxlint: { elapsedMs: next.elapsedMs, exitCode: next.exitCode, findings: b.length }, exactRuleFileLineParity: equal, legacyOnly: a.filter(x => !b.includes(x)), oxlintOnly: b.filter(x => !a.includes(x)), note: "Includes process startup; ESLint npx may include dependency setup. Install is measured by a separate CI step." };
 writeFileSync(new URL("./dist/lint-comparison.json", import.meta.url), JSON.stringify(summary, null, 2) + "\n");
 console.log(JSON.stringify(summary, null, 2));
-if (oldCount === null || newCount === null || ![0, 1].includes(legacy.exitCode) || ![0, 1].includes(next.exitCode)) process.exitCode = 1;
-} finally {
-  unlinkSync(candidateConfig);
-}
+assert.deepEqual(b, a, "diagnostic parity must include path, rule, line and multiplicity");

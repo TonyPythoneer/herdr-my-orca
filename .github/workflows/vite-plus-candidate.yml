@@ -34,12 +34,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Resolve pinned candidate (lockfile captured for review)
-        run: |
-          if test -f package-lock.json; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
-      - name: Capture public package lock for review
-        if: matrix.os == 'ubuntu-latest'
-        run: node -e 'for (const line of require("node:fs").readFileSync("package-lock.json", "utf8").split("\n")) console.log("VITE_LOCK " + line)'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frozen toolchain
+        run: npm ci --no-audit --no-fund
       - name: Verify type-aware lint and type checking
         run: |
           npm run check:pilot

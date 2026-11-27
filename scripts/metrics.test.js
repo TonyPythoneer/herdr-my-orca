@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { coverageByMod, judge, nextActions, parseCoverage, parseTestSummary, summarizeLint, toMarkdown, trackedTestFiles } from "./metrics.mjs";
+import { coverageByMod, judge, nextActions, normalizeOxlint, parseCoverage, parseTestSummary, summarizeLint, toMarkdown, trackedTestFiles } from "./metrics.mjs";
 
 const COVERAGE = `ℹ start of coverage report
 ℹ ------------------------------------------------------------
@@ -41,6 +41,24 @@ test("lint results are counted by rule and area and the worst complexity is list
   assert.deepEqual(out.byRule, { complexity: 1, "no-shadow": 2 });
   assert.deepEqual(out.byArea, { "mods/a": 2, scripts: 1 });
   assert.deepEqual(out.worstComplexity, [{ where: "mods/a/main.js:3", complexity: 20 }]);
+});
+
+test("Oxlint diagnostics preserve stable report keys and reject invalid file scopes", () => {
+  const normalized = normalizeOxlint({
+    number_of_files: 2,
+    diagnostics: [
+      { filename: "mods/a/main.js", code: "eslint(complexity)", message: "function f has a complexity of 20. Maximum allowed is 12.", labels: [{ span: { line: 3 } }] },
+      { filename: "mods/a/main.js", code: "eslint(no-shadow)", message: "shadow", labels: [{ span: { line: 4 } }] },
+      { filename: "scripts/x.mjs", code: "eslint(no-shadow)", message: "shadow", labels: [{ span: { line: 1 } }] },
+    ],
+  }, "/r");
+  const out = summarizeLint(normalized, "/r");
+  assert.deepEqual(out, {
+    total: 3, byRule: { complexity: 1, "no-shadow": 2 },
+    byArea: { "mods/a": 2, scripts: 1 }, worstComplexity: [{ where: "mods/a/main.js:3", complexity: 20 }],
+  });
+  assert.throws(() => normalizeOxlint({ diagnostics: [], number_of_files: 0 }, "/r"));
+  assert.throws(() => normalizeOxlint({ diagnostics: [{ filename: "a.js" }], number_of_files: 1 }, "/r"));
 });
 
 const report = (over = {}) => ({

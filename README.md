@@ -143,7 +143,7 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 - Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
   (see [.agents/skills/herdr-app-dev-sync/SKILL.md](.agents/skills/herdr-app-dev-sync/SKILL.md)).
 - Checks: `node --test mods scripts orca-ui/features`, `herdr-app check <mod>`, `herdr-app status`,
-  `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npx eslint@9 -c eslint.config.mjs mods scripts orca-ui`
+  `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npm ci` then `npx --no-install vp lint mods scripts orca-ui`
   (complexity, nesting, function length, parameters, shadowing; generated files are skipped) and
   `node --test --experimental-test-coverage mods scripts orca-ui/features`.
   CI runs unit/contract and behavior suites separately; the aggregate check requires both.

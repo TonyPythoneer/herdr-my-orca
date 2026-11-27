@@ -64,7 +64,7 @@ node --test mods/<mod>                 # that mod
 node --test scripts/ui-index.test.mjs  # after touching the index or CLI
 herdr-app check mods/<mod>             # load the mod once; never against the live path
 node scripts/build-orca-ui.mjs --check --out .
-npx eslint@9 -c eslint.config.mjs mods scripts orca-ui
+npm ci && npx --no-install vp lint mods scripts orca-ui
 ```
 
 Quality gates, CI and the error-to-file lookup (`scripts/where-error.mjs`) are described in

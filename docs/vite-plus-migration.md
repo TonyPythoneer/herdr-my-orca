@@ -8,8 +8,8 @@ All stages are mandatory in **PR #32**. Do not create follow-up PRs or mark read
 - Exact Vite+ 1.8.0 (includes tsrs); Node 24, existing production build/tests/lint untouched.
 - `tools/vite-plus-pilot/src/list-viewport.ts` is an experiment, NOT a second authoritative source. The legacy JS remains canonical until the cutover. It is deliberately a pure helper used by multiple mods.
 - From the repository root: `npm install`, `npm run check:pilot`, `node tools/vite-plus-pilot/verify-type-check.mjs`, `npm run test:pilot`, `npm run pack:pilot`, `node tools/vite-plus-pilot/verify-output.mjs`, `npm run compare:lint`, `npm run pack:delivery:candidate`. The pinned toolchain now lives in the root package and `vite.config.ts`.
-- Initial install is an experiment with a pinned direct dependency, not a reproducible production install. Capture the resolved lockfile, review the dependency tree and commit the lockfile before adopting the toolchain in required CI. No independent Oxlint/tsrs/tsdown versions.
-- Compare lint diagnostics by file/rule/location, including suppression and rule options, not just totals. Existing ESLint remains authoritative; collect cold/warm timing with identical scope and report install separately.
+- The root lockfile was captured from successful Linux CI (153 package records, public npm registry) and committed. Required CI and candidate CI use npm ci. No independent Oxlint/tsrs/tsdown versions.
+- Compare lint diagnostics by file/rule/location, including suppression and rule options, not just totals. Initial exact parity was verified at file/rule/line level (20 findings on both tools); production quality checks use Vite+ while the legacy config remains only for migration comparisons. Collect cold/warm timing with identical scope and report install separately.
 - The negative type probe must fail with the expected assignment diagnostic, not just a nonzero exit code. Pack must generate a usable ESM .js file and match all existing manifest copies' behavior.
 - No live Herdr writes, no changes to tracked mods or existing workflow gates in this stage.
 
