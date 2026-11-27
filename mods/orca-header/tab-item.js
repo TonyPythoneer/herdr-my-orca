@@ -3,6 +3,7 @@
 import { div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { openOverlay, panes, run } from "herdr";
+import { IconButton } from "./icon-button.js";
 
 // Glass surfaces for the header (the reference design's "liquid glass" look): translucent fills
 // derived from the theme's own foreground, so both the dark and the light theme tint correctly.
@@ -180,18 +181,17 @@ function tabContent(pill, view, t, { tab, copyId, identity, label }) {
     // Collapse pane — SortableTab.tsx:298-316: shown while the pane is expanded, a 16px box
     // with a 12px `Minimize2`; active tabs always show it, inactive ones on TAB hover
     // (`text-transparent group-hover:text-muted-foreground`). `pane.zoom` collapses.
-    .when(tab.zoomed, el => el.child(div().id(`collapse-${tab.id}${copyId}`).size(16).flex_none().flex().items_center().justify_center().rounded(8)
-      .text_color(tab.active || view.hoveredTab === tab.id ? t.muted : t.dim)
-      .hover(s => s.text_color(t.foreground).bg(tint(t.foreground, 0.14)))
-      .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
-      .on_mouse_down("left", stop)
-      .on_click((_e, cx) => {
-        cx.stop_propagation();
-        // The ZOOMED pane, not the focused one: a split tab can have another pane zoomed.
-        const z = (panes() ?? []).find(p => p.tab === tab.id && p.zoomed);
-        if (z) run("pane.zoom", { pane: z.pane });
-      })
-      .child(svg("mods/orca-assets/minimize-2--orca-header.svg").size(12))))
+    .when(tab.zoomed, el => el.child(IconButton(`collapse-${tab.id}${copyId}`, "Collapse pane",
+      svg("mods/orca-assets/minimize-2--orca-header.svg").size(12),
+      { t, size: 16, radius: 8, tooltip: "Collapse pane", color: tab.active || view.hoveredTab === tab.id ? t.muted : t.dim,
+        hoverBg: tint(t.foreground, 0.14),
+        onClick: (_e, cx) => {
+          cx.stop_propagation();
+          // The ZOOMED pane, not the focused one: a split tab can have another pane zoomed.
+          const z = (panes() ?? []).find(p => p.tab === tab.id && p.zoomed);
+          if (z) run("pane.zoom", { pane: z.pane });
+        } })
+      .on_mouse_down("left", stop)))
     // Close — SortableTab.tsx:317-349: only when `!isPinned` (Orca's pinned tab has no close
     // button; Herdr's pin analogue is `settled`, TabInfo.settled). The box is `w-4 h-4`
     // (16px), the glyph `w-3` (12px); inactive is `text-transparent` and becomes muted on

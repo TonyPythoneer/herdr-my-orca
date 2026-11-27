@@ -5,6 +5,7 @@ import { h_flex } from "gpui-base";
 import { layout, openOverlay, panes, run, settings } from "herdr";
 import { find, toggleLeft } from "./header-layout.js";
 import { renderTabItem, stop, tint, TAB_STRIP_SLIDE_MS } from "./tab-item.js";
+import { IconButton } from "./icon-button.js";
 
 export function addSidebarToggle(row, view, { t, sidebar, w, leftPad }) {
   // .sidebar-toggle (main.css:1213-1230) — padding 4px 8px around a 16px glyph = 32x24,
@@ -13,10 +14,9 @@ export function addSidebarToggle(row, view, { t, sidebar, w, leftPad }) {
   // TitlebarLeftControls.tsx:74-88 — Orca has ONE sidebar toggle, at the LEFT of the titlebar. This
   // header spans the sidebar too, so it draws that toggle always. Its glyph names what the click does
   // (`PanelLeftClose` while the column is open, `PanelLeftOpen` while it is hidden), and the label follows it.
-  const sidebarToggle = (glyph, action, ml, label) => div().id("sidebar-toggle").ml(ml).mr(4).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
-    .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-    .role("button").accessibility_label(label).tooltip(label)
-    .on_mouse_down("left", stop).on_click(action).child(glyph);
+  const sidebarToggle = (glyph, action, ml, label) => IconButton("sidebar-toggle", label, glyph,
+    { t, w: 32, h: 24, radius: 8, tooltip: label, hoverBg: tint(t.foreground, 0.1), onClick: action })
+    .ml(ml).mr(4).on_mouse_down("left", stop);
   return row
     // Same x (75, or 8 in full screen) in every state so the button does not jump on collapse.
     .child(sidebarToggle(svg(sharedAsset(`mods/orca-header/panel-left-${sidebar?.hidden ? "open" : "close"}.svg`)).size(16), (_e, ecx) => {
@@ -42,13 +42,11 @@ export function addTabTrack(row, view, frame) {
   const tabScrollButton = (direction, disabled) => {
     const label = direction === "start" ? "Scroll tabs left" : "Scroll tabs right";
     const glyph = sharedAsset(`mods/orca-header/chevron-${direction === "start" ? "left" : "right"}.svg`);
-    return div().id(`tab-scroll-${direction}`).w(20).h(24).flex_none().flex().items_center().justify_center().rounded(8)
+    return IconButton(`tab-scroll-${direction}`, label, svg(glyph).size(14).flex_none(),
+      { t, w: 20, h: 24, radius: 8, tooltip: label, disabled, hoverBg: tint(t.foreground, 0.1),
+        onClick: (_e, cx) => { if (!disabled) view.scrollTabStrip(direction, cx); } })
       .when(direction === "start", el => el.ml(2).mr(16)).when(direction === "end", el => el.ml(16).mr(2))
-      .text_color(disabled ? t.dim : t.muted)
-      .when(!disabled, el => el.hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground)).on_mouse_down("left", stop))
-      .role("button").accessibility_label(label).tooltip(label)
-      .on_click((_e, cx) => { if (!disabled) view.scrollTabStrip(direction, cx); })
-      .child(svg(glyph).size(14).flex_none());
+      .when(!disabled, el => el.on_mouse_down("left", stop));
   };
   const item = (tab, index, mode) => renderTabItem(view, frame, tab, index, mode);
   const edgeFillet = (side, tab) => div().id(`tab-active-${side}-${tab.id}`).w(14).h_full().flex_none().relative()
@@ -94,23 +92,21 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
   // holding a Lucide `Plus` at `w-3.5 h-3.5` (14px). It is a DropdownMenuTrigger, not a bare
   // action: it opens the new-tab menu, which `orca-new-menu` provides.
   // `rounded-md` resolves to 8px, not 6: --radius .625rem x .8 (main.css:175,195).
-  const tabNew = (action) => div().id("tab-new").ml(8).size(28).flex_none().flex().items_center().justify_center().rounded_full()
-    .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-    .role("button").accessibility_label("New tab").tooltip("New tab")
-    .on_mouse_down("left", (e, cx) => { view.plusBounds = e.bounds; stop(e, cx); }).on_click(action)
-    .child(svg("mods/orca-assets/plus--orca-header.svg").size(14).flex_none());
-  const winBtn = (id, label, glyph, action, close) => div().id(id).w(46).h_full().flex_none().flex().items_center().justify_center()
-    .text_color(t.muted).hover(s => s.bg(close ? "#c42b1c" : tint(t.foreground, 0.1)).text_color(close ? "#ffffff" : t.foreground))
-    .role("button").accessibility_label(label).tooltip(label)
-    .on_mouse_down("left", stop).on_click(action).child(glyph);
+  const tabNew = (action) => IconButton("tab-new", "New tab", svg("mods/orca-assets/plus--orca-header.svg").size(14).flex_none(),
+    { t, size: 28, radius: "full", tooltip: "New tab", hoverBg: tint(t.foreground, 0.1), onClick: action })
+    .ml(8).on_mouse_down("left", (e, cx) => { view.plusBounds = e.bounds; stop(e, cx); });
+  const winBtn = (id, label, glyph, action, close) => IconButton(id, label, glyph,
+    { t, w: 46, h: "full", radius: null, tooltip: label, hoverBg: close ? "#c42b1c" : tint(t.foreground, 0.1),
+      hoverFg: close ? "#ffffff" : t.foreground, onClick: action })
+    .on_mouse_down("left", stop);
   // Keep the right-sidebar toggle in the tab header in both states, like the left-sidebar toggle.
   // The glyph names the action: open when hidden, close when visible.
   const panelHidden = Boolean(find(layout(), "panel")?.hidden);
-  const panelToggle = (action) => div().id("panel-toggle").mr(8).w(32).h(24).flex_none().flex().items_center().justify_center().rounded(8)
-    .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-    .role("button").accessibility_label(panelHidden ? "Expand right sidebar" : "Collapse right sidebar").tooltip(panelHidden ? "Expand right sidebar" : "Collapse right sidebar")
-    .on_mouse_down("left", stop).on_click(action)
-    .child(svg(panelHidden ? "mods/orca-assets/panel-right-open.svg" : "mods/orca-assets/panel-right-close--orca-right-sidebar-header.svg").size(16));
+  const panelLabel = panelHidden ? "Expand right sidebar" : "Collapse right sidebar";
+  const panelToggle = (action) => IconButton("panel-toggle", panelLabel,
+    svg(panelHidden ? "mods/orca-assets/panel-right-open.svg" : "mods/orca-assets/panel-right-close--orca-right-sidebar-header.svg").size(16),
+    { t, w: 32, h: 24, radius: 8, tooltip: panelLabel, hoverBg: tint(t.foreground, 0.1), onClick: action })
+    .mr(8).on_mouse_down("left", stop);
   return row
     // Orca terminal-tab-strip-drop-target.ts:39-52 — visual drop indicator when a pane is dragged to the tab strip.
     .when(Boolean(paneDrag?.inTabStrip), el =>
@@ -136,15 +132,14 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
     // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,
     // use-app-chrome-layout.ts:129; hasTabBar is `tabCount >= 2`). `.titlebar-icon-button` is
     // 4px padding around a 14px glyph with `mr-2`, radius 4 (main.css:1288-1313).
-    .when(shown.length === 1 && shown[0].zoomed, el => el.child(div().id("titlebar-collapse").mr(8).size(22).flex_none().flex().items_center().justify_center().rounded_full()
-      .text_color(t.muted).hover(s => s.bg(tint(t.foreground, 0.1)).text_color(t.foreground))
-      .role("button").accessibility_label("Collapse pane").tooltip("Collapse pane")
-      .on_mouse_down("left", stop)
-      .on_click(() => {
-        const z = (panes() ?? []).find(p => p.tab === shown[0].id && p.zoomed);
-        if (z) run("pane.zoom", { pane: z.pane });
-      })
-      .child(svg("mods/orca-assets/minimize-2--orca-header.svg").size(14))))
+    .when(shown.length === 1 && shown[0].zoomed, el => el.child(IconButton("titlebar-collapse", "Collapse pane",
+      svg("mods/orca-assets/minimize-2--orca-header.svg").size(14),
+      { t, size: 22, radius: "full", tooltip: "Collapse pane", hoverBg: tint(t.foreground, 0.1),
+        onClick: () => {
+          const z = (panes() ?? []).find(p => p.tab === shown[0].id && p.zoomed);
+          if (z) run("pane.zoom", { pane: z.pane });
+        } })
+      .mr(8).on_mouse_down("left", stop)))
     // Keep one right-sidebar toggle in the tab header for both open and closed states.
     .child(panelToggle((_e, cx) => { view.wantPanelToggle = (view.wantPanelToggle ?? 0) + 1; cx.notify(); }))
     // WindowControls.tsx:27-30,42-49,60-67 — Orca replaces native chrome on Linux and Windows
