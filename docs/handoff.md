@@ -5,9 +5,10 @@ first; they say where things live. `.claude/skills` is a symlink to `.agents/ski
 
 ## State
 
-- Branch `fix/sidebar-branch-tooltip`, pushed, tracking `origin/fix/sidebar-branch-tooltip`.
-  No pull request is open. Ask the owner before opening one or pushing again.
-- Nine commits on top of `main`, oldest first:
+- Branch `fix/sidebar-branch-tooltip`, tracking `origin/fix/sidebar-branch-tooltip`. The four commits
+  after `f2b61c2` are local only; nothing was pushed. No pull request is open. Ask the owner before
+  opening one or pushing.
+- Thirteen commits on top of `main`, oldest first:
   1. `9011451` AI discovery and live-driving tools (`scripts/ui.mjs`, `AGENTS.md`, the skill)
   2. `bdfcb32` LiteLLM gateway quickstart and shared agent selection (mixed in one commit)
   3. `e912bf1` shared ghost icon button (`IconButton`) and index support for call sites
@@ -17,11 +18,14 @@ first; they say where things live. `.claude/skills` is a symlink to `.agents/ski
   7. `9cea965` outline icon buttons through `IconButton` (floating workspace, ports close)
   8. `a403f18` audit skips the shared-control helper files
   9. `f2b61c2` review fixes: changes harness, pane theme, index labels and roles
-- Later commit: the verification tools and this document (see "Tools" below).
-- Guardrails, current values: shared sources 13, shared copies 40, managed files 44.
+  10. `2679403` the verification tools and this document (see "Tools" below)
+  11. `601fd58` strict golden diffs now walk keyed records, not only a tree's `c`
+  12. `5fa355d` handoff and changes dialog footers through `DialogButton`
+  13. this document's dialog footer record
+- Guardrails, current values: shared sources 13, shared copies 41, managed files 45.
   Enforced by `scripts/sync-shared.test.mjs`, `scripts/build-orca-ui.test.js` and
   `scripts/orca-ui-manifests.test.js`.
-- Audit (`node scripts/ui.mjs audit`): 125 interactive builders, 40 without a stable id.
+- Audit (`node scripts/ui.mjs audit`): 125 interactive builders, 38 without a stable id.
   The helper internals are excluded; the shared-control call sites are counted by their literal id.
 - Decisions already made by the owner:
   - keep the pointer cursor on the titlebar buttons;
@@ -78,7 +82,9 @@ Get the base dump from `git archive <previous commit> | tar -x -C <dir>` and run
   `cd <tmp> && herdr-app check mods/<mod>`. Grep the output for `check passed`: the last line can be a WARN.
 - **Baseline failures.** Every suite has failures that predate the work (list below). A change is
   acceptable when the failing names are the same as the previous commit's. Compare with
-  `scripts/failing-tests.sh` on the current tree and on a `git archive` of the previous commit.
+  `scripts/failing-tests.sh` on the current tree and on a detached worktree of the previous commit:
+  `git worktree add --detach /tmp/base <commit>`. A `git archive` copy has no `.git`, so the script's
+  `git ls-files` finds no tests and writes an empty list; that is the "0 failures" trap below.
   Never run `comm` against a file that does not exist: `2>/dev/null` makes it print 0, which means nothing.
 - **Goldens depend on call order.** The sidebar-top nav golden is green and must stay strictly identical
   to the previous commit (`golden-diff.mjs strict`, all five `nav-*` keys, zero differences).
@@ -116,12 +122,12 @@ migrate one real consumer, and write the finding into this document under "Findi
 order before and after.
 
 **A. Buttons, the rest**
-- Dialog footers: handoff copy and start (icon plus text, `gap(6)`, start has a `.9` opacity hover),
-  force-push (cancel and force push, `h24`, no hover), create PR (`py(5)`, `rounded(4)`, no height),
-  confirm dialog in `orca-confirm` (`h32`, `px14`, `rounded(8)`, `.88` opacity hover, border colours
-  by id). Extend `DialogButton` with the variants they need, or leave them and say why.
-- Hand-built `role("button")`: about 64 call sites (grep, excluding shared helper files and tests).
-  Largest: `orca-sidebar-projects` (about 18), `orca-files` (5), `orca-status-bar` (4).
+- Dialog footers: done in `5fa355d` for handoff copy and start, force-push cancel and force push,
+  create-PR cancel and create. `DialogButton` gained `h: null`, `py`, `rounded`, `icon`, `gap` and
+  `hoverOpacity`. The confirm dialog is left as its local two-line helper: its green strict golden
+  would need a re-record for no behaviour gain (six builders, and the border colour is keyed by id).
+- Hand-built `role("button")`: still about 64 call sites (grep, excluding shared helper files and tests).
+  Largest: `orca-sidebar-projects` (about 18), `orca-files` (5), `orca-status-bar` (4). Not started.
 - `orca-ui/shared/agent-config-view.js` is the only source. The two copies, in `mods/orca-agent-flyout/`
   and `mods/orca-agent-settings/`, are generated: never edit them.
 
@@ -212,13 +218,36 @@ Do not start K or L until the owner says they are in scope. Do not start E's tab
 
 ## Findings
 
-Empty at handoff. Add one dated entry per finding: what was tried, the exact result, and the file it
-changed. A native API finding (Switch, Select, Tabs, Popup) goes here too.
+Add one dated entry per finding: what was tried, the exact result, and the file it changed. A native API
+finding (Switch, Select, Tabs, Popup) goes here too.
+
+### 2026-11-27 — Dialog footers, first part of A
+
+- `DialogButton` (`orca-ui/shared/dialog-button.js`) gained `icon` + `gap`, `py`, `rounded`,
+  `h: null` and `hoverOpacity`. Its default call order is unchanged for the header and tasks copies:
+  the 71-case header dump is identical in both `semantic` and `strict` mode.
+- Migrated the handoff copy/start pair (`mods/orca-handoff/main.js`) and the changes force-push and
+  create-PR pairs (`mods/orca-changes/main.js`). Handoff gained a generated `dialog-button.js` copy;
+  its golden test now loads that file, as the changes test already did.
+- Handoff diff: `semantic --noid` has 0 base-only and 7 now-only calls (`flex_none`, `border_1`,
+  `role("button")`, four dynamic label values). The strict first difference is call order inside
+  `btn-copy-prompt` (`h` before `px`), which layout ignores. The 50 of 70 differing strict cases are
+  all this same footer.
+- Changes diff: `semantic --noid` shows the two force-push ids and `Force Push`; strict first difference
+  is the new id before `h`. The create-PR footer has no golden flow (its flows record actions, not the
+  footer), so it is covered by the host check and a read, not a diff.
+- Confirm was left local: its strict golden is green, and a shared box would change `h_flex` to `div`,
+  add role/label/flex calls and force a re-record for no behaviour gain.
+- Failing names: 34 on the working tree and 34 on the `2679403` worktree, no name added or removed.
+- Host checks passed for orca-handoff, orca-changes, orca-header and orca-tasks. Live sync: 9 files,
+  `errors []`, `diff -rq orca-ui` empty.
+- Independent review is still open: no second reviewer was available. I re-read the diff, but that is
+  not the independent review item 8 asks for.
 
 ## Baseline: the 34 pre-existing failing tests
 
-Each file was run alone (`scripts/failing-tests.sh`) at commit `f2b61c2` plus the tools commit. The list is
-the same as the whole-suite run (34 failures, 927 of 961 passing). Use it as the comparison base.
+Each file was run alone (`scripts/failing-tests.sh`) at commit `2679403`. The list is the same as the
+whole-suite run at the start of this branch (34 failures, 927 of 961 passing). Use it as the comparison base.
 
 - `mods/orca-changes/main.golden.test.js`
   - main.js behaves as recorded: renders, handlers and flows
