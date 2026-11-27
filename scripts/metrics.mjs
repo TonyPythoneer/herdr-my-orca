@@ -43,20 +43,28 @@ export function parseTestSummary(text) {
 }
 
 // Normalize Oxlint's JSON to the stable report schema (legacy rule names and source lines).
-export function normalizeOxlint(report, root = ROOT) {
+function validateOxlintReport(report) {
   if (!Array.isArray(report?.diagnostics) || !Number.isInteger(report.number_of_files) || report.number_of_files < 1) {
     throw new Error("Oxlint did not report a nonempty file scope");
   }
+}
+
+function normalizeDiagnostic(d, root) {
+  const line = d.labels?.[0]?.span?.line;
+  if (typeof d.filename !== "string" || !Number.isInteger(line) || typeof d.message !== "string") {
+    throw new Error("Malformed Oxlint diagnostic");
+  }
+  const ruleId = d.code?.match(/^eslint\(([^)]+)\)$/)?.[1] ?? d.code?.replace(/^eslint\//, "") ?? "parse";
+  return { filePath: resolve(root, d.filename), message: { ruleId, message: d.message, line } };
+}
+
+export function normalizeOxlint(report, root = ROOT) {
+  validateOxlintReport(report);
   const files = new Map();
   for (const d of report.diagnostics) {
-    const line = d.labels?.[0]?.span?.line;
-    if (typeof d.filename !== "string" || !Number.isInteger(line) || typeof d.message !== "string") {
-      throw new Error("Malformed Oxlint diagnostic");
-    }
-    const filePath = resolve(root, d.filename);
-    const ruleId = d.code?.match(/^eslint\(([^)]+)\)$/)?.[1] ?? d.code?.replace(/^eslint\//, "") ?? "parse";
+    const { filePath, message } = normalizeDiagnostic(d, root);
     if (!files.has(filePath)) files.set(filePath, { filePath, messages: [] });
-    files.get(filePath).messages.push({ ruleId, message: d.message, line });
+    files.get(filePath).messages.push(message);
   }
   return [...files.values()];
 }
