@@ -17,6 +17,9 @@ const MAIN = new URL("./main.js", import.meta.url);
 const SOURCE = readFileSync(MAIN, "utf8")
   .replace(/^import\s[^;]*;$/gm, (text) => text.replace(/[^\n]/g, " ")).replace("export default class HandoffDialog", `${" ".repeat(15)}class HandoffDialog`);
 const SCRIPT = new vm.Script(`${SOURCE}\nglobalThis.HandoffDialog = HandoffDialog;`, { filename: fileURLToPath(MAIN) });
+const DIALOG_BUTTON_SOURCE = readFileSync(new URL("./dialog-button.js", import.meta.url), "utf8")
+  .replace(/^import .*;$/gm, (line) => " ".repeat(line.length)).replace("export function DialogButton", "function DialogButton");
+const DIALOG_BUTTON = new vm.Script(`${DIALOG_BUTTON_SOURCE}\nglobalThis.DialogButton = DialogButton;`, { filename: fileURLToPath(new URL("./dialog-button.js", import.meta.url)) });
 
 function cleanse(value) {
   if (value?.__rec) return value.__rec;
@@ -80,6 +83,7 @@ function setup({ props = {}, panes, agents, hcResult, git = {}, spaces = [{ acti
     buildAgentSessionForkPrompt, buildAgentSessionContinuationPrompt,
   };
   SCRIPT.runInNewContext(scope);
+  DIALOG_BUTTON.runInContext(scope);
   let notifies = 0;
   const cx = { notify() { notifies++; }, spawn(fn) { fn(cx); }, focus_handle: () => ({ focus() { log.exec.push(["focus"]); } }), timer: { after(ms, fn) { log.timers.push(ms); fn(); } } };
   return { view: new scope.HandoffDialog(), cx, log, state, get notifies() { return notifies; } };

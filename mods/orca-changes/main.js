@@ -308,9 +308,10 @@ export default class Changes extends View {
     return () => dialogShell(t, 420, "Force Push?")
       .child(div().text_size(12).text_color(t.muted).child(`This can overwrite remote history.\nRepository: ${captured.root}\nHost: ${captured.on ?? "local"}\nBranch: ${target.branch}\nRemote: ${target.remote} (${destination})\nTarget: ${target.ref}\nLease from local tracking: ${target.expected}\nPush commit: ${target.oid}`))
       .child(h_flex().justify_end().gap(8)
-        .child(div().h(24).px(12).flex().items_center().rounded(6).border_1().border_color(t.border).text_color(t.muted).cursor_pointer().on_click(() => window.close_dialog()).child("Cancel"))
-        .child(div().h(24).px(12).flex().items_center().rounded(6).bg(t.blocked).text_color(t.canvas).cursor_pointer()
-          .on_click((_e, eventCx) => { window.close_dialog(); this.confirmForcePush(captured, target, eventCx); }).child("Force Push")));
+        .child(DialogButton("force-push-cancel", "Cancel", { t, h: 24, border: t.border, color: t.muted,
+          onClick: () => window.close_dialog() }))
+        .child(DialogButton("force-push-confirm", "Force Push", { t, h: 24, bg: t.blocked, color: t.canvas,
+          onClick: (_e, eventCx) => { window.close_dialog(); this.confirmForcePush(captured, target, eventCx); } })));
   }
 
   confirmForcePush(captured, target, cx) {
@@ -389,9 +390,10 @@ export default class Changes extends View {
         .child(div().size(14).border_1().border_color(t.border).bg(draft ? t.accent : t.popover))
         .child(div().text_size(11).text_color(t.muted).child("Create as draft PR")))
       .child(h_flex().justify_end().gap(8)
-        .child(div().px(12).py(5).cursor_pointer().text_color(t.muted).on_click(() => window.close_dialog()).child("Cancel"))
-        .child(div().px(12).py(5).rounded(4).bg(t.done).text_color(t.canvas).cursor_pointer()
-          .on_click((_e, eventCx) => { const text = title.value().trim(); if (!text) return; window.close_dialog(); this.submitCreatePr(target, snapshot, { title: text, body: body.value(), draft }, eventCx); }).child("Create PR"))));
+        .child(DialogButton("create-pr-cancel", "Cancel", { t, h: null, px: 12, py: 5, rounded: null, color: t.muted,
+          onClick: () => window.close_dialog() }))
+        .child(DialogButton("create-pr-confirm", "Create PR", { t, h: null, px: 12, py: 5, rounded: 4, bg: t.done, color: t.canvas,
+          onClick: (_e, eventCx) => { const text = title.value().trim(); if (!text) return; window.close_dialog(); this.submitCreatePr(target, snapshot, { title: text, body: body.value(), draft }, eventCx); } }))));
   }
 
   submitCreatePr(target, snapshot, { title, body, draft }, cx) {

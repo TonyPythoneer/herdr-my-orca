@@ -21,6 +21,7 @@ import {
   exec
 } from "herdr";
 import { copyText } from "./clip.js";
+import { DialogButton } from "./dialog-button.js";
 import {
   buildAgentSessionForkPrompt,
   buildAgentSessionContinuationPrompt
@@ -376,41 +377,15 @@ export default class HandoffDialog extends View {
       .justify_end()
       .gap(8)
       .children([
-        div()
-          .id("btn-copy-prompt")
-          .px(10)
-          .h(28)
-          .rounded(6)
-          .border(1)
-          .border_color(t.border)
-          .flex()
-          .items_center()
-          .gap(6)
-          .cursor_pointer()
-          .hover((s) => s.bg(t.hover))
-          .on_click((_e, cx) => void this.copyCurrentPrompt(cx))
-          .child(svg("mods/orca-assets/copy.svg").size(12).text_color(t.foreground))
-          .child(div().text_size(12).text_color(t.foreground).child(this.copied ? "Copied!" : "Copy Prompt")),
-
-        div()
-          .id("btn-start-action")
-          .px(12)
-          .h(28)
-          .rounded(6)
-          .bg(t.foreground)
-          .text_color(t.background)
-          .flex()
-          .items_center()
-          .gap(6)
-          .cursor_pointer()
-          .hover((s) => s.opacity(0.9))
-          .on_click((_e, cx) => this.startAction(isFork, cx))
-          .child(
-            div()
-              .text_size(12)
-              .font_medium()
-              .child(this.startLabel(isFork))
-          )
+        DialogButton("btn-copy-prompt", this.copied ? "Copied!" : "Copy Prompt", {
+          t, h: 28, px: 10, border: t.border, hoverBg: t.hover, name: "Copy prompt",
+          icon: svg("mods/orca-assets/copy.svg").size(12).text_color(t.foreground),
+          onClick: (_e, cx) => void this.copyCurrentPrompt(cx)
+        }),
+        DialogButton("btn-start-action", this.startLabel(isFork), {
+          t, h: 28, px: 12, bg: t.foreground, color: t.background, medium: true, hoverOpacity: 0.9,
+          onClick: (_e, cx) => this.startAction(isFork, cx)
+        })
       ]);
   }
 }
