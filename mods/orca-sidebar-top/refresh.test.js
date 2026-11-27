@@ -3,7 +3,7 @@
 // closing itself so the sidebar repaints); this checks that wiring, not orca-sidebar-projects' git pass.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { register, registerHooks } from 'node:module';
 
@@ -265,7 +265,10 @@ function views() {
 }
 
 test('every nav view renders as recorded', () => {
-  const out = digests(views());
+  const raw = views();
+  // DUMP=<file> writes the full render trees, for scripts/golden-diff.mjs.
+  if (process.env.DUMP) writeFileSync(process.env.DUMP, JSON.stringify(raw, null, 1));
+  const out = digests(raw);
   assert.deepEqual(out, JSON.parse(readFileSync(GOLDEN, 'utf8')));
   assert.ok(new Set(Object.values(out)).size >= 30);
 });
