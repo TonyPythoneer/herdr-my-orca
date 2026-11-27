@@ -34,6 +34,7 @@ test("audit skips the IconButton helper but still counts other shared controls",
   assert.ok(report.missingIds.every((item) => item.name !== "IconButton"));
   assert.ok(report.missingLabels.every((item) => item.name !== "IconButton"));
   assert.ok(report.missingIds.some((item) => item.mod === "shared"), "shared controls must still be audited");
+  assert.ok(report.missingIds.every((item) => !item.file.startsWith("orca-ui/shared/icon-button.js") && !item.file.startsWith("orca-ui/shared/dialog-button.js")), "helper internals are not screen controls");
 });
 
 test("a DialogButton call site names its id and label for the index", () => {

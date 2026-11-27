@@ -16,6 +16,8 @@ const CLICK = /\.on_click\s*\(/;
 // Shared controls are called with their literal id and label, e.g. `IconButton("<id>", "<label>", ...)`, so the
 // call site is where the index reads them. The helper declarations themselves are not screen controls.
 export const SHARED_CONTROLS = ["IconButton", "DialogButton"];
+// Their helper files: every internal function there belongs to the control, not to a screen.
+export const SHARED_CONTROL_FILES = new Set(["orca-ui/shared/icon-button.js", "orca-ui/shared/dialog-button.js"]);
 const CONTROL_CALL = new RegExp(`(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(`);
 // A dynamic label (a ternary or a template) is left unnamed; the id is always a literal.
 const CONTROL_LITERALS = new RegExp(`(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(\\s*(["'\`])([^"'\`]+)\\1(?:\\s*,\\s*(["'\`])([^"'\`]+)\\3)?`, "g");
@@ -328,7 +330,8 @@ export function outline(index, mod) {
 
 export function audit(index) {
   // The shared helpers are not screen controls: each call site supplies its id and label.
-  const interactive = index.components.filter((item) => item.kind === "control" && !SHARED_CONTROLS.includes(item.name));
+  const interactive = index.components.filter((item) => item.kind === "control" && !SHARED_CONTROLS.includes(item.name)
+    && !SHARED_CONTROL_FILES.has(item.file));
   const bare = interactive.filter((item) => !item.ids.length);
   const seen = new Map();
   const duplicateIds = [];
