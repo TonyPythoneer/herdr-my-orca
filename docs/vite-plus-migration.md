@@ -2,14 +2,19 @@
 
 Base: `fix/sidebar-branch-tooltip` at `6dd7b2c`. This is separate from the ongoing shared-component refactor. Do not merge this migration into main before that parent branch lands or is explicitly reconciled.
 
-## Stage 0 (this change): isolated executable candidate
+All stages are mandatory in **PR #32**. Do not create follow-up PRs or mark ready until the cutover gates are satisfied.
+
+## Stage 0: isolated executable candidate
 - Exact Vite+ 1.8.0 (includes tsrs); Node 24, existing production build/tests/lint untouched.
 - `tools/vite-plus-pilot/src/list-viewport.ts` is an experiment, NOT a second authoritative source. The legacy JS remains canonical until the cutover. It is deliberately a pure helper used by multiple mods.
-- From the pilot directory: `npm install`, `npm run check`, `node verify-type-check.mjs`, `npm run test`, `npm run pack`, `npm run parity`, `node compare-lint.mjs`.
+- From the repository root: `npm install`, `npm run check:pilot`, `node tools/vite-plus-pilot/verify-type-check.mjs`, `npm run test:pilot`, `npm run pack:pilot`, `node tools/vite-plus-pilot/verify-output.mjs`, `npm run compare:lint`, `npm run pack:delivery:candidate`. The pinned toolchain now lives in the root package and `vite.config.ts`.
 - Initial install is an experiment with a pinned direct dependency, not a reproducible production install. Capture the resolved lockfile, review the dependency tree and commit the lockfile before adopting the toolchain in required CI. No independent Oxlint/tsrs/tsdown versions.
 - Compare lint diagnostics by file/rule/location, including suppression and rule options, not just totals. Existing ESLint remains authoritative; collect cold/warm timing with identical scope and report install separately.
 - The negative type probe must fail with the expected assignment diagnostic, not just a nonzero exit code. Pack must generate a usable ESM .js file and match all existing manifest copies' behavior.
 - No live Herdr writes, no changes to tracked mods or existing workflow gates in this stage.
+
+## Full installation build candidate
+`pack:delivery:candidate` stages all tracked installation paths in an ignored directory, overlays managed canonical sources, compiles runtime `.js` with Vite+ unbundle, externalizes host imports and preserves static assets/permissions. It does not write live config or tracked `mods/`. Output path/mode/static-byte/syntax checks are required before native and behavioral validation. `.mjs` scripts remain byte-preserved until their runtime contract is verified. This is not yet the final source-only cutover.
 
 ## Stage 1: lint and quality reporting
 Map all 17 current ESLint rules and suppression semantics; compare diagnostics; adapt metrics.mjs JSON parsing and baseline schema with tests; preserve complexity thresholds and scope. Install pinned Vite+ with committed lockfile in CI, measure cold/warm setup and execution. Switch required CI only after parity; keep Node tests and full process routing. Revert the switch if the candidate drops findings or breaks report generation.

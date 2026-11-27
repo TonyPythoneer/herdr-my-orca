@@ -5,9 +5,11 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
     "skipLibCheck": false
   },
   "include": [
-    "src/**/*.ts"
+    "tools/vite-plus-pilot/src/**/*.ts"
   ]
 }

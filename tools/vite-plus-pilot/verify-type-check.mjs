@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 const file = new URL("./src/__negative_type_probe.ts", import.meta.url);
 writeFileSync(file, 'export const typeProbe: number = "not a number";\n', { flag: "wx" });
 try {
-  const result = spawnSync("npm", ["run", "check"], { encoding: "utf8" });
+  const result = spawnSync("npm", ["run", "check:pilot"], { encoding: "utf8" });
   assert.ifError(result.error);
   const output = (result.stdout ?? "") + (result.stderr ?? "");
   console.log(output);

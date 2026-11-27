@@ -6,6 +6,12 @@ on:
     branches: [fix/sidebar-branch-tooltip]
     paths:
       - 'tools/vite-plus-pilot/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'mods/**'
+      - 'orca-ui/**'
       - '.github/workflows/vite-plus-candidate.yml'
       - 'orca-ui/shared/list-viewport.js'
       - 'orca-ui/shared/manifest.json'
@@ -23,29 +29,33 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: tools/vite-plus-pilot
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - name: Resolve pinned candidate (lockfile captured for review)
-        run: npm install --no-audit --no-fund
+        run: |
+          if test -f package-lock.json; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+      - name: Capture public package lock for review
+        if: matrix.os == 'ubuntu-latest'
+        run: node -e 'for (const line of require("node:fs").readFileSync("package-lock.json", "utf8").split("\n")) console.log("VITE_LOCK " + line)'
       - name: Verify type-aware lint and type checking
         run: |
-          npm run check
-          node verify-type-check.mjs
+          npm run check:pilot
+          node tools/vite-plus-pilot/verify-type-check.mjs
       - name: Run Vite+ tests
-        run: npm run test
+        run: npm run test:pilot
       - name: Pack and compare actual JS output
         run: |
-          npm run pack
-          npm run parity
+          npm run pack:pilot
+          node tools/vite-plus-pilot/verify-output.mjs
       - name: Compare lint diagnostics
         if: matrix.os == 'ubuntu-latest'
-        run: node compare-lint.mjs
+        run: npm run compare:lint
+      - name: Build full isolated installation candidate
+        if: always() && !cancelled()
+        run: npm run pack:delivery:candidate
       - name: Verify no tracked production files changed
         if: always()
         run: git diff --exit-code
@@ -55,4 +65,4 @@ jobs:
           name: vite-plus-candidate-${{ matrix.os }}
           path: |
             tools/vite-plus-pilot/dist/
-            tools/vite-plus-pilot/package-lock.json
+            package-lock.json

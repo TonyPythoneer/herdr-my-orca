@@ -1,0 +1,15 @@
+{
+  "name": "herdr-my-orca",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:pilot": "vp lint tools/vite-plus-pilot/src --type-aware --type-check --max-warnings 0",
+    "test:pilot": "vp test run tools/vite-plus-pilot/test",
+    "pack:pilot": "vp pack",
+    "pack:delivery:candidate": "node tools/vite-plus-pilot/pack-delivery.mjs",
+    "compare:lint": "node tools/vite-plus-pilot/compare-lint.mjs"
+  },
+  "devDependencies": {
+    "vite-plus": "1.8.0"
+  }
+}

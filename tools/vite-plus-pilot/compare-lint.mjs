@@ -9,12 +9,12 @@ const config = eslintConfig[0];
 const candidateConfig = new URL("../../.oxlintrc-vite-plus-candidate.json", import.meta.url);
 writeFileSync(candidateConfig, JSON.stringify({
   categories: { correctness: "off" },
-  rules: config.rules,
+  rules: Object.fromEntries(Object.entries(config.rules).map(([name, value]) => [`eslint/${name}`, value])),
   ignorePatterns: config.ignores,
 }, null, 2), { flag: "wx" });
 try {
 const paths = ["mods", "scripts", "orca-ui"];
-const vp = fileURLToPath(new URL("./node_modules/.bin/vp", import.meta.url));
+const vp = fileURLToPath(new URL("../../node_modules/.bin/vp", import.meta.url));
 function run(label, command, args) {
   const start = performance.now();
   const result = spawnSync(command, args, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
@@ -24,6 +24,7 @@ function run(label, command, args) {
   writeFileSync(new URL("./dist/" + label + ".log", import.meta.url), result.stderr);
   let parsed;
   try { parsed = JSON.parse(result.stdout); } catch { parsed = null; }
+  if (parsed === null) console.error(`${label}: ${result.stderr || result.stdout || "no diagnostic output"}`);
   return { elapsedMs, exitCode: result.status, parsed };
 }
 const legacy = run("eslint", "npx", ["--yes", "eslint@9", "-c", "eslint.config.mjs", "--format", "json", ...paths]);
