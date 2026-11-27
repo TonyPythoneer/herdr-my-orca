@@ -1,3 +1,5 @@
+import { packedExpectedBytes } from "../tools/vite-plus-pilot/packed-contract.mjs";
+import { loadManifests } from "./orca-ui-manifests.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
@@ -45,7 +47,8 @@ test("the real repo builds its 4 panel-head files and matches", t => {
   assert.equal(run("--out", out).status, 0);
   assert.equal(files(out).filter(f => f.startsWith("mods/orca-right-sidebar-header/")).length, 4);
   for (const f of files(out)) {
-    assert.ok(readFileSync(join(out, f)).equals(readFileSync(join(fileURLToPath(new URL("..", import.meta.url)), f))), f);
+    const expected = packedExpectedBytes(f, readFileSync(join(out, f)), loadManifests());
+    assert.ok(expected.equals(readFileSync(join(fileURLToPath(new URL("..", import.meta.url)), f))), f);
     assert.equal(statSync(join(out, f)).mode & 0o777, statSync(join(fileURLToPath(new URL("..", import.meta.url)), f)).mode & 0o777, f);
   }
 });

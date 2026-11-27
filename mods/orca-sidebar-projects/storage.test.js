@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
+import { register } from 'node:module';
+
+register(new URL('../../scripts/gpui-stub-loader.mjs', import.meta.url));
 
 test('spaces instances do not share mutable cached state', async () => {
   const source = await readFile(new URL('./main.js', import.meta.url), 'utf8');
@@ -17,7 +20,8 @@ test('spaces instances do not share mutable cached state', async () => {
   assert.equal(second.reconnecting.remote.busy, false);
 });
 
-test('stored reads and workspace options invalidate when another mod writes', async () => {
+test('stored reads and workspace options invalidate when another mod writes', async t => {
+  t.after(() => { delete globalThis.__herdrShared; delete globalThis.localStorage; });
   const values = new Map();
   let published = null;
   globalThis.__herdrShared = key => key === 'workspace.options.v1' ? published : undefined;

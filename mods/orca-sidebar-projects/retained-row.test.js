@@ -1,4 +1,6 @@
-import { stored, workspaceOptions } from './storage.js';
+import { register } from 'node:module';
+register(new URL('../../scripts/gpui-stub-loader.mjs', import.meta.url));
+const { stored, workspaceOptions } = await import('./storage.js');
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

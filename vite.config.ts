@@ -7,10 +7,6 @@ const shared: { files: { outputs: string[] }[] } = JSON.parse(
 const generated = shared.files.flatMap((file) => file.outputs);
 
 const pilot = "tools/vite-plus-pilot";
-const delivery = process.env.HERDR_PACK_CANDIDATE === "1";
-const inputs: string[] = delivery
-  ? JSON.parse(readFileSync(`${pilot}/dist/delivery-entries.json`, "utf8"))
-  : [];
 
 export default defineConfig({
   lint: {
@@ -38,15 +34,14 @@ export default defineConfig({
     ignorePatterns: ["**/*.test.js", "**/*.test.mjs", "**/*.test.ts", "**/*.test.mts", "artifacts/**", "egm/**", "mods/orca-right-sidebar-header/**", "**/dist/**", "**/node_modules/**", ...generated],
   },
   pack: {
-    entry: delivery ? inputs : { "list-viewport": `${pilot}/src/list-viewport.ts` },
-    ...(delivery ? { root: `${pilot}/dist/delivery-input`, deps: { neverBundle: true }, treeshake: false } : {}),
+    entry: { "list-viewport": `${pilot}/src/list-viewport.ts` },
     format: "esm",
     unbundle: true,
     fixedExtension: false,
     dts: false,
     minify: false,
-    outDir: delivery ? `${pilot}/dist/delivery-compiled` : `${pilot}/dist`,
-    clean: !delivery,
+    outDir: `${pilot}/dist/typed`,
+    clean: true,
   },
   test: { include: [`${pilot}/test/**/*.test.ts`] },
 });

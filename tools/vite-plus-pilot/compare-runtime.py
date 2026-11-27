@@ -13,7 +13,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "tools/vite-plus-pilot/dist"
-BASE = "6dd7b2c686f76a707c31f1168b50bfa831f57487"
+
 TEST = re.compile(r"\.test\.[cm]?js$")
 FAILURE = re.compile(r"^\s*✖\s+(.+?)\s*$", re.MULTILINE)
 
@@ -26,10 +26,14 @@ def test_files(root):
     return sorted(p for p in git(root, "ls-files", "-z", "--", "mods", "scripts", "orca-ui/features").split("\0") if TEST.search(p))
 
 
-def run_file(root, path, logs, stub):
+def run_file(root, path, logs, stub, packed=False):
     with tempfile.TemporaryDirectory(prefix="herdr-test-home-") as home:
         env = {**os.environ, "HOME": home, "HERDR_APP_HOME": str(Path(home) / "app"),
                "PATH": str(stub.parent) + os.pathsep + os.environ["PATH"], "NO_COLOR": "1", "FORCE_COLOR": "0"}
+        # Never inherit candidate mode into parent or source tests.
+        env.pop("HERDR_PACKED_ARTIFACT_DIR", None)
+        if packed:
+            env["HERDR_PACKED_ARTIFACT_DIR"] = str(DIST)
         Path(env["HERDR_APP_HOME"]).mkdir()
         try:
             p = subprocess.run(["node", "--test", "--test-reporter=spec", "--test-timeout=60000", path],
@@ -54,13 +58,21 @@ def run_file(root, path, logs, stub):
 def run_suite(root, files, logs, stub):
     print(f"{root.name}: {len(files)} test files", flush=True)
     with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(lambda path: run_file(root, path, logs, stub), files))
+        results = list(pool.map(lambda path: run_file(root, path, logs, stub, packed=root.name == "packed"), files))
     failed = sorted({failure for result in results for failure in result})
     print(f"{root.name}: {len(failed)} named failures", flush=True)
     return failed
 
 
 def main():
+    # Compare the exact first parent of the tested PR merge, not a stale hardcoded base.
+    parents = git(ROOT, "rev-list", "--parents", "-n", "1", "HEAD").split()
+    if len(parents) != 3:
+        raise RuntimeError("Expected the GitHub PR merge commit with two parents")
+    event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
+    if parents[2] != event["pull_request"]["head"]["sha"]:
+        raise RuntimeError("Tested merge does not match the PR head")
+    base = parents[1]
     delivery = DIST / "delivery"
     if not (delivery / "mods").is_dir():
         raise RuntimeError("Missing packed delivery")
@@ -73,7 +85,7 @@ def main():
         roots = {name: temp / name for name in ("parent", "source", "packed")}
         created = []
         try:
-            for name, ref in (("parent", BASE), ("source", "HEAD"), ("packed", "HEAD")):
+            for name, ref in (("parent", base), ("source", "HEAD"), ("packed", "HEAD")):
                 git(ROOT, "worktree", "add", "--detach", str(roots[name]), ref)
                 created.append(roots[name])
             # The packed worktree is disposable; tests retain the real git metadata and fixtures.
@@ -90,7 +102,7 @@ def main():
                 for name, root in roots.items()
             }
             parent, source, packed = (set(results[name]) for name in ("parent", "source", "packed"))
-            report = {"base": BASE, "head": git(ROOT, "rev-parse", "HEAD").strip(),
+            report = {"base": base, "head": git(ROOT, "rev-parse", "HEAD").strip(),
                       "parentFailures": results["parent"], "sourceFailures": results["source"],
                       "packedFailures": results["packed"], "newSourceFailures": sorted(source - parent),
                       "newPackFailures": sorted(packed - source), "fixedParentFailures": sorted(parent - source)}

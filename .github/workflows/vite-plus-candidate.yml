@@ -44,7 +44,9 @@ jobs:
         run: npm run compare:lint
       - name: Build full isolated installation candidate
         if: always() && !cancelled()
-        run: npm run pack:delivery:candidate
+        run: |
+          npm run pack:delivery:candidate
+          node tools/vite-plus-pilot/verify-output.mjs --delivery
       - name: Compare parent, source and packed behavior
         if: matrix.os == 'ubuntu-latest' && success()
         run: python3 tools/vite-plus-pilot/compare-runtime.py

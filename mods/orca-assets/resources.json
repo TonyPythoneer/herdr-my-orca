@@ -421,6 +421,10 @@
     "orca-right-sidebar-placeholders",
     "orca-sidebar-top"
   ],
+  "mods/orca-assets/litellm_favicon_light_32.png": [
+    "orca-agent-flyout",
+    "orca-agent-settings"
+  ],
   "mods/orca-assets/loader-circle.svg": [
     "orca-files",
     "orca-sidebar-projects",
@@ -628,6 +632,11 @@
   "mods/orca-assets/text-select.svg": [
     "orca-context-menu"
   ],
+  "mods/orca-assets/tip-arrow--orca-new-menu.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings",
+    "orca-new-menu"
+  ],
   "mods/orca-assets/trash.svg": [
     "orca-changes",
     "orca-context-menu",
@@ -687,6 +696,10 @@
   ],
   "mods/orca-assets/x--orca-pane-header.svg": [
     "orca-pane-header"
+  ],
+  "mods/orca-assets/zap--orca-agent-flyout.svg": [
+    "orca-agent-flyout",
+    "orca-agent-settings"
   ],
   "mods/orca-assets/zoom.svg": [
     "orca-pane-header"
