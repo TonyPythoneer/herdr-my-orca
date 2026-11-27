@@ -5,6 +5,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme, run, openOverlay, closeOverlay, shared, setShared, window, layout, pickFolder, props, spaces, machines } from "herdr";
+import { IconButton } from "./icon-button.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -152,13 +153,11 @@ function searchButton() {
 }
 
 function collapseAllButton(t, allCollapsed) {
-  return div().id("proj-collapse-all").size(24).flex_none().flex().items_center().justify_center().rounded(6)
-    .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-    .role("button").accessibility_label(allCollapsed ? "Expand all projects" : "Collapse all projects")
-    .on_click(() => run(allCollapsed ? "orca-sidebar-projects.expand-all" : "orca-sidebar-projects.collapse-all"))
-    // ProjectsCollapseAllButton.tsx:51 renders a bare `<Icon />`, so the icon-xs
-    // `[&_svg:not([class*='size-'])]:size-3` rule (button.tsx:59) applies: 12px.
-    .child(svg(allCollapsed ? "mods/orca-assets/chevrons-up-down.svg" : "mods/orca-assets/chevrons-down-up.svg").size(12));
+  // ProjectsCollapseAllButton.tsx:51 renders a bare `<Icon />`, so the icon-xs
+  // `[&_svg:not([class*='size-'])]:size-3` rule (button.tsx:59) applies: 12px.
+  return IconButton("proj-collapse-all", allCollapsed ? "Expand all projects" : "Collapse all projects",
+    svg(allCollapsed ? "mods/orca-assets/chevrons-up-down.svg" : "mods/orca-assets/chevrons-down-up.svg").size(12),
+    { t, onClick: () => run(allCollapsed ? "orca-sidebar-projects.expand-all" : "orca-sidebar-projects.collapse-all") });
 }
 
 // SidebarWorkspaceOptionsMenu.tsx:43-68 — a ghost icon-xs button (24x24) holding
@@ -172,12 +171,11 @@ function optionsButton(t) {
   // `OptionsFilterCountBadge` (options-filter-count-badge.tsx): a corner badge on the trigger,
   // 12px tall, 9px text, primary fill; 9+ past nine.
   const filters = activeFilterCount(readOptions());
-  return div().id("proj-options").relative().size(24).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.muted)
-    .hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-    .role("button").tooltip(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"})` : "Workspace options")
-    .accessibility_label(filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"} active)` : "Workspace options")
-    .on_click(() => openOverlay({ mod: "orca-sidebar-top", kind: "popup", width: 288, height: 560, props: { navMenu: "workspace-options" } }))
-    .child(svg("mods/orca-assets/sliders-horizontal.svg").size(14).flex_none())
+  return IconButton("proj-options", filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"} active)` : "Workspace options",
+    svg("mods/orca-assets/sliders-horizontal.svg").size(14).flex_none(),
+    { t, tooltip: filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"})` : "Workspace options",
+      onClick: () => openOverlay({ mod: "orca-sidebar-top", kind: "popup", width: 288, height: 560, props: { navMenu: "workspace-options" } }) })
+    .relative()
     .when(filters > 0, el => el.child(div().absolute().top(-2).right(-2).h(12).min_w(12).px(2).rounded_full().bg(t.accent).flex().items_center().justify_center()
       .text_size(9).line_height("9px").text_color(t.accent_foreground).child(filters > 9 ? "9+" : String(filters))));
 }
@@ -199,23 +197,19 @@ function addProject(folder) {
 
 // AddProjectButton (:27-31) — FolderPlus `size-3.5` at the explicit `strokeWidth={2.25}`.
 function addProjectButton(t) {
-  return div().id("proj-add-repo").size(24).flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-    .role("button").accessibility_label("Add project")
-    // herdr.d.ts:39 — the folder picker is async: `Promise<string | null>`.
-    // Taking the promise as a value stored "[object Promise]" as the folder.
-    .on_click(() => { void pickFolder().then(addProject); })
-    .child(svg("mods/orca-assets/folder-plus--orca-sidebar-top.svg").size(14));
+  // herdr.d.ts:39 — the folder picker is async: `Promise<string | null>`.
+  // Taking the promise as a value stored "[object Promise]" as the folder.
+  return IconButton("proj-add-repo", "Add project", svg("mods/orca-assets/folder-plus--orca-sidebar-top.svg").size(14),
+    { t, onClick: () => { void pickFolder().then(addProject); } });
 }
 
 // NewWorkspaceButton (:60-64) — Plus `size-3.5`, same 2.25 stroke. Orca's header
 // actions are `size="icon-xs"` buttons, which are 24x24, so this is not wider than
 // the options slot.
 function newWorkspaceButton(t) {
-  return div().id("proj-new").size(24).flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
-    .role("button").accessibility_label("New workspace")
-    // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-    .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }))
-    .child(svg("mods/orca-assets/plus--orca-sidebar-top.svg").size(14));
+  // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
+  return IconButton("proj-new", "New workspace", svg("mods/orca-assets/plus--orca-sidebar-top.svg").size(14),
+    { t, onClick: () => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }) });
 }
 
 // Activating one of these rows writes one option patch and redraws. A `null` patch is the one

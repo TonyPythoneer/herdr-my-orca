@@ -4,6 +4,7 @@ import { h_flex, v_flex } from "gpui-base";
 import { settings } from "herdr";
 import { LIST_HEADER_HEIGHT } from "./state.js";
 import { PERMISSION_SHORT_LABELS } from "./permissions.js";
+import { IconButton } from "./icon-button.js";
 
 /** The font of commands and paths: the app's own monospace font. */
 export const monoFont = () => settings()?.font_family ?? "JetBrains Mono";
@@ -100,20 +101,6 @@ export function group(title, note, t) {
 
 /** The arrow at the top left of both pages; `onClick` decides where it goes. */
 export function backButton(t, onClick) {
-  return div()
-    .id("am-back")
-    .size(28)
-    .flex_none()
-    .flex()
-    .items_center()
-    .justify_center()
-    .rounded(6)
-    .text_color(t.muted)
-    .cursor_pointer()
-    .hover((s) => s.bg(t.hover).text_color(t.foreground))
-    .role("button")
-    .accessibility_label("Back to terminals")
-    .tooltip("Back to terminals")
-    .on_click(onClick)
-    .child(svg("mods/orca-assets/chevron-left--orca-agent-settings.svg").size(16));
+  return IconButton("am-back", "Back to terminals", svg("mods/orca-assets/chevron-left--orca-agent-settings.svg").size(16),
+    { t, size: 28, tooltip: "Back to terminals", onClick });
 }

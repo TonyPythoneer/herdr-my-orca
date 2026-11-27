@@ -61,6 +61,7 @@ export const inPlace = [
       "mods/orca-agent-flyout/flyout.golden.test.js",
       "mods/orca-agent-flyout/launch.test.js",
       "mods/orca-agent-flyout/lists.test.js",
+      "mods/orca-agent-flyout/quickstart-wrapper.test.js",
       "mods/orca-agent-flyout/render.golden.test.js",
       "mods/orca-agent-flyout/settings.flow.test.js"
     ],

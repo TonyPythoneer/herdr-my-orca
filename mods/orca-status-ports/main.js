@@ -14,6 +14,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { checking, closeOverlay, exec, nextCommand, notify, openOverlay, panes, props, run, setShared, settings, shared, spaces, theme, window as appWindow } from "herdr";
 import { PANEL, addressForPort, browserUrlForPort, buildPorts, knownSpaces, panelAt, panelHeight, parseCwds, parseListeners, sections } from "./scan.js";
 import { copyText } from "./clip.js";
+import { IconButton } from "./icon-button.js";
 
 const SCAN_KEY = "orca-status-ports.scan";
 const OVERLAY_KEY = "orca-status-ports.overlay";
@@ -203,12 +204,8 @@ export default class Ports extends View {
   }
 
   iconButton(id, icon, label, onClick) {
-    const t = theme();
-    return h_flex().id(id).size(20).flex_none().items_center().justify_center().rounded(4)
-      .role("button").cursor_pointer().text_color(t.muted).tooltip(label).accessibility_label(label)
-      .hover((style) => style.bg(t.hover).text_color(t.foreground))
-      .on_click(onClick)
-      .child(svg(`${ICON}/${icon}.svg`).size(12).flex_none());
+    return IconButton(id, label, svg(`${ICON}/${icon}.svg`).size(12).flex_none(),
+      { t: theme(), size: 20, radius: 4, tooltip: label, onClick });
   }
 
   header(t, view) {

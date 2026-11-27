@@ -13,8 +13,16 @@ const DECL = /^(export\s+)?(?:(?:default|async)\s+)*(function|class|const|let|va
 const METHOD = /^  (?:static\s+)?(?:async\s+)?(?:get\s+|set\s+)?([A-Za-z_$][\w$]*)\s*\(/;
 const UI_CALL = /\b(?:div|h_flex|v_flex|svg|image|Button|IconButton|Input|InputState|TextareaState|Table|List|Link|Scrollbar)\s*\(/;
 const CLICK = /\.on_click\s*\(/;
+// `IconButton("<id>", "<label>", glyph, {...})`: the call site names the control, so ui-index reads its id and label there.
+const ICON_CALL = /(?<!function\s+)\bIconButton\s*\(/;
+// A dynamic label (a ternary or a template) is left unnamed; the id is always a literal.
+const ICON_BUTTON = /(?<!function\s+)\bIconButton\s*\(\s*(["'`])([^"'`]+)\1(?:\s*,\s*(["'`])([^"'`]+)\3)?/g;
+const ICON_TOOLTIP = /\btooltip:\s*(["'`])([^"'`]+)\1/g;
 const QUOTED = (name) => new RegExp(`\\.${name}\\(\\s*["'\`]([^"'\`]+)["'\`]`, "g");
 const attr = (body, name) => [...body.matchAll(QUOTED(name))].map((m) => m[1].trim()).filter(Boolean);
+const iconButtonIds = (body) => [...body.matchAll(ICON_BUTTON)].map((m) => m[2].trim());
+const iconButtonLabels = (body) => [...body.matchAll(ICON_BUTTON)].map((m) => m[4]?.trim()).filter((text) => text && !text.includes("${"));
+const iconButtonTooltips = (body) => [...body.matchAll(ICON_TOOLTIP)].map((m) => m[2].trim()).filter((text) => !text.includes("${"));
 const unique = (values) => [...new Set(values)];
 
 export const normalize = (text) => String(text ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -52,7 +60,7 @@ function endOfBlock(lines, start, stopAtColumnZero) {
 
 // A 
 function kindOf(body) {
-  if (CLICK.test(body)) return "control";
+  if (CLICK.test(body) || ICON_CALL.test(body)) return "control";
   if (UI_CALL.test(body)) return "view";
   if (/=>|\bfunction\b/.test(body)) return "logic";
   return "data";
@@ -71,10 +79,10 @@ function component(parts) {
     exported: parts.exported,
     kind: kindOf(body),
     description: docAbove(parts.lines, parts.start),
-    ids: unique(attr(body, "id")),
-    roles: unique(attr(body, "role")),
-    labels: unique(attr(body, "accessibility_label")),
-    tooltips: unique(attr(body, "tooltip")),
+    ids: unique([...attr(body, "id"), ...iconButtonIds(body)]),
+    roles: unique([...attr(body, "role"), ...(ICON_CALL.test(body) ? ["button"] : [])]),
+    labels: unique([...attr(body, "accessibility_label"), ...iconButtonLabels(body)]),
+    tooltips: unique([...attr(body, "tooltip"), ...(ICON_CALL.test(body) ? iconButtonTooltips(body) : [])]),
     texts: unique([...attr(body, "child"), ...attr(body, "placeholder")]).filter((text) => !text.includes("${")).slice(0, 12),
     lines: parts.end - parts.start,
   };
@@ -313,7 +321,8 @@ export function outline(index, mod) {
 }
 
 export function audit(index) {
-  const interactive = index.components.filter((item) => item.kind === "control");
+  // The IconButton helper is not a screen control: each call site supplies its id and label.
+  const interactive = index.components.filter((item) => item.kind === "control" && item.name !== "IconButton");
   const bare = interactive.filter((item) => !item.ids.length);
   const seen = new Map();
   const duplicateIds = [];

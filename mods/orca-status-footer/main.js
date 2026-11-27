@@ -4,6 +4,7 @@ import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { theme, run, layout } from "herdr";
 import { startTaskRunner } from "./scheduler.js";
+import { IconButton } from "./icon-button.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -34,11 +35,9 @@ export default class WorkspaceChrome extends View {
     // Each control is a rounded-md 8px button with a 14px glyph (SidebarSettingsHelpMenu.tsx:203),
     // 18px square so it fits the 20px status bar under its 1px top border.
     // `active` inverts the button while its page is open; no hover tint then, or the inverted text would vanish.
-    const row = (id, icon, label, action, active = false) => {
-      const base = div().id(id).size(18).flex_none().flex().items_center().justify_center().rounded(8).cursor_pointer()
-        .role("button").accessibility_label(label).tooltip(label).on_click(action).child(svg(sharedAsset(`mods/orca-status-footer/${icon}.svg`)).size(14));
-      return active ? base.bg(t.foreground).text_color(t.background) : base.text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground));
-    };
+    const row = (id, icon, label, action, active = false) =>
+      IconButton(id, label, svg(sharedAsset(`mods/orca-status-footer/${icon}.svg`)).size(14),
+        { t, size: 18, radius: 8, tooltip: label, active, onClick: action });
     const onAgents = find(layout(), "main")?.active === "main-agents";
     // Same fill and top border as orca-status-bar, so the row reads as one bar.
     const footerBar = h_flex().size_full().items_center().bg(t.surface).border_t(1).border_color(t.border).pl(8).pr(8).text_size(12)

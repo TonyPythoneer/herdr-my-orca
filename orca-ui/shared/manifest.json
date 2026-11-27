@@ -84,6 +84,15 @@
         "mods/orca-agent-settings/selection-ui.js",
         "mods/orca-agent-flyout/selection-ui.js"
       ]
+    },
+    {
+      "source": "orca-ui/shared/icon-button.js",
+      "outputs": [
+        "mods/orca-agent-settings/icon-button.js",
+        "mods/orca-sidebar-top/icon-button.js",
+        "mods/orca-status-ports/icon-button.js",
+        "mods/orca-status-footer/icon-button.js"
+      ]
     }
   ]
 }

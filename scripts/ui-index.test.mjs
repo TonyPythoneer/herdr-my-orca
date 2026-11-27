@@ -24,6 +24,26 @@ test("a stable id resolves to its real source line and label", () => {
   assert.match(line, /export function backButton/, "index line is not the declaration");
 });
 
+test("an IconButton's tooltip option is indexed", () => {
+  const back = index.components.find((item) => item.name === "backButton");
+  assert.ok(back.tooltips.includes("Back to terminals"), "tooltip option not indexed");
+});
+
+test("audit skips the IconButton helper but still counts other shared controls", () => {
+  const report = audit(index);
+  assert.ok(report.missingIds.every((item) => item.name !== "IconButton"));
+  assert.ok(report.missingLabels.every((item) => item.name !== "IconButton"));
+  assert.ok(report.missingIds.some((item) => item.mod === "shared"), "shared controls must still be audited");
+});
+
+test("an IconButton call site names its id, label and role for the index", () => {
+  const hit = findEntity(index, "proj-new");
+  assert.equal(hit.file, "mods/orca-sidebar-top/main.js");
+  assert.equal(hit.label, "New workspace");
+  assert.equal(hit.role, "button");
+  assert.match(readFileSync(`${ROOT}/${hit.file}`, "utf8").split(/\r?\n/)[hit.line - 1], /function newWorkspaceButton/);
+});
+
 test("each component points at a declaration with its name", () => {
   for (const item of index.components.filter((entry) => entry.kind !== "data")) {
     const lines = readFileSync(`${ROOT}/${item.file}`, "utf8").split(/\r?\n/);
