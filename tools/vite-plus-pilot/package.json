@@ -1,0 +1,14 @@
+{
+  "name": "herdr-vite-plus-pilot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "vp lint src --type-aware --type-check --max-warnings 0",
+    "pack": "vp pack",
+    "test": "vp test run",
+    "parity": "node verify-output.mjs"
+  },
+  "devDependencies": {
+    "vite-plus": "1.8.0"
+  }
+}
