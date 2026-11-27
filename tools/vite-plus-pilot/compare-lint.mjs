@@ -1,17 +1,18 @@
 // Candidate-only diagnostic comparison; existing ESLint remains authoritative.
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, unlinkSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import eslintConfig from "../../eslint.config.mjs";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const config = eslintConfig[0];
-const candidateConfig = new URL("./dist/oxlint-comparison.json", import.meta.url);
+const candidateConfig = new URL("../../.oxlintrc-vite-plus-candidate.json", import.meta.url);
 writeFileSync(candidateConfig, JSON.stringify({
   categories: { correctness: "off" },
   rules: config.rules,
   ignorePatterns: config.ignores,
-}, null, 2));
+}, null, 2), { flag: "wx" });
+try {
 const paths = ["mods", "scripts", "orca-ui"];
 const vp = fileURLToPath(new URL("./node_modules/.bin/vp", import.meta.url));
 function run(label, command, args) {
@@ -33,3 +34,6 @@ const summary = { eslint: { elapsedMs: legacy.elapsedMs, exitCode: legacy.exitCo
 writeFileSync(new URL("./dist/lint-comparison.json", import.meta.url), JSON.stringify(summary, null, 2) + "\n");
 console.log(JSON.stringify(summary, null, 2));
 if (oldCount === null || newCount === null || ![0, 1].includes(legacy.exitCode) || ![0, 1].includes(next.exitCode)) process.exitCode = 1;
+} finally {
+  unlinkSync(candidateConfig);
+}
