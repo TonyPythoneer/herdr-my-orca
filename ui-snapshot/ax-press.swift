@@ -212,6 +212,24 @@ if wanted == "--paste" {
     restoreClipboard()
     exit(0)
 }
+if wanted == "--key" {
+    let codes: [String: CGKeyCode] = ["escape":53,"return":36,"enter":76,"tab":48,"space":49,
+        "up":126,"down":125,"left":123,"right":124,"backspace":51,"delete":117,
+        "home":115,"end":119,"pageup":116,"pagedown":121]
+    guard CommandLine.arguments.count == 4, let code = codes[CommandLine.arguments[3].lowercased()] else {
+        fail("Usage: ax-press PID --key escape|return|enter|tab|space|up|down|left|right|backspace|delete|home|end|pageup|pagedown")
+    }
+    guard let running = NSRunningApplication(processIdentifier: pid) else { fail("Missing target app") }
+    if !local { activate(running) }
+    requireForeground(pid)
+    guard let down = CGEvent(keyboardEventSource:nil,virtualKey:code,keyDown:true),
+          let up = CGEvent(keyboardEventSource:nil,virtualKey:code,keyDown:false)
+    else { fail("Cannot send \(CommandLine.arguments[3]) to foreground Herdr") }
+    postInput(down)
+    postInput(up)
+    print("Native key \(CommandLine.arguments[3].lowercased())")
+    exit(0)
+}
 if wanted == "--escape" {
     guard let running = NSRunningApplication(processIdentifier: pid) else { fail("Missing target app") }
     if !local { activate(running) }

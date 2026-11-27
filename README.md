@@ -2,6 +2,9 @@
 
 My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's layouts and mods.
 
+> **AI agents**: start with [AGENTS.md](AGENTS.md) and `.agents/skills/orca-ui/SKILL.md`. For UI
+> work they replace reading this file: `node scripts/ui.mjs <find|where|outline|open|tree|click>`.
+
 - **Orca**: the `orca` layout (`layouts/orca.json`) and the `orca-*` mods are a re-creation of Orca's UI in Herdr.
 - **Names**: [docs/naming.md](docs/naming.md) maps what you see on screen to mod names, layout node ids and commands.
 - **Ports**: the bottom bar's plug button (`orca-status-ports/`) counts the listening ports the open
