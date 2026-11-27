@@ -1,13 +1,12 @@
 # Handoff: finishing the shared-component work in the Orca UI
 
 This is what is left and what will bite you. Read `AGENTS.md` and `.agents/skills/orca-ui/SKILL.md`
-first; they say where things live. `.claude/skills` is a symlink to `.agents/skills`, so both paths work.
+first; they say where things live. `.claude` is a symlink to `.agents`, so `.claude/skills` resolves there too.
 
 ## State
 
-- Branch `fix/sidebar-branch-tooltip`, tracking `origin/fix/sidebar-branch-tooltip`. The four commits
-  after `f2b61c2` are local only; nothing was pushed. No pull request is open. Ask the owner before
-  opening one or pushing.
+- Branch `fix/sidebar-branch-tooltip`, tracking `origin/fix/sidebar-branch-tooltip`; both refs point
+  to `6dd7b2c`. No pull request is open. Ask the owner before opening one or pushing again.
 - Thirteen commits on top of `main`, oldest first:
   1. `9011451` AI discovery and live-driving tools (`scripts/ui.mjs`, `AGENTS.md`, the skill)
   2. `bdfcb32` LiteLLM gateway quickstart and shared agent selection (mixed in one commit)
@@ -38,12 +37,14 @@ The bar used for every family: a semantic diff, a strict diff where order matter
 diff, an isolated host check, a live sync check, and updated guardrails. The tools are in the repo:
 
 - `scripts/golden-diff.mjs semantic <base> <now> [--key a.b.c ...] [--noid]`
-  per case or key, the set of calls each element makes, order ignored. `--noid` also ignores which
-  element a call sits on. Use it when a control gains an id: it then shows only the added calls.
+  compares call-signature sets per case or key, ignoring order. `--noid` also ignores element ids,
+  so it cannot show multiplicity or which element owns a call. Use it alongside `strict`, not as a
+  complete account of structural changes.
 - `scripts/golden-diff.mjs strict <base> <now> [--key a.b.c ...]`
   the first order-sensitive difference, with the nearest element id.
 - `scripts/failing-tests.sh [repo] [out.tsv]`
-  runs every test file alone and lists each failing test. Compare two outputs with `comm -23`.
+  runs every test file alone and lists each failing test. To check for regressions, compare sorted
+  outputs with `comm -23 current.tsv base.tsv`; this lists failures present only on the current tree.
 
 Dumps, per suite (run from the repo root, one suite at a time):
 
@@ -51,6 +52,9 @@ Dumps, per suite (run from the repo root, one suite at a time):
 - Header, pane, float: `GOLDEN_DUMP=/path/dir node --test mods/<mod>/golden.test.js`, which writes
   `orca-header-golden.json`, `orca-pane-golden.json` or `orca-float-golden.json` into that directory
   (many cases, each with `name` and `trees`).
+- Handoff: `GOLDEN_FULL=/path/full.json node --test mods/orca-handoff/main.golden.test.js`
+  (keyed record with `renders`, `flows` and `handlers`; compare cases with `--key renders.<name>` or
+  `--key handlers.<name>`).
 - Changes: `GOLDEN_FULL=/path/full.json node --test mods/orca-changes/main.golden.test.js`
   (keyed record with the top-level keys `renders`, `flows`, `handlers`; use `--key flows.<name>`).
 
@@ -84,7 +88,7 @@ Get the base dump from `git archive <previous commit> | tar -x -C <dir>` and run
   acceptable when the failing names are the same as the previous commit's. Compare with
   `scripts/failing-tests.sh` on the current tree and on a detached worktree of the previous commit:
   `git worktree add --detach /tmp/base <commit>`. A `git archive` copy has no `.git`, so the script's
-  `git ls-files` finds no tests and writes an empty list; that is the "0 failures" trap below.
+  `git ls-files` finds no tests and writes an empty list, which can look like "0 failures."
   Never run `comm` against a file that does not exist: `2>/dev/null` makes it print 0, which means nothing.
 - **Goldens depend on call order.** The sidebar-top nav golden is green and must stay strictly identical
   to the previous commit (`golden-diff.mjs strict`, all five `nav-*` keys, zero differences).
@@ -192,7 +196,8 @@ Do not start K or L until the owner says they are in scope. Do not start E's tab
 1. An inventory from `ui.mjs find` and `audit`, and a read of each builder.
 2. `golden-diff.mjs semantic` and, where order matters, `strict`, against the previous commit.
    Every difference explained, and nothing removed that was not meant to be.
-3. `scripts/failing-tests.sh` on the current tree and on the previous commit; `comm -23` must print nothing.
+3. `scripts/failing-tests.sh` on the current tree and on the previous commit; `comm -23 current.tsv base.tsv`
+   must print nothing (no new failures).
 4. An isolated `herdr-app check` for every changed mod, with `check passed` in the output.
 5. Live sync for every changed file (`cmp`, modes, `status`, `diff -rq orca-ui`).
 6. Guardrails updated to the real values.
@@ -209,7 +214,7 @@ Do not start K or L until the owner says they are in scope. Do not start E's tab
 - Multi-button builders: when a label is a variable (for example `close-confirm`), the index reports it
   empty. Only literal labels are read.
 - Goldens that are stale at baseline (they fail before any of this work): `orca-changes`
-  (`main.golden.test.js`, digests missing for `renders/clean` and others), `orca-header`,
+  (`main.golden.test.js`, digests missing for `renders/clean` and others), `orca-handoff`, `orca-header`,
   `orca-pane-header`, `orca-float-workspace`. Do not re-record them silently. Their failing keys are in the
   list below.
 - The titlebar buttons show a pointer cursor now (owner decision: keep).
@@ -229,20 +234,25 @@ finding (Switch, Select, Tabs, Popup) goes here too.
 - Migrated the handoff copy/start pair (`mods/orca-handoff/main.js`) and the changes force-push and
   create-PR pairs (`mods/orca-changes/main.js`). Handoff gained a generated `dialog-button.js` copy;
   its golden test now loads that file, as the changes test already did.
-- Handoff diff: `semantic --noid` has 0 base-only and 7 now-only calls (`flex_none`, `border_1`,
-  `role("button")`, four dynamic label values). The strict first difference is call order inside
-  `btn-copy-prompt` (`h` before `px`), which layout ignores. The 50 of 70 differing strict cases are
-  all this same footer.
+- Handoff diff: `semantic --noid` has 0 base-only and 7 now-only call signatures (`flex_none`,
+  `border_1`, `role("button")`, four dynamic label values). The strict first difference is call order
+  inside `btn-copy-prompt` (`h` before `px`); the migrated copy control also adds a nested flex box.
+  The 50 of 70 differing strict cases are all this same footer. Visual equivalence was not checked.
 - Changes diff: `semantic --noid` shows the two force-push ids and `Force Push`; strict first difference
-  is the new id before `h`. The create-PR footer has no golden flow (its flows record actions, not the
-  footer), so it is covered by the host check and a read, not a diff.
+  is the new id before `h`. The create-PR fixture now returns a valid mocked GitHub response, asserts
+  that the dialog opens, and records its tree as `flows/createPrDialog`; its golden digest was updated.
 - Confirm was left local: its strict golden is green, and a shared box would change `h_flex` to `div`,
   add role/label/flex calls and force a re-record for no behaviour gain.
 - Failing names: 34 on the working tree and 34 on the `2679403` worktree, no name added or removed.
 - Host checks passed for orca-handoff, orca-changes, orca-header and orca-tasks. Live sync: 9 files,
   `errors []`, `diff -rq orca-ui` empty.
-- Independent review is still open: no second reviewer was available. I re-read the diff, but that is
-  not the independent review item 8 asks for.
+- Independent review for item 8 is complete: GPT-6.2-Sol reviewed the full `5fa355d` diff and found no
+  production correctness or accessibility regressions. Visual equivalence remains unverified: the UI
+  tree command found zero visible Herdr windows in this session.
+- The create-PR dialog footer golden now includes the dialog tree. The cancel and create controls have
+  recorded ids, labels, button roles and handlers. The test's `InputState` mock returns an empty title,
+  so this covers rendering and the empty-title guard, not successful submission; live visual verification
+  remains unavailable.
 
 ## Baseline: the 34 pre-existing failing tests
 

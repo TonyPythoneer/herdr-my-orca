@@ -1,8 +1,8 @@
 #!/bin/bash
 # Run every test file alone and list each failing test as "<file><TAB><test name>".
 # Per file, not the whole suite: a test that fails only because of its neighbours then shows up as a
-# difference, and the baseline comparison stays exact. Use it on the current tree and on a
-# `git archive <previous commit>` copy, then `comm -23` the two sorted lists.
+# difference. Use it on the current tree and in a detached worktree of the previous commit.
+# `comm -23 current.tsv base.tsv` lists new failures; use `cmp` to check whether both lists match.
 #
 #   scripts/failing-tests.sh [repo-dir] [out.tsv]        (defaults: ., failing-tests.tsv)
 #

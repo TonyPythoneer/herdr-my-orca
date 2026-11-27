@@ -295,10 +295,26 @@ test("main.js behaves as recorded: renders, handlers and flows", async () => {
   await flow("force-push-confirm", (env) => env.view.confirmForcePush(env.view.operationTarget(), { branch: "topic", remote: "origin", ref: "refs/heads/topic", oid: "a".repeat(40), destination: "https://u:p@example.com/r.git", leaseTracking: "refs/remotes/origin/topic", expected: "b".repeat(40) }, env.cx));
   await flow("force-push-confirm-busy", (env) => env.view.confirmForcePush(env.view.operationTarget(), {}, env.cx), undefined, { busy: true });
   await flow("force-push-no-lease", (env) => env.view.runForcePush(env.cx), { script: { "for-each-ref": { code: 0, stdout: "refs/heads/topic\0origin\0refs/heads/topic\0\0\0\0" } } });
-  await flow("create-pr-dialog", async (env) => {
+  const createPrFlow = await flow("create-pr-dialog", async (env) => {
     await env.view.openCreatePrDialog(env.cx); await settle();
-    if (env.log.dialogs.length) { const d = dialogTree(env); out.flows.createPrDialog = plain(d.__rec); for (const h of handlers(d.__rec)) await fire(env, h, [{}]); }
-  }, { script: { "symbolic-ref --quiet HEAD": { code: 0, stdout: "refs/heads/topic\n" }, "config --null --get-all branch.topic.remote": { code: 0, stdout: "origin\0" }, "config --null --get-all branch.topic.merge": { code: 0, stdout: "refs/heads/topic\0" }, "remote get-url --all origin": { code: 0, stdout: "git@github.com:o/r.git\n" }, "gh": { code: 0, stdout: "" } } });
+    if (env.log.dialogs.length) {
+      const d = dialogTree(env);
+      out.flows.createPrDialog = plain(d.__rec);
+      for (const h of handlers(d.__rec)) await fire(env, h, [{}]);
+    }
+  }, { script: {
+    "symbolic-ref --quiet HEAD": { code: 0, stdout: "refs/heads/topic\n" },
+    "config --null --get-all branch.topic.remote": { code: 0, stdout: "origin\0" },
+    "config --null --get-all branch.topic.merge": { code: 0, stdout: "refs/heads/topic\0" },
+    "remote get-url --all origin": { code: 0, stdout: "git@github.com:o/r.git\n" },
+    "api graphql": { code: 0, stdout: JSON.stringify({ data: { repository: {
+      id: "repo-id", nameWithOwner: "o/r", isArchived: false, isFork: false,
+      defaultBranchRef: { name: "main", target: { oid: "b".repeat(40) } },
+      ref: { prefix: "refs/heads/", name: "topic", target: { oid: "a".repeat(40) } },
+    } } }) },
+  } });
+  assert.equal(createPrFlow.log.dialogs.length, 1, "create-PR flow should open its dialog");
+  assert.ok(out.flows.createPrDialog, "create-PR dialog tree should be recorded");
   await flow("submit-create-pr", (env) => env.view.submitCreatePr(env.view.operationTarget(), {}, { title: "t", body: "b", draft: true }, env.cx));
   await flow("submit-create-pr-busy", (env) => env.view.submitCreatePr(env.view.operationTarget(), {}, { title: "t", body: "b", draft: true }, env.cx), undefined, { busy: true });
   for (const [name, target] of [["ok", undefined], ["stale", { root: "/x", on: "host", context: "x" }]]) {
