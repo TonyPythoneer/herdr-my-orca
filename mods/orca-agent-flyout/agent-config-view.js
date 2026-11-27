@@ -11,7 +11,8 @@ import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea, InputState, Input, Scrollbar, HoverCard } from "gpui-base";
 import { checking, run, props, closeOverlay, theme, setShared, exec, appHome, home, readTextFile, writeTextFile, settings, spaces } from "herdr";
 import { PROVIDER_FILE, launchArgv, launchClaudeArgv, launchOpenCodeArgv, launchPiArgv, parseProviderFile, piModelLimits, serializeProviderFile, supportsCodingModel, validateHost, writeProviderFile } from "./codex-provider.js";
-import { viewportHeight, scrolls, ROW } from "./list-viewport.js";
+import { viewportHeight, scrolls, ROW, VISIBLE_ROWS } from "./list-viewport.js";
+import { selectionMark } from "./selection-ui.js";
 import { SPECS, buildArgv, defaultValues, parseModels, presetOf, readGroup, readValues, sectionsOf } from "./agent-flyout.js";
 
 // Only servers in config.toml: `-c mcp_servers.<name>.enabled=false` on a plugin-provided server
@@ -36,6 +37,9 @@ const CATALOG_SCHEMA = 4;
 // Reuse a cache for ten minutes; the CLI and the upstream list are checked again after that.
 const CATALOG_TTL_MS = 10 * 60_000;
 const SETTINGS = `${appHome()}/agent-config.json`;
+// The gateway script is the only writer of this file, so the flyout reads it itself, not a shared flag.
+const GATEWAY = `${appHome()}/model-gateway.json`;
+const gatewayEnabled = text => { try { return JSON.parse(text).enabled === true; } catch { return false; } };
 // A model-list or version probe runs a login shell and may start a slow CLI.
 const CLI_TIMEOUT_MS = 60_000;
 // The style-name input is mounted by the next frame, so focus waits a moment.
@@ -180,6 +184,8 @@ class AgentConfigCore {
   async loadSaved(cx) {
     try {
       this.snapshot = await readTextFile(SETTINGS).catch(() => null);
+      this.litellmEnabled = gatewayEnabled(await readTextFile(GATEWAY).catch(() => null));
+      cx.notify();
       const all = JSON.parse(this.snapshot ?? "{}");
       const saved = all[this.key] ?? {};
       await this.applySaved(saved, cx);
@@ -743,7 +749,8 @@ class AgentConfigCore {
     const on = this.model === m.id;
     const hidden = this.hidden.has(m.id);
     return this.tip(`model-${m.id}`, m.label,
-      this.listRow(`model-${m.id}`, t)
+      this.listRow(`model-${m.id}`, t, 2)
+        .px(6)
         .flex_none()
         .on_click((_e, cx) => {
           this.choose(m, this.effort);
@@ -753,7 +760,7 @@ class AgentConfigCore {
           cx.notify();
         })
         .child(div().flex_1().min_w(0).truncate().text_color(hidden ? t.muted : t.foreground).child(m.label))
-        .when(on, (el) => el.child(div().flex_none().text_color(t.accent).child("✓")))
+        .child(selectionMark(on, t))
         .child(
           div()
             .id(`visibility-${m.id}`)
@@ -870,7 +877,7 @@ class AgentConfigCore {
     return v_flex()
       .gap(2)
       .when(this.groupOption(), (el) => this.withGroupFilter(el, t))
-      .child(this.scrollList("agent-config-models", rows))
+      .child(this.scrollList("agent-config-models", rows, true))
       .child(
         div()
           .id("refresh-models")
@@ -939,7 +946,14 @@ class AgentConfigCore {
   // A provider's icon sits in a small tile: the file saved in this app's folder, else the default
   // drive; None gets a plain circle. Without a record the tile is None's.
   providerIcon(record, t) {
-    return div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(providerGlyph(record, t));
+    return div().relative().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised)
+      .child(providerGlyph(record, t))
+      .when(Boolean(record) && this.litellmEnabled === true, el => el.child(
+        div().absolute().right(-3).bottom(-3).size(13).rounded_full().bg(t.surface)
+          .border_2().border_color(t.surface).flex().items_center().justify_center()
+          .tooltip("LiteLLM enabled")
+          .child(image("mods/orca-assets/litellm_favicon_light_32.png").w(9).h(9).rounded_full()),
+      ));
   }
 
   // The agent's own icon, shown for the default origin (no-provider) model source. The menu
@@ -972,7 +986,7 @@ class AgentConfigCore {
       .role("group")
       .accessibility_label(`Model source: ${label}`)
       .child(this.controlHead("source-head", "hard-drive.svg", `Model source: ${label}`, t))
-      .child(this.sourceList(t, enabled));
+      .child(this.listBox(this.sourceList(t, enabled), t));
   }
 
   // The expanded model source list: the origin source (agent icon) first, then saved providers.
@@ -988,14 +1002,18 @@ class AgentConfigCore {
         rows.map((option) => this.tip(`source-${option.id}`, option.label,
           this.listRow(`source-${option.id}`, t, 0)
             .w_full()
-            .px(4)
+            .pl(8)
+            .pr(2)
+            .gap(4)
             .justify_start()
             .accessibility_label(option.label)
             .when(!enabled, (el) => el.opacity(0.5))
             .when(enabled, (el) => el.on_click((_e, cx) => this.setProvider(option.id, cx)))
-            .when(this.providerId === option.id, (el) => el.bg(t.selected))
-            .child(option.icon),
+            .child(option.icon)
+            .child(div().flex_1())
+            .child(selectionMark(this.providerId === option.id, t)),
           true)),
+        true,
       ));
   }
 
@@ -1025,14 +1043,14 @@ class AgentConfigCore {
           .on_click((_e, cx) => this.setProvider(option.id, cx))
           .child(this.providerIcon(option.id === "none" ? null : this.providers[option.id], t))
           .child(div().flex_1().min_w(0).truncate().child(option.label))
-          .when(this.providerId === option.id, (el) => el.child(div().flex_none().text_color(t.accent).child("✓"))),
+          .child(selectionMark(this.providerId === option.id, t)),
       ).concat(
         // The way to a new provider: the Model providers page, with this menu and flyout closed.
         this.listRow("provider-add", t)
           .on_click(() => this.openProviders())
           .child(div().size(24).flex_none().flex().items_center().justify_center().rounded(6).bg(t.raised).child(svg("mods/orca-assets/plus--orca-agent-flyout.svg").size(13).text_color(t.muted)))
           .child(div().flex_1().min_w(0).truncate().child("Add More")),
-      ));
+      ), true);
   }
 
   openProviders() {
@@ -1053,8 +1071,8 @@ class AgentConfigCore {
             cx.notify();
           })
           .child(div().flex_1().child(EFFORT_LABEL[e] ?? e))
-          .when(this.effort === e, (el) => el.child(div().text_color(t.accent).child("✓"))),
-      ));
+          .child(selectionMark(this.effort === e, t)),
+      ), true);
   }
 
   // The one look of a list row (ROW in list-viewport.js): the same height, radius, padding, gap,
@@ -1078,15 +1096,18 @@ class AgentConfigCore {
   // and a half rows with a scrollbar, drawn like the Agent Settings lists. A definite height is
   // needed because gpui does not clamp a content-sized flex item to max-height; the rows sit in an
   // absolutely placed scroller inside it. The wheel stops at the list so the popup does not move.
-  scrollList(id, rows) {
+  scrollList(id, rows, fixedHeight = false) {
     const { height, gap } = ROW;
-    if (!scrolls(rows.length)) return v_flex().w_full().gap(gap).children(rows);
-    return div()
+    const overflow = scrolls(rows.length);
+    if (!overflow && !fixedHeight) return v_flex().w_full().gap(gap).children(rows);
+    const viewport = div()
       .w_full()
       .flex_none()
       .relative()
       .overflow_hidden()
-      .h(viewportHeight(rows.length, height, gap))
+      .h(viewportHeight(fixedHeight ? VISIBLE_ROWS : rows.length, height, gap));
+    if (!overflow) return viewport.child(v_flex().w_full().gap(gap).children(rows));
+    return viewport
       .on_scroll_wheel((_e, cx) => cx.stop_propagation())
       .child(v_flex().id(id).w_full().absolute().inset_0().overflow_y_scroll().gap(gap).children(rows))
       .child(Scrollbar.vertical(id).absolute().inset_0());

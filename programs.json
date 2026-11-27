@@ -4,15 +4,93 @@
       "name": "OMP",
       "icon": "icons/omp.svg",
       "tint": false,
-      "run": ["omp"],
+      "run": [
+        "omp"
+      ],
       "tile": "#1c1d21",
       "color": "#ffffff"
     },
     "codex": {
-      "run": ["codex", "--no-daemon", "-c", "disable_paste_burst=true", "--dangerously-bypass-approvals-and-sandbox"]
+      "run": [
+        "codex",
+        "--no-daemon",
+        "-c",
+        "disable_paste_burst=true",
+        "--dangerously-bypass-approvals-and-sandbox"
+      ]
     },
     "claude": {
-      "run": ["claude", "--dangerously-skip-permissions"]
+      "run": [
+        "claude",
+        "--dangerously-skip-permissions"
+      ]
+    },
+    "cursor": {
+      "run": [
+        "agent",
+        "--yolo"
+      ]
+    },
+    "copilot": {
+      "run": [
+        "copilot",
+        "--yolo"
+      ]
+    },
+    "amp": {
+      "run": [
+        "amp",
+        "--dangerously-allow-all"
+      ]
+    },
+    "gemini": {
+      "run": [
+        "gemini",
+        "--yolo"
+      ]
+    },
+    "grok": {
+      "run": [
+        "grok",
+        "--permission-mode",
+        "bypassPermissions"
+      ]
+    },
+    "antigravity": {
+      "run": [
+        "agy",
+        "--dangerously-skip-permissions"
+      ]
+    },
+    "crush": {
+      "run": [
+        "crush",
+        "--yolo"
+      ]
+    },
+    "hermes": {
+      "run": [
+        "hermes",
+        "--yolo"
+      ]
+    },
+    "kimi": {
+      "run": [
+        "kimi",
+        "--auto"
+      ]
+    },
+    "kiro": {
+      "run": [
+        "kiro-cli",
+        "--trust-all-tools"
+      ]
+    },
+    "qoder": {
+      "run": [
+        "qodercli",
+        "--dangerously-skip-permissions"
+      ]
     }
   }
 }

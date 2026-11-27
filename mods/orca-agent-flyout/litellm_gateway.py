@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import signal
 import shutil
@@ -89,7 +90,7 @@ def settings(app):
     if not isinstance(value, dict):
         raise RuntimeError("LiteLLM settings are invalid.")
     value.setdefault("mode", "local")
-    if value["mode"] not in ("local", "remote"):
+    if value["mode"] not in ("local", "remote", "quickstart"):
         raise RuntimeError("LiteLLM connection mode is invalid.")
     return value
 
@@ -123,13 +124,17 @@ def remote_health(config):
     try:
         root = remote_root(host)
         req = urllib.request.Request(root + "/v1/models", headers={"Authorization": "Bearer " + key})
-        opener = urllib.request.build_opener(NoRedirect())
+        # The quickstart is local: never let a proxy from the environment or the system see the key.
+        handlers = [urllib.request.ProxyHandler({})] if config.get("source") == "quickstart" else []
+        opener = urllib.request.build_opener(NoRedirect(), *handlers)
         with opener.open(req, timeout=8) as response:
             payload = json.load(response)
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             return {"healthy": False, "error": "LiteLLM returned an invalid model list."}
         models = sorted({item["id"] for item in payload.get("data", [])
                          if isinstance(item, dict) and isinstance(item.get("id"), str)})
+        if any(key in model for model in models):  # a server must not echo the key back through its catalog
+            return {"healthy": False, "error": "LiteLLM returned an invalid model list."}
         # Liveness is not readiness: an empty catalog still proves the server is alive.
         return {"healthy": True, "models": models}
     except urllib.error.HTTPError as error:
@@ -143,13 +148,15 @@ def local_quickstart_status():
         return None
     try:
         result = subprocess.run([cli, "status"], capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, ValueError):  # ValueError: output that is not UTF-8
         return {"cli": cli, "installed": True, "running": False, "usable": False}
     output = result.stdout or result.stderr
     running = result.returncode == 0 and "LiteLLM is running" in output
     version = next((line.split(":", 1)[1].strip() for line in output.splitlines()
                     if line.strip().startswith("Version:")), None)
-    return {"cli": cli, "installed": True, "running": running, "version": version, "usable": running}
+    admin = re.search(r"Admin UI:?\s+https?://[^:\s/]+:(\d+)", output)  # the port the running server reports
+    return {"cli": cli, "installed": True, "running": running, "version": version, "usable": running,
+            "port": int(admin.group(1)) if admin else None}
 
 def local_status(app):
     root = app / "litellm-gateway"
@@ -167,22 +174,68 @@ def local_status(app):
             "healthy": healthy,
             "quickstart": local_quickstart_status()}
 
+def quickstart_settings(text):
+    """Host and master key from the quickstart's .env text: the last line wins, the port defaults to 4000."""
+    values = {}
+    for line in text.splitlines():
+        found = re.match(r"^(LITELLM_MASTER_KEY|LITELLM_PORT)=(.*)$", line.strip())
+        if found:
+            values[found.group(1)] = found.group(2).strip()  # the shell wrapper strips the same way
+    key = values.get("LITELLM_MASTER_KEY", "")
+    port = values.get("LITELLM_PORT") or "4000"
+    if not key or not (port.isascii() and port.isdigit()):  # isdigit alone accepts other Unicode digits, which int() rejects
+        return None
+    return {"host": f"http://127.0.0.1:{port}", "apiKey": key}
+
+def quickstart_remote():
+    """The running quickstart gateway's host and key, read from its folder each time. Never saved."""
+    status = local_quickstart_status()
+    if not status or not status.get("running") or not status.get("cli"):
+        return None
+    try:
+        # The CLI that reported "running" is the one whose folder we read; the .env must be a regular file.
+        folder = re.search(r"^export LITELLM_DIR='([^']+)'", Path(status["cli"]).read_text(), re.M)
+        env_path = Path(folder.group(1)) / ".env" if folder else None
+        if env_path is None or not env_path.is_file():  # a FIFO or a directory would block or fail
+            return None
+        settings = quickstart_settings(env_path.read_text())
+    except (OSError, ValueError):
+        return None
+    # The key goes only to the port the running server reports, so a different listener never gets it.
+    if not settings or status.get("port") != int(settings["host"].rsplit(":", 1)[1]):
+        return None
+    return {**settings, "env": str(env_path)}  # the wrapper reads the key from this file at launch
+
+def remote_settings(config):
+    """What a remote-type mode talks to. Existing uses its saved host and key; quickstart reads them each time, never saved."""
+    if config.get("mode") != "quickstart":
+        return config
+    source = quickstart_remote()
+    if source is None:
+        raise RuntimeError("Start the LiteLLM quickstart on this Mac first.")
+    return {**source, "mode": "quickstart", "source": "quickstart"}
+
 def status(app):
     config = settings(app)
-    if config.get("mode") == "remote":
-        remote = remote_health(config)
-        return {"enabled": config.get("enabled") is True, "mode": "remote", "host": config.get("host", ""),
-                "hasApiKey": bool(config.get("apiKey")), "remote": remote}
+    if config.get("mode") in ("remote", "quickstart"):
+        try:
+            resolved = remote_settings(config)
+            remote = remote_health(resolved)
+        except RuntimeError as error:
+            resolved, remote = {}, {"healthy": False, "error": str(error)}
+        return {"enabled": config.get("enabled") is True, "mode": config["mode"], "host": resolved.get("host", config.get("host", "")),
+                "hasApiKey": bool(resolved.get("apiKey")), "remote": remote}
     return {"enabled": config.get("enabled") is True, "mode": "local", "local": local_status(app)}
 
 def save_remote(app, staged):
     incoming = read(staged)
     if not isinstance(incoming, dict):
         raise RuntimeError("Existing LiteLLM settings are invalid.")
+    previous = settings(app)
     host = remote_root(incoming.get("host", ""))
     key = incoming.get("apiKey")
-    previous = settings(app)
-    if not key and previous.get("apiKey"):
+    # A saved key is reused only for the host it was saved with, never sent to a newly typed one.
+    if not key and previous.get("apiKey") and previous.get("host") == host:
         key = previous["apiKey"]
     if not isinstance(key, str) or not key:
         raise RuntimeError("Enter a LiteLLM API key.")
@@ -233,22 +286,28 @@ def prepare(app, provider, model, expected_host, kind):
     alias = alias_for(provider, model)
     if alias not in routes:
         raise RuntimeError("Selected model is not in the saved provider catalog.")
-    if config.get("mode") == "remote":
+    if config.get("mode") in ("remote", "quickstart"):
+        config = remote_settings(config)
         remote = remote_health(config)
         if not remote.get("healthy"):
             raise RuntimeError(remote.get("error", "The existing LiteLLM server is unavailable."))
         if model not in remote["models"]:
             raise RuntimeError("Selected model is not available on the existing LiteLLM server.")
         root = remote_root(config["host"])
-        credentials = app / "litellm-gateway/credentials.json"
-        credentials.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        credentials.parent.chmod(0o700)
-        private_write(credentials, {"openai": {"host": root + "/v1", "apiKey": config["apiKey"]},
-                                    "claude": {"host": root, "apiKey": config["apiKey"]}})
+        if config.get("mode") == "quickstart":
+            # The quickstart's own .env already holds the master key; reading it there copies nothing.
+            configured = config["env"]
+        else:
+            credentials = app / "litellm-gateway/credentials.json"
+            credentials.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            credentials.parent.chmod(0o700)
+            private_write(credentials, {"openai": {"host": root + "/v1", "apiKey": config["apiKey"]},
+                                        "claude": {"host": root, "apiKey": config["apiKey"]}})
+            configured = str(credentials)
         selected = {r["model"]: r["model"] for r in routes.values()
                     if r["provider"] == provider and r["model"] in remote["models"]}
         return {"host": root + ("" if kind == "claude" else "/v1"),
-                "configPath": str(credentials), "id": "claude" if kind == "claude" else "openai",
+                "configPath": configured, "id": "claude" if kind == "claude" else "openai",
                 "aliases": selected, "model": model}
     if not routes[alias]["api_key"]:
         raise RuntimeError("This LiteLLM integration requires a provider API key; anonymous authentication is not yet verified.")
@@ -351,7 +410,7 @@ def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser()
     parser.add_argument("app", type=Path)
-    parser.add_argument("action", choices=["prepare", "enable", "disable", "local", "remote", "status", "save-remote", "stop"])
+    parser.add_argument("action", choices=["prepare", "enable", "disable", "local", "remote", "quickstart", "status", "save-remote", "stop"])
     parser.add_argument("args", nargs="*")
     ns = parser.parse_args()
     try:
@@ -366,13 +425,13 @@ def main():
         else:
             config = settings(ns.app)
             if ns.action in ("enable", "disable"):
-                if ns.action == "enable" and config.get("mode") == "remote":
-                    remote = remote_health(config)
+                if ns.action == "enable" and config.get("mode") in ("remote", "quickstart"):
+                    remote = remote_health(remote_settings(config))
                     if not remote.get("healthy"):
                         raise RuntimeError(remote.get("error", "The existing LiteLLM server is unavailable."))
                     if not remote.get("models"):
-                        raise RuntimeError("The existing LiteLLM server advertises no models; add one before enabling it.")
-                if ns.action == "enable" and config.get("mode") != "remote":
+                        raise RuntimeError("The LiteLLM server advertises no models; add one before enabling it.")
+                if ns.action == "enable" and config.get("mode") == "local":
                     local = local_status(ns.app)
                     if not local.get("installed"):
                         raise RuntimeError("The pinned local LiteLLM install is missing or cannot start. Install or repair version " + VERSION + " in the gateway venv before enabling it.")
@@ -381,6 +440,8 @@ def main():
                 if config.get("enabled") is True and config.get("mode") != ns.action:
                     raise RuntimeError("Turn LiteLLM off before changing its connection mode.")
                 config["mode"] = ns.action
+                if ns.action == "quickstart":  # stores only the mode; host and key are read from the quickstart each time
+                    config = {"enabled": config.get("enabled") is True, "mode": "quickstart"}
             private_write(ns.app / "model-gateway.json", config)
             result = {"enabled": config.get("enabled") is True, "mode": config.get("mode", "local")}
         print(json.dumps(result))

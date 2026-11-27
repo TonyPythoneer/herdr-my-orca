@@ -76,6 +76,14 @@
         "mods/orca-files/ui-settings.js",
         "mods/orca-status-bar/ui-settings.js"
       ]
+    },
+    {
+      "source": "orca-ui/shared/selection-ui.js",
+      "outputs": [
+        "mods/orca-sidebar-projects/selection-ui.js",
+        "mods/orca-agent-settings/selection-ui.js",
+        "mods/orca-agent-flyout/selection-ui.js"
+      ]
     }
   ]
 }

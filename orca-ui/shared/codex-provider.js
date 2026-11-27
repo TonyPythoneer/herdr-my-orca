@@ -28,6 +28,16 @@ export const WRAPPER = `${KEY_FROM_PROVIDER} export OMLX_API_KEY="$key"; unset k
 export const PROVIDER_KEY_WRAPPER = `${KEY_FROM_PROVIDER} export HERDR_PROVIDER_API_KEY="$key"; unset key; shift 3; exec "$@"`;
 export const CLAUDE_PROVIDER_WRAPPER = `${KEY_FROM_PROVIDER} export ANTHROPIC_AUTH_TOKEN="$key"; unset key; shift 3; exec "$@"`;
 
+// A quickstart's own .env: the master key is read from it at launch, so Herdr never copies it. Same
+// checks as the record lookup: the host must be the port the .env names, and the key is never in argv.
+const KEY_FROM_ENV = `key="$(python3 -c 'import re,sys; t=open(sys.argv[1]).read(); k=re.findall(r"^\\s*LITELLM_MASTER_KEY=(.*)$", t, re.M); p=re.findall(r"^\\s*LITELLM_PORT=(.*)$", t, re.M); base="http://127.0.0.1:"+((p[-1].strip() if p else "") or "4000"); sys.exit(1) if not k or sys.argv[2].rstrip("/") not in (base, base+"/v1") else print(k[-1].strip())' "$1" "$3")" || exit 1; [ -n "$key" ] || exit 1;`;
+
+/** The launch wrapper for a provider: a quickstart's .env is read directly, a saved record from its file. */
+export function wrapperFor(provider, name) {
+  const source = String(provider?.configPath ?? "").endsWith(".env") ? KEY_FROM_ENV : KEY_FROM_PROVIDER;
+  return `${source} export ${name}="$key"; unset key; shift 3; exec "$@"`;
+}
+
 const HOST_ERROR = "Enter a host like http://127.0.0.1:8000/v1";
 
 /** A base URL like http://127.0.0.1:8000/v1, or a fixed message. Trailing slashes are dropped. */
@@ -71,7 +81,7 @@ export function launchPiArgv(baseArgv, provider, model, extensionPath) {
     return [[id, { ...info, ...limits }]];
   }));
   return [
-    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
+    "/bin/sh", "-c", wrapperFor(provider, "HERDR_PROVIDER_API_KEY"), "--", provider.configPath, provider.id, provider.host,
     "env", `HERDR_PI_BASE_URL=${provider.host}`, `HERDR_PI_MODELS=${JSON.stringify(models)}`, `HERDR_PI_MODEL_INFO=${JSON.stringify(modelInfo)}`,
     command, ...rest, "--provider", "herdr", "--model", model, "--extension", extensionPath,
   ];
@@ -83,7 +93,7 @@ export function launchClaudeArgv(baseArgv, provider, model) {
   if (!provider) return argv;
   const [command, ...rest] = argv;
   return [
-    "/bin/sh", "-c", CLAUDE_PROVIDER_WRAPPER, "--", provider.configPath, provider.id, provider.host,
+    "/bin/sh", "-c", wrapperFor(provider, "ANTHROPIC_AUTH_TOKEN"), "--", provider.configPath, provider.id, provider.host,
     "env", `ANTHROPIC_BASE_URL=${provider.host}`, command, ...rest, "--model", model,
   ];
 }
@@ -126,7 +136,7 @@ export function launchOpenCodeArgv(baseArgv, provider, model) {
   // The normal OpenCode wrapper is `env OPENCODE_CONFIG_CONTENT=... opencode ...`; replace only
   // that default config while keeping the command and standalone suffix from the spec.
   return [
-    "/bin/sh", "-c", PROVIDER_KEY_WRAPPER, "--", provider.configPath, provider.id, provider.host,
+    "/bin/sh", "-c", wrapperFor(provider, "HERDR_PROVIDER_API_KEY"), "--", provider.configPath, provider.id, provider.host,
     "env", `OPENCODE_CONFIG_CONTENT=${JSON.stringify(config)}`, ...argv.slice(2),
   ];
 }
@@ -335,7 +345,7 @@ export function launchArgv(baseArgv, provider, model) {
   return [
     "/bin/sh",
     "-c",
-    WRAPPER,
+    wrapperFor(provider, "OMLX_API_KEY"),
     "--",
     provider.configPath,
     provider.id ?? OMLX,

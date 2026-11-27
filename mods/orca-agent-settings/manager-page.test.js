@@ -523,6 +523,29 @@ test("an existing LiteLLM server is reachable with an empty catalog", async (t) 
   assert.match(JSON.stringify(draw(page, cx)), /launches will fail/);
 });
 
+test("quickstart shows no host or key fields and refuses to enable without a running gateway or models", async (t) => {
+  const { page, cx } = harness(t);
+  page.railSelection = "global";
+  page.litellmMode = "quickstart";
+  page.litellmEnabled = false;
+  page.litellmCheckedAt = Date.now();
+  page.litellmStatus = {
+    enabled: false, mode: "quickstart", host: "http://127.0.0.1:4000", hasApiKey: true,
+    remote: { healthy: true, models: [] },
+  };
+  const text = JSON.stringify(draw(page, cx));
+  assert.match(text, /Uses the LiteLLM quickstart running on this Mac/);
+  assert.match(text, /advertises no models/);
+  assert.doesNotMatch(text, /am-litellm-host|am-litellm-api-key|API HOST/);
+  await handler("on_click", "am-litellm-toggle")({}, cx);
+  assert.match(page.litellmError, /no models/);
+
+  page.litellmStatus = { enabled: false, mode: "quickstart", hasApiKey: false, remote: { healthy: false, error: "Start the LiteLLM quickstart on this Mac first." } };
+  page.litellmError = null;
+  await handler("on_click", "am-litellm-toggle")({}, cx);
+  assert.equal(page.litellmError, "Start the LiteLLM quickstart on this Mac first.");
+});
+
 test("harness inputs are initialized after render and cached by the manager", async (t) => {
   const { page, cx } = harness(t);
   const row = SOME[0];

@@ -1769,9 +1769,10 @@ export default class AgentManager extends View {
       const status = JSON.parse(result.stdout);
       this.litellmStatus = status;
       this.litellmEnabled = status.enabled === true;
-      this.litellmMode = status.mode === "remote" ? "remote" : "local";
-      this.litellmHasApiKey = status.hasApiKey === true;
-      if (!this.litellmRemoteDirty) {
+      this.litellmMode = ["remote", "quickstart"].includes(status.mode) ? status.mode : "local";
+      // Only a saved Existing key counts as saved; the quickstart's key is read locally and never stored.
+      this.litellmHasApiKey = status.mode === "remote" && status.hasApiKey === true;
+      if (!this.litellmRemoteDirty && status.mode === "remote") {
         this.litellmLoadingHost = true;
         this.litellmHost.set_value(status.host ?? "");
         this.litellmLoadingHost = false;
@@ -1794,7 +1795,7 @@ export default class AgentManager extends View {
   }
 
   async setLiteLLMMode(mode, cx) {
-    if (this.litellmBusy || this.litellmEnabled || !["local", "remote"].includes(mode) || mode === this.litellmMode) return;
+    if (this.litellmBusy || this.litellmEnabled || !["local", "remote", "quickstart"].includes(mode) || mode === this.litellmMode) return;
     this.litellmBusy = true;
     this.litellmError = null;
     cx.notify();
@@ -1865,7 +1866,7 @@ export default class AgentManager extends View {
     }
     if (!this.litellmEnabled && this.litellmMode === "local" && !this.litellmStatus?.local?.usable) {
       this.litellmError = this.litellmStatus?.local?.quickstart?.usable
-        ? "A local LiteLLM Gateway is running. Switch to Existing and check its host and API key before enabling it."
+        ? "A local LiteLLM Gateway is running. Switch to Quickstart before enabling it."
         : "Install or repair the pinned local LiteLLM version before enabling it.";
       cx.notify();
       return;
@@ -1875,9 +1876,16 @@ export default class AgentManager extends View {
       cx.notify();
       return;
     }
-    if (!this.litellmEnabled && this.litellmMode === "remote" && this.litellmStatus?.remote?.healthy
+    if (!this.litellmEnabled && this.litellmMode === "quickstart" && !this.litellmStatus?.remote?.healthy) {
+      this.litellmError = this.litellmStatus?.remote?.error ?? "Start the LiteLLM quickstart on this Mac, then check it again.";
+      cx.notify();
+      return;
+    }
+    if (!this.litellmEnabled && ["remote", "quickstart"].includes(this.litellmMode) && this.litellmStatus?.remote?.healthy
         && this.litellmStatus.remote.models.length === 0) {
-      this.litellmError = "The existing server advertises no models. Add one before enabling it.";
+      this.litellmError = this.litellmMode === "quickstart"
+        ? "The quickstart advertises no models. Add one in its Admin UI before enabling it."
+        : "The existing server advertises no models. Add one before enabling it.";
       cx.notify();
       return;
     }
@@ -1894,7 +1902,7 @@ export default class AgentManager extends View {
       }
       const saved = JSON.parse(result.stdout);
       this.litellmEnabled = saved.enabled === true;
-      this.litellmMode = saved.mode === "remote" ? "remote" : "local";
+      this.litellmMode = ["remote", "quickstart"].includes(saved.mode) ? saved.mode : "local";
     } catch (error) {
       this.litellmError = error?.message || "Could not save LiteLLM setting.";
     } finally {
@@ -2120,6 +2128,7 @@ export default class AgentManager extends View {
       selectedKey = this.adding || !this.selectedProviderId ? "provider:add" : `provider:${this.selectedProviderId}`;
     }
     if (shared("agent-manager.selected")?.key !== selectedKey) setShared("agent-manager.selected", { key: selectedKey });
+    if (shared("agent-manager.litellm-enabled") !== this.litellmEnabled) setShared("agent-manager.litellm-enabled", this.litellmEnabled);
     const providerRail = Object.entries(this.providers).map(([id, record]) => ({
       id, name: record.name, iconPath: record.iconPath, health: this.providerHealthState(id).state,
     }));

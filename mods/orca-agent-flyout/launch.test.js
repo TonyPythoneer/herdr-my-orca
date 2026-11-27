@@ -284,14 +284,15 @@ test("managed model provider launches use the hidden gateway; native and failed 
     const argv = argvOf(managed.runs);
     assert.ok(argv.includes('model_providers.omlx.base_url="http://127.0.0.1:12345/v1"'));
     assert.ok(argv.includes("herdr-fixture"));
-    assert.equal(argv[4], "/home/litellm-gateway/credentials.json");
+    // The key is read from this file by a shell wrapper, so the path is an argument and the key never is.
+    assert.ok(argv.includes("/home/litellm-gateway/credentials.json"));
     assert.equal(managed.view.providerId, "omlx");
     assert.equal(managed.view.model, OMLX_MODEL);
     assert.equal(prepares, 1);
 
     const native = flyout({ files: files() });
     await native.view.launch(cx);
-    assert.deepEqual(argvOf(native.runs), [...CODEX, "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=high"]);
+    assert.deepEqual(argvOf(native.runs), withManagerEnvironment([...CODEX, "-m", "gpt-5.6-sol", "-c", "model_reasoning_effort=high"]));
     assert.equal(prepares, 1);
 
     globalThis.__herdrExec = async () => ({ code: 1, stdout: '{"error":"Gateway unavailable"}' });

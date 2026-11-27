@@ -4,8 +4,16 @@ import { div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Link } from "gpui-base";
 import { appHome } from "herdr";
 import { RAIL, railGeometry, railViewport, railRows, railControl } from "./agent-rail.js";
+import { hoverHighlight, selectedCheck } from "./selection-ui.js";
 
 const MOTION = { duration: 200, easing: "ease-out" };
+const LITELLM_ICON = "mods/orca-assets/litellm_favicon_light_32.png";
+
+function litellmBadge(t, size = 14) {
+  return div().absolute().right(1).bottom(1).size(size).rounded_full().bg(t.surface)
+    .border_2().border_color(t.surface).flex().items_center().justify_center()
+    .tooltip("LiteLLM enabled").child(image(LITELLM_ICON).w(size - 4).h(size - 4).rounded_full());
+}
 
 // The same icon tile the settings page used (orca-agent-settings parts.js).
 function icon(row, size, t) {
@@ -43,8 +51,10 @@ export function railItem(owner, row, t, tile = t.raised) {
     .on_click((_e,cx) => owner.selectRail(row.key,cx))
     .child(div().id("am-rail-tile-" + row.key).absolute().inset_0().rounded(RAIL.avatarRadius)
       .bg(t.hover).opacity(selected || tileHovered ? 1 : 0).transition("opacity", MOTION))
-    .child(div().relative().child(global ? svg("mods/orca-assets/bot.svg").size(25).text_color(t.foreground)
-      : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))));
+    .child(div().size_full().relative().flex().items_center().justify_center()
+      .child(global ? svg("mods/orca-assets/bot.svg").size(25).text_color(t.foreground)
+        : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))
+      .when(global && owner.litellmEnabled, el => el.child(litellmBadge(t)))));
   return item.child(railAction(owner, row, t, control, label));
 }
 
@@ -70,10 +80,12 @@ function providerItem(owner, provider, t) {
     .child(div().id(`am-rail-select-${key}`).absolute().left(g.avatarLeft).top(g.avatarTop).size(RAIL.avatar).rounded(RAIL.avatarRadius).bg(t.surface)
       .flex().items_center().justify_center().cursor_pointer().role("button").accessibility_label(label).tooltip(label)
       .on_click((_e,cx) => owner.selectRail(key,cx))
-      .child(div().id(`am-rail-tile-${key}`).absolute().inset_0().rounded(RAIL.avatarRadius).bg(t.hover)
-        .opacity(selected || hovered ? 1 : 0).transition("opacity", MOTION))
-      .child(div().relative().child(src ? image(src).w(28).h(28).rounded(6) : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted)))
-      .child(div().absolute().right(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label)));
+      .child(div().size_full().relative().flex().items_center().justify_center()
+        .child(hoverHighlight(hovered && !selected, t, RAIL.avatarRadius))
+        .child(src ? image(src).w(28).h(28).rounded(6) : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted))
+        .child(selectedCheck(selected, t))
+        .child(div().absolute().left(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label))
+        .when(owner.litellmEnabled, el => el.child(litellmBadge(t)))));
 }
 
 function providerAddItem(owner, t) {

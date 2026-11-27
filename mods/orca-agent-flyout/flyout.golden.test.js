@@ -13,6 +13,7 @@ import vm from "node:vm";
 register(new URL("../../scripts/gpui-stub-loader.mjs", import.meta.url));
 const codexProvider = await import("./codex-provider.js");
 const viewport = await import("./list-viewport.js");
+const selection = await import("./selection-ui.js");
 const flyout = await import("./agent-flyout.js");
 const managerDeps = {
   ...await import("../orca-agent-settings/codex-provider.js"),
@@ -148,7 +149,7 @@ function start(world, log, settingsPage = false) {
     Scrollbar: { vertical: (...a) => recorder(handlers)("Scrollbar.vertical")(...a) },
     HoverCard: { new: (...a) => recorder(handlers)("HoverCard.new")(...a) },
     checking: () => Boolean(world.checking), run: (...a) => log.push(["run", ...plain(a)]), props: () => props, closeOverlay: id => log.push(["closeOverlay", id]),
-    theme: () => t, setShared: (...a) => log.push(["setShared", ...plain(a)]), appHome: () => "/home", home: () => "/home", settings: () => ({ dark: world.dark !== false, font_family: "Mono" }),
+    theme: () => t, selectionMark: selection.selectionMark, setShared: (...a) => log.push(["setShared", ...plain(a)]), appHome: () => "/home", home: () => "/home", settings: () => ({ dark: world.dark !== false, font_family: "Mono" }),
     spaces: () => [{ id: "s1", active: true, machine: world.machine ?? null, folder: "/repo" }],
     readTextFile: async path => files.get(path),
     writeTextFile: async (path, text, expected) => { log.push(["write", path, stamp(text), expected === undefined ? "<none>" : expected === null ? null : "<prev>"]); files.set(path, text); },

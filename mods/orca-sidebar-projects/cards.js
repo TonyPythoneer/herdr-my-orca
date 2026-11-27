@@ -308,18 +308,20 @@ function cardText(owner, { w, g }, t, { title, metaText, metaMono, others, mine,
   return v_flex().flex_1().min_w(0).gap(6)
     // Title row: title, then Orca's primary pill (h-16, px-1.5, 10px).
     .child(h_flex().w_full().min_w(0).gap(6).items_center()
-      .child(div().min_w(0).max_w(150).truncate().text_size(13).line_height("20px").text_color(t.foreground).child(title))
+      .child(div().min_w(0).max_w(150).truncate().text_size(13).line_height("20px").text_color(t.foreground)
+        .when(title === (g?.branch ?? w.branch), el => el.tooltip(title)).child(title))
       .when(isPrimary, el => el.child(div().flex_none().h(16).px(6).rounded(4).border_1().border_color("#f0f0f033").bg("#f0f0f00f")
         .text_size(10).font_medium().line_height("14px").text_color("#f0f0f0b3").child("primary")))
       // No trailing element: Orca's title row ends at the title (and the primary pill);
       // its right-hand cluster lives in the meta row below.
       .child(div().flex_1()))
-    // Meta row: the branch, or the folder's own last segment — 11px muted, mono for paths
+    // Meta row: the folder's own last segment — 11px muted, mono for paths
     // (`WorktreeCardFolderPath`: `font-mono text-[11px] leading-none`). The review badge
     // sits at the row's end, which is Orca's `ml-auto ... pr-1.5` cluster
     // (WorktreeCardMetaBadges.tsx:86) and the only thing it holds for a classic card.
-    .when(Boolean(metaText), el => el.child(h_flex().w_full().min_w(0).items_center()
-      .child(div().min_w(0).truncate().text_size(11).line_height("11px").text_color(t.muted).when(metaMono, m => m.font_family("JetBrains Mono")).child(metaText))
+    // A git card has no meta text (its branch is in the title), but its review badge still lives in this row.
+    .when(Boolean(metaText) || Boolean(owner.reviewOf(g)), el => el.child(h_flex().w_full().min_w(0).items_center()
+      .when(Boolean(metaText), row => row.child(div().min_w(0).truncate().text_size(11).line_height("11px").text_color(t.muted).when(metaMono, m => m.font_family("JetBrains Mono")).child(metaText)))
       .child(div().flex_1())
       .when(Boolean(owner.reviewOf(g)), row => row.child(owner.prBadge(owner.reviewOf(g), t, w.id, g)))))
     // Orca's compact agent summary (worktree-card-compact-agents.tsx): h-6, px-1, 11px
@@ -335,15 +337,10 @@ export function cardView(owner, row, t, ps, mine) {
   const group = [w, ...(also ?? []).map(a => a.w)];
   const on = group.some(s => s.active);
   const branch = g?.branch ?? w.branch ?? null;
-  // `default-workspace-card.json`: folder cards print the folder's own last segment
-  // (`folderInMeta`, `WorktreeCardFolderPath` = `getDirectoryName`), branch cards the branch.
-  // Orca's classic card draws the branch unconditionally (`default-workspace-card.json`
-  // `branch: "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && ..."`,
-  // `worktree-card-presentation.tsx:76-80`), and an automatic worktree name IS the branch
-  // (`display-name-provenance.ts:17-19`), so Orca really does print `main` twice on such a card.
+  // Folder cards keep their path in the secondary row; worktree branches appear in the title.
   const text = {
     title: cardTitle(w, branch, owner.reviewOf(g)),
-    metaText: g ? branch : base(place(w, ps)),
+    metaText: g ? null : base(place(w, ps)),
     metaMono: !g,
     // Orca's card lists its own agents (inlineAgents) as `AgentStateDot` rows, from agents():
     // the same rows the agents view reads, so a collapsed card shows real rows, never invented.

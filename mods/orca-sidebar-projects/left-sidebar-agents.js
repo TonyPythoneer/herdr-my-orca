@@ -23,6 +23,7 @@ export function agentRailOwner() {
     unofficialRailScroll: ScrollHandle.new(),
     providerRailScroll: ScrollHandle.new(),
     providerRailOpen: true,
+    get litellmEnabled() { return shared("agent-manager.litellm-enabled") === true; },
     get railSelection() { return shared("agent-manager.selected")?.key ?? "global"; },
     selectRail: (key) => setShared("agent-manager.open-agent", { key }),
     toggleEnabled: (row) => setShared("agent-manager.toggle-agent", { key: row.key }),
