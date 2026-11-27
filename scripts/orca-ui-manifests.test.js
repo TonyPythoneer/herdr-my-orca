@@ -56,12 +56,12 @@ test("registry problems: a missing, duplicate, extra entry and a dead next link 
 test("the real repo loads and every managed destination is under its mod", () => {
   const { table, features: loaded, shared } = loadManifests();
   assert.deepEqual([...loaded.keys()], ["orca-ui/features/right-sidebar/header/manifest.json"]);
-  assert.equal(shared.files.length, 12);
-  assert.equal(table.size, 40);
+  assert.equal(shared.files.length, 13);
+  assert.equal(table.size, 43);
   const feature = [...table].filter(([, row]) => row.kind === "feature").map(([dest]) => dest);
   assert.equal(feature.length, 4);
   for (const dest of feature) assert.match(dest, /^mods\/orca-right-sidebar-header\/[^/]+$/);
-  assert.equal([...table.values()].filter(r => r.kind === "shared").length, 36);
+  assert.equal([...table.values()].filter(r => r.kind === "shared").length, 39);
 });
 
 test("the table maps each destination to its source, mode, tests and slots", t => {

@@ -95,6 +95,14 @@
         "mods/orca-header/icon-button.js",
         "mods/orca-pane-header/icon-button.js"
       ]
+    },
+    {
+      "source": "orca-ui/shared/dialog-button.js",
+      "outputs": [
+        "mods/orca-header/dialog-button.js",
+        "mods/orca-changes/dialog-button.js",
+        "mods/orca-tasks/dialog-button.js"
+      ]
     }
   ]
 }

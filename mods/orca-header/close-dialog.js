@@ -2,6 +2,7 @@ import { div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { closeOverlay, props, run, spaces, theme } from "herdr";
 import { closePlan } from "./close-plan.js";
+import { DialogButton } from "./dialog-button.js";
 
 function dialogCopy(kind, cfg) {
   if (kind === "agent") return { title: "Stop this agent?", desc: "Closing this terminal will stop the agent's current work.", confirmLabel: "Stop Agent" };
@@ -55,25 +56,12 @@ function confirmCheckbox(view, t, isPinned) {
 }
 
 function dialogFooter(t, confirmLabel, cancel, confirm) {
+  // Outline, size-sm, then destructive, size-sm.
   return h_flex().justify_end().gap(8)
-    // Outline, size-sm.
-    .child(
-      h_flex().id("close-cancel").h(32).px(12).items_center().justify_center().rounded(6)
-        .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground)
-        .text_size(12).font_medium().cursor_pointer()
-        .hover(s => s.bg(t.hover))
-        .on_click((_e, _cx) => cancel())
-        .child("Cancel")
-    )
-    // Destructive, size-sm.
-    .child(
-      h_flex().id("close-confirm").h(32).px(12).items_center().justify_center().rounded(6)
-        .bg("#dc2626").text_color("#ffffff")
-        .text_size(12).font_medium().cursor_pointer()
-        .hover(s => s.bg("#b91c1c"))
-        .on_click((_e, _cx) => confirm())
-        .child(confirmLabel)
-    );
+    .child(DialogButton("close-cancel", "Cancel", { t, medium: true, bg: t.raised, color: t.foreground, border: t.border,
+      hoverBg: t.hover, onClick: () => cancel() }))
+    .child(DialogButton("close-confirm", confirmLabel, { t, medium: true, bg: "#dc2626", color: "#ffffff",
+      hoverBg: "#b91c1c", onClick: () => confirm() }));
 }
 
 // Dialog ported from Orca: CloseTerminalDialog.tsx:101-184, PinnedTabCloseDialog.tsx:52-94,

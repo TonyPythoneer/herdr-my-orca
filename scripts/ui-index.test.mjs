@@ -36,6 +36,20 @@ test("audit skips the IconButton helper but still counts other shared controls",
   assert.ok(report.missingIds.some((item) => item.mod === "shared"), "shared controls must still be audited");
 });
 
+test("a DialogButton call site names its id and label for the index", () => {
+  const hit = findEntity(index, "close-cancel");
+  assert.equal(hit.file, "mods/orca-header/close-dialog.js");
+  assert.equal(hit.label, "Cancel");
+  assert.equal(hit.role, "button");
+  // A dynamic label is not borrowed from a sibling button in the same builder.
+  assert.equal(findEntity(index, "close-confirm").label, "");
+});
+
+test("the shared control names are one list, used by both the reader and the audit", async () => {
+  const { SHARED_CONTROLS } = await import("./ui-index.mjs");
+  assert.deepEqual(SHARED_CONTROLS, ["IconButton", "DialogButton"]);
+});
+
 test("an IconButton call site names its id, label and role for the index", () => {
   const hit = findEntity(index, "proj-new");
   assert.equal(hit.file, "mods/orca-sidebar-top/main.js");

@@ -8,6 +8,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextareaState, Textarea } from "gpui-base";
 import { appHome, layout, run, setShared, shared, theme, readTextFile, writeTextFile, settings } from "herdr";
+import { DialogButton } from "./dialog-button.js";
 import {
   TASKS_FILE,
   TASKS_VERSION,
@@ -246,26 +247,10 @@ export default class Tasks extends View {
   // `disabled`: greyed and inert (no hover, no click) — the plan dropped the window this task
   // waits for, so running it would do nothing.
   button(id, label, t, action, options = {}) {
-    const disabled = Boolean(options.disabled);
-    return div()
-      .id(id)
-      .h(options.height ?? 26)
-      .px(options.px ?? 9)
-      .flex_none()
-      .flex()
-      .items_center()
-      .justify_center()
-      .rounded(6)
-      .border_1()
-      .border_color(options.border ?? t.border)
-      .text_size(options.size ?? 11)
-      .text_color(options.color ?? t.muted)
-      .when(disabled, (el) => el.opacity(0.4))
-      .when(!disabled, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click(action))
-      .role("button")
-      .accessibility_label(options.label ?? label)
-      .tooltip(options.label ?? label)
-      .child(label);
+    return DialogButton(id, label, { t, name: options.label ?? label, tooltip: options.label ?? label,
+      h: options.height ?? 26, px: options.px ?? 9, size: options.size ?? 11, color: options.color ?? t.muted,
+      border: options.border ?? t.border, hoverBg: t.hover, hoverFg: t.foreground,
+      disabled: Boolean(options.disabled), onClick: action });
   }
 
   togglePill(id, enabled, t, action) {

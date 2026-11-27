@@ -11,6 +11,7 @@ import { GIT_OPTIONS as READ, chunkPaths as chunks } from "./git-options.js";
 import { assertDiscardUnchanged, discardSnapshot } from "./discard-snapshot.js";
 import { displayPushDestination, forcePushConfirmed, forcePushTarget, pushConfigured } from "./push-target.js";
 import { panelFrame } from "./panel-motion.js";
+import { DialogButton } from "./dialog-button.js";
 
 let mainChangesView = null;
 
@@ -68,9 +69,8 @@ const ghIn = (target) => (args) => exec("gh", args, { cwd: target.root, on: targ
 const dialogShell = (t, width, title) => v_flex().w(width).p(16).gap(12).rounded(8).bg(t.popover).border_1().border_color(t.border)
   .child(div().text_size(13).font_weight(500).text_color(t.foreground).child(title));
 
-const discardCancelButton = (t) => div().h(24).px(12).flex().items_center().rounded(6).border_1().border_color(t.border)
-  .text_size(11).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover))
-  .on_click((_e, _cx) => { window.close_dialog(); }).child("Cancel");
+const discardCancelButton = (t) => DialogButton("discard-cancel", "Cancel", { t, h: 24, size: 11, color: t.muted,
+  border: t.border, hoverBg: t.hover, onClick: () => { window.close_dialog(); } });
 
 // Orca gates every per-row discard/delete behind a confirmation dialog
 // (discard-confirmation.ts:13-62, use-discard-confirmation.ts:190-201).
@@ -608,9 +608,8 @@ export default class Changes extends View {
       .child(div().text_size(12).text_color(t.muted).child(`${copy.text}\nRepository: ${target.root}\nHost: ${target.on ?? "local"}\nPath: ${f.path}`))
       .child(h_flex().justify_end().gap(8)
         .child(discardCancelButton(t))
-        .child(div().h(24).px(12).flex().items_center().rounded(6).bg(deleting ? t.blocked : t.done)
-          .text_color(t.canvas).text_size(11).cursor_pointer()
-          .on_click((_e, eventCx) => { window.close_dialog(); this.verifyDiscard(target, [f.path], snapshot, eventCx, (callbackCx) => this.apply([command], callbackCx, null, target)); }).child(copy.label)))));
+        .child(DialogButton("discard-confirm", copy.label, { t, h: 24, size: 11, bg: deleting ? t.blocked : t.done, color: t.canvas,
+          onClick: (_e, eventCx) => { window.close_dialog(); this.verifyDiscard(target, [f.path], snapshot, eventCx, (callbackCx) => this.apply([command], callbackCx, null, target)); } })))));
   }
 
   // Discard all is gated by the same destructive confirmation as one row
@@ -626,9 +625,8 @@ export default class Changes extends View {
         : `This will revert the unstaged changes to ${count}. This cannot be undone.`) + `\nRepository: ${target.root}\nHost: ${target.on ?? "local"}\n${paths.join("\n")}`))
       .child(h_flex().justify_end().gap(8)
         .child(discardCancelButton(t))
-        .child(div().h(24).px(12).flex().items_center().rounded(6).bg(t.blocked)
-          .text_color(t.canvas).text_size(11).cursor_pointer()
-          .on_click((_e, eventCx) => { window.close_dialog(); this.verifyDiscard(target, paths, snapshot, eventCx, (callbackCx) => this.discardPaths(paths, area, callbackCx, target)); }).child("Discard all")))));
+        .child(DialogButton("discard-all-confirm", "Discard all", { t, h: 24, size: 11, bg: t.blocked, color: t.canvas,
+          onClick: (_e, eventCx) => { window.close_dialog(); this.verifyDiscard(target, paths, snapshot, eventCx, (callbackCx) => this.discardPaths(paths, area, callbackCx, target)); } })))));
   }
 
   discardPaths(paths, area, cx, expected = this.operationTarget()) {

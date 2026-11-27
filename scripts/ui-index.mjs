@@ -13,15 +13,20 @@ const DECL = /^(export\s+)?(?:(?:default|async)\s+)*(function|class|const|let|va
 const METHOD = /^  (?:static\s+)?(?:async\s+)?(?:get\s+|set\s+)?([A-Za-z_$][\w$]*)\s*\(/;
 const UI_CALL = /\b(?:div|h_flex|v_flex|svg|image|Button|IconButton|Input|InputState|TextareaState|Table|List|Link|Scrollbar)\s*\(/;
 const CLICK = /\.on_click\s*\(/;
-// `IconButton("<id>", "<label>", glyph, {...})`: the call site names the control, so ui-index reads its id and label there.
-const ICON_CALL = /(?<!function\s+)\bIconButton\s*\(/;
+// Shared controls are called with their literal id and label, e.g. `IconButton("<id>", "<label>", ...)`, so the
+// call site is where the index reads them. The helper declarations themselves are not screen controls.
+export const SHARED_CONTROLS = ["IconButton", "DialogButton"];
+const CONTROL_CALL = new RegExp(`(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(`);
 // A dynamic label (a ternary or a template) is left unnamed; the id is always a literal.
-const ICON_BUTTON = /(?<!function\s+)\bIconButton\s*\(\s*(["'`])([^"'`]+)\1(?:\s*,\s*(["'`])([^"'`]+)\3)?/g;
+const CONTROL_LITERALS = new RegExp(`(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(\\s*(["'\`])([^"'\`]+)\\1(?:\\s*,\\s*(["'\`])([^"'\`]+)\\3)?`, "g");
 const ICON_TOOLTIP = /\btooltip:\s*(["'`])([^"'`]+)\1/g;
 const QUOTED = (name) => new RegExp(`\\.${name}\\(\\s*["'\`]([^"'\`]+)["'\`]`, "g");
 const attr = (body, name) => [...body.matchAll(QUOTED(name))].map((m) => m[1].trim()).filter(Boolean);
-const iconButtonIds = (body) => [...body.matchAll(ICON_BUTTON)].map((m) => m[2].trim());
-const iconButtonLabels = (body) => [...body.matchAll(ICON_BUTTON)].map((m) => m[4]?.trim()).filter((text) => text && !text.includes("${"));
+const iconButtonIds = (body) => [...body.matchAll(CONTROL_LITERALS)].map((m) => m[2].trim());
+const iconButtonLabels = (body) => [...body.matchAll(CONTROL_LITERALS)].map((m) => m[4]?.trim()).filter((text) => text && !text.includes("${"));
+// id -> label, read per call site, so a builder that draws several controls names each one correctly.
+const controlLabelFor = (body) => Object.fromEntries([...body.matchAll(CONTROL_LITERALS)]
+  .map((m) => [m[2].trim(), m[4] && !m[4].includes("${") ? m[4].trim() : ""]));
 const iconButtonTooltips = (body) => [...body.matchAll(ICON_TOOLTIP)].map((m) => m[2].trim()).filter((text) => !text.includes("${"));
 const unique = (values) => [...new Set(values)];
 
@@ -60,7 +65,7 @@ function endOfBlock(lines, start, stopAtColumnZero) {
 
 // A 
 function kindOf(body) {
-  if (CLICK.test(body) || ICON_CALL.test(body)) return "control";
+  if (CLICK.test(body) || CONTROL_CALL.test(body)) return "control";
   if (UI_CALL.test(body)) return "view";
   if (/=>|\bfunction\b/.test(body)) return "logic";
   return "data";
@@ -80,9 +85,10 @@ function component(parts) {
     kind: kindOf(body),
     description: docAbove(parts.lines, parts.start),
     ids: unique([...attr(body, "id"), ...iconButtonIds(body)]),
-    roles: unique([...attr(body, "role"), ...(ICON_CALL.test(body) ? ["button"] : [])]),
+    roles: unique([...attr(body, "role"), ...(CONTROL_CALL.test(body) ? ["button"] : [])]),
     labels: unique([...attr(body, "accessibility_label"), ...iconButtonLabels(body)]),
-    tooltips: unique([...attr(body, "tooltip"), ...(ICON_CALL.test(body) ? iconButtonTooltips(body) : [])]),
+    labelFor: controlLabelFor(body),
+    tooltips: unique([...attr(body, "tooltip"), ...(CONTROL_CALL.test(body) ? iconButtonTooltips(body) : [])]),
     texts: unique([...attr(body, "child"), ...attr(body, "placeholder")]).filter((text) => !text.includes("${")).slice(0, 12),
     lines: parts.end - parts.start,
   };
@@ -246,7 +252,7 @@ function readModComponents(root, mods, featureMods) {
 function collectIds(components) {
   const ids = {};
   for (const item of components) {
-    for (const id of item.ids) ids[id] ??= { id, mod: item.mod, file: item.file, line: item.line, component: item.name, label: item.labels[0] ?? "", role: item.roles[0] ?? "" };
+    for (const id of item.ids) ids[id] ??= { id, mod: item.mod, file: item.file, line: item.line, component: item.name, label: item.labelFor?.[id] ?? item.labels[0] ?? "", role: item.roles[0] ?? "" };
   }
   return ids;
 }
@@ -321,8 +327,8 @@ export function outline(index, mod) {
 }
 
 export function audit(index) {
-  // The IconButton helper is not a screen control: each call site supplies its id and label.
-  const interactive = index.components.filter((item) => item.kind === "control" && item.name !== "IconButton");
+  // The shared helpers are not screen controls: each call site supplies its id and label.
+  const interactive = index.components.filter((item) => item.kind === "control" && !SHARED_CONTROLS.includes(item.name));
   const bare = interactive.filter((item) => !item.ids.length);
   const seen = new Map();
   const duplicateIds = [];
