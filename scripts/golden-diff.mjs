@@ -68,6 +68,16 @@ export function firstDifference(a, b, id = "root") {
     }
     return { id: here, what: `call #${i}`, a: JSON.stringify(ea)?.slice(0, 120), b: JSON.stringify(eb)?.slice(0, 120) };
   }
+  // A keyed dump (GOLDEN_FULL, or --key flows.x) carries its data on named keys, not only on c.
+  return keyDifference(a, b, here);
+}
+
+function keyDifference(a, b, id) {
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key === "c") continue;
+    const found = firstDifference(a[key], b[key], id);
+    if (found) return found;
+  }
   return null;
 }
 

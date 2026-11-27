@@ -50,3 +50,9 @@ test("noid mode counts a call by its content, so a renamed element shows only wh
   assert.deepEqual(semantic("t", base, renamed, false).onlyNow, ['role["button"]']);
   assert.equal(semantic("t", base, now, false).onlyNow.length, 1);
 });
+
+test("strict mode also finds a difference on a keyed record, not only on c", () => {
+  const found = firstDifference({ plain: [["close", "o"]] }, { plain: [["close", "x"]] });
+  assert.equal(found.a, "o");
+  assert.equal(found.b, "x");
+});
