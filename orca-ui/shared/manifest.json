@@ -92,7 +92,8 @@
         "mods/orca-sidebar-top/icon-button.js",
         "mods/orca-status-ports/icon-button.js",
         "mods/orca-status-footer/icon-button.js",
-        "mods/orca-header/icon-button.js"
+        "mods/orca-header/icon-button.js",
+        "mods/orca-pane-header/icon-button.js"
       ]
     }
   ]

@@ -10,6 +10,7 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { panes, props, run, openOverlay, closeOverlay, spaces, setShared, settings, terminals, theme } from "herdr";
+import { IconButton } from "./icon-button.js";
 import { crewOf, crewGroups, crewMembers, crewSignature } from "./crew.js";
 import { statusMark, agentMark } from "./status.js";
 
@@ -186,23 +187,16 @@ export default class Pane extends View {
     openOverlay(paneMenu(pane, terminal));
   }
 
-  button(id, icon, action, args) {
-    return div()
-      .id(id)
-      .size(24)
-      .flex()
-      .items_center()
-      .justify_center()
-      .rounded(6)
-      // terminal.css:398,464: button fg rgb(255 255 255 / 0.3) → hover /0.8.
-      .text_color("#ffffff4d")
-      .hover((s) => s.text_color("#ffffffcc"))
-      .on_click((_e, cx) => {
+  button(id, label, icon, action, args) {
+    // terminal.css:398,464: button fg rgb(255 255 255 / 0.3) → hover /0.8.
+    return IconButton(id, label, svg(sharedAsset(`mods/orca-pane-header/${icon}.svg`)).size(12), {
+      size: 24, radius: 6, tooltip: label, color: "#ffffff4d", hoverBg: null, hoverFg: "#ffffffcc",
+      onClick: (_e, cx) => {
         cx.stop_propagation();
         if (typeof action === "function") action(cx);
         else run(action, args);
-      })
-      .child(svg(sharedAsset(`mods/orca-pane-header/${icon}.svg`)).size(12));
+      },
+    });
   }
 
   // Orca's collapsed pill (`OrchestrationCrewPanel.tsx:344-380`): `Workflow` + the managing count,
@@ -357,21 +351,14 @@ export default class Pane extends View {
   // The close control, as "Close pane" while the tab is split and "Close tab" when it is alone.
   // TerminalPaneHeaderOverlay.tsx:125-131: terminalPaneCloseLabel(paneCount)
   closeButton(p, paneCount, { id, size, radius, glyph }) {
-    const button = id ? div().id(id) : div();
-    return button
-      .size(size)
-      .flex()
-      .items_center()
-      .justify_center()
-      .rounded(radius)
-      .text_color("#ffffff4d")
-      .hover((s) => s.text_color("#ef4444").bg("#ffffff14"))
-      .tooltip(paneCount > 1 ? "Close pane" : "Close tab")
-      .on_click((_e, clickCx) => {
+    const label = paneCount > 1 ? "Close pane" : "Close tab";
+    return IconButton(id, label, svg("mods/orca-assets/x--orca-pane-header.svg").size(glyph), {
+      size, radius, tooltip: label, color: "#ffffff4d", hoverBg: "#ffffff14", hoverFg: "#ef4444",
+      onClick: (_e, clickCx) => {
         clickCx.stop_propagation();
         run(paneCount > 1 ? "pane.close" : "tab.close", paneCount > 1 ? { pane: p.pane } : { id: p.tab });
-      })
-      .child(svg("mods/orca-assets/x--orca-pane-header.svg").size(glyph));
+      },
+    });
   }
 
   titleCluster(p, tabTitle, isFocused, paneCount) {
@@ -391,7 +378,7 @@ export default class Pane extends View {
           .cursor_pointer()
           .child(div().text_size(11).text_color("#8a8a93").child(">"))
           .child(div().max_w(180).truncate().text_size(12).font_medium().text_color(isFocused ? "#ffffff" : "#a1a1aa").child(tabTitle || "terminal"))
-          .child(this.closeButton(p, paneCount, { size: 16, radius: 3, glyph: 10 }))
+          .child(this.closeButton(p, paneCount, { id: `ph-x-title-${p.pane}`, size: 16, radius: 3, glyph: 10 }))
       )
       .child(
         div()
@@ -488,14 +475,14 @@ export default class Pane extends View {
       )
       // TabGroupPaneActionsMenu.tsx:41-45: Ellipsis button
       .child(
-        this.button(`ph-m-${pane}`, "ellipsis", () => this.openPaneMenu(pane, p.terminal)).tooltip("Pane actions")
+        this.button(`ph-m-${pane}`, "Pane actions", "ellipsis", () => this.openPaneMenu(pane, p.terminal))
       )
       // Split right & split down buttons
       .child(
-        this.button(`ph-r-${pane}`, "square-split-vertical", "pane.split", { direction: "right", pane }).tooltip("Split terminal right")
+        this.button(`ph-r-${pane}`, "Split terminal right", "square-split-vertical", "pane.split", { direction: "right", pane })
       )
       .child(
-        this.button(`ph-d-${pane}`, "split-down", "pane.split", { direction: "down", pane }).tooltip("Split terminal down")
+        this.button(`ph-d-${pane}`, "Split terminal down", "split-down", "pane.split", { direction: "down", pane })
       )
       // TerminalPaneHeaderOverlay.tsx:125-131: Close split pane or tab when alone
       .child(this.closeButton(p, paneCount, { id: `ph-x-${pane}`, size: 24, radius: 6, glyph: 12 }));
