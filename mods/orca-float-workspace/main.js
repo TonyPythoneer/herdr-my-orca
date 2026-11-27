@@ -19,6 +19,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, run, theme, nextCommand, keys, setShared, openOverlay, spaces } from "herdr";
+import { IconButton } from "./icon-button.js";
 
 // Orca's DEFAULT_PANEL_WIDTH/HEIGHT, MIN_PANEL_WIDTH/HEIGHT and viewport clamp
 // (`floating-terminal-panel-bounds.ts:1-4,89-90`).
@@ -213,20 +214,14 @@ export default class FloatWorkspace extends View {
         // person's default agent inside the panel. Herdr has no default-agent setting
         // (herdr-app/src/settings.rs:471-498), so this opens Herdr's own agent launcher —
         // `new-menu`, the popup the tab bar's `+` opens — instead of guessing one.
-        .child(div().id("orca-float-start-agent").size(24).flex_none().flex().items_center().justify_center().rounded(6)
-          .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground)
-          .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-          .role("button").accessibility_label("Start an agent")
-          .on_click(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }))
-          .child(svg("mods/orca-assets/plus--orca-float-workspace.svg").size(14).flex_none()))
+        .child(IconButton("orca-float-start-agent", "Start an agent", svg("mods/orca-assets/plus--orca-float-workspace.svg").size(14).flex_none(),
+          { t, size: 24, radius: 6, border: t.border, bg: t.raised, color: t.foreground,
+            onClick: () => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }) }))
         // Minimize's `icon-xs` outline button: `size-6 rounded-md` (`button.tsx:41`),
         // `border-border bg-secondary hover:bg-accent` (`FloatingTerminalWindowControls.tsx:25-26`).
-        .child(div().id("orca-float-close").size(24).flex_none().flex().items_center().justify_center().rounded(6)
-          .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground).text_size(14)
-          .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-          .role("button").accessibility_label("Hide floating workspace")
-          .on_click((_e, cx) => this.setOpen(false, cx))
-          .child("×")))
+        .child(IconButton("orca-float-close", "Hide floating workspace", "×",
+          { t, size: 24, radius: 6, border: t.border, bg: t.raised, color: t.foreground, textSize: 14,
+            onClick: (_e, cx) => this.setOpen(false, cx) })))
       .child(v_flex().flex_1().min_h(0)
         .when(list.length > 0, (el) => el
           // Orca's list bar (`AiVaultSessionListBar.tsx:59-62`, via orca-right-sidebar-agents/main.js:94-99).

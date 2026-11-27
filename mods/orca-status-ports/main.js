@@ -220,12 +220,8 @@ export default class Ports extends View {
         h_flex().flex_none().items_center().gap(8)
           .child(div().text_size(11).text_color(t.muted).child(`${view.workspaceCount} workspace · ${view.externalCount} external`))
           // The Floating Workspace header's × (orca-float-workspace): size-6 rounded-md outline button.
-          .child(div().id("ports-close").size(24).flex_none().flex().items_center().justify_center().rounded(6)
-            .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground).text_size(14)
-            .cursor_pointer().hover((style) => style.bg(t.hover).text_color(t.foreground))
-            .role("button").accessibility_label("Close").tooltip("Close")
-            .on_click(() => this.closePanel())
-            .child("×"))
+          .child(IconButton("ports-close", "Close", "×", { t, size: 24, radius: 6, border: t.border, bg: t.raised,
+            color: t.foreground, textSize: 14, tooltip: "Close", onClick: () => this.closePanel() }))
       );
   }
 
