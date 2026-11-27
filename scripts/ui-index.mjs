@@ -90,6 +90,7 @@ function component(parts) {
     roles: unique([...attr(body, "role"), ...(CONTROL_CALL.test(body) ? ["button"] : [])]),
     labels: unique([...attr(body, "accessibility_label"), ...iconButtonLabels(body)]),
     labelFor: controlLabelFor(body),
+    controlIds: unique(iconButtonIds(body)),
     tooltips: unique([...attr(body, "tooltip"), ...(CONTROL_CALL.test(body) ? iconButtonTooltips(body) : [])]),
     texts: unique([...attr(body, "child"), ...attr(body, "placeholder")]).filter((text) => !text.includes("${")).slice(0, 12),
     lines: parts.end - parts.start,
@@ -254,7 +255,7 @@ function readModComponents(root, mods, featureMods) {
 function collectIds(components) {
   const ids = {};
   for (const item of components) {
-    for (const id of item.ids) ids[id] ??= { id, mod: item.mod, file: item.file, line: item.line, component: item.name, label: item.labelFor?.[id] ?? item.labels[0] ?? "", role: item.roles[0] ?? "" };
+    for (const id of item.ids) ids[id] ??= { id, mod: item.mod, file: item.file, line: item.line, component: item.name, label: item.labelFor?.[id] ?? (item.ids.length === 1 ? item.labels[0] : undefined) ?? "", role: item.controlIds?.includes(id) ? "button" : (item.ids.length === 1 ? item.roles[0] : undefined) ?? "" };
   }
   return ids;
 }

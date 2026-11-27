@@ -21,6 +21,10 @@ const MAIN = new URL("./main.js", import.meta.url);
 const SOURCE = readFileSync(MAIN, "utf8")
   .replace(/^import .*;$/gm, (line) => " ".repeat(line.length)).replace("export default class Changes", `${" ".repeat(15)}class Changes`);
 const SCRIPT = new vm.Script(`${SOURCE}\nglobalThis.Changes = Changes;`, { filename: fileURLToPath(MAIN) });
+// dialog-button.js is a shared helper main.js imports; it runs in the same context, imports blanked the same way.
+const DIALOG_BUTTON_SOURCE = readFileSync(new URL("./dialog-button.js", import.meta.url), "utf8")
+  .replace(/^import .*;$/gm, (line) => " ".repeat(line.length)).replace("export function DialogButton", "function DialogButton");
+const DIALOG_BUTTON = new vm.Script(`${DIALOG_BUTTON_SOURCE}\nglobalThis.DialogButton = DialogButton;`, { filename: fileURLToPath(new URL("./dialog-button.js", import.meta.url)) });
 
 function cleanse(value) {
   if (value?.__rec) return value.__rec;
@@ -114,7 +118,9 @@ function setup({ script = {}, props = {}, spaceState } = {}) {
     assertDiscardUnchanged, discardSnapshot, displayPushDestination, forcePushConfirmed, forcePushTarget, pushConfigured,
     panelFrame: (inner) => inner,
   };
-  SCRIPT.runInNewContext(scope);
+  const context = vm.createContext(scope);
+  SCRIPT.runInContext(context);
+  DIALOG_BUTTON.runInContext(context);
   let notifies = 0;
   const cx = {
     notify() { notifies++; }, stop_propagation() { log.exec.push(["stop_propagation"]); },

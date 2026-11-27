@@ -190,7 +190,7 @@ export default class Pane extends View {
   button(id, label, icon, action, args) {
     // terminal.css:398,464: button fg rgb(255 255 255 / 0.3) → hover /0.8.
     return IconButton(id, label, svg(sharedAsset(`mods/orca-pane-header/${icon}.svg`)).size(12), {
-      size: 24, radius: 6, tooltip: label, color: "#ffffff4d", hoverBg: null, hoverFg: "#ffffffcc",
+      t: theme(), size: 24, radius: 6, tooltip: label, color: "#ffffff4d", hoverBg: null, hoverFg: "#ffffffcc",
       onClick: (_e, cx) => {
         cx.stop_propagation();
         if (typeof action === "function") action(cx);
@@ -353,7 +353,7 @@ export default class Pane extends View {
   closeButton(p, paneCount, { id, size, radius, glyph }) {
     const label = paneCount > 1 ? "Close pane" : "Close tab";
     return IconButton(id, label, svg("mods/orca-assets/x--orca-pane-header.svg").size(glyph), {
-      size, radius, tooltip: label, color: "#ffffff4d", hoverBg: "#ffffff14", hoverFg: "#ef4444",
+      t: theme(), size, radius, tooltip: label, color: "#ffffff4d", hoverBg: "#ffffff14", hoverFg: "#ef4444",
       onClick: (_e, clickCx) => {
         clickCx.stop_propagation();
         run(paneCount > 1 ? "pane.close" : "tab.close", paneCount > 1 ? { pane: p.pane } : { id: p.tab });
