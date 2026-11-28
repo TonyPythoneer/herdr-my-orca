@@ -21,7 +21,7 @@ import {
   type AgentInfo,
   type Status,
 } from "herdr";
-import { AGENT } from "../../shared/agent-catalog.js";
+import { AGENT } from "../../config/definitions/agent-catalog.js";
 import { IconButton } from "../../shared/icon-button.js";
 import { themeColor } from "../../shared/theme-color.js";
 

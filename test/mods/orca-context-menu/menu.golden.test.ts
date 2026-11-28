@@ -16,7 +16,7 @@ import {
   focusHandle,
   type Effect,
 } from "./host.js";
-import { AGENT } from "../../../src/shared/agent-catalog.js";
+import { AGENT } from "../../../src/config/definitions/agent-catalog.js";
 
 vi.mock("gpui-kit", async () => {
   const { element } = await import("./host.js");

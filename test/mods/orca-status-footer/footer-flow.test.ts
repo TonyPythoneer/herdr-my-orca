@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test, vi } from "vite-plus/test";
 import type { AsyncContext } from "gpui-kit";
-import { AGENT } from "../../../src/shared/agent-catalog.js";
+import { AGENT } from "../../../src/config/definitions/agent-catalog.js";
 import { TASKS_VERSION, parseTasks } from "../../../src/shared/tasks.js";
 import Chrome from "../../../src/mods/orca-status-footer/main.js";
 import { TASK_KEYS } from "../../../src/mods/orca-status-footer/scheduler.js";

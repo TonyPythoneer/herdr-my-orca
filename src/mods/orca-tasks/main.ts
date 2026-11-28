@@ -19,7 +19,7 @@ import {
   writeTextFile,
   settings,
 } from "herdr";
-import { AGENT } from "../../shared/agent-catalog.js";
+import { AGENT } from "../../config/definitions/agent-catalog.js";
 import { DialogButton } from "../../shared/dialog-button.js";
 import {
   PING_PROMPT,

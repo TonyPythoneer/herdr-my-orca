@@ -1,4 +1,4 @@
-import { OFFICIAL_AGENT_KEYS } from "../../shared/agent-catalog.js";
+import { OFFICIAL_AGENT_KEYS } from "../../config/definitions/agent-catalog.js";
 
 export type AgentRow = {
   key?: string;

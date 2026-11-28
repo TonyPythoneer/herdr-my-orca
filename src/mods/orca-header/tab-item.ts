@@ -18,7 +18,7 @@ import {
   type TabInfo,
 } from "herdr";
 import { IconButton } from "../../shared/icon-button.js";
-import { AGENT } from "../../shared/agent-catalog.js";
+import { AGENT } from "../../config/definitions/agent-catalog.js";
 import type { UnofficialApp } from "./unofficial-apps.js";
 import type { TabArrows, TabSlot } from "./tab-strip-scroll.js";
 import type { HeaderTheme } from "./types.js";

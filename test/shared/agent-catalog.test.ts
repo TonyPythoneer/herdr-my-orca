@@ -6,7 +6,7 @@ import {
   AGENT_KEYS,
   OFFICIAL_AGENT_KEYS,
   isAgentKey,
-} from "../../src/shared/agent-catalog.js";
+} from "../../src/config/definitions/agent-catalog.js";
 import { BUILTIN_DEFAULTS, HOMEPAGES } from "../../src/mods/orca-agent-settings/state.js";
 
 const LEGACY_OFFICIAL_ORDER =

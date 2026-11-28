@@ -1,7 +1,7 @@
 import { it } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { SPIN_PERIOD_MS } from "../../src/shared/ui-settings.ts";
+import { SPIN_PERIOD_MS } from "../../src/config/ui-settings/primitives/ui-settings.ts";
 
 it("visual assets have one canonical config path and a consumer manifest", () => {
   const root = new URL("../../", import.meta.url);

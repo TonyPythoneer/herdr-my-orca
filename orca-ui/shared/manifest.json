@@ -1,7 +1,7 @@
 {
   "files": [
     {
-      "source": "src/shared/agent-catalog.ts",
+      "source": "src/config/definitions/agent-catalog.ts",
       "outputs": [
         "mods/orca-agent-flyout/agent-catalog.js",
         "mods/orca-agent-settings/agent-catalog.js",
@@ -136,7 +136,7 @@
       "outputs": ["mods/orca-context-menu/transcript.js", "mods/orca-handoff/transcript.js"]
     },
     {
-      "source": "src/shared/ui-settings.ts",
+      "source": "src/config/ui-settings/primitives/ui-settings.ts",
       "outputs": ["mods/orca-files/ui-settings.js", "mods/orca-status-bar/ui-settings.js"]
     }
   ]
