@@ -16,7 +16,7 @@ import {
   focusHandle,
   type Effect,
 } from "./host.js";
-import { AGENT } from "../../../src/shared/agent-catalog.js";
+import { AGENT } from "../../../src/config/definitions/agent-catalog.js";
 
 vi.mock("gpui-kit", async () => {
   const { element } = await import("./host.js");
@@ -31,7 +31,7 @@ vi.mock("../../../src/shared/clip.ts", async () => {
   const { host } = await import("./host.js");
   return { copyText: (text: unknown, cx: unknown) => host.onCopy?.(text, cx) };
 });
-vi.mock("../../../src/shared/transcript.ts", () => ({
+vi.mock("../../../src/services/agent-handoff/transcript.ts", () => ({
   buildBoundedSessionTranscript: (text: string) => text.trim() && `clean:${text.trim()}`,
 }));
 

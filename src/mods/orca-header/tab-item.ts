@@ -17,8 +17,8 @@ import {
   type SpaceInfo,
   type TabInfo,
 } from "herdr";
-import { IconButton } from "../../shared/icon-button.js";
-import { AGENT } from "../../shared/agent-catalog.js";
+import { IconButton } from "../../primitives/icon-button.js";
+import { AGENT } from "../../config/definitions/agent-catalog.js";
 import type { UnofficialApp } from "./unofficial-apps.js";
 import type { TabArrows, TabSlot } from "./tab-strip-scroll.js";
 import type { HeaderTheme } from "./types.js";
@@ -102,7 +102,7 @@ function agentIcon(
     : image(program.icon).size(12);
 }
 
-function fillet(side: "left" | "right", t: HeaderTheme, flare: number): NativeElement {
+function ActiveTabBottomCurve(side: "left" | "right", t: HeaderTheme, flare: number): NativeElement {
   return div()
     .absolute()
     .bottom(0)
@@ -141,8 +141,8 @@ function tabSurface(
     .rounded_t(14)
     .bg(t.background)
     .opacity(tab.active ? 1 : 0)
-    .child(fillet("left", t, flare))
-    .child(fillet("right", t, flare));
+    .child(ActiveTabBottomCurve("left", t, flare))
+    .child(ActiveTabBottomCurve("right", t, flare));
   const hoverLayer = div()
     .id(`tab-hover-${tab.id}${copyId}`)
     .absolute()

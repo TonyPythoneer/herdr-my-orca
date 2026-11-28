@@ -1,7 +1,7 @@
 {
   "files": [
     {
-      "source": "src/shared/agent-catalog.ts",
+      "source": "src/config/definitions/agent-catalog.ts",
       "outputs": [
         "mods/orca-agent-flyout/agent-catalog.js",
         "mods/orca-agent-settings/agent-catalog.js",
@@ -48,7 +48,7 @@
       ]
     },
     {
-      "source": "src/shared/dialog-button.ts",
+      "source": "src/primitives/dialog-button.ts",
       "outputs": [
         "mods/orca-changes/dialog-button.js",
         "mods/orca-handoff/dialog-button.js",
@@ -57,7 +57,7 @@
       ]
     },
     {
-      "source": "src/shared/icon-button.ts",
+      "source": "src/primitives/icon-button.ts",
       "outputs": [
         "mods/orca-agent-settings/icon-button.js",
         "mods/orca-float-workspace/icon-button.js",
@@ -69,7 +69,7 @@
       ]
     },
     {
-      "source": "src/shared/list-viewport.ts",
+      "source": "src/primitives/list-viewport.ts",
       "outputs": [
         "mods/orca-agent-flyout/list-viewport.js",
         "mods/orca-agent-settings/list-viewport.js",
@@ -77,7 +77,7 @@
       ]
     },
     {
-      "source": "src/shared/panel-motion.ts",
+      "source": "src/components/right-sidebar/panel-motion.ts",
       "outputs": [
         "mods/orca-files/panel-motion.js",
         "mods/orca-changes/panel-motion.js",
@@ -90,11 +90,11 @@
       "outputs": ["mods/orca-sidebar-projects/review-store.js"]
     },
     {
-      "source": "src/shared/scan.ts",
+      "source": "src/services/ports/scan.ts",
       "outputs": ["mods/orca-status-ports/scan.js"]
     },
     {
-      "source": "src/shared/selection-ui.ts",
+      "source": "src/primitives/selection-ui.ts",
       "outputs": [
         "mods/orca-agent-flyout/selection-ui.js",
         "mods/orca-agent-settings/selection-ui.js",
@@ -132,11 +132,11 @@
       ]
     },
     {
-      "source": "src/shared/transcript.ts",
+      "source": "src/services/agent-handoff/transcript.ts",
       "outputs": ["mods/orca-context-menu/transcript.js", "mods/orca-handoff/transcript.js"]
     },
     {
-      "source": "src/shared/ui-settings.ts",
+      "source": "src/config/ui-settings/primitives/ui-settings.ts",
       "outputs": ["mods/orca-files/ui-settings.js", "mods/orca-status-bar/ui-settings.js"]
     }
   ]

@@ -1,5 +1,5 @@
 import { normalizePermissions, type Permissions, type PermissionChoice } from "./permissions.js";
-import { FULL_ROWS, VISIBLE_ROWS, viewportHeight } from "../../shared/list-viewport.js";
+import { FULL_ROWS, VISIBLE_ROWS, viewportHeight } from "../../primitives/list-viewport.js";
 
 export const BUILTIN_DEFAULTS: Record<string, string[]> = {
   claude: ["claude"],

@@ -1,7 +1,7 @@
 import { div, svg, type ClickEvent, type Context, type NativeElement } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { openOverlay, panes, run, type TabInfo } from "herdr";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 import { find, layoutTree, toggleLeft, zoomOf } from "./header-layout.js";
 import { renderTabItem, stop, tint, TAB_STRIP_SLIDE_MS, type StripFrame } from "./tab-item.js";
 import type { HeaderTheme, LayoutNode, WindowState } from "./types.js";

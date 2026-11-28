@@ -11,8 +11,8 @@ import {
   type SpaceInfo,
   type Status,
 } from "herdr";
-import { panelFrame } from "../../shared/panel-motion.js";
-import { AGENT } from "../../shared/agent-catalog.js";
+import { panelFrame } from "../../components/right-sidebar/panel-motion.js";
+import { AGENT } from "../../config/definitions/agent-catalog.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 type AgentsTheme = {
@@ -745,7 +745,7 @@ export default class AgentsPanel extends View {
       );
   }
 
-  scopeSwitch(
+  AgentSessionScopeToggleGroup(
     scope: string,
     workspaceAvailable: boolean,
     projectAvailable: boolean,
@@ -859,7 +859,7 @@ export default class AgentsPanel extends View {
           .child(div().truncate().text_size(12).font_semibold().child("Agent Session History"))
           .child(div().truncate().text_size(11).text_color(t.muted).child("Resume past sessions")),
       )
-      .child(this.scopeSwitch(scope, workspaceAvailable, projectAvailable, t))
+      .child(this.AgentSessionScopeToggleGroup(scope, workspaceAvailable, projectAvailable, t))
       .child(this.searchBar(t));
   }
 

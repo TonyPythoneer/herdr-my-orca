@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test, vi } from "vite-plus/test";
 import type { Context } from "gpui-kit";
 import { TextareaState } from "gpui-base";
-import { AGENT } from "../../../src/shared/agent-catalog.js";
+import { AGENT } from "../../../src/config/definitions/agent-catalog.js";
 import Tasks from "../../../src/mods/orca-tasks/main.js";
 import { parseTasks, serializeTasks, type Task } from "../../../src/shared/tasks.js";
 

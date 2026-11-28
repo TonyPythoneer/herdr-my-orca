@@ -32,11 +32,11 @@ type ProviderOwner = {
     handler: Handler,
     opts?: ButtonOpts,
   ) => NativeElement;
-  cards: Map<string, ProviderCard>;
-  linkChanged: (card: ProviderCard, cx: ContextLike) => void;
-  saveCard: (card: ProviderCard, cx: ContextLike) => void;
-  cancelNewCard: (card: ProviderCard, cx: ContextLike) => void;
-  deleteProvider: (card: ProviderCard, cx: ContextLike) => void;
+  cards: Map<string, ProviderEditorState>;
+  linkChanged: (card: ProviderEditorState, cx: ContextLike) => void;
+  saveCard: (card: ProviderEditorState, cx: ContextLike) => void;
+  cancelNewCard: (card: ProviderEditorState, cx: ContextLike) => void;
+  deleteProvider: (card: ProviderEditorState, cx: ContextLike) => void;
   providersError?: string;
 };
 
@@ -49,7 +49,7 @@ type ProviderRecord = {
   apiKey?: string;
 };
 
-type ProviderCard = {
+type ProviderEditorState = {
   id?: string;
   open?: boolean;
   replacing?: boolean;
@@ -132,9 +132,9 @@ export function providersPageView(owner: ProviderOwner): NativeElement {
 }
 
 export function modelProvidersView(owner: ProviderOwner, t: PartsTheme): NativeElement {
-  if (owner.adding) return addProviderView(owner, t);
+  if (owner.adding) return AddModelProviderForm(owner, t);
   if (owner.selectedProviderId && owner.providers[owner.selectedProviderId]) {
-    return providerDetailView(owner, owner.selectedProviderId, t);
+    return ModelProviderDetail(owner, owner.selectedProviderId, t);
   }
   return v_flex()
     .w_full()
@@ -154,7 +154,7 @@ export function modelProvidersView(owner: ProviderOwner, t: PartsTheme): NativeE
     );
 }
 
-function addProviderView(owner: ProviderOwner, t: PartsTheme): NativeElement {
+function AddModelProviderForm(owner: ProviderOwner, t: PartsTheme): NativeElement {
   return v_flex()
     .w_full()
     .gap(10)
@@ -168,7 +168,7 @@ function addProviderView(owner: ProviderOwner, t: PartsTheme): NativeElement {
     .child(owner.providerCard(owner.adding, t));
 }
 
-function healthToneLabel(
+function getProviderHealthPresentation(
   health: ProviderHealthState,
   t: PartsTheme,
 ): { tone: Color; label: string } {
@@ -181,13 +181,13 @@ function healthToneLabel(
   return map[health.state] ?? { tone: t.dim, label: "Not checked" };
 }
 
-function providerDetailView(owner: ProviderOwner, id: string, t: PartsTheme): NativeElement {
+function ModelProviderDetail(owner: ProviderOwner, id: string, t: PartsTheme): NativeElement {
   const providers = owner.providers;
   const record = providers[id];
   const cards = owner.cards;
   const card = cards.get(id);
   const health = owner.providerHealthState(id);
-  const { tone: healthTone, label: healthLabel } = healthToneLabel(health, t);
+  const { tone: healthTone, label: healthLabel } = getProviderHealthPresentation(health, t);
   const models = health.models?.length ? health.models : (record?.models ?? []);
   return v_flex()
     .w_full()
@@ -239,13 +239,13 @@ function providerDetailView(owner: ProviderOwner, id: string, t: PartsTheme): Na
       ),
     )
     .when(card !== undefined, (el) => el.child(owner.providerCard(card, t)))
-    .child(modelsListView(id, models, t));
+    .child(ProviderModelList(id, models, t));
 }
 
 function providerActionRow(
   owner: ProviderOwner,
   id: string,
-  card: ProviderCard | undefined,
+  card: ProviderEditorState | undefined,
   t: PartsTheme,
   healthState: string,
 ): NativeElement {
@@ -276,7 +276,7 @@ function providerActionRow(
     );
 }
 
-function modelsListView(id: string, models: unknown[], t: PartsTheme): NativeElement {
+function ProviderModelList(id: string, models: unknown[], t: PartsTheme): NativeElement {
   return v_flex()
     .w_full()
     .gap(6)
@@ -309,7 +309,7 @@ function modelsListView(id: string, models: unknown[], t: PartsTheme): NativeEle
 
 export function providerCardView(
   owner: ProviderOwner,
-  card: ProviderCard,
+  card: ProviderEditorState,
   t: PartsTheme,
 ): NativeElement {
   const providers = owner.providers;
@@ -322,12 +322,12 @@ export function providerCardView(
     .border_1()
     .border_color(card.id ? t.border : t.accent)
     .bg(t.raised)
-    .child(cardHeader(card, record, t))
-    .when(card.open || !card.id, (el) => el.child(cardEditor(owner, card, record, t)));
+    .child(ProviderEditorHeader(card, record, t))
+    .when(card.open || !card.id, (el) => el.child(ModelProviderConfigurationForm(owner, card, record, t)));
 }
 
-function cardHeader(
-  card: ProviderCard,
+function ProviderEditorHeader(
+  card: ProviderEditorState,
   record: ProviderRecord | null,
   t: PartsTheme,
 ): NativeElement {
@@ -366,7 +366,7 @@ function cardHeader(
 
 function appendCardMetadata(
   el: NativeElement,
-  card: ProviderCard,
+  card: ProviderEditorState,
   record: ProviderRecord,
   t: PartsTheme,
 ): NativeElement {
@@ -435,9 +435,9 @@ function inputField(
   );
 }
 
-function keyField(
+function ProviderApiKeyField(
   owner: ProviderOwner,
-  card: ProviderCard,
+  card: ProviderEditorState,
   record: ProviderRecord | null,
   t: PartsTheme,
 ): NativeElement {
@@ -471,12 +471,12 @@ function keyField(
     `am-key-${card.id ?? "new"}`,
     "API KEY",
     card.key,
-    { after: revealButton(card, t) },
+    { after: ToggleApiKeyVisibilityButton(card, t) },
     t,
   );
 }
 
-function revealButton(card: ProviderCard, t: PartsTheme): NativeElement {
+function ToggleApiKeyVisibilityButton(card: ProviderEditorState, t: PartsTheme): NativeElement {
   const label = card.reveal ? "Hide key" : "Show key";
   return Button.new(`am-key-eye-${card.id ?? "new"}`)
     .disabled(false)
@@ -509,7 +509,7 @@ function revealButton(card: ProviderCard, t: PartsTheme): NativeElement {
 
 function presetOffer(
   owner: ProviderOwner,
-  card: ProviderCard,
+  card: ProviderEditorState,
   t: PartsTheme,
 ): NativeElement | null {
   const host = card.host?.value() ?? "";
@@ -544,9 +544,9 @@ function presetOffer(
 const LINK_HINT =
   "A GitHub link gives the repo name and the owner's avatar; any other https link gives its site name and favicon. The icon is downloaded once.";
 
-function cardEditor(
+function ModelProviderConfigurationForm(
   owner: ProviderOwner,
-  card: ProviderCard,
+  card: ProviderEditorState,
   record: ProviderRecord | null,
   t: PartsTheme,
 ): NativeElement {
@@ -574,7 +574,7 @@ function cardEditor(
         .w_full()
         .gap(8)
         .flex_wrap()
-        .child(keyField(owner, card, record, t))
+        .child(ProviderApiKeyField(owner, card, record, t))
         .child(
           inputField(
             `am-link-${idPart}`,
@@ -591,10 +591,10 @@ function cardEditor(
         .text_color(t.dim)
         .child((info as { error?: string }).error ? "" : LINK_HINT),
     )
-    .child(cardActions(owner, card, t));
+    .child(ProviderFormActions(owner, card, t));
 }
 
-function cardActions(owner: ProviderOwner, card: ProviderCard, t: PartsTheme): NativeElement {
+function ProviderFormActions(owner: ProviderOwner, card: ProviderEditorState, t: PartsTheme): NativeElement {
   let tone = t.muted;
   if (card.status?.tone === "blocked") tone = t.blocked;
   else if (card.status?.tone === "done") tone = t.done;

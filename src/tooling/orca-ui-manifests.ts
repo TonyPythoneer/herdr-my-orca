@@ -275,14 +275,13 @@ function sharedOutputName(root: string, source: unknown, seen: OwnerMap, fail: F
       return name;
     }
   }
-  if (typeof source === "string" && source.startsWith("src/shared/")) {
-    const name = source.slice("src/shared/".length);
-    if (/^[\w.-]+\.ts$/.test(name)) {
-      if (seen.sources.has(source)) fail(`source ${source} is declared twice`);
-      seen.sources.add(source);
-      requireSourceFile(root, "src/shared", name, fail);
-      return name.replace(/\.ts$/, ".js");
-    }
+  if (typeof source === "string" && /^src\/(?:shared|config|primitives|components|composables|services)\/(?:[\w.-]+\/)*[\w.-]+\.ts$/.test(source)) {
+    const name = source.slice("src/".length);
+    if (relativeInside(name) !== name) fail(`invalid source "${source}"`);
+    if (seen.sources.has(source)) fail(`source ${source} is declared twice`);
+    seen.sources.add(source);
+    requireSourceFile(root, "src", name, fail);
+    return posix.basename(name).replace(/\.ts$/, ".js");
   }
   fail(`source "${source}" must be ${SHARED}/<name>.js or src/shared/<name>.ts`);
 }

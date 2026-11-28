@@ -29,7 +29,7 @@ const RENDER = `ORCA_PROBE_R
 
 it("TypeScript generated entries and shared copies omit unmapped runtime coordinates", () => {
   const [helper, entry] = locate(RENDER, table);
-  assert.equal(helper.edit, "src/shared/panel-motion.ts");
+  assert.equal(helper.edit, "src/components/right-sidebar/panel-motion.ts");
   assert.equal(helper.kind, "shared");
   assert.match(helper.note, /orca-right-sidebar-agents/);
   assert.equal(

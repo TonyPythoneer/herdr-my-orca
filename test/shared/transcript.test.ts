@@ -4,7 +4,7 @@ import {
   buildAgentSessionForkPrompt,
   buildBoundedSessionTranscript,
   cleanAgentSessionForkTranscript,
-} from "../../src/shared/transcript";
+} from "../../src/services/agent-handoff/transcript";
 
 const ESC = "\x1b";
 

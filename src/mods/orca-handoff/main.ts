@@ -22,11 +22,11 @@ import {
   exec,
 } from "herdr";
 import { copyText } from "../../shared/clip.js";
-import { DialogButton } from "../../shared/dialog-button.js";
+import { DialogButton } from "../../primitives/dialog-button.js";
 import {
   buildAgentSessionForkPrompt,
   buildAgentSessionContinuationPrompt,
-} from "../../shared/transcript.js";
+} from "../../services/agent-handoff/transcript.js";
 
 type AgentSpec = { id: string; name: string; run: string[] };
 

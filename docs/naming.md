@@ -1,4 +1,26 @@
-# Naming: what you see, what the code calls it
+# Semantic naming contract
+
+The binding policy is in [AGENTS.md](../AGENTS.md). The target vocabulary is defined by [#38](https://github.com/TonyPythoneer/herdr-my-orca/issues/38). Existing legacy identifiers in the mapping below describe the current runtime, not permission to introduce new ones.
+
+| Behavior | Preferred anatomy |
+|---|---|
+| Execute a command | Button, IconButton, MenuItem |
+| Choose one value | Select, RadioGroup |
+| Choose multiple values | CheckboxGroup |
+| Text input with value selection | Combobox |
+| Anchored complex content | Popover |
+| Grouped actions | Toolbar |
+| Expandable content | CollapsibleRoot, CollapsibleTrigger, CollapsiblePanel |
+| Boolean track/thumb | SwitchRoot, SwitchTrack, SwitchThumb |
+| Pressable state without track/thumb | Toggle, ToggleGroup |
+| Context-dependent commands | ContextMenu |
+| Short hover hint / rich content | Tooltip / HoverCard |
+| Scrollable content | ScrollArea, Viewport, Scrollbar, Thumb |
+
+Actual native behavior determines the name. Do not add a web dependency or claim unsupported anatomy. IDs: scope--semantic-identifier[-stable-target-identity], e.g. left-sidebar--search-worktrees-trigger, agent-settings--group-trigger-official. Native external IDs and persisted keys must be migrated deliberately. Use handleMouseDown for a raw event, onSelect for a callback and selectAgent for the domain action; distinguish isHovered from hoveredItemId and selectedModelId. Configuration uses COMPONENT__PROPERTY_UNIT. Preserve agent/provider logos; use verified native icons for equivalent generic controls.
+
+## Legacy runtime location map
+
 
 Say the words in the first column to a person or an AI and they land on the right mod, layout node and file.
 Mod names follow `orca-<screen area>-<what it draws>`. Layout node ids are older and shorter; the third column maps them.

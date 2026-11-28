@@ -7,7 +7,7 @@ import {
   VISIBLE_ROWS,
   scrolls,
   viewportHeight,
-} from "../../../src/shared/list-viewport.js";
+} from "../../../src/primitives/list-viewport.js";
 import { flyoutView, installHost, resetHost, textOf, THEME, type FlyoutKey } from "./host.js";
 
 vi.mock("gpui-kit", async () => {

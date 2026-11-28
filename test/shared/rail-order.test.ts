@@ -8,7 +8,7 @@ import {
   persistRailOrder,
   readRailOrder,
   type RailOrder,
-} from "../../src/shared/rail-order";
+} from "../../src/services/agent-settings/sidebar-order";
 
 type TestGlobal = typeof globalThis & {
   __herdrShared?: (key: string) => unknown;

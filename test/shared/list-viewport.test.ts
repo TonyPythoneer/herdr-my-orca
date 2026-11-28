@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { viewportHeight, scrolls, ROW } from "../../src/shared/list-viewport";
+import { viewportHeight, scrolls, ROW } from "../../src/primitives/list-viewport";
 
 describe("typed viewport candidate", () => {
   it("preserves empty, short and overflowing list dimensions", () => {

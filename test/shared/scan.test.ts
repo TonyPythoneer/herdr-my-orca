@@ -6,7 +6,7 @@ import {
   sections,
   type Port,
   type PortListener,
-} from "../../src/shared/scan";
+} from "../../src/services/ports/scan";
 
 describe("scan source behavior", () => {
   it("attributes a pane folder only when the pane's tab belongs to the space, including an empty tab id", () => {

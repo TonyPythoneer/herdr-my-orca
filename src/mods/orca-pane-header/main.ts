@@ -27,7 +27,7 @@ import {
   type OverlaySpec,
   type PaneInfo,
 } from "herdr";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 import {
   crewOf,
   crewGroups,

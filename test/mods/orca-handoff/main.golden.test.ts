@@ -7,7 +7,7 @@ import { asRecorder, cleanse, handlers, plain, type HandlerRecord, type Rec } fr
 import {
   buildAgentSessionForkPrompt,
   buildAgentSessionContinuationPrompt,
-} from "../../../src/shared/transcript.js";
+} from "../../../src/services/agent-handoff/transcript.js";
 import HandoffDialog from "../../../src/mods/orca-handoff/main.ts";
 
 const GOLDEN = new URL("./main.golden.json", import.meta.url);

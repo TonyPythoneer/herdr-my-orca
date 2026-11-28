@@ -1,6 +1,6 @@
 import { div, type Color, type NativeElement } from "gpui-kit";
 import { theme, layout, props, shared } from "herdr";
-import { themeColor } from "./theme-color.js";
+import { themeColor } from "../../shared/theme-color.js";
 
 type LayoutNode = {
   id?: string;

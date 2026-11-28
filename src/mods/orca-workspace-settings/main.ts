@@ -23,7 +23,7 @@ import {
   spaces,
   machines,
 } from "herdr";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 type NavTheme = {
@@ -315,7 +315,7 @@ function sidebarFrame(inner: NativeElement): NativeElement {
     );
 }
 
-function searchButton(): NativeElement {
+function SearchWorktreesTrigger(): NativeElement {
   return h_flex()
     .id("nav-search")
     .w_full()
@@ -676,7 +676,7 @@ export default class Nav extends View {
       .pb(4)
       .gap(2)
       .bg(t.surface)
-      .child(searchButton())
+      .child(SearchWorktreesTrigger())
       .child(this.projectsHeader(t));
   }
 

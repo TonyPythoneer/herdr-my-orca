@@ -8,7 +8,7 @@ import {
   type NativeElement,
 } from "gpui-kit";
 import type { ColorTokens } from "gpui-base";
-import { themeColor } from "./theme-color.js";
+import { themeColor } from "../shared/theme-color.js";
 
 type DialogButtonTheme = Pick<ColorTokens, "foreground">;
 type ClickHandler = (event: ClickEvent, cx: Context) => void;

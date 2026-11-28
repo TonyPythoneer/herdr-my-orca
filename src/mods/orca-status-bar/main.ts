@@ -23,7 +23,7 @@ import {
   type PaneInfo,
 } from "herdr";
 import { themeColor } from "../../shared/theme-color.js";
-import { SPIN_PERIOD_MS } from "../../shared/ui-settings.js";
+import { SPIN_PERIOD_MS } from "../../config/ui-settings/primitives/ui-settings.js";
 import { gatewayReadings } from "./gateway-usage.js";
 import { probeLocal } from "./local-usage.js";
 import {

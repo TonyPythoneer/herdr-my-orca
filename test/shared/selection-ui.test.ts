@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { callsOf } from "../stubs/gpui-kit";
-import { hoverHighlight, selectedCheck, selectionMark } from "../../src/shared/selection-ui";
+import { hoverHighlight, selectedCheck, selectionMark } from "../../src/primitives/selection-ui";
 
 const theme = { hover: "#222222", accent: "#aabbcc", surface: "#ffffff" } as const;
 

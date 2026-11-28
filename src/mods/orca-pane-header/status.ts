@@ -1,5 +1,5 @@
 import { div, svg, image, type Color, type Length, type NativeElement } from "gpui-kit";
-import { AGENT } from "../../shared/agent-catalog.js";
+import { AGENT } from "../../config/definitions/agent-catalog.js";
 import { themeColor } from "../../shared/theme-color.js";
 import { STATUS, type TerminalInfo } from "./crew.js";
 

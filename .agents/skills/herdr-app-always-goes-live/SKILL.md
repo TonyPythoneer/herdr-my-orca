@@ -5,7 +5,7 @@ description: Required before you create, edit, rename or delete any Herdr App UI
 
 # Herdr App always goes live
 
-The repo is the owner. Live (`~/.config/herdr-app/`) is a copy that the repo overwrites. Every repo change to a deliverable file lands in live, every time.
+The repo is the owner. Live (`~/.config/herdr-app/`) is a copy that the repo overwrites. Sync only authorized, verified delivery changes when a live target is available; a remote PR does not imply live deployment.
 
 ## Normal sync (default)
 
@@ -24,11 +24,8 @@ The repo is the owner. Live (`~/.config/herdr-app/`) is a copy that the repo ove
 
 ## Never
 
-- Edit a `mods/` file that a manifest under `orca-ui/features/` lists. Edit the source there, run `npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --out .`, and require `--check --out .` to exit 0 before syncing. `--force` overwrites a copy that is newer than its source, so diff first.
-- Edit a copy of a file under `orca-ui/shared/`. Edit the source, rebuild, check, then copy each regenerated file.
-- Build a TypeScript mod by hand. Run `npx --no-install vp pack`, then copy `tools/vite-plus-pilot/dist/typed/<id>.js` to the output named by that id in `src/build-entries.json`. Copy only the entries you changed: a hand-written `.js` file in the same folder may hold uncommitted work that has no TypeScript source.
-- Import across mod folders. A mod may import only files in its own folder; a helper it needs goes in its own folder or in the shared source.
-- Edit a generated copy to try something. Re-run the builder.
-- Commit unasked.
-- Leave a probe mod (for example `zz-probe`) live.
-- Delete Herdr-shipped mods or `*-edited` folders. List them for the user.
+- Edit generated delivery JavaScript, build by hand or publish an unverified result.
+- Use stale legacy source paths as instructions for new architecture; follow AGENTS.md and the actual current build mapping.
+- Sync or delete live files without the user's authorization and an available, verified local target. Preserve user runtime data and Herdr-shipped mods.
+- Create cross-mod runtime imports or substitute a custom compiler. Report build-readiness blockers.
+- Commit unasked or leave a probe mod live.

@@ -37,9 +37,9 @@ import {
   parseListeners,
   sections,
   type Port,
-} from "../../shared/scan.js";
+} from "../../services/ports/scan.js";
 import { copyText } from "../../shared/clip.js";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 const MOD = "orca-status-ports";
@@ -420,7 +420,7 @@ export default class Ports extends View {
       );
   }
 
-  externalHeader(t: PortTheme, view: PortSections) {
+  ExternalPortsCollapsibleTrigger(t: PortTheme, view: PortSections) {
     const chevron = this.externalOpen ? "chevron-down--orca-files" : "chevron-right--orca-files";
     return h_flex()
       .id("external-ports-toggle")
@@ -449,7 +449,7 @@ export default class Ports extends View {
       );
   }
 
-  portRow(t: PortTheme, port: Port, external: boolean) {
+  PortListItem(t: PortTheme, port: Port, external: boolean) {
     const hovered = this.hoveredPort === port.id;
     const name = port.processName ?? (port.pid ? `PID ${port.pid}` : "Unknown process");
     const address = addressForPort(port);
@@ -571,7 +571,7 @@ export default class Ports extends View {
     const rows = [];
     for (const [index, group] of view.groups.entries()) {
       rows.push(this.groupHeader(t, group, index === 0));
-      for (const port of group.ports) rows.push(this.portRow(t, port, false));
+      for (const port of group.ports) rows.push(this.PortListItem(t, port, false));
     }
     const externalRows = () => {
       if (!this.externalOpen) return [];
@@ -579,12 +579,12 @@ export default class Ports extends View {
         return [
           div().px(12).py(8).text_size(11).text_color(t.muted).child("No external ports detected"),
         ];
-      return view.external.map((port) => this.portRow(t, port, true));
+      return view.external.map((port) => this.PortListItem(t, port, true));
     };
     const body = [
       ...(empty ? [empty] : []),
       ...rows,
-      this.externalHeader(t, view),
+      this.ExternalPortsCollapsibleTrigger(t, view),
       ...externalRows(),
     ];
 
