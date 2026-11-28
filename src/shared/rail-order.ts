@@ -52,25 +52,21 @@ export function applyRailOrder<T>(
   return ordered;
 }
 
-export function swapOrderIds(order: readonly string[], a: string, b: string): string[] {
-  const next = order.slice();
-  if (a === b) return next;
-  const ai = next.indexOf(a);
-  const bi = next.indexOf(b);
-  if (ai < 0 || bi < 0) return next;
-  next[ai] = b;
-  next[bi] = a;
-  return next;
+// The order while an icon is dragged: `key` moves to slot `target`; the others keep their order.
+export function moveInOrder(base: readonly string[], key: string, target: number): string[] {
+  if (!base.includes(key)) return base.slice();
+  const rest = base.filter((item) => item !== key);
+  rest.splice(Math.max(0, Math.min(target, rest.length)), 0, key);
+  return rest;
 }
 
-// Drag to swap: the icon pressed (`from`) takes the place of the one released on (`to`) in `base`,
-// the order on screen. Returns the new order, or null when nothing moves.
-export function dragSwapOrder(
-  base: readonly string[],
-  from: string | null,
-  to: string,
-): string[] | null {
-  if (!from || from === to) return null;
-  const next = swapOrderIds(base, from, to);
-  return next.every((key, i) => key === base[i]) ? null : next;
+// The slot under the pointer. `pressOffset` is where the icon was grabbed inside its own row.
+export function dragSlot(
+  pointerY: number,
+  pressOffset: number,
+  rowHeight: number,
+  count: number,
+): number {
+  const slot = Math.floor((pointerY - pressOffset + rowHeight / 2) / rowHeight);
+  return Math.max(0, Math.min(count - 1, slot));
 }

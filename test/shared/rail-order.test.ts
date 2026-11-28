@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {
   RAIL_ORDER_KEY,
   applyRailOrder,
-  dragSwapOrder,
+  dragSlot,
+  moveInOrder,
   persistRailOrder,
   readRailOrder,
-  swapOrderIds,
   type RailOrder,
 } from "../../src/shared/rail-order";
 
@@ -24,17 +24,17 @@ function sharedState(order: RailOrder | null) {
 }
 
 describe("rail order", () => {
-  it("swapOrderIds exchanges two present ids without mutating the input", () => {
+  it("moveInOrder moves a key to the target slot without mutating the input", () => {
     const order = [...agents];
-    const swapped = swapOrderIds(order, "freebuff", "claude");
-    assert.deepEqual(swapped, ["claude", "freebuff", "codex"]);
+    assert.deepEqual(moveInOrder(order, "codex", 0), ["codex", "freebuff", "claude"]);
+    assert.deepEqual(moveInOrder(order, "freebuff", 2), ["claude", "codex", "freebuff"]);
     assert.deepEqual(order, agents);
   });
 
-  it("swapOrderIds is a no-op for equal or missing ids", () => {
-    assert.deepEqual(swapOrderIds(agents, "claude", "claude"), agents);
-    assert.deepEqual(swapOrderIds(agents, "claude", "nope"), agents);
-    assert.deepEqual(swapOrderIds(agents, "nope", "yep"), agents);
+  it("moveInOrder clamps the target and ignores a missing key", () => {
+    assert.deepEqual(moveInOrder(agents, "claude", 99), ["freebuff", "codex", "claude"]);
+    assert.deepEqual(moveInOrder(agents, "claude", -5), ["claude", "freebuff", "codex"]);
+    assert.deepEqual(moveInOrder(agents, "nope", 0), agents);
   });
 
   it("applyRailOrder orders listed keys first and appends the rest in list order", () => {
@@ -110,19 +110,16 @@ describe("rail order", () => {
   });
 });
 
-describe("dragSwapOrder", () => {
-  it("swaps the pressed and released icons in the on-screen order", () => {
-    assert.deepEqual(dragSwapOrder(["freebuff", "claude", "codex"], "codex", "freebuff"), [
-      "codex",
-      "claude",
-      "freebuff",
-    ]);
+describe("dragSlot", () => {
+  it("picks the row under the pointer, measured from the grab point", () => {
+    // Rows are 60px. Grabbed 20px into row 0, the icon's top is pointer - 20.
+    assert.equal(dragSlot(10, 20, 60, 3), 0);
+    assert.equal(dragSlot(70, 20, 60, 3), 1);
+    assert.equal(dragSlot(130, 20, 60, 3), 2);
   });
 
-  it("does nothing for a release on the same icon, no press, or an unknown icon", () => {
-    const base = ["freebuff", "claude"];
-    assert.equal(dragSwapOrder(base, "claude", "claude"), null);
-    assert.equal(dragSwapOrder(base, null, "claude"), null);
-    assert.equal(dragSwapOrder(base, "claude", "nope"), null);
+  it("clamps to the first and last row", () => {
+    assert.equal(dragSlot(-200, 0, 60, 3), 0);
+    assert.equal(dragSlot(900, 0, 60, 3), 2);
   });
 });
