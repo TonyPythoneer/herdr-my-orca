@@ -54,7 +54,7 @@ const inventory: { agents: RailRow[]; unofficial: RailRow[] } = {
     {
       key: "freebuff",
       name: "FreeBuff CLI",
-      icon: "mods/orca-assets/freebuff--orca-new-menu.png",
+      icon: "mods/orca-assets/freebuff--orca-tab-dropdown.png",
       installed: true,
       enabled: false,
     },

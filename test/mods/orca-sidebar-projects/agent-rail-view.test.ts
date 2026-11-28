@@ -110,7 +110,7 @@ const unofficial: RailRow[] = [
   {
     key: "freebuff",
     name: "FreeBuff CLI",
-    icon: "mods/orca-assets/freebuff--orca-new-menu.png",
+    icon: "mods/orca-assets/freebuff--orca-tab-dropdown.png",
     installed: false,
     enabled: false,
   },
@@ -187,11 +187,8 @@ it("a provider group lists each provider with its health, icon and an add tile",
   assert.ok(
     nodesIn(view).some((n) => n.n === "svg" && n.a[0] === "mods/orca-assets/hard-drive.svg"),
   );
-  assert.ok(
-    nodesIn(view).some(
-      (n) => n.n === "image" && n.a[0] === "mods/orca-assets/litellm_favicon_light_32.png",
-    ),
-  );
+  assert.ok(hasCall(view, "right", 2));
+  assert.ok(hasCall(view, "bottom", 2));
 });
 
 it("agent tiles and the Global gear select their agent through their handlers", () => {
@@ -276,12 +273,16 @@ it("an installed row with a tint draws its icon as an svg and an uninstalled one
   assert.ok(hasCall(plain, "child", "P"));
 });
 
-it("the Global row shows its LiteLLM badge only while LiteLLM is enabled", () => {
+it("the Global row never shows the LiteLLM badge; non-global rows show it when enabled", () => {
   const off = railItem(owner(), { key: "global" }, t);
   assert.ok(!hasCall(off, "tooltip", "LiteLLM enabled"));
   const on = railItem(owner({ litellmEnabled: true }), { key: "global" }, t);
+  assert.ok(!hasCall(on, "tooltip", "LiteLLM enabled"));
+  const agentOff = railItem(owner(), { key: "codex", name: "Codex" }, t);
+  assert.ok(!hasCall(agentOff, "tooltip", "LiteLLM enabled"));
+  const agentOn = railItem(owner({ litellmEnabled: true }), { key: "codex", name: "Codex" }, t);
   assert.ok(
-    nodesIn(on).some((n) =>
+    nodesIn(agentOn).some((n) =>
       n.c.some(([name, args]) => name === "tooltip" && args[0] === "LiteLLM enabled"),
     ),
   );

@@ -12,6 +12,13 @@ import {
   type RailRow,
 } from "./agent-rail.js";
 import { hoverHighlight, selectedCheck } from "../../shared/selection-ui.js";
+import {
+  applyRailOrder,
+  persistRailOrder,
+  readRailOrder,
+  swapOrderIds,
+  type RailOrder,
+} from "../../shared/rail-order.js";
 
 export type RailTheme = {
   accent: Color;
@@ -37,6 +44,7 @@ export type ProviderRow = {
 export type RailOwner = {
   railHover: string | null;
   railControlHover?: string | null;
+  railSwapSource?: { group: "unofficial" | "providers"; key: string } | null;
   railSelection: string;
   readonly litellmEnabled: boolean;
   officialRailOpen?: boolean;
@@ -209,7 +217,7 @@ function avatar(
                 .when(!row.installed, (el) => el.opacity(0.45))
                 .child(icon(row, 28, t)),
         )
-        .when(s.global && owner.litellmEnabled, (el) => el.child(litellmBadge(t))),
+        .when(!s.global && owner.litellmEnabled, (el) => el.child(litellmBadge(t))),
     );
 }
 
@@ -218,6 +226,7 @@ export function railItem(
   row: RailRow,
   t: RailTheme,
   tile: Color = t.raised,
+  swapGroup: RailSwapGroup | null = null,
 ): NativeElement {
   const s = railState(owner, row);
   const control = s.global || row.installed === undefined ? null : railControl(row);
@@ -230,7 +239,10 @@ export function railItem(
     .on_hover(hoverTracker(owner, row.key))
     .child(indicator(row.key, s.geometry, t))
     .child(avatar(owner, row, t, tile, s))
-    .child(railAction(owner, row, t, control, s.label));
+    .child(railAction(owner, row, t, control, s.label))
+    .when(swapGroup, (inner) =>
+      inner.child(railSwapButton(owner, swapGroup!, row.key, s.label, t)),
+    );
 }
 
 function providerTone(health: string, t: RailTheme): Color {
@@ -295,7 +307,7 @@ function providerAvatar(owner: RailOwner, s: ProviderState, t: RailTheme): Nativ
         .child(
           div()
             .absolute()
-            .left(2)
+            .right(2)
             .bottom(2)
             .size(11)
             .rounded_full()
@@ -303,8 +315,7 @@ function providerAvatar(owner: RailOwner, s: ProviderState, t: RailTheme): Nativ
             .border_2()
             .border_color(t.raised)
             .tooltip(s.label),
-        )
-        .when(owner.litellmEnabled, (el) => el.child(litellmBadge(t))),
+        ),
     );
 }
 
@@ -318,7 +329,8 @@ function providerItem(owner: RailOwner, provider: ProviderRow, t: RailTheme): Na
     .flex_none()
     .on_hover(hoverTracker(owner, s.key))
     .child(indicator(s.key, s.geometry, t))
-    .child(providerAvatar(owner, s, t));
+    .child(providerAvatar(owner, s, t))
+    .child(railSwapButton(owner, "providers", provider.id, s.label, t));
 }
 
 function providerAddItem(owner: RailOwner, t: RailTheme): NativeElement {
@@ -585,6 +597,62 @@ function groupShell(
     );
 }
 
+type RailSwapGroup = "unofficial" | "providers";
+
+function railSwapButton(
+  owner: RailOwner,
+  group: RailSwapGroup,
+  key: string,
+  label: string,
+  t: RailTheme,
+): NativeElement {
+  const source = owner.railSwapSource;
+  const active = Boolean(source && source.group === group && source.key === key);
+  return div()
+    .id("am-rail-swap-" + key)
+    .absolute()
+    .top(8)
+    .right(10)
+    .size(14)
+    .rounded_full()
+    .bg(active ? t.accent : t.raised)
+    .border_1()
+    .border_color(active ? t.foreground : t.border)
+    .flex()
+    .items_center()
+    .justify_center()
+    .cursor_pointer()
+    .role("button")
+    .accessibility_label(active ? "Swap " + label + " — tap another icon in this group" : "Swap " + label)
+    .tooltip(active ? "Tap another icon in this group to swap positions" : "Swap position")
+    .on_click((_e, cx) => handleRailSwap(owner, group, key, cx))
+    .text_size(11)
+    .text_color(active ? t.surface : t.muted)
+    .child("⇄");
+}
+
+function handleRailSwap(
+  owner: RailOwner,
+  group: RailSwapGroup,
+  key: string,
+  cx: Context,
+): void {
+  const cur = owner.railSwapSource ?? null;
+  if (cur && cur.group === group && cur.key !== key) {
+    const saved = readRailOrder();
+    const list = group === "unofficial" ? saved.unofficial : saved.providers;
+    const next = swapOrderIds(list, cur.key, key);
+    const updated: RailOrder =
+      group === "unofficial" ? { ...saved, unofficial: next } : { ...saved, providers: next };
+    persistRailOrder(updated);
+    owner.railSwapSource = null;
+    cx.notify();
+    return;
+  }
+  owner.railSwapSource = cur && cur.group === group && cur.key === key ? null : { group, key };
+  cx.notify();
+}
+
 function groupView(
   owner: RailOwner,
   title: string,
@@ -595,8 +663,14 @@ function groupView(
   const key = title === "Official" ? "officialRailOpen" : "unofficialRailOpen";
   const open = owner[key] !== false;
   const action = `${open ? "Collapse" : "Expand"} ${title}`;
-  const medal = title === "Official" ? "🥇" : "🥉";
-  const { height, scroll: overflow } = railViewport(rows.length);
+  const medal = title === "Official" ? "🏅" : "🥉";
+  const isUnofficial = title === "Unofficial";
+  const swapGroup: RailSwapGroup | null = isUnofficial ? "unofficial" : null;
+  const rowsInGroup = railRows(rows);
+  const displayed = isUnofficial
+    ? applyRailOrder(rowsInGroup, readRailOrder().unofficial, (row) => row.key)
+    : rowsInGroup;
+  const { height, scroll: overflow } = railViewport(displayed.length);
   const folder = folderTile(
     "am-rail-folder-" + title.toLowerCase(),
     action,
@@ -604,7 +678,7 @@ function groupView(
       owner[key] = !open;
       cx.notify();
     },
-    div().absolute().right(-7).bottom(-6).text_size(14).child(medal),
+    div().absolute().right(-7).bottom(-6).text_size(20).child(medal),
     t,
   );
   const list = v_flex()
@@ -612,7 +686,7 @@ function groupView(
     .w(RAIL.width)
     .track_scroll(scroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
-    .children(railRows(rows).map((row) => railItem(owner, row, t, t.surface)));
+    .children(displayed.map((row) => railItem(owner, row, t, t.surface, swapGroup)));
   return groupShell(folder, list, open, height, t);
 }
 
@@ -623,7 +697,8 @@ function providerGroupView(
 ): NativeElement {
   const open = owner.providerRailOpen !== false;
   const action = `${open ? "Collapse" : "Expand"} Model providers`;
-  const { height, scroll: overflow } = railViewport(providers.length + 1);
+  const displayed = applyRailOrder(providers, readRailOrder().providers, (provider) => provider.id);
+  const { height, scroll: overflow } = railViewport(displayed.length + 1);
   const folder = folderTile(
     "am-rail-folder-model-providers",
     action,
@@ -651,7 +726,7 @@ function providerGroupView(
     .w(RAIL.width)
     .track_scroll(owner.providerRailScroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
-    .children(providers.map((provider) => providerItem(owner, provider, t)))
+    .children(displayed.map((provider) => providerItem(owner, provider, t)))
     .child(providerAddItem(owner, t));
   return groupShell(folder, list, open, height, t);
 }

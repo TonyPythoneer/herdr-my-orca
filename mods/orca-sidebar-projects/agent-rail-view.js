@@ -5,6 +5,7 @@ import { h_flex, v_flex, Link } from "gpui-base";
 import { appHome } from "herdr";
 import { RAIL, railGeometry, railViewport, railRows, railControl } from "./agent-rail.js";
 import { hoverHighlight, selectedCheck } from "./selection-ui.js";
+import { applyRailOrder, persistRailOrder, readRailOrder, swapOrderIds } from "./rail-order.js";
 
 const MOTION = { duration: 200, easing: "ease-out" };
 const LITELLM_ICON = "mods/orca-assets/litellm_favicon_light_32.png";
@@ -25,7 +26,7 @@ function icon(row, size, t) {
   return div().size(size).flex_none().rounded(3).bg(t.raised).flex().items_center().justify_center()
     .text_size(Math.round(size * 0.55)).text_color(t.muted).child((row.name ?? "?").slice(0, 1).toUpperCase());
 }
-export function railItem(owner, row, t, tile = t.raised) {
+export function railItem(owner, row, t, tile = t.raised, swapGroup = null) {
   const global = row.key === "global";
   const selected = owner.railSelection === row.key;
   const hovered = owner.railHover === row.key;
@@ -54,8 +55,8 @@ export function railItem(owner, row, t, tile = t.raised) {
     .child(div().size_full().relative().flex().items_center().justify_center()
       .child(global ? svg("mods/orca-assets/bot.svg").size(25).text_color(t.foreground)
         : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))
-      .when(global && owner.litellmEnabled, el => el.child(litellmBadge(t)))));
-  return item.child(railAction(owner, row, t, control, label));
+      .when(!global && owner.litellmEnabled, el => el.child(litellmBadge(t)))));
+  return item.child(railAction(owner, row, t, control, label)).when(swapGroup, el => el.child(railSwapButton(owner, swapGroup, row.key, label, t)));
 }
 
 function providerItem(owner, provider, t) {
@@ -67,7 +68,7 @@ function providerItem(owner, provider, t) {
   const tone = { healthy: t.done, checking: t.accent, unhealthy: t.blocked, unknown: t.dim }[health] ?? t.dim;
   const label = `${provider.name || "Model provider"} · ${{ healthy: "Healthy", checking: "Checking", unhealthy: "Unhealthy", unknown: "Not checked" }[health] ?? "Not checked"}`;
   const src = String(provider.iconPath ?? "").startsWith(`${appHome()}/`) ? String(provider.iconPath).slice(appHome().length + 1) : provider.iconPath;
-  return div().id(`am-rail-${key}`).relative().w(RAIL.width).h(RAIL.row).flex_none()
+  const item = div().id(`am-rail-${key}`).relative().w(RAIL.width).h(RAIL.row).flex_none()
     .on_hover((inside, cx) => {
       if (!inside && owner.railHover !== key) return;
       const next = inside ? key : null;
@@ -84,8 +85,8 @@ function providerItem(owner, provider, t) {
         .child(hoverHighlight(hovered && !selected, t, RAIL.avatarRadius))
         .child(src ? image(src).w(28).h(28).rounded(6) : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted))
         .child(selectedCheck(selected, t))
-        .child(div().absolute().left(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label))
-        .when(owner.litellmEnabled, el => el.child(litellmBadge(t)))));
+        .child(div().absolute().right(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label))));
+  return item.child(railSwapButton(owner, "providers", provider.id, label, t));
 }
 
 function providerAddItem(owner, t) {
@@ -163,12 +164,45 @@ function railAction(owner, row, t, control, label) {
 }
 
 // A Discord-style rounded group has a folder toggle at the top and agent tiles beneath it.
+// Swap two icons inside one group: tap one swap button, then another in the same group.
+function railSwapButton(owner, group, key, label, t) {
+  const source = owner.railSwapSource;
+  const active = Boolean(source && source.group === group && source.key === key);
+  return div().id("am-rail-swap-" + key).absolute().top(8).right(10).size(14).rounded_full()
+    .bg(active ? t.accent : t.raised).border_1().border_color(active ? t.foreground : t.border)
+    .flex().items_center().justify_center().cursor_pointer().role("button")
+    .accessibility_label(active ? "Swap " + label + " — tap another icon in this group" : "Swap " + label)
+    .tooltip(active ? "Tap another icon in this group to swap positions" : "Swap position")
+    .on_click((_e, cx) => handleRailSwap(owner, group, key, cx))
+    .text_size(11).text_color(active ? t.surface : t.muted)
+    .child("⇄");
+}
+
+function handleRailSwap(owner, group, key, cx) {
+  const cur = owner.railSwapSource ?? null;
+  if (cur && cur.group === group && cur.key !== key) {
+    const saved = readRailOrder();
+    const list = group === "unofficial" ? saved.unofficial : saved.providers;
+    const next = swapOrderIds(list, cur.key, key);
+    const updated = group === "unofficial" ? { ...saved, unofficial: next } : { ...saved, providers: next };
+    persistRailOrder(updated);
+    owner.railSwapSource = null;
+    cx.notify();
+    return;
+  }
+  owner.railSwapSource = cur && cur.group === group && cur.key === key ? null : { group, key };
+  cx.notify();
+}
+
 function groupView(owner, title, rows, scroll, t) {
   const key = title === "Official" ? "officialRailOpen" : "unofficialRailOpen";
   const open = owner[key] !== false;
   const action = `${open ? "Collapse" : "Expand"} ${title}`;
-  const medal = title === "Official" ? "🥇" : "🥉";
-  const {height,scroll:overflow} = railViewport(rows.length);
+  const medal = title === "Official" ? "🏅" : "🥉";
+  const isUnofficial = title === "Unofficial";
+  const swapGroup = isUnofficial ? "unofficial" : null;
+  const displayed = isUnofficial ? applyRailOrder(railRows(rows), readRailOrder().unofficial, row => row.key) : railRows(rows);
+  const {height,scroll:overflow} = railViewport(displayed.length);
   const id = "am-rail-list-" + title.toLowerCase();
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
@@ -179,19 +213,20 @@ function groupView(owner, title, rows, scroll, t) {
         .on_click((_e,cx) => { owner[key] = !open; cx.notify(); })
         .child(div().relative().size(32).flex().items_center().justify_center()
           .child(svg("mods/orca-assets/folder--orca-sidebar-projects.svg").size(25).text_color(t.accent))
-          .child(div().absolute().right(-7).bottom(-6).text_size(14).child(medal))))
+          .child(div().absolute().right(-7).bottom(-6).text_size(20).child(medal))))
       .child(div().relative().w(RAIL.width).h(open ? height : 0).overflow_hidden().transition("height", MOTION)
         .opacity(open ? 1 : 0).transition("opacity", MOTION)
         .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
         .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
           .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
-          .children(railRows(rows).map(row => railItem(owner,row,t,t.surface)))))));
+          .children(displayed.map(row => railItem(owner,row,t,t.surface,swapGroup)))))));
 }
 
 function providerGroupView(owner, providers, t) {
   const open = owner.providerRailOpen !== false;
   const action = `${open ? "Collapse" : "Expand"} Model providers`;
-  const {height,scroll:overflow} = railViewport(providers.length + 1);
+  const displayed = applyRailOrder(providers, readRailOrder().providers, provider => provider.id);
+  const {height,scroll:overflow} = railViewport(displayed.length + 1);
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
     .child(v_flex().w(RAIL.width)
@@ -211,7 +246,7 @@ function providerGroupView(owner, providers, t) {
               .child(
                 v_flex().id("am-rail-list-model-providers").w(RAIL.width).track_scroll(owner.providerRailScroll)
                   .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
-                  .children(providers.map(provider => providerItem(owner,provider,t)))
+                  .children(displayed.map(provider => providerItem(owner,provider,t)))
                   .child(providerAddItem(owner,t)),
               ),
           ),
