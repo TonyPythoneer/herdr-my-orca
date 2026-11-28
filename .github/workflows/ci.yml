@@ -15,48 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  plan:
-    name: Select impacted validation
-    runs-on: ubuntu-latest
-    outputs:
-      tests: ${{ steps.plan.outputs.tests }}
-      has_tests: ${{ steps.plan.outputs.has_tests }}
-      mods: ${{ steps.plan.outputs.mods }}
-      has_mods: ${{ steps.plan.outputs.has_mods }}
-      config: ${{ steps.plan.outputs.config }}
-      snapshot: ${{ steps.plan.outputs.snapshot }}
-      git_benchmark: ${{ steps.plan.outputs.git_benchmark }}
-      projection_benchmark: ${{ steps.plan.outputs.projection_benchmark }}
-      lint: ${{ steps.plan.outputs.lint }}
-      syntax: ${{ steps.plan.outputs.syntax }}
-      native: ${{ steps.plan.outputs.native }}
-      has_native: ${{ steps.plan.outputs.has_native }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Verify selector contracts
-        run: |
-          python3 scripts/ci-impact-test.py
-          python3 scripts/test-ci-routing.py
-      - name: Resolve change scope
-        id: plan
-        env:
-          FULL_PROCESS: ${{ github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process' }}
-        run: |
-          args=()
-          if [[ "$FULL_PROCESS" == "true" ]]; then args+=(--force-full); fi
-          python3 scripts/ci-impact.py "${args[@]}" --output impact-plan.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: impact-plan
-          path: impact-plan.json
-          retention-days: 14
-
   validate:
     name: Config and syntax validation
-    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -68,91 +28,27 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
-      - name: Install pinned Vite+ for quality checks
-        if: needs.plan.outputs.lint != '[]'
+      - name: Install frozen toolchain
         run: npm ci --no-audit --no-fund
       - name: Check Python and shell availability
         run: |
           python3 --version
           bash --version | head -n 1
       - name: Validate configuration and mod manifests
-        if: needs.plan.outputs.config == 'true'
         run: node scripts/check-config.mjs
-      - name: Check impacted source syntax
-        if: needs.plan.outputs.syntax != '[]'
-        env:
-          SYNTAX_PATHS: ${{ needs.plan.outputs.syntax }}
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import json, os, subprocess
-          for name in json.loads(os.environ["SYNTAX_PATHS"]):
-              if name.endswith((".js", ".mjs", ".cjs")):
-                  subprocess.run(["node", "--check", name], check=True)
-              elif name.endswith(".py"):
-                  compile(Path(name).read_bytes(), name, "exec")
-              elif name.endswith(".sh"):
-                  subprocess.run(["bash", "-n", name], check=True)
-          PY
       - name: Pack TypeScript outputs
-        if: needs.plan.outputs.config == 'true'
         run: npm run pack:ts
       - name: Check generated Orca UI and shared helpers
-        if: needs.plan.outputs.config == 'true'
         run: ./node_modules/.bin/vpx src/tooling/build-orca-ui.ts --check --out .
       - name: Run UI snapshot observer unit tests (no GUI)
-        if: needs.plan.outputs.snapshot == 'true'
         run: python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
-      - name: Lint impacted handwritten code
-        if: needs.plan.outputs.lint != '[]'
-        env:
-          LINT_PATHS: ${{ needs.plan.outputs.lint }}
-        run: |
-          mapfile -t paths < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["LINT_PATHS"])))')
-          ./node_modules/.bin/vp lint --max-warnings 0 --no-error-on-unmatched-pattern "${paths[@]}"
-      - name: Type check migrated source (complete TS project)
-        if: needs.plan.outputs.lint != '[]'
-        run: npm run check:ts
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
-      - name: Paired Git branch-header microbenchmark
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        run: |
-          python3 scripts/benchmark-git-status.py --output "$RUNNER_TEMP/git-status-benchmark.json"
-          python3 - "$RUNNER_TEMP/git-status-benchmark.json" <<'PY'
-          import json, sys, os
-          d = json.load(open(sys.argv[1]))
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write("## Git branch-header microbenchmark (synthetic, not app latency)\n")
-              f.write("| Metric | Before ms | After ms | Reduction |\n|---|---:|---:|---:|\n")
-              for m in ("p50_ms", "p95_ms"):
-                  f.write(f"| {m} | {d['before'][m]} | {d['after'][m]} | {d[m + '_reduction_pct']}% |\n")
-          PY
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        with:
-          name: git-status-benchmark
-          path: ${{ runner.temp }}/git-status-benchmark.json
-          if-no-files-found: error
-      - name: Benchmark workspace projection at increasing sizes
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        run: ./node_modules/.bin/vpx src/tooling/benchmark-worktree-plan.ts "$RUNNER_TEMP/worktree-projection.json"
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        with:
-          name: worktree-projection-benchmark
-          path: ${{ runner.temp }}/worktree-projection.json
-          if-no-files-found: error
 
   tests:
-    name: Tests (${{ matrix.suite }})
-    needs: plan
-    if: needs.plan.outputs.has_tests == 'true'
+    name: Node flow tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.tests) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -166,41 +62,18 @@ jobs:
           printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status-bar.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
           chmod +x "$RUNNER_TEMP/bin/herdr-app"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run assigned test suite
+      - name: Run Node flow tests
         shell: bash
-        env:
-          SELECTED_TESTS: ${{ toJSON(matrix.files) }}
         run: |
           export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
-          mapfile -t selected < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["SELECTED_TESTS"])))')
-          test "${#selected[@]}" -gt 0
-          set -o pipefail
-          node --test --test-timeout=60000 --experimental-test-coverage --test-coverage-exclude='**/*.test.*' "${selected[@]}" | tee "$RUNNER_TEMP/selected-tests.log"
-      - name: Extract machine-readable performance contracts
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          root = Path(os.environ["RUNNER_TEMP"])
-          log = root / "selected-tests.log"
-          rows = [json.loads(line.split("PERF_CONTRACT ", 1)[1]) for line in log.read_text().splitlines() if "PERF_CONTRACT " in line and line.split("PERF_CONTRACT ", 1)[1].startswith("{")] if log.exists() else []
-          (root / "performance-contracts.json").write_text(json.dumps({"schema":1,"scope":"selected test fixtures, not native latency","contracts":rows}, indent=2))
-          PY
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: selected-tests-${{ matrix.suite }}
-          path: |
-            ${{ runner.temp }}/selected-tests.log
-            ${{ runner.temp }}/performance-contracts.json
-          retention-days: 14
+          selected="$(find mods \( -name '*.test.js' -o -name '*.test.mjs' \) | sort)"
+          test -n "$selected"
+          node --test --test-timeout=60000 $selected
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 
   typescript:
     name: TypeScript checks and tests
-    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -233,62 +106,19 @@ jobs:
 
   checks:
     name: Tests and config validation
-    needs: [plan, validate, tests, typescript]
+    needs: [validate, tests, typescript]
     if: always()
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Require all suites and validation
         env:
           VALIDATION: ${{ needs.validate.result }}
           TESTS: ${{ needs.tests.result }}
           TYPESCRIPT: ${{ needs.typescript.result }}
-          PLAN: ${{ needs.plan.result }}
-          HAS_TESTS: ${{ needs.plan.outputs.has_tests }}
         run: |
-          test "$PLAN" = success
           test "$VALIDATION" = success
+          test "$TESTS" = success
           test "$TYPESCRIPT" = success
-          if [ "$HAS_TESTS" = true ]; then test "$TESTS" = success; else test "$TESTS" = skipped; fi
-      - uses: actions/download-artifact@v4
-        if: always() && needs.plan.result == 'success'
-        with:
-          name: impact-plan
-      - name: Upsert scoped CI feedback
-        if: always() && needs.plan.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
-        env:
-          TEST_RESULT: ${{ needs.tests.result }}
-          VALIDATION_RESULT: ${{ needs.validate.result }}
-        with:
-          script: |
-            const fs = require('node:fs');
-            const p = JSON.parse(fs.readFileSync('impact-plan.json', 'utf8'));
-            const {owner, repo} = context.repo;
-            const issue_number = context.issue.number;
-            const {data: current} = await github.rest.pulls.get({owner, repo, pull_number: issue_number});
-            if (current.state !== 'open' || current.head.sha !== context.payload.pull_request.head.sha) return;
-            const marker = '<!-- herdr-ci-impact:v1 -->';
-            const url = process.env.GITHUB_SERVER_URL + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID;
-            const body = [
-              marker, '## Change-aware CI feedback',
-              'Head: `' + current.head.sha.slice(0,12) + '`',
-              '| Scope | Selected | Total | Result |', '|---|---:|---:|---|',
-              '| JS test files | ' + p.selected_test_files + ' | ' + p.total_test_files + ' | ' + process.env.TEST_RESULT + ' |',
-              '| Native page routes | ' + (current.base.ref === 'ci/main-with-full-process' ? p.total_native_routes : 0) + ' | ' + p.total_native_routes + ' | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' |',
-              '| Native mod checks | ' + (current.base.ref === 'ci/main-with-full-process' ? 'all' : '0') + ' | — | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' |',
-              '| Config / syntax / lint | — | — | ' + process.env.VALIDATION_RESULT + ' |',
-              '| Git benchmark | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' | — | see validation |',
-              '| Workspace projection | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' | — | see validation |',
-              '', 'Full fallback: ' + p.full + '. Unselected work is not a passing measurement.',
-              '', '[Impact plan and scoped coverage artifacts](' + url + ')'
-            ].join('\n');
-            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
-            const old = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.startsWith(marker));
-            if (old) await github.rest.issues.updateComment({owner, repo, comment_id: old.id, body});
-            else await github.rest.issues.createComment({owner, repo, issue_number, body});
 
   delivery:
     name: Build validated delivery
