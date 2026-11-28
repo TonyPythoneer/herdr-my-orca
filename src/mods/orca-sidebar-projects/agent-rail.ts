@@ -1,21 +1,6 @@
 import { viewportHeight, scrolls } from "../../primitives/list-viewport.js";
 
-export const RAIL = Object.freeze({
-  width: 76,
-  row: 60,
-  avatar: 46,
-  avatarRadius: 13,
-  indicatorWidth: 5,
-  idleHeight: 10,
-  selectedHeight: 40,
-  hoverHeight: 20,
-  switchWidth: 27,
-  switchHeight: 17,
-  groupLeft: 9,
-  groupWidth: 58,
-  groupRadius: 16,
-  groupGap: 8,
-});
+import * as SidebarUI from "../../config/ui-settings/agent-settings/sidebar.js";
 
 export type RailRow = {
   key: string;
@@ -40,19 +25,19 @@ export type RailViewport = { height: number; scroll: boolean };
 export type RailControl = { kind: "switch"; checked: boolean } | { kind: "install" };
 
 export function railGeometry(selected = false, hovered = false): RailGeometry {
-  const idleHeight = hovered ? RAIL.hoverHeight : RAIL.idleHeight;
-  const height = selected ? RAIL.selectedHeight : idleHeight;
+  const idleHeight = hovered ? SidebarUI.SELECTION_INDICATOR__HOVER_HEIGHT_PX : SidebarUI.SELECTION_INDICATOR__IDLE_HEIGHT_PX;
+  const height = selected ? SidebarUI.SELECTION_INDICATOR__SELECTED_HEIGHT_PX : idleHeight;
   return {
-    avatarLeft: (RAIL.width - RAIL.avatar) / 2,
-    avatarTop: (RAIL.row - RAIL.avatar) / 2,
+    avatarLeft: (SidebarUI.SIDEBAR__WIDTH_PX - SidebarUI.AVATAR__SIZE_PX) / 2,
+    avatarTop: (SidebarUI.ROW__HEIGHT_PX - SidebarUI.AVATAR__SIZE_PX) / 2,
     indicatorLeft: 0,
-    indicatorTop: (RAIL.row - height) / 2,
+    indicatorTop: (SidebarUI.ROW__HEIGHT_PX - height) / 2,
     indicatorHeight: height,
   };
 }
 
 export function railViewport(count: number): RailViewport {
-  return { height: viewportHeight(count, RAIL.row), scroll: scrolls(count) };
+  return { height: viewportHeight(count, SidebarUI.ROW__HEIGHT_PX), scroll: scrolls(count) };
 }
 
 export function railRows<T extends { installed?: boolean }>(rows: T[]): T[] {

@@ -287,3 +287,15 @@ it("the Global row never shows the LiteLLM badge; non-global rows show it when e
     ),
   );
 });
+
+it("the agent availability switch hit target matches the rendered track", () => {
+  const view = railView(owner(), agents, [], [], t);
+  const root = nodesIn(view).find((node) => idOf(node) === "am-rail-toggle-claude");
+  assert.ok(root);
+  const dimension = (node: RecordedNode, name: string) => node.c.find(([method]) => method === name)?.[1][0];
+  assert.equal(dimension(root, "w"), 27);
+  assert.equal(dimension(root, "h"), 17);
+  assert.equal(dimension(root, "top"), 38);
+  const track = nodesIn(root).find((node) => node !== root && dimension(node, "w") === 27 && dimension(node, "h") === 17);
+  assert.ok(track);
+});

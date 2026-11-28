@@ -10,7 +10,6 @@ import {
 import { h_flex, v_flex, Link, type ScrollHandle } from "gpui-base";
 import { appHome } from "herdr";
 import {
-  RAIL,
   railGeometry,
   railViewport,
   railRows,
@@ -19,6 +18,7 @@ import {
   type RailGeometry,
   type RailRow,
 } from "./agent-rail.js";
+import * as SidebarUI from "../../config/ui-settings/agent-settings/sidebar.js";
 import { hoverHighlight } from "../../primitives/selection-ui.js";
 import {
   applyRailOrder,
@@ -93,7 +93,7 @@ type ProviderState = {
 
 const MOTION = { duration: 200, easing: "ease-out" } as const;
 const LITELLM_ICON = "mods/orca-assets/litellm_favicon_light_32.png";
-const AVATAR_RIGHT = (RAIL.width + RAIL.avatar) / 2;
+const AVATAR_RIGHT = (SidebarUI.SIDEBAR__WIDTH_PX + SidebarUI.AVATAR__SIZE_PX) / 2;
 const HEALTH_LABEL: Record<string, string | undefined> = {
   healthy: "Healthy",
   checking: "Checking",
@@ -171,7 +171,7 @@ function indicator(key: string, g: RailGeometry, t: RailTheme): NativeElement {
     .left(g.indicatorLeft)
     .top(0)
     .bottom(0)
-    .w(RAIL.indicatorWidth)
+    .w(SidebarUI.SELECTION_INDICATOR__WIDTH_PX)
     .flex()
     .items_center()
     .child(
@@ -179,7 +179,7 @@ function indicator(key: string, g: RailGeometry, t: RailTheme): NativeElement {
         .id("am-rail-pill-" + key)
         .w_full()
         .h(g.indicatorHeight)
-        .rounded_r(RAIL.indicatorWidth)
+        .rounded_r(SidebarUI.SELECTION_INDICATOR__WIDTH_PX)
         .bg(t.foreground)
         .transition("height", MOTION),
     );
@@ -197,8 +197,8 @@ function avatar(
     .absolute()
     .left(s.geometry.avatarLeft)
     .top(s.geometry.avatarTop)
-    .size(RAIL.avatar)
-    .rounded(RAIL.avatarRadius)
+    .size(SidebarUI.AVATAR__SIZE_PX)
+    .rounded(SidebarUI.AVATAR__RADIUS_PX)
     .bg(tile)
     .flex()
     .items_center()
@@ -213,7 +213,7 @@ function avatar(
         .id("am-rail-tile-" + row.key)
         .absolute()
         .inset_0()
-        .rounded(RAIL.avatarRadius)
+        .rounded(SidebarUI.AVATAR__RADIUS_PX)
         .bg(t.hover)
         .opacity(s.selected || s.tileHovered ? 1 : 0)
         .transition("opacity", MOTION),
@@ -247,8 +247,8 @@ export function railItem(
   return div()
     .id("am-rail-" + row.key)
     .relative()
-    .w(RAIL.width)
-    .h(RAIL.row)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
+    .h(SidebarUI.ROW__HEIGHT_PX)
     .flex_none()
     .on_hover(hoverTracker(owner, row.key))
     .child(indicator(row.key, s.geometry, t))
@@ -290,8 +290,8 @@ function providerAvatar(owner: RailOwner, s: ProviderState, t: RailTheme): Nativ
     .absolute()
     .left(s.geometry.avatarLeft)
     .top(s.geometry.avatarTop)
-    .size(RAIL.avatar)
-    .rounded(RAIL.avatarRadius)
+    .size(SidebarUI.AVATAR__SIZE_PX)
+    .rounded(SidebarUI.AVATAR__RADIUS_PX)
     .bg(t.surface)
     .flex()
     .items_center()
@@ -308,7 +308,7 @@ function providerAvatar(owner: RailOwner, s: ProviderState, t: RailTheme): Nativ
         .flex()
         .items_center()
         .justify_center()
-        .child(hoverHighlight(s.hovered && !s.selected, t, RAIL.avatarRadius))
+        .child(hoverHighlight(s.hovered && !s.selected, t, SidebarUI.AVATAR__RADIUS_PX))
         .child(
           s.src
             ? image(s.src).w(28).h(28).rounded(6)
@@ -334,8 +334,8 @@ function providerItem(owner: RailOwner, provider: ProviderRow, t: RailTheme): Na
   return div()
     .id(`am-rail-${s.key}`)
     .relative()
-    .w(RAIL.width)
-    .h(RAIL.row)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
+    .h(SidebarUI.ROW__HEIGHT_PX)
     .flex_none()
     .on_hover(hoverTracker(owner, s.key))
     .child(indicator(s.key, s.geometry, t))
@@ -350,8 +350,8 @@ function providerAddItem(owner: RailOwner, t: RailTheme): NativeElement {
   return div()
     .id("am-rail-provider-add")
     .relative()
-    .w(RAIL.width)
-    .h(RAIL.row)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
+    .h(SidebarUI.ROW__HEIGHT_PX)
     .flex_none()
     .on_hover(hoverTracker(owner, key))
     .child(
@@ -360,14 +360,14 @@ function providerAddItem(owner: RailOwner, t: RailTheme): NativeElement {
         .left(g.indicatorLeft)
         .top(0)
         .bottom(0)
-        .w(RAIL.indicatorWidth)
+        .w(SidebarUI.SELECTION_INDICATOR__WIDTH_PX)
         .flex()
         .items_center()
         .child(
           div()
             .w_full()
             .h(g.indicatorHeight)
-            .rounded_r(RAIL.indicatorWidth)
+            .rounded_r(SidebarUI.SELECTION_INDICATOR__WIDTH_PX)
             .bg(t.foreground)
             .transition("height", MOTION),
         ),
@@ -378,7 +378,7 @@ function providerAddItem(owner: RailOwner, t: RailTheme): NativeElement {
         .absolute()
         .left(g.avatarLeft)
         .top(g.avatarTop)
-        .size(RAIL.avatar)
+        .size(SidebarUI.AVATAR__SIZE_PX)
         .rounded_full()
         .border_1()
         .border_dashed()
@@ -432,14 +432,14 @@ function AgentAvailabilitySwitch(
   t: RailTheme,
   checked: boolean,
 ): NativeElement {
-  const switchLeft = AVATAR_RIGHT - RAIL.switchWidth;
+  const switchLeft = AVATAR_RIGHT - SidebarUI.ENABLE_SWITCH__WIDTH_PX;
   return div()
     .id("am-rail-toggle-" + row.key)
     .absolute()
     .left(switchLeft)
-    .top(38)
-    .w(RAIL.switchWidth)
-    .h(RAIL.switchHeight)
+    .top(SidebarUI.ENABLE_SWITCH__TOP_OFFSET_PX)
+    .w(SidebarUI.ENABLE_SWITCH__WIDTH_PX)
+    .h(SidebarUI.ENABLE_SWITCH__HEIGHT_PX)
     .flex()
     .items_center()
     .justify_center()
@@ -455,8 +455,8 @@ function AgentAvailabilitySwitch(
     .child(
       div()
         .relative()
-        .w(RAIL.switchWidth)
-        .h(RAIL.switchHeight)
+        .w(SidebarUI.ENABLE_SWITCH__WIDTH_PX)
+        .h(SidebarUI.ENABLE_SWITCH__HEIGHT_PX)
         .rounded_full()
         .bg(checked ? t.accent : t.ring)
         .border_1()
@@ -465,9 +465,9 @@ function AgentAvailabilitySwitch(
         .child(
           div()
             .absolute()
-            .top(2)
-            .left(checked ? RAIL.switchWidth - 15 : 2)
-            .size(11)
+            .top(SidebarUI.ENABLE_SWITCH_THUMB__INSET_PX)
+            .left(checked ? SidebarUI.ENABLE_SWITCH__WIDTH_PX - SidebarUI.ENABLE_SWITCH_THUMB__SIZE_PX - SidebarUI.ENABLE_SWITCH_THUMB__CHECKED_RIGHT_OFFSET_PX : SidebarUI.ENABLE_SWITCH_THUMB__INSET_PX)
+            .size(SidebarUI.ENABLE_SWITCH_THUMB__SIZE_PX)
             .rounded_full()
             .bg(t.foreground)
             .transition("left", MOTION),
@@ -541,8 +541,8 @@ function AgentGroupCollapsibleTrigger(
   return div()
     .id(id)
     .relative()
-    .w(RAIL.width)
-    .h(RAIL.row)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
+    .h(SidebarUI.ROW__HEIGHT_PX)
     .flex_none()
     .flex()
     .items_center()
@@ -575,33 +575,33 @@ function AgentGroupCollapsible(
 ): NativeElement {
   return div()
     .relative()
-    .w(RAIL.width)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
     .flex_none()
-    .mb(RAIL.groupGap)
+    .mb(SidebarUI.GROUP__GAP_PX)
     .child(
       div()
         .absolute()
-        .left(RAIL.groupLeft)
-        .w(RAIL.groupWidth)
+        .left(SidebarUI.GROUP__LEFT_OFFSET_PX)
+        .w(SidebarUI.GROUP__WIDTH_PX)
         .top(0)
         .bottom(0)
-        .rounded(RAIL.groupRadius)
+        .rounded(SidebarUI.GROUP__RADIUS_PX)
         .bg(t.raised),
     )
     .child(
       v_flex()
-        .w(RAIL.width)
+        .w(SidebarUI.SIDEBAR__WIDTH_PX)
         .child(folder)
         .child(
           div()
             .relative()
-            .w(RAIL.width)
+            .w(SidebarUI.SIDEBAR__WIDTH_PX)
             .h(open ? height : 0)
             .overflow_hidden()
             .transition("height", MOTION)
             .opacity(open ? 1 : 0)
             .transition("opacity", MOTION)
-            .child(div().relative().w(RAIL.width).h(height).overflow_hidden().child(list)),
+            .child(div().relative().w(SidebarUI.SIDEBAR__WIDTH_PX).h(height).overflow_hidden().child(list)),
         ),
     );
 }
@@ -620,7 +620,7 @@ function railDragStart(
   const base = owner.railDisplayed?.[group] ?? [];
   const index = base.indexOf(key);
   if (index < 0) return;
-  owner.railDrag = { group, key, base, pressOffset, pointerY: index * RAIL.row + pressOffset };
+  owner.railDrag = { group, key, base, pressOffset, pointerY: index * SidebarUI.ROW__HEIGHT_PX + pressOffset };
   cx.notify();
 }
 
@@ -635,7 +635,7 @@ function railDragEnd(owner: RailOwner, cx: Context): void {
   const drag = owner.railDrag;
   owner.railDrag = null;
   if (drag) {
-    const target = dragSlot(drag.pointerY, drag.pressOffset, RAIL.row, drag.base.length);
+    const target = dragSlot(drag.pointerY, drag.pressOffset, SidebarUI.ROW__HEIGHT_PX, drag.base.length);
     const next = moveInOrder(drag.base, drag.key, target);
     if (next.some((key, i) => key !== drag.base[i])) {
       persistRailOrder({ ...readRailOrder(), [drag.group]: next });
@@ -659,24 +659,24 @@ function dragRows<T>(
     ? moveInOrder(
         drag.base,
         drag.key,
-        dragSlot(drag.pointerY, drag.pressOffset, RAIL.row, drag.base.length),
+        dragSlot(drag.pointerY, drag.pressOffset, SidebarUI.ROW__HEIGHT_PX, drag.base.length),
       )
     : items.map(keyOf);
   return div()
     .relative()
-    .w(RAIL.width)
-    .h(keys.length * RAIL.row)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
+    .h(keys.length * SidebarUI.ROW__HEIGHT_PX)
     .children(
       keys.map((key, slot) => {
         const dragged = drag?.key === key;
-        const top = drag && dragged ? drag.pointerY - drag.pressOffset : slot * RAIL.row;
+        const top = drag && dragged ? drag.pointerY - drag.pressOffset : slot * SidebarUI.ROW__HEIGHT_PX;
         const item = byKey.get(key);
         return div()
           .absolute()
           .left(0)
           .top(top)
-          .w(RAIL.width)
-          .h(RAIL.row)
+          .w(SidebarUI.SIDEBAR__WIDTH_PX)
+          .h(SidebarUI.ROW__HEIGHT_PX)
           .when(!dragged, (el) => el.transition("top", MOTION))
           .when(dragged, (el) => el.shadow_lg())
           .on_mouse_down("left", (e, cx) =>
@@ -722,7 +722,7 @@ function AgentCategoryGroup(
         .on_mouse_move((e, cx) => railDragMove(owner, "unofficial", e, cx))
         .on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx)),
     )
-    .w(RAIL.width)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
     .track_scroll(scroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
     .children(
@@ -777,7 +777,7 @@ function ModelProviderGroup(
     .id("am-rail-list-model-providers")
     .on_mouse_move((e, cx) => railDragMove(owner, "providers", e, cx))
     .on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx))
-    .w(RAIL.width)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
     .track_scroll(owner.providerRailScroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
     .children([
@@ -802,7 +802,7 @@ export function railView(
 ): NativeElement {
   return v_flex()
     .id("am-agent-rail")
-    .w(RAIL.width)
+    .w(SidebarUI.SIDEBAR__WIDTH_PX)
     .flex_none()
     .min_h(0)
     .bg(t.surface)

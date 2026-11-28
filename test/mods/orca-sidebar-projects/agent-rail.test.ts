@@ -1,7 +1,7 @@
 import { it } from "vite-plus/test";
 import assert from "node:assert/strict";
+import * as SidebarUI from "../../../src/config/ui-settings/agent-settings/sidebar.js";
 import {
-  RAIL,
   railGeometry,
   railViewport,
   railRows,
@@ -19,17 +19,17 @@ it("global and every agent indicator are centered on the rounded-square avatar",
     ]) {
       const g = railGeometry(selected, hovered);
       assert.equal(
-        offset + g.avatarTop + RAIL.avatar / 2,
+        offset + g.avatarTop + SidebarUI.AVATAR__SIZE_PX / 2,
         offset + g.indicatorTop + g.indicatorHeight / 2,
       );
       assert.equal(g.indicatorLeft, 0);
-      assert.equal(g.avatarLeft + RAIL.avatar / 2, RAIL.width / 2);
+      assert.equal(g.avatarLeft + SidebarUI.AVATAR__SIZE_PX / 2, SidebarUI.SIDEBAR__WIDTH_PX / 2);
     }
   }
-  assert.equal(railGeometry().indicatorHeight, RAIL.idleHeight);
+  assert.equal(railGeometry().indicatorHeight, SidebarUI.SELECTION_INDICATOR__IDLE_HEIGHT_PX);
   assert.equal(railGeometry(true).indicatorTop, 10);
-  assert.equal(RAIL.avatarRadius, 13);
-  assert.equal(RAIL.groupLeft + RAIL.groupWidth / 2, RAIL.width / 2);
+  assert.equal(SidebarUI.AVATAR__RADIUS_PX, 13);
+  assert.equal(SidebarUI.GROUP__LEFT_OFFSET_PX + SidebarUI.GROUP__WIDTH_PX / 2, SidebarUI.SIDEBAR__WIDTH_PX / 2);
 });
 
 it("each group caps independently at five and a half rows", () => {
@@ -62,8 +62,8 @@ it("installed first, stable when toggling, no switch for missing CLI", () => {
 });
 
 it("agent availability switch uses its visible track dimensions", () => {
-  assert.equal(RAIL.switchWidth, 27);
-  assert.equal(RAIL.switchHeight, 17);
-  assert.equal(Object.hasOwn(RAIL, "hitWidth"), false);
-  assert.equal(Object.hasOwn(RAIL, "hitHeight"), false);
+  assert.equal(SidebarUI.ENABLE_SWITCH__WIDTH_PX, 27);
+  assert.equal(SidebarUI.ENABLE_SWITCH__HEIGHT_PX, 17);
+  assert.equal(Object.hasOwn(SidebarUI, "hitWidth"), false);
+  assert.equal(Object.hasOwn(SidebarUI, "hitHeight"), false);
 });
