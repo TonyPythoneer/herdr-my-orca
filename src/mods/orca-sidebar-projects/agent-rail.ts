@@ -11,8 +11,6 @@ export const RAIL = Object.freeze({
   hoverHeight: 20,
   switchWidth: 27,
   switchHeight: 17,
-  hitWidth: 34,
-  hitHeight: 27,
   groupLeft: 9,
   groupWidth: 58,
   groupRadius: 16,

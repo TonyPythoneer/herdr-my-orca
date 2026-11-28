@@ -60,3 +60,10 @@ it("installed first, stable when toggling, no switch for missing CLI", () => {
   rows[1].enabled = false;
   assert.deepEqual(railControl(rows[1]), { kind: "switch", checked: false });
 });
+
+it("agent availability switch uses its visible track dimensions", () => {
+  assert.equal(RAIL.switchWidth, 27);
+  assert.equal(RAIL.switchHeight, 17);
+  assert.equal(Object.hasOwn(RAIL, "hitWidth"), false);
+  assert.equal(Object.hasOwn(RAIL, "hitHeight"), false);
+});

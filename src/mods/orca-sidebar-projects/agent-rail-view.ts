@@ -151,7 +151,7 @@ function hoverTracker(owner: RailOwner, key: string) {
   };
 }
 
-function railState(owner: RailOwner, row: RailRow): RailState {
+function getAgentSelectionState(owner: RailOwner, row: RailRow): RailState {
   const global = row.key === "global";
   const selected = owner.railSelection === row.key;
   const hovered = owner.railHover === row.key;
@@ -242,7 +242,7 @@ export function railItem(
   t: RailTheme,
   tile: Color = t.raised,
 ): NativeElement {
-  const s = railState(owner, row);
+  const s = getAgentSelectionState(owner, row);
   const control = s.global || row.installed === undefined ? null : railControl(row);
   return div()
     .id("am-rail-" + row.key)
@@ -256,7 +256,7 @@ export function railItem(
     .child(railAction(owner, row, t, control, s.label));
 }
 
-function providerTone(health: string, t: RailTheme): Color {
+function getProviderHealthStatusColor(health: string, t: RailTheme): Color {
   const tones: Record<string, Color | undefined> = {
     healthy: t.done,
     checking: t.accent,
@@ -279,7 +279,7 @@ function providerState(owner: RailOwner, provider: ProviderRow, t: RailTheme): P
     hovered,
     geometry: railGeometry(selected, hovered),
     label: `${provider.name || "Model provider"} · ${HEALTH_LABEL[health] ?? "Not checked"}`,
-    tone: providerTone(health, t),
+    tone: getProviderHealthStatusColor(health, t),
     src: iconPath.startsWith(home) ? iconPath.slice(home.length) : iconPath,
   };
 }
@@ -426,20 +426,20 @@ function globalAction(owner: RailOwner, t: RailTheme, label: string): NativeElem
     .child(svg("mods/orca-assets/settings.svg").size(12).text_color(t.muted));
 }
 
-function switchAction(
+function AgentAvailabilitySwitch(
   owner: RailOwner,
   row: RailRow,
   t: RailTheme,
   checked: boolean,
 ): NativeElement {
-  const hitLeft = AVATAR_RIGHT - (RAIL.hitWidth + RAIL.switchWidth) / 2;
+  const switchLeft = AVATAR_RIGHT - RAIL.switchWidth;
   return div()
     .id("am-rail-toggle-" + row.key)
     .absolute()
-    .left(hitLeft)
-    .top(33)
-    .w(RAIL.hitWidth)
-    .h(RAIL.hitHeight)
+    .left(switchLeft)
+    .top(38)
+    .w(RAIL.switchWidth)
+    .h(RAIL.switchHeight)
     .flex()
     .items_center()
     .justify_center()
@@ -526,12 +526,12 @@ function railAction(
   label: string,
 ): NativeElement {
   if (row.key === "global") return globalAction(owner, t, label);
-  if (control?.kind === "switch") return switchAction(owner, row, t, control.checked);
+  if (control?.kind === "switch") return AgentAvailabilitySwitch(owner, row, t, control.checked);
   if (control?.kind === "install") return installAction(owner, row, t);
   return div().size(0);
 }
 
-function folderTile(
+function AgentGroupCollapsibleTrigger(
   id: string,
   action: string,
   toggle: (cx: Context) => void,
@@ -566,7 +566,7 @@ function folderTile(
     );
 }
 
-function groupShell(
+function AgentGroupCollapsible(
   folder: NativeElement,
   list: NativeElement,
   open: boolean,
@@ -687,7 +687,7 @@ function dragRows<T>(
     );
 }
 
-function groupView(
+function AgentCategoryGroup(
   owner: RailOwner,
   title: string,
   rows: RailRow[],
@@ -705,7 +705,7 @@ function groupView(
     : rowsInGroup;
   if (isUnofficial) owner.railDisplayed = { ...owner.railDisplayed, unofficial: displayed.map((row) => row.key) };
   const { height, scroll: overflow } = railViewport(displayed.length);
-  const folder = folderTile(
+  const folder = AgentGroupCollapsibleTrigger(
     "am-rail-folder-" + title.toLowerCase(),
     action,
     (cx) => {
@@ -738,10 +738,10 @@ function groupView(
           ]
         : displayed.map((row) => railItem(owner, row, t, t.surface)),
     );
-  return groupShell(folder, list, open, height, t);
+  return AgentGroupCollapsible(folder, list, open, height, t);
 }
 
-function providerGroupView(
+function ModelProviderGroup(
   owner: RailOwner,
   providers: ProviderRow[],
   t: RailTheme,
@@ -751,7 +751,7 @@ function providerGroupView(
   const displayed = applyRailOrder(providers, readRailOrder().providers, (provider) => provider.id);
   owner.railDisplayed = { ...owner.railDisplayed, providers: displayed.map((provider) => provider.id) };
   const { height, scroll: overflow } = railViewport(displayed.length + 1);
-  const folder = folderTile(
+  const folder = AgentGroupCollapsibleTrigger(
     "am-rail-folder-model-providers",
     action,
     (cx) => {
@@ -790,7 +790,7 @@ function providerGroupView(
       ),
     ])
     .child(providerAddItem(owner, t));
-  return groupShell(folder, list, open, height, t);
+  return AgentGroupCollapsible(folder, list, open, height, t);
 }
 
 export function railView(
@@ -817,8 +817,8 @@ export function railView(
         .justify_center()
         .child(div().w(32).h(2).rounded_full().bg(t.border)),
     )
-    .child(groupView(owner, "Official", official, owner.officialRailScroll, t))
-    .child(groupView(owner, "Unofficial", unofficial, owner.unofficialRailScroll, t))
+    .child(AgentCategoryGroup(owner, "Official", official, owner.officialRailScroll, t))
+    .child(AgentCategoryGroup(owner, "Unofficial", unofficial, owner.unofficialRailScroll, t))
     .child(
       div()
         .w_full()
@@ -828,5 +828,5 @@ export function railView(
         .justify_center()
         .child(div().w(32).h(2).rounded_full().bg(t.border)),
     )
-    .child(providerGroupView(owner, providers, t));
+    .child(ModelProviderGroup(owner, providers, t));
 }
