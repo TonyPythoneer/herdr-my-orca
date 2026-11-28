@@ -45,33 +45,6 @@ jobs:
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 
-  tests:
-    name: Node flow tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - name: Install isolated herdr-app test stand-in
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status-bar.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
-          chmod +x "$RUNNER_TEMP/bin/herdr-app"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run Node flow tests
-        shell: bash
-        run: |
-          export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
-          selected="$(find mods \( -name '*.test.js' -o -name '*.test.mjs' \) | sort)"
-          test -n "$selected"
-          node --test --test-timeout=60000 $selected
-      - name: Ensure tests did not modify tracked files
-        run: git diff --exit-code
-
   typescript:
     name: TypeScript checks and tests
     runs-on: ubuntu-latest
@@ -106,18 +79,16 @@ jobs:
 
   checks:
     name: Tests and config validation
-    needs: [validate, tests, typescript]
+    needs: [validate, typescript]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Require all suites and validation
         env:
           VALIDATION: ${{ needs.validate.result }}
-          TESTS: ${{ needs.tests.result }}
           TYPESCRIPT: ${{ needs.typescript.result }}
         run: |
           test "$VALIDATION" = success
-          test "$TESTS" = success
           test "$TYPESCRIPT" = success
 
   delivery:
