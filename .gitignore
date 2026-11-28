@@ -8,3 +8,6 @@ artifacts
 
 # Unified Vite+ toolchain and isolated build candidates
 /node_modules/
+
+# Vitest coverage output (CI uploads json-summary as an artifact)
+/coverage/
