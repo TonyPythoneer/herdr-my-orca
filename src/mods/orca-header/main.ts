@@ -502,10 +502,10 @@ export default class Tabs extends View {
     const b = this.plusBounds;
     const vp = globalWindow()?.viewport_size();
     if (!b || !vp) return "pointer";
-    return {
-      x: Math.max(8, Math.min(b.x + b.width - 288, vp.width - 288 - 8)),
-      y: b.y + b.height + 4,
-    };
+    // The menu window is a fixed 288px and its panel sits at the window's left edge, so 24 = MENU_PAD (6)
+    // + half the 36px first button (18): the New Terminal button lands under the +.
+    const x = b.x + b.width / 2 - 24;
+    return { x: Math.max(8, Math.min(x, vp.width - 288 - 8)), y: b.y + b.height + 4 };
   }
 
   syncLanding(_cx: AsyncContext): void {

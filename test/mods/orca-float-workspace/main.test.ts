@@ -162,7 +162,7 @@ it("every control of an open panel does its one job and hides the panel where it
   view.open = true;
   log.length = 0;
   click(byId(asNode(view.render()), "orca-float-start-agent"), cx);
-  assert.deepEqual(log, [["open", { mod: "orca-new-menu", kind: "popup", width: 288 }]]);
+  assert.deepEqual(log, [["open", { mod: "orca-tab-dropdown", kind: "popup", frame: "none", width: 288 }]]);
   assert.equal(view.open, true);
 });
 

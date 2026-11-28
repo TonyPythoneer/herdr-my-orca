@@ -232,7 +232,13 @@ export function addEndControls(
     .when(Boolean(paneDrag?.inTabStrip), (el) => el.child(dropIndicator(t)))
     .child(
       tabNew(() =>
-        openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, at: view.newMenuAt() }),
+        openOverlay({
+          mod: "orca-tab-dropdown",
+          kind: "popup",
+          frame: "none",
+          width: 288,
+          at: view.newMenuAt(),
+        }),
       )
         .id("tab-new")
         .relative(),

@@ -1,7 +1,7 @@
 import { SPECS } from "./agent-flyout.js";
 import { exec, home } from "herdr";
 
-                                   
+                                       
 const INSTALL_DIRS = [
 	".bun/bin",
 	".local/bin",

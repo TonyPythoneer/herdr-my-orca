@@ -179,6 +179,23 @@ function flyoutX(left: number, right: number, windowWidth: number): number {
   );
 }
 
+function menuWidth(n: number): number {
+  if (n > AGENT_FULL) return 288;
+  return 2 * MENU_PAD + Math.max(36, n * 36 + (n - 1) * AGENT_GAP);
+}
+
+// The rail's Unofficial swap order (shared key "rail.order", set by orca-sidebar-projects) decides
+// this group's order. A row's tip is its agent key. Unsaved rows keep their place after saved ones.
+function railUnofficialOrder(rows: MenuRow[]): MenuRow[] {
+  const saved = shared("rail.order") as { unofficial?: unknown } | null;
+  const order = Array.isArray(saved?.unofficial) ? (saved?.unofficial as string[]) : [];
+  const rank = (row: MenuRow): number => {
+    const i = order.indexOf(row.tip ?? "");
+    return i < 0 ? order.length : i;
+  };
+  return [...rows].sort((a, b) => rank(a) - rank(b));
+}
+
 function shortcut(name: string): string {
   const k = keys().find((b) => b.section === "global" && b.action === name);
   if (!k?.keys.trim()) return "";
@@ -588,12 +605,12 @@ export default class NewMenu extends View {
         ? svg(String(p.icon)).size(size).flex_none().text_color(t.muted)
         : image(String(p.icon)).size(size).flex_none();
     if (row.image)
-      return image(sharedAsset(`mods/orca-new-menu/${row.image}`))
+      return image(sharedAsset(`mods/orca-tab-dropdown/${row.image}`))
         .size(size)
         .flex_none()
         .rounded(4);
     if (row.icon)
-      return svg(sharedAsset(`mods/orca-new-menu/${row.icon}.svg`))
+      return svg(sharedAsset(`mods/orca-tab-dropdown/${row.icon}.svg`))
         .size(size)
         .flex_none()
         .text_color(t.muted);
@@ -618,7 +635,7 @@ export default class NewMenu extends View {
       .border_color(t.ring)
       .bg(t.input)
       .child(
-        svg("mods/orca-assets/search--orca-new-menu.svg").size(14).flex_none().text_color(t.muted),
+        svg("mods/orca-assets/search--orca-tab-dropdown.svg").size(14).flex_none().text_color(t.muted),
       )
       .child(
         Input.new(this.input)
@@ -816,7 +833,7 @@ export default class NewMenu extends View {
           .right(0)
           .flex()
           .justify_center()
-          .child(svg("mods/orca-assets/tip-arrow--orca-new-menu.svg").w(14).h(8).flex_none()),
+          .child(svg("mods/orca-assets/tip-arrow--orca-tab-dropdown.svg").w(14).h(8).flex_none()),
       );
   }
 
@@ -824,7 +841,7 @@ export default class NewMenu extends View {
     const rows = this.agentRows();
     return {
       official: rows.filter((row) => !row.section && !row.settings),
-      unofficial: rows.filter((row) => row.section === "Unofficial"),
+      unofficial: railUnofficialOrder(rows.filter((row) => row.section === "Unofficial")),
       settings: rows.find((row) => row.settings),
     };
   }
@@ -973,14 +990,21 @@ export default class NewMenu extends View {
     return this.picking ? this.renderPicker(t) : this.renderPalette(t);
   }
 
+  // The popup is frame "none" and fixed at 288px, so this panel draws its own box and sizes
+  // itself to its rows. A press outside the panel closes the menu.
   renderPalette(t: MenuTheme): NativeElement {
     return v_flex()
-      .id("orca-new-menu")
+      .id("orca-tab-dropdown")
       .track_focus(this.handle)
-      .w_full()
+      .w(menuWidth(this.agentRows().length))
       .p(MENU_PAD)
       .gap(6)
       .bg(t.popover)
+      .rounded(8)
+      .border_1()
+      .border_color(t.border)
+      .shadow_md()
+      .on_mouse_down_out(() => this.closeMenu())
       .text_size(12)
       .on_key_down((e, cx) => this.onKey(e, cx, null))
       .on_scroll_wheel((e, cx) => {
@@ -997,12 +1021,17 @@ export default class NewMenu extends View {
     const picking = this.picking;
     const page = this.wheel(FIT.models);
     return v_flex()
-      .id("orca-new-menu")
+      .id("orca-tab-dropdown")
       .track_focus(this.handle)
       .w_full()
       .min_h(0)
       .p(4)
       .bg(t.popover)
+      .rounded(8)
+      .border_1()
+      .border_color(t.border)
+      .shadow_md()
+      .on_mouse_down_out(() => this.closeMenu())
       .text_size(12)
       .on_key_down((e, cx) => this.onKey(e, cx, picking))
       .on_scroll_wheel((e, cx) => {
@@ -1023,15 +1052,15 @@ export default class NewMenu extends View {
 }
 
 const SHARED_ASSET_PATHS: Record<string, string> = Object.freeze({
-  "mods/orca-new-menu/chevron-left.svg": "mods/orca-assets/chevron-left--orca-agent-settings.svg",
-  "mods/orca-new-menu/chevron-right.svg": "mods/orca-assets/chevron-right--orca-agent-settings.svg",
-  "mods/orca-new-menu/freebuff.png": "mods/orca-assets/freebuff--orca-new-menu.png",
-  "mods/orca-new-menu/git-branch-plus.svg":
+  "mods/orca-tab-dropdown/chevron-left.svg": "mods/orca-assets/chevron-left--orca-agent-settings.svg",
+  "mods/orca-tab-dropdown/chevron-right.svg": "mods/orca-assets/chevron-right--orca-agent-settings.svg",
+  "mods/orca-tab-dropdown/freebuff.png": "mods/orca-assets/freebuff--orca-tab-dropdown.png",
+  "mods/orca-tab-dropdown/git-branch-plus.svg":
     "mods/orca-assets/git-branch-plus--orca-context-menu.svg",
-  "mods/orca-new-menu/search.svg": "mods/orca-assets/search--orca-new-menu.svg",
-  "mods/orca-new-menu/square-terminal.svg":
+  "mods/orca-tab-dropdown/search.svg": "mods/orca-assets/search--orca-tab-dropdown.svg",
+  "mods/orca-tab-dropdown/square-terminal.svg":
     "mods/orca-assets/square-terminal--orca-agent-flyout.svg",
-  "mods/orca-new-menu/workflow.svg": "mods/orca-assets/workflow--orca-context-menu.svg",
+  "mods/orca-tab-dropdown/workflow.svg": "mods/orca-assets/workflow--orca-context-menu.svg",
 });
 function sharedAsset(path: string): string {
   return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;

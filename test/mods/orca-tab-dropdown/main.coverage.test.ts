@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test, vi } from "vite-plus/test";
 import { InputState } from "gpui-base";
-import NewMenu from "../../../src/mods/orca-new-menu/main.js";
-import type { AgentRow } from "../../../src/mods/orca-new-menu/rows.js";
+import NewMenu from "../../../src/mods/orca-tab-dropdown/main.js";
+import type { AgentRow } from "../../../src/mods/orca-tab-dropdown/rows.js";
 
 type Calls = [string, unknown[]][];
 type Built = { name: string; args: unknown[]; calls: Calls };
@@ -486,7 +486,7 @@ test("agent icons: tinted program icons are svg, plain ones images, and each pal
     ["svg", "mods/orca-assets/square-terminal--orca-agent-flyout.svg"],
     ["svg", "claude.svg"],
     ["image", "gemini.png"],
-    ["image", "mods/orca-assets/freebuff--orca-new-menu.png"],
+    ["image", "mods/orca-assets/freebuff--orca-tab-dropdown.png"],
     ["svg", "mods/orca-assets/bot.svg"],
   ]);
 });

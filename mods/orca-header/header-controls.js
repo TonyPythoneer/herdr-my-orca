@@ -90,7 +90,7 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
   // tab-bar-surface.tsx:221-227 — `ml-2 my-auto flex h-7 w-7 shrink-0 items-center
   // justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground`,
   // holding a Lucide `Plus` at `w-3.5 h-3.5` (14px). It is a DropdownMenuTrigger, not a bare
-  // action: it opens the new-tab menu, which `orca-new-menu` provides.
+  // action: it opens the new-tab menu, which `orca-tab-dropdown` provides.
   // `rounded-md` resolves to 8px, not 6: --radius .625rem x .8 (main.css:175,195).
   const tabNew = (action) => IconButton("tab-new", "New tab", svg("mods/orca-assets/plus--orca-header.svg").size(14).flex_none(),
     { t, size: 28, radius: "full", tooltip: "New tab", hoverBg: tint(t.foreground, 0.1), onClick: action })
@@ -126,7 +126,7 @@ export function addEndControls(row, view, { t, paneDrag, shown, w }) {
       )
     )
     // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-    .child(tabNew(() => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288, at: view.newMenuAt() })).id("tab-new").relative())
+    .child(tabNew(() => openOverlay({ mod: "orca-tab-dropdown", kind: "popup", frame: "none", width: 288, at: view.newMenuAt() })).id("tab-new").relative())
     .child(div().flex_1())
     // TitlebarMainStrip.tsx:58-69 — the single-tab case gets a `Minimize2`
     // (`showTitlebarExpandButton` = `!hasTabBar && effectiveActiveTabExpanded`,

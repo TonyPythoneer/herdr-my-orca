@@ -5,7 +5,7 @@ import { View, div, image, svg } from "gpui-kit";
 import { HoverCard, Input, InputState, h_flex, v_flex } from "gpui-base";
 import { appHome, checking, closeOverlay, exec, keys, knownAgents, openOverlay, props, readTextFile, run, setShared, shared, spaces, theme, window } from "herdr";
 
-                                 
+                                     
 const agentsByMachine =                 new Map();
 const agentsFailedByMachine =                 new Map();
 const INVENTORY_KEY = "agent-manager.inventory";
@@ -77,6 +77,19 @@ function launchArgv(target, model, herdrEnv) {
 }
 function flyoutX(left, right, windowWidth) {
 	return Math.max(WINDOW_MARGIN, Math.min((left + right) / 2 - FLYOUT_W / 2, windowWidth - FLYOUT_W - WINDOW_MARGIN));
+}
+function menuWidth(n) {
+	if (n > AGENT_FULL) return 288;
+	return 12 + Math.max(36, n * 36 + (n - 1) * AGENT_GAP);
+}
+function railUnofficialOrder(rows) {
+	const saved = shared("rail.order");
+	const order = Array.isArray(saved?.unofficial) ? saved?.unofficial : [];
+	const rank = (row) => {
+		const i = order.indexOf(row.tip ?? "");
+		return i < 0 ? order.length : i;
+	};
+	return [...rows].sort((a, b) => rank(a) - rank(b));
 }
 function shortcut(name) {
 	const k = keys().find((b) => b.section === "global" && b.action === name);
@@ -435,15 +448,15 @@ var NewMenu = class extends View {
 	icon(row, size, t) {
 		const p = row.program;
 		if (p?.icon) return p.tint ? svg(String(p.icon)).size(size).flex_none().text_color(t.muted) : image(String(p.icon)).size(size).flex_none();
-		if (row.image) return image(sharedAsset(`mods/orca-new-menu/${row.image}`)).size(size).flex_none().rounded(4);
-		if (row.icon) return svg(sharedAsset(`mods/orca-new-menu/${row.icon}.svg`)).size(size).flex_none().text_color(t.muted);
+		if (row.image) return image(sharedAsset(`mods/orca-tab-dropdown/${row.image}`)).size(size).flex_none().rounded(4);
+		if (row.icon) return svg(sharedAsset(`mods/orca-tab-dropdown/${row.icon}.svg`)).size(size).flex_none().text_color(t.muted);
 		return div().w(size).flex_none();
 	}
 	heading(label, t) {
 		return div().px(8).pt(8).pb(4).text_size(11).text_color(t.dim).child(label);
 	}
 	filterRow(t) {
-		return h_flex().w_full().h(32).min_h(0).px(8).gap(6).items_center().rounded(8).mb(4).border_1().border_color(t.ring).bg(t.input).child(svg("mods/orca-assets/search--orca-new-menu.svg").size(14).flex_none().text_color(t.muted)).child(Input.new(this.input).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"));
+		return h_flex().w_full().h(32).min_h(0).px(8).gap(6).items_center().rounded(8).mb(4).border_1().border_color(t.ring).bg(t.input).child(svg("mods/orca-assets/search--orca-tab-dropdown.svg").size(14).flex_none().text_color(t.muted)).child(Input.new(this.input).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000"));
 	}
 	hoverConfig(agent, hovered, launchNow = false) {
 		if (!hovered) return;
@@ -554,13 +567,13 @@ var NewMenu = class extends View {
 		let caps = [];
 		if (row.hint) caps = row.hint.includes("+") ? row.hint.split("+") : [...row.hint];
 		const card = h_flex().h(34).px(10).gap(10).items_center().rounded(8).border_1().border_color("#e4e4e7").bg("#f4f4f5").shadow_md().child(div().text_size(13).font_medium().text_color("#18181b").child(row.label)).when(caps.length > 0, (el) => el.child(h_flex().gap(4).children(caps.map((key) => div().size(20).rounded(4).bg("#a1a1aa").flex().items_center().justify_center().text_size(12).text_color("#18181b").child(key)))));
-		return div().relative().mt(4).pt(7).child(card).child(div().absolute().top(0).left(0).right(0).flex().justify_center().child(svg("mods/orca-assets/tip-arrow--orca-new-menu.svg").w(14).h(8).flex_none()));
+		return div().relative().mt(4).pt(7).child(card).child(div().absolute().top(0).left(0).right(0).flex().justify_center().child(svg("mods/orca-assets/tip-arrow--orca-tab-dropdown.svg").w(14).h(8).flex_none()));
 	}
 	agentGroups() {
 		const rows = this.agentRows();
 		return {
 			official: rows.filter((row) => !row.section && !row.settings),
-			unofficial: rows.filter((row) => row.section === "Unofficial"),
+			unofficial: railUnofficialOrder(rows.filter((row) => row.section === "Unofficial")),
 			settings: rows.find((row) => row.settings)
 		};
 	}
@@ -621,7 +634,7 @@ var NewMenu = class extends View {
 		return this.picking ? this.renderPicker(t) : this.renderPalette(t);
 	}
 	renderPalette(t) {
-		return v_flex().id("orca-new-menu").track_focus(this.handle).w_full().p(MENU_PAD).gap(6).bg(t.popover).text_size(12).on_key_down((e, cx) => this.onKey(e, cx, null)).on_scroll_wheel((e, cx) => {
+		return v_flex().id("orca-tab-dropdown").track_focus(this.handle).w(menuWidth(this.agentRows().length)).p(MENU_PAD).gap(6).bg(t.popover).rounded(8).border_1().border_color(t.border).shadow_md().on_mouse_down_out(() => this.closeMenu()).text_size(12).on_key_down((e, cx) => this.onKey(e, cx, null)).on_scroll_wheel((e, cx) => {
 			if (!e.delta.y) return;
 			this.move(e.delta.y > 0 ? 1 : -1);
 			cx.notify();
@@ -630,7 +643,7 @@ var NewMenu = class extends View {
 	renderPicker(t) {
 		const picking = this.picking;
 		const page = this.wheel(FIT.models);
-		return v_flex().id("orca-new-menu").track_focus(this.handle).w_full().min_h(0).p(4).bg(t.popover).text_size(12).on_key_down((e, cx) => this.onKey(e, cx, picking)).on_scroll_wheel((e, cx) => {
+		return v_flex().id("orca-tab-dropdown").track_focus(this.handle).w_full().min_h(0).p(4).bg(t.popover).rounded(8).border_1().border_color(t.border).shadow_md().on_mouse_down_out(() => this.closeMenu()).text_size(12).on_key_down((e, cx) => this.onKey(e, cx, picking)).on_scroll_wheel((e, cx) => {
 			if (!e.delta.y) return;
 			this.move(e.delta.y > 0 ? 1 : -1);
 			cx.notify();
@@ -645,13 +658,13 @@ var NewMenu = class extends View {
 	}
 };
 const SHARED_ASSET_PATHS = Object.freeze({
-	"mods/orca-new-menu/chevron-left.svg": "mods/orca-assets/chevron-left--orca-agent-settings.svg",
-	"mods/orca-new-menu/chevron-right.svg": "mods/orca-assets/chevron-right--orca-agent-settings.svg",
-	"mods/orca-new-menu/freebuff.png": "mods/orca-assets/freebuff--orca-new-menu.png",
-	"mods/orca-new-menu/git-branch-plus.svg": "mods/orca-assets/git-branch-plus--orca-context-menu.svg",
-	"mods/orca-new-menu/search.svg": "mods/orca-assets/search--orca-new-menu.svg",
-	"mods/orca-new-menu/square-terminal.svg": "mods/orca-assets/square-terminal--orca-agent-flyout.svg",
-	"mods/orca-new-menu/workflow.svg": "mods/orca-assets/workflow--orca-context-menu.svg"
+	"mods/orca-tab-dropdown/chevron-left.svg": "mods/orca-assets/chevron-left--orca-agent-settings.svg",
+	"mods/orca-tab-dropdown/chevron-right.svg": "mods/orca-assets/chevron-right--orca-agent-settings.svg",
+	"mods/orca-tab-dropdown/freebuff.png": "mods/orca-assets/freebuff--orca-tab-dropdown.png",
+	"mods/orca-tab-dropdown/git-branch-plus.svg": "mods/orca-assets/git-branch-plus--orca-context-menu.svg",
+	"mods/orca-tab-dropdown/search.svg": "mods/orca-assets/search--orca-tab-dropdown.svg",
+	"mods/orca-tab-dropdown/square-terminal.svg": "mods/orca-assets/square-terminal--orca-agent-flyout.svg",
+	"mods/orca-tab-dropdown/workflow.svg": "mods/orca-assets/workflow--orca-context-menu.svg"
 });
 function sharedAsset(path) {
 	return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;

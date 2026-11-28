@@ -1719,7 +1719,7 @@ export default class AgentManager extends View {
     return div().w_full().flex_none().rounded(10).border_1().border_color(t.border).bg(t.surface).child(
       h_flex().w_full().h(LIST_ROW_HEIGHT - 12).my(6).px(18).gap(12).items_center()
         .child(h_flex().w(32).h(32).flex_none().items_center().justify_center().rounded(8).border_1().border_color(t.border)
-          .child(icon({ name: "freebuff", icon: "mods/orca-assets/freebuff--orca-new-menu.png" }, 18, t)))
+          .child(icon({ name: "freebuff", icon: "mods/orca-assets/freebuff--orca-tab-dropdown.png" }, 18, t)))
         .child(v_flex().flex_1().min_w(0).gap(3)
           .child(div().text_size(13).font_medium().text_color(t.foreground).child("freebuff"))
           .child(div().min_w(0).truncate().font_family(mono).text_size(11).text_color(t.muted).child("freebuff")))
@@ -2000,7 +2000,7 @@ export default class AgentManager extends View {
     const configured = this.programsText === undefined ? null : readRunOverride(this.programsText, "freebuff").run;
     const installed = typeof this.freebuffInstalled === "boolean" ? this.freebuffInstalled : agent?.installed;
     return [{
-      key: "freebuff", name: "FreeBuff CLI", icon: "mods/orca-assets/freebuff--orca-new-menu.png",
+      key: "freebuff", name: "FreeBuff CLI", icon: "mods/orca-assets/freebuff--orca-tab-dropdown.png",
       homepage: "https://github.com/CodebuffAI/freebuff#quick-start",
       // Match the existing Start an agent integration, including a configured command.
       run: configured ?? agent?.run ?? ["zsh", "-lic", "exec freebuff"],

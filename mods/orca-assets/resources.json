@@ -29,12 +29,12 @@
   ],
   "mods/orca-assets/arrow-left.svg": [
     "orca-context-menu",
-    "orca-sidebar-top",
+    "orca-workspace-settings",
     "orca-split-menu"
   ],
   "mods/orca-assets/arrow-right.svg": [
     "orca-context-menu",
-    "orca-sidebar-top",
+    "orca-workspace-settings",
     "orca-split-menu"
   ],
   "mods/orca-assets/arrow-up.svg": [
@@ -46,7 +46,7 @@
     "orca-sidebar-projects"
   ],
   "mods/orca-assets/bell--orca-sidebar-top.svg": [
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/bell-filled.svg": [
     "orca-sidebar-projects"
@@ -57,13 +57,13 @@
   "mods/orca-assets/bot.svg": [
     "orca-agent-flyout",
     "orca-agent-settings",
-    "orca-new-menu",
+    "orca-tab-dropdown",
     "orca-sidebar-projects",
     "orca-status-footer"
   ],
   "mods/orca-assets/calendar-clock.svg": [
     "orca-right-sidebar-placeholders",
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/case-sensitive.svg": [
     "orca-files"
@@ -86,7 +86,7 @@
   ],
   "mods/orca-assets/chevron-left--orca-agent-settings.svg": [
     "orca-agent-settings",
-    "orca-new-menu",
+    "orca-tab-dropdown",
     "orca-tasks"
   ],
   "mods/orca-assets/chevron-left--orca-header.svg": [
@@ -94,7 +94,7 @@
   ],
   "mods/orca-assets/chevron-right--orca-agent-settings.svg": [
     "orca-agent-settings",
-    "orca-new-menu"
+    "orca-tab-dropdown"
   ],
   "mods/orca-assets/chevron-right--orca-changes.svg": [
     "orca-changes"
@@ -108,10 +108,10 @@
     "orca-header"
   ],
   "mods/orca-assets/chevrons-down-up.svg": [
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/chevrons-up-down.svg": [
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/circle-alert.svg": [
     "orca-files"
@@ -312,7 +312,7 @@
     "orca-changes",
     "orca-context-menu",
     "orca-files",
-    "orca-new-menu",
+    "orca-tab-dropdown",
     "orca-status-ports"
   ],
   "mods/orca-assets/folder-plus--orca-files.svg": [
@@ -325,14 +325,14 @@
     "orca-sidebar-projects"
   ],
   "mods/orca-assets/folder-plus--orca-sidebar-top.svg": [
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/freebuff--orca-header.png": [
     "orca-header"
   ],
-  "mods/orca-assets/freebuff--orca-new-menu.png": [
+  "mods/orca-assets/freebuff--orca-tab-dropdown.png": [
     "orca-agent-settings",
-    "orca-new-menu",
+    "orca-tab-dropdown",
     "orca-sidebar-projects"
   ],
   "mods/orca-assets/gemini.png": [
@@ -351,7 +351,7 @@
   ],
   "mods/orca-assets/git-branch-plus--orca-context-menu.svg": [
     "orca-context-menu",
-    "orca-new-menu"
+    "orca-tab-dropdown"
   ],
   "mods/orca-assets/git-branch-plus--orca-landing.svg": [
     "orca-landing"
@@ -409,7 +409,7 @@
     "orca-right-sidebar-placeholders"
   ],
   "mods/orca-assets/list-checks--orca-sidebar-top.svg": [
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/list-collapse.svg": [
     "orca-files"
@@ -419,7 +419,7 @@
   ],
   "mods/orca-assets/list.svg": [
     "orca-right-sidebar-placeholders",
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/litellm_favicon_light_32.png": [
     "orca-agent-flyout",
@@ -536,7 +536,7 @@
     "orca-pane-header"
   ],
   "mods/orca-assets/plus--orca-sidebar-top.svg": [
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/qoder.png": [
     "orca-float-workspace",
@@ -564,12 +564,12 @@
     "orca-agent-flyout",
     "orca-agent-settings"
   ],
-  "mods/orca-assets/search--orca-new-menu.svg": [
-    "orca-new-menu"
+  "mods/orca-assets/search--orca-tab-dropdown.svg": [
+    "orca-tab-dropdown"
   ],
   "mods/orca-assets/search--orca-right-sidebar-agents.svg": [
     "orca-right-sidebar-agents",
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/server.svg": [
     "orca-sidebar-projects",
@@ -590,11 +590,11 @@
     "orca-header"
   ],
   "mods/orca-assets/sliders-horizontal.svg": [
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/smartphone.svg": [
     "orca-right-sidebar-placeholders",
-    "orca-sidebar-top"
+    "orca-workspace-settings"
   ],
   "mods/orca-assets/spinner.svg": [
     "orca-header"
@@ -617,7 +617,7 @@
   "mods/orca-assets/square-terminal--orca-agent-flyout.svg": [
     "orca-agent-flyout",
     "orca-agent-settings",
-    "orca-new-menu"
+    "orca-tab-dropdown"
   ],
   "mods/orca-assets/square-terminal--orca-agent-settings.svg": [
     "orca-agent-settings"
@@ -632,10 +632,10 @@
   "mods/orca-assets/text-select.svg": [
     "orca-context-menu"
   ],
-  "mods/orca-assets/tip-arrow--orca-new-menu.svg": [
+  "mods/orca-assets/tip-arrow--orca-tab-dropdown.svg": [
     "orca-agent-flyout",
     "orca-agent-settings",
-    "orca-new-menu"
+    "orca-tab-dropdown"
   ],
   "mods/orca-assets/trash.svg": [
     "orca-changes",
@@ -674,7 +674,7 @@
   ],
   "mods/orca-assets/workflow--orca-context-menu.svg": [
     "orca-context-menu",
-    "orca-new-menu"
+    "orca-tab-dropdown"
   ],
   "mods/orca-assets/workflow--orca-pane-header.svg": [
     "orca-pane-header"

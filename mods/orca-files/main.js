@@ -1057,7 +1057,7 @@ export default class Files extends View {
       .child(item(11, "Delete", "trash", "delete", { destructive: true }));
   }
 
-  // The "Open in" flyout is its own popup (as orca-new-menu's agent setup is), level with the row and
+  // The "Open in" flyout is its own popup (as orca-tab-dropdown's agent setup is), level with the row and
   // flipped to the menu's left when the right side would leave the window. Its width is fixed
   // so that position is known; the menu's id rides along so choosing an app closes both.
   openIn() {

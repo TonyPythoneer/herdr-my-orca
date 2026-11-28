@@ -25,7 +25,7 @@ const ACTION_TOGGLE = `${MOD}.toggle`;
 const CHORD_ACTION_NEW_TAB = "orca-header.new-tab";
 const SHARED_OPEN = `${MOD}.open`;
 const SHARED_ATTENTION = `${MOD}.attention`;
-const NEW_MENU_MOD = "orca-new-menu";
+const NEW_MENU_MOD = "orca-tab-dropdown";
 const NEW_MENU_WIDTH = 288;
 const TERMINAL_ICON = "mods/orca-assets/terminal-square.svg";
 const MINIMIZE_ICON = "mods/orca-assets/minus--orca-float-workspace.svg";
@@ -145,6 +145,7 @@ function header(t, hide) {
 		onClick: () => openOverlay({
 			mod: NEW_MENU_MOD,
 			kind: "popup",
+			frame: "none",
 			width: NEW_MENU_WIDTH
 		})
 	})).child(IconButton("orca-float-close", "Hide floating workspace", "×", {

@@ -60,8 +60,9 @@ function actionButton(id, icon, label, onClick, t) {
 }
 function actionRow(t) {
 	return h_flex().items_center().justify_center().gap(10).child(actionButton("landing-add", "folder-plus", "Add project", () => run(ACTION.newSpace), t)).child(actionButton("landing-create", "git-branch-plus", CREATE_WORKSPACE, () => openOverlay({
-		mod: "orca-new-menu",
+		mod: "orca-tab-dropdown",
 		kind: "popup",
+		frame: "none",
 		width: 288
 	}), t));
 }

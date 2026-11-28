@@ -141,7 +141,7 @@ function actionRow(t: LandingTheme) {
         "landing-create",
         "git-branch-plus",
         CREATE_WORKSPACE,
-        () => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }),
+        () => openOverlay({ mod: "orca-tab-dropdown", kind: "popup", frame: "none", width: 288 }),
         t,
       ),
     );

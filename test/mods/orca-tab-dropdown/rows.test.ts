@@ -9,12 +9,12 @@ import {
   installedEnabledAgents,
   mergeInventory,
   type AgentRow,
-} from "../../../src/mods/orca-new-menu/rows.ts";
+} from "../../../src/mods/orca-tab-dropdown/rows.ts";
 import {
   detectFreebuff,
   FREEBUFF_RUN,
   freebuffProbeArgs,
-} from "../../../src/mods/orca-new-menu/freebuff.ts";
+} from "../../../src/mods/orca-tab-dropdown/freebuff.ts";
 
 const AGENTS: AgentRow[] = [
   { key: "claude", name: "Claude", installed: true, run: ["claude"] },

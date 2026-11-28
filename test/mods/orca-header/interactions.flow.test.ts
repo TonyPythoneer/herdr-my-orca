@@ -1188,19 +1188,19 @@ test("the header's buttons act on the sidebar, the panel, the new-tab menu and t
   w.log.length = 0;
   click("tab-new");
   assert.deepEqual(w.log, [
-    ["openOverlay", { mod: "orca-new-menu", kind: "popup", width: 288, at: "pointer" }],
+    ["openOverlay", { mod: "orca-tab-dropdown", kind: "popup", frame: "none", width: 288, at: "pointer" }],
   ]);
   const pointer = viewport();
   w.log.length = 0;
   click("tab-new");
   assert.deepEqual(
     (w.log[0][1] as { at: unknown }).at,
-    { x: 8, y: 36 },
-    "anchored under the plus, kept inside the window",
+    { x: 90, y: 36 },
+    "centred under the plus (100 + 14 - 24)",
   );
   pointer.viewport_size = () => ({ width: 2000, height: 800 });
   w.view.plusBounds = { x: 900, y: 4, width: 28, height: 28 };
-  assert.deepEqual(w.view.newMenuAt(), { x: 640, y: 36 });
+  assert.deepEqual(w.view.newMenuAt(), { x: 890, y: 36 });
   w.view.plusBounds = { x: 1990, y: 4, width: 28, height: 28 };
   assert.deepEqual(w.view.newMenuAt(), { x: 1704, y: 36 });
   w.host.window = { platform: "windows", maximized: true };
