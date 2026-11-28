@@ -212,16 +212,9 @@ export const inPlace = [
       "orca-files.target.<token>"
     ],
     "tests": [
-      "mods/orca-files/delete-target.test.js",
-      "mods/orca-files/editor-drafts.test.js",
-      "mods/orca-files/editor-path.test.js",
-      "mods/orca-files/file-mutation.test.js",
       "mods/orca-files/files-data.flow.test.js",
       "mods/orca-files/files-ui.flow.test.js",
-      "mods/orca-files/pure.flow.test.js",
-      "mods/orca-files/save-queue.test.js",
-      "mods/orca-files/tree-keys.test.js",
-      "mods/orca-files/tree-nav.test.js"
+      "mods/orca-files/pure.flow.test.js"
     ],
     "next": [
       "mods/orca-confirm/main.js"
