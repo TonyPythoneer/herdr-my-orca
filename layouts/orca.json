@@ -71,7 +71,7 @@
                           "id": "nav-top",
                           "type": "block",
                           "content": {
-                            "mod": "orca-sidebar-top"
+                            "mod": "orca-workspace-settings"
                           },
                           "size": {
                             "px": 86

@@ -62,23 +62,23 @@
     },
     {
       "id": "models",
-      "source": "src/mods/orca-new-menu/models.ts",
-      "output": "mods/orca-new-menu/models.js"
+      "source": "src/mods/orca-tab-dropdown/models.ts",
+      "output": "mods/orca-tab-dropdown/models.js"
     },
     {
       "id": "rows",
-      "source": "src/mods/orca-new-menu/rows.ts",
-      "output": "mods/orca-new-menu/rows.js"
+      "source": "src/mods/orca-tab-dropdown/rows.ts",
+      "output": "mods/orca-tab-dropdown/rows.js"
     },
     {
       "id": "freebuff",
-      "source": "src/mods/orca-new-menu/freebuff.ts",
-      "output": "mods/orca-new-menu/freebuff.js"
+      "source": "src/mods/orca-tab-dropdown/freebuff.ts",
+      "output": "mods/orca-tab-dropdown/freebuff.js"
     },
     {
       "id": "sidebar-top-main",
-      "source": "src/mods/orca-sidebar-top/main.ts",
-      "output": "mods/orca-sidebar-top/main.js"
+      "source": "src/mods/orca-workspace-settings/main.ts",
+      "output": "mods/orca-workspace-settings/main.js"
     },
     {
       "id": "right-sidebar-agents-main",
@@ -156,9 +156,9 @@
       "output": "mods/orca-context-menu/constants.js"
     },
     {
-      "id": "orca-new-menu-main",
-      "source": "src/mods/orca-new-menu/main.ts",
-      "output": "mods/orca-new-menu/main.js"
+      "id": "orca-tab-dropdown-main",
+      "source": "src/mods/orca-tab-dropdown/main.ts",
+      "output": "mods/orca-tab-dropdown/main.js"
     },
     {
       "id": "orca-handoff-main",

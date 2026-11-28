@@ -2841,7 +2841,7 @@
           "reach": ["orca-status-bar.show"],
           "action": "click",
           "target": "Start an agent",
-          "expect": ["overlay orca-new-menu", "afterText New Terminal"],
+          "expect": ["overlay orca-tab-dropdown", "afterText New Terminal"],
           "harness": "supported",
           "notes": ""
         },
@@ -2958,7 +2958,7 @@
           "reach": ["Fresh terminal"],
           "action": "click",
           "target": "New tab",
-          "expect": ["overlay orca-new-menu", "afterText New Terminal"],
+          "expect": ["overlay orca-tab-dropdown", "afterText New Terminal"],
           "harness": "supported",
           "notes": "AX action is wired at line 92. Cmd+T instead directly creates a terminal."
         },
@@ -3153,20 +3153,20 @@
           "reach": ["page main-landing"],
           "action": "click",
           "target": "Create workspace",
-          "expect": ["overlay orca-new-menu", "afterText New Terminal"],
+          "expect": ["overlay orca-tab-dropdown", "afterText New Terminal"],
           "harness": "supported",
           "notes": ""
         }
       ]
     },
-    "orca-new-menu": {
+    "orca-tab-dropdown": {
       "manifest": true,
-      "notes": "Open through orca-header.new-menu, orca-sidebar-top.new or a named setup overlay. Agent rows require a ready installed/enabled catalog. A data-driven agent or model row counts once per route. Picker Return/Space and row click share choose at main.js:573–582,557. Hover at 552 updates selection.",
+      "notes": "Open through orca-header.new-menu, orca-workspace-settings.new or a named setup overlay. Agent rows require a ready installed/enabled catalog. A data-driven agent or model row counts once per route. Picker Return/Space and row click share choose at main.js:573–582,557. Hover at 552 updates selection.",
       "interactions": [
         {
-          "id": "orca-new-menu.terminal",
+          "id": "orca-tab-dropdown.terminal",
           "title": "Create standard terminal tab",
-          "source": "mods/orca-new-menu/main.js:238",
+          "source": "mods/orca-tab-dropdown/main.js:238",
           "reach": ["Open new menu"],
           "action": "click",
           "target": "New Terminal",
@@ -3175,9 +3175,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.browser",
+          "id": "orca-tab-dropdown.browser",
           "title": "Split in a file-browser pane",
-          "source": "mods/orca-new-menu/main.js:242",
+          "source": "mods/orca-tab-dropdown/main.js:242",
           "reach": ["Focus terminal", "Open new menu"],
           "action": "click",
           "target": "New File Browser",
@@ -3186,9 +3186,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.folder",
+          "id": "orca-tab-dropdown.folder",
           "title": "Choose directory for a new terminal",
-          "source": "mods/orca-new-menu/main.js:245",
+          "source": "mods/orca-tab-dropdown/main.js:245",
           "reach": ["Open new menu"],
           "action": "click",
           "target": "New Terminal in Folder…",
@@ -3200,9 +3200,9 @@
           "notes": "Picker dispatch at line 417."
         },
         {
-          "id": "orca-new-menu.new-worktree",
+          "id": "orca-tab-dropdown.new-worktree",
           "title": "Open worktree creation from launcher",
-          "source": "mods/orca-new-menu/main.js:248",
+          "source": "mods/orca-tab-dropdown/main.js:248",
           "reach": ["Open new menu in Git workspace"],
           "action": "click",
           "target": "New worktree…",
@@ -3211,9 +3211,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.open-worktree",
+          "id": "orca-tab-dropdown.open-worktree",
           "title": "Open existing worktree from launcher",
-          "source": "mods/orca-new-menu/main.js:250",
+          "source": "mods/orca-tab-dropdown/main.js:250",
           "reach": ["Open new menu in Git workspace"],
           "action": "click",
           "target": "Open worktree…",
@@ -3222,9 +3222,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.settings",
+          "id": "orca-tab-dropdown.settings",
           "title": "Go to Agent Settings from empty agent list",
-          "source": "mods/orca-new-menu/main.js:286",
+          "source": "mods/orca-tab-dropdown/main.js:286",
           "reach": [
             "Open new menu with no installed enabled agent and no FreeBuff",
             "Wait for probes"
@@ -3236,9 +3236,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.agent",
+          "id": "orca-tab-dropdown.agent",
           "title": "Start installed agent from launcher",
-          "source": "mods/orca-new-menu/main.js:296",
+          "source": "mods/orca-tab-dropdown/main.js:296",
           "reach": ["Seed installed enabled agent command", "Open new menu"],
           "action": "click",
           "target": "Fixture agent name",
@@ -3247,9 +3247,9 @@
           "notes": "Direct and configured-launch branches share the visible outcome. Configured branch delegates via launchNow."
         },
         {
-          "id": "orca-new-menu.model-picker",
+          "id": "orca-tab-dropdown.model-picker",
           "title": "Enter agent's model picker",
-          "source": "mods/orca-new-menu/main.js:299",
+          "source": "mods/orca-tab-dropdown/main.js:299",
           "reach": ["Seed installed enabled picker-style agent", "Open new menu"],
           "action": "click",
           "target": "Installed agent name with model picker",
@@ -3258,9 +3258,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.flyout",
+          "id": "orca-tab-dropdown.flyout",
           "title": "Open configuration via row chevron",
-          "source": "mods/orca-new-menu/main.js:566",
+          "source": "mods/orca-tab-dropdown/main.js:566",
           "reach": ["Seed a flyout-capable agent and open new menu"],
           "action": "hover",
           "target": "Unlabeled chevron at right edge of agent name row",
@@ -3269,9 +3269,9 @@
           "notes": "Use row text to locate the adjacent chevron and retain pointer until capture."
         },
         {
-          "id": "orca-new-menu.freebuff",
+          "id": "orca-tab-dropdown.freebuff",
           "title": "Start FreeBuff CLI",
-          "source": "mods/orca-new-menu/main.js:277",
+          "source": "mods/orca-tab-dropdown/main.js:277",
           "reach": ["Seed detectable FreeBuff CLI stub", "Open new menu"],
           "action": "click",
           "target": "FreeBuff CLI",
@@ -3280,10 +3280,10 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.default-model",
+          "id": "orca-tab-dropdown.default-model",
           "title": "Launch agent with selected model",
-          "source": "mods/orca-new-menu/main.js:311",
-          "reach": ["orca-new-menu.model-picker"],
+          "source": "mods/orca-tab-dropdown/main.js:311",
+          "reach": ["orca-tab-dropdown.model-picker"],
           "action": "click",
           "target": "Default / named model row",
           "expect": ["paneChange", "noOverlay"],
@@ -3291,10 +3291,10 @@
           "notes": "Named rows at line 320 include the model flag in launch argv. Default omits it."
         },
         {
-          "id": "orca-new-menu.filter",
+          "id": "orca-tab-dropdown.filter",
           "title": "Filter model list",
-          "source": "mods/orca-new-menu/main.js:131",
-          "reach": ["orca-new-menu.model-picker with model catalog", "Use focused model search"],
+          "source": "mods/orca-tab-dropdown/main.js:131",
+          "reach": ["orca-tab-dropdown.model-picker with model catalog", "Use focused model search"],
           "action": "paste",
           "target": "Focused model filter input",
           "expect": ["afterText No models match for a guaranteed non-match"],
@@ -3302,10 +3302,10 @@
           "notes": "Return submits current selection at line 133."
         },
         {
-          "id": "orca-new-menu.back",
+          "id": "orca-tab-dropdown.back",
           "title": "Return from model picker",
-          "source": "mods/orca-new-menu/main.js:620",
-          "reach": ["orca-new-menu.model-picker"],
+          "source": "mods/orca-tab-dropdown/main.js:620",
+          "reach": ["orca-tab-dropdown.model-picker"],
           "action": "click",
           "target": "Back",
           "expect": ["afterText New Terminal", "absentText model picker Back"],
@@ -3313,9 +3313,9 @@
           "notes": "Escape also backs out at line 581."
         },
         {
-          "id": "orca-new-menu.cancel",
+          "id": "orca-tab-dropdown.cancel",
           "title": "Dismiss new menu",
-          "source": "mods/orca-new-menu/main.js:579",
+          "source": "mods/orca-tab-dropdown/main.js:579",
           "reach": ["Open new menu on its root list"],
           "action": "keyboard",
           "target": "Escape",
@@ -3324,9 +3324,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.navigate",
+          "id": "orca-tab-dropdown.navigate",
           "title": "Move launcher selection with keys",
-          "source": "mods/orca-new-menu/main.js:573",
+          "source": "mods/orca-tab-dropdown/main.js:573",
           "reach": ["Open new menu"],
           "action": "keyboard",
           "target": "Up / Down / Home / End",
@@ -3335,9 +3335,9 @@
           "notes": ""
         },
         {
-          "id": "orca-new-menu.scroll",
+          "id": "orca-tab-dropdown.scroll",
           "title": "Scroll launcher choices",
-          "source": "mods/orca-new-menu/main.js:604",
+          "source": "mods/orca-tab-dropdown/main.js:604",
           "reach": ["Open new menu with more options than visible"],
           "action": "scroll",
           "target": "Launcher options list",
@@ -3899,14 +3899,14 @@
         }
       ]
     },
-    "orca-sidebar-top": {
+    "orca-workspace-settings": {
       "manifest": true,
       "notes": "Workspace options is a multi-page popup. Generated radio/filter rows share main.js:462. Alternate labels within a state-setting control are represented together where they exercise the same state transition. Options updates use localStorage in main.js:42–50, so use visible check marks, labels or sidebar results. Gap rows at lines 395–405 only expose explanatory tooltips and are disabled.",
       "interactions": [
         {
-          "id": "orca-sidebar-top.search",
+          "id": "orca-workspace-settings.search",
           "title": "Open workspace search picker",
-          "source": "mods/orca-sidebar-top/main.js:149",
+          "source": "mods/orca-workspace-settings/main.js:149",
           "reach": ["Fresh terminal with sidebar shown"],
           "action": "click",
           "target": "Search",
@@ -3915,9 +3915,9 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.collapse",
+          "id": "orca-workspace-settings.collapse",
           "title": "Toggle all project groups",
-          "source": "mods/orca-sidebar-top/main.js:158",
+          "source": "mods/orca-workspace-settings/main.js:158",
           "reach": ["group expand or collapse", "Hover Projects heading in active window"],
           "action": "toggle",
           "target": "Collapse all projects / Expand all projects",
@@ -3926,20 +3926,20 @@
           "notes": "Projects hover at 300 mounts button at 330. Existing cases use one calibrated click each and do not establish hover independently."
         },
         {
-          "id": "orca-sidebar-top.options",
+          "id": "orca-workspace-settings.options",
           "title": "Open workspace options",
-          "source": "mods/orca-sidebar-top/main.js:179",
+          "source": "mods/orca-workspace-settings/main.js:179",
           "reach": ["Fresh terminal with left sidebar"],
           "action": "click",
           "target": "Workspace options tooltip on unlabeled options icon",
-          "expect": ["overlay orca-sidebar-top", "afterText Group by"],
+          "expect": ["overlay orca-workspace-settings", "afterText Group by"],
           "harness": "supported",
           "notes": "Existing case has calibrated mouse fallback."
         },
         {
-          "id": "orca-sidebar-top.add",
+          "id": "orca-workspace-settings.add",
           "title": "Add project folder to sidebar",
-          "source": "mods/orca-sidebar-top/main.js:206",
+          "source": "mods/orca-workspace-settings/main.js:206",
           "reach": ["Fresh terminal with left sidebar"],
           "action": "click",
           "target": "Add project",
@@ -3948,21 +3948,21 @@
           "notes": "Successful pick updates saved projects."
         },
         {
-          "id": "orca-sidebar-top.new",
+          "id": "orca-workspace-settings.new",
           "title": "Open the new workspace menu",
-          "source": "mods/orca-sidebar-top/main.js:217",
+          "source": "mods/orca-workspace-settings/main.js:217",
           "reach": ["Fresh terminal with left sidebar"],
           "action": "click",
           "target": "New workspace",
-          "expect": ["overlay orca-new-menu"],
+          "expect": ["overlay orca-tab-dropdown"],
           "harness": "supported",
           "notes": "Use existing calibrated fallback if AX unavailable."
         },
         {
-          "id": "orca-sidebar-top.refresh",
+          "id": "orca-workspace-settings.refresh",
           "title": "Refresh project branches",
-          "source": "mods/orca-sidebar-top/main.js:373",
-          "reach": ["orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:373",
+          "reach": ["orca-workspace-settings.options"],
           "action": "click",
           "target": "Refresh branches",
           "expect": ["noOverlay", "absentText Refresh branches"],
@@ -3970,10 +3970,10 @@
           "notes": "To verify refresh itself, change branch state in a disposable fixture."
         },
         {
-          "id": "orca-sidebar-top.hosts",
+          "id": "orca-workspace-settings.hosts",
           "title": "Open Hosts filter page",
-          "source": "mods/orca-sidebar-top/main.js:378",
-          "reach": ["Seed more than one host", "orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:378",
+          "reach": ["Seed more than one host", "orca-workspace-settings.options"],
           "action": "click",
           "target": "Hosts",
           "expect": ["afterText Back and All hosts"],
@@ -3981,10 +3981,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.projects",
+          "id": "orca-workspace-settings.projects",
           "title": "Open Projects filter page",
-          "source": "mods/orca-sidebar-top/main.js:382",
-          "reach": ["Seed more than one discovered project", "orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:382",
+          "reach": ["Seed more than one discovered project", "orca-workspace-settings.options"],
           "action": "click",
           "target": "Projects",
           "expect": ["afterText Back and Clear in popup"],
@@ -3992,10 +3992,10 @@
           "notes": "Disambiguate from sidebar header."
         },
         {
-          "id": "orca-sidebar-top.sort",
+          "id": "orca-workspace-settings.sort",
           "title": "Open workspace sort choices",
-          "source": "mods/orca-sidebar-top/main.js:390",
-          "reach": ["orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:390",
+          "reach": ["orca-workspace-settings.options"],
           "action": "click",
           "target": "Sort by",
           "expect": ["afterText Back and Agent Activity"],
@@ -4003,10 +4003,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.project-order",
+          "id": "orca-workspace-settings.project-order",
           "title": "Open project group order choices",
-          "source": "mods/orca-sidebar-top/main.js:392",
-          "reach": ["orca-sidebar-top.options", "Set Group by Project"],
+          "source": "mods/orca-workspace-settings/main.js:392",
+          "reach": ["orca-workspace-settings.options", "Set Group by Project"],
           "action": "click",
           "target": "Project order",
           "expect": ["afterText Manual and Recent"],
@@ -4014,10 +4014,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.none",
+          "id": "orca-workspace-settings.none",
           "title": "Remove workspace grouping",
-          "source": "mods/orca-sidebar-top/main.js:477",
-          "reach": ["orca-sidebar-top.options with Project grouping active"],
+          "source": "mods/orca-workspace-settings/main.js:477",
+          "reach": ["orca-workspace-settings.options with Project grouping active"],
           "action": "click",
           "target": "None in Group by",
           "expect": ["absentText Project order", "afterText ungrouped workspace row"],
@@ -4025,10 +4025,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.status",
+          "id": "orca-workspace-settings.status",
           "title": "Group workspaces by status",
-          "source": "mods/orca-sidebar-top/main.js:477",
-          "reach": ["orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:477",
+          "reach": ["orca-workspace-settings.options"],
           "action": "click",
           "target": "Status in Group by",
           "expect": [
@@ -4039,10 +4039,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.repo",
+          "id": "orca-workspace-settings.repo",
           "title": "Group workspaces by project",
-          "source": "mods/orca-sidebar-top/main.js:477",
-          "reach": ["orca-sidebar-top.options with None selected first"],
+          "source": "mods/orca-workspace-settings/main.js:477",
+          "reach": ["orca-workspace-settings.options with None selected first"],
           "action": "click",
           "target": "Project in Group by",
           "expect": ["afterText Project order and sample-project group"],
@@ -4050,10 +4050,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.hide-default",
+          "id": "orca-workspace-settings.hide-default",
           "title": "Toggle default-branch filter",
-          "source": "mods/orca-sidebar-top/main.js:402",
-          "reach": ["group expand", "orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:402",
+          "reach": ["group expand", "orca-workspace-settings.options"],
           "action": "toggle",
           "target": "Hide default branch",
           "expect": ["absentText primary when hidden", "afterText primary when restored"],
@@ -4061,10 +4061,10 @@
           "notes": "Use repo fixture with known default branch."
         },
         {
-          "id": "orca-sidebar-top.hide-detached",
+          "id": "orca-workspace-settings.hide-detached",
           "title": "Toggle detached-HEAD filter",
-          "source": "mods/orca-sidebar-top/main.js:406",
-          "reach": ["Seed detached fixture checkout", "orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:406",
+          "reach": ["Seed detached fixture checkout", "orca-workspace-settings.options"],
           "action": "toggle",
           "target": "Hide detached HEAD",
           "expect": ["absentText detached fixture card when hidden"],
@@ -4072,10 +4072,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.host",
+          "id": "orca-workspace-settings.host",
           "title": "Change visible host selection",
-          "source": "mods/orca-sidebar-top/main.js:415",
-          "reach": ["orca-sidebar-top.hosts"],
+          "source": "mods/orca-workspace-settings/main.js:415",
+          "reach": ["orca-workspace-settings.hosts"],
           "action": "toggle",
           "target": "Fixture host name / All hosts",
           "expect": ["afterText or absentText host's workspace marker according to selection"],
@@ -4083,10 +4083,10 @@
           "notes": "All hosts resets explicit restriction."
         },
         {
-          "id": "orca-sidebar-top.project",
+          "id": "orca-workspace-settings.project",
           "title": "Change visible project selection",
-          "source": "mods/orca-sidebar-top/main.js:418",
-          "reach": ["orca-sidebar-top.projects"],
+          "source": "mods/orca-workspace-settings/main.js:418",
+          "reach": ["orca-workspace-settings.projects"],
           "action": "toggle",
           "target": "Fixture project name / Clear",
           "expect": ["afterText or absentText fixture group according to filter"],
@@ -4094,10 +4094,10 @@
           "notes": "Clear removes explicit project selections."
         },
         {
-          "id": "orca-sidebar-top.back",
+          "id": "orca-workspace-settings.back",
           "title": "Return to workspace options root",
-          "source": "mods/orca-sidebar-top/main.js:434",
-          "reach": ["orca-sidebar-top.sort"],
+          "source": "mods/orca-workspace-settings/main.js:434",
+          "reach": ["orca-workspace-settings.sort"],
           "action": "click",
           "target": "Back",
           "expect": ["afterText Group by", "absentText choices under Sort by"],
@@ -4105,10 +4105,10 @@
           "notes": "Shared per-subpage Back row."
         },
         {
-          "id": "orca-sidebar-top.sort-name",
+          "id": "orca-workspace-settings.sort-name",
           "title": "Sort workspaces by name",
-          "source": "mods/orca-sidebar-top/main.js:100",
-          "reach": ["orca-sidebar-top.sort with two differently named cards"],
+          "source": "mods/orca-workspace-settings/main.js:100",
+          "reach": ["orca-workspace-settings.sort with two differently named cards"],
           "action": "click",
           "target": "Name",
           "expect": ["afterText alphabetical card order in left-sidebar regions"],
@@ -4116,10 +4116,10 @@
           "notes": "Return via Back and verify Sort by shows Name."
         },
         {
-          "id": "orca-sidebar-top.sort-activity",
+          "id": "orca-workspace-settings.sort-activity",
           "title": "Sort workspaces by agent activity",
-          "source": "mods/orca-sidebar-top/main.js:101",
-          "reach": ["orca-sidebar-top.sort"],
+          "source": "mods/orca-workspace-settings/main.js:101",
+          "reach": ["orca-workspace-settings.sort"],
           "action": "click",
           "target": "Agent Activity",
           "expect": ["afterText Agent Activity as Sort by value after Back"],
@@ -4127,10 +4127,10 @@
           "notes": "Ordering itself requires different agent activity states."
         },
         {
-          "id": "orca-sidebar-top.sort-recent",
+          "id": "orca-workspace-settings.sort-recent",
           "title": "Choose alternate workspace sort",
-          "source": "mods/orca-sidebar-top/main.js:102",
-          "reach": ["orca-sidebar-top.sort"],
+          "source": "mods/orca-workspace-settings/main.js:102",
+          "reach": ["orca-workspace-settings.sort"],
           "action": "click",
           "target": "Recent / Project / Manual",
           "expect": ["afterText selected value beside Sort by after Back"],
@@ -4138,10 +4138,10 @@
           "notes": "Choices at lines 102–104 use the same radio path at line 423."
         },
         {
-          "id": "orca-sidebar-top.order-recent",
+          "id": "orca-workspace-settings.order-recent",
           "title": "Set project group order",
-          "source": "mods/orca-sidebar-top/main.js:106",
-          "reach": ["orca-sidebar-top.project-order"],
+          "source": "mods/orca-workspace-settings/main.js:106",
+          "reach": ["orca-workspace-settings.project-order"],
           "action": "click",
           "target": "Recent / Manual",
           "expect": ["afterText selected value beside Project order after Back"],
@@ -4149,10 +4149,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.escape",
+          "id": "orca-workspace-settings.escape",
           "title": "Dismiss Workspace options",
-          "source": "mods/orca-sidebar-top/main.js:354",
-          "reach": ["orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:354",
+          "reach": ["orca-workspace-settings.options"],
           "action": "keyboard",
           "target": "Escape",
           "expect": ["noOverlay", "absentText Refresh branches"],
@@ -4160,10 +4160,10 @@
           "notes": ""
         },
         {
-          "id": "orca-sidebar-top.navigate",
+          "id": "orca-workspace-settings.navigate",
           "title": "Navigate Workspace options by key",
-          "source": "mods/orca-sidebar-top/main.js:344",
-          "reach": ["orca-sidebar-top.options"],
+          "source": "mods/orca-workspace-settings/main.js:344",
+          "reach": ["orca-workspace-settings.options"],
           "action": "keyboard",
           "target": "Up / Down / Home / End",
           "expect": ["imageAssert selected eligible row moves"],

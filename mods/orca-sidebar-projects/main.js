@@ -230,7 +230,7 @@ export default class Spaces extends View {
         // Explicit callers can still request a repaint; normal workspace-option writes publish
         // through Herdr's shared store, which already re-renders every mod.
         else if (cmd === "options-changed") this.notify(taskCx);
-        // Workspace options' Refresh (orca-sidebar-top): re-read git now, not on the 60s fallback or a
+        // Workspace options' Refresh (orca-workspace-settings): re-read git now, not on the 60s fallback or a
         // filesystem wake. Orca reads a repo's worktrees when a dialog asks; a person who just
         // checked out or added one here has no such trigger.
         else if (cmd === "refresh") this.refreshAll(taskCx);
@@ -1152,18 +1152,18 @@ export default class Spaces extends View {
     return r.head ? [this.header(r, t, ps), this.card(r, t, ps, mine)] : [this.card(r, t, ps, mine)];
   }
 
-  // Publishes what orca-sidebar-top's collapse-all button needs.
+  // Publishes what orca-workspace-settings's collapse-all button needs.
   publishProjectState(cx) {
     // ProjectsCollapseAllButton's `allCollapsed` prop: Orca computes it from the same set the
     // header folds on (`useAppStore` allCollapsed), so publish the identical predicate here and
-    // let orca-sidebar-top pick the glyph and the toggle direction. `setShared` does not notify
-    // (AGENTS.md rule 10), which is fine: orca-sidebar-top re-reads it when orca-sidebar-projects re-renders.
+    // let orca-workspace-settings pick the glyph and the toggle direction. `setShared` does not notify
+    // (AGENTS.md rule 10), which is fine: orca-workspace-settings re-reads it when orca-sidebar-projects re-renders.
     const keys = this.projectKeys(cx);
     const allCollapsed = keys.length > 0 && keys.every((k) => this.foldedRepos.has(k));
     if (allCollapsed !== Boolean(shared("projects.allCollapsed"))) setShared("projects.allCollapsed", allCollapsed);
     // `WorktreeList.tsx:290` mounts the collapse-all button only when
     // `projectsCollapseTarget && projectCollapseKeys.length > 0` — with no projects there is
-    // nothing to collapse, so Orca renders no button at all. Publish the count so orca-sidebar-top can
+    // nothing to collapse, so Orca renders no button at all. Publish the count so orca-workspace-settings can
     // make the same call; the header cannot see the row plan itself.
     if (keys.length !== shared("projects.count")) setShared("projects.count", keys.length);
   }

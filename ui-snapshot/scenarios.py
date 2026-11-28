@@ -62,13 +62,13 @@ PERM="Each agent's own settings"
 
 CASES = [
     case("Workspace options popup","orca-sidebar-top","Workspace options",(204,97),overlay="orca-sidebar-top"),
-    case("New workspace menu","orca-sidebar-top orca-new-menu","New workspace",(260,97),overlay="orca-new-menu"),
+    case("New workspace menu","orca-sidebar-top orca-tab-dropdown","New workspace",(260,97),overlay="orca-tab-dropdown"),
     case("Collapse project groups","orca-sidebar-top orca-sidebar-projects","Collapse all projects",(76,97),group="expand",beforeText=["primary"],afterText=["sample-project"],absentText=["primary"],evidenceRegion=LEFT),
     case("Expand project groups","orca-sidebar-top orca-sidebar-projects","Expand all projects",(76,97),group="collapse",afterText=["primary"],evidenceRegion=LEFT),
     case("Project group disclosure","orca-sidebar-projects","sample-project",visible=True,region=LEFT,group="expand",beforeText=["primary"],afterText=["sample-project"],absentText=["primary"],evidenceRegion=LEFT),
     case("Project group expand","orca-sidebar-projects","sample-project",visible=True,region=LEFT,group="collapse",afterText=["primary"],evidenceRegion=LEFT),
     case("Project group context menu","orca-sidebar-projects orca-context-menu","sample-project",visible=True,region=LEFT,group="expand",right=True,overlay="orca-context-menu",afterText=["Open worktree","Copy Path","Delete all tabs"],closedText=["sample-project"],closedAbsent=["New worktree"]),
-    case("New terminal tab menu","orca-header orca-new-menu","New tab",(446,16),overlay="orca-new-menu"),
+    case("New terminal tab menu","orca-header orca-tab-dropdown","New tab",(446,16),overlay="orca-tab-dropdown"),
     case("Explorer: expand src folder","orca-files","src",(720,199),visible=True,region=RIGHT,files="names",afterText=["example.js"]),
     case("Explorer: select Contents search","orca-files","Contents",visible=True,region=RIGHT,files="names",beforeText=["Find files"],afterText=["Search"],absentText=["Find files"],evidenceRegion=RIGHT),
     case("Explorer: search details","orca-files","Toggle search details",(1007,191),files="contents",afterText=["Files to include"]),
@@ -93,7 +93,7 @@ CASES = [
     case("Sidebar collapse","orca-header","Collapse sidebar",(91,15),files="names",beforeText=["Projects","Find files"],afterText=["Find files"],absentText=["Projects"]),
     case("Right panel collapse","orca-right-sidebar-header orca-header","Collapse right sidebar",(1000,15),files="names",beforeText=["Find files","Names"],afterText=["Projects"],absentText=["Find files","Names"],allowTransientRuntimeErrors=["can't render at a zero size"]),
     # New native interaction cases.
-    case("Landing: create workspace","orca-landing orca-new-menu","Create workspace",(545,388),mouse_only=True,page="main-landing",overlay="orca-new-menu"),
+    case("Landing: create workspace","orca-landing orca-tab-dropdown","Create workspace",(545,388),mouse_only=True,page="main-landing",overlay="orca-tab-dropdown"),
     case("Group: open New worktree dialog and cancel","orca-context-menu orca-worktree","New worktree",(146,154),group="expand",prepare=[text("sample-project",LEFT,right=True)],setupOverlay="orca-context-menu",overlay="orca-worktree",afterText=["New worktree"],follow=[mouse(150,530,noOverlay=True,absentText=["New worktree"])]),
     case("File context: delete confirmation and cancel","orca-files orca-confirm","Delete",visible=True,region=(.60,.05,1,.96),files="names",fresh=True,prepare=[text("notes.txt",RIGHT,right=True,scroll=True)],setupOverlay="orca-files",overlay="orca-confirm",afterText=["Delete?","Cancel"],follow=[text("Cancel",scroll=True,noOverlay=True,absentText=["Delete?"])],fixtureExists="notes.txt"),
     case("Panel gap: Checks unavailable state","orca-right-sidebar-header orca-right-sidebar-placeholders","Checks",(978,47),mouse_only=True,prepare=[mouse(894,47)],afterText=["Checks read Orca's hosted-review data","Herdr has no GitHub or GitLab","integration."],evidenceRegion=RIGHT),
