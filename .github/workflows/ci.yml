@@ -67,6 +67,9 @@ jobs:
           printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status-bar.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
           chmod +x "$RUNNER_TEMP/bin/herdr-app"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # Some tests read the compiled typed modules; build them from source in this job first.
+      - name: Pack TypeScript to JavaScript (vp pack)
+        run: npm run pack:ts
       - name: Vitest suite with coverage (from source)
         run: |
           export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
