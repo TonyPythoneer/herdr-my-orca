@@ -1,6 +1,6 @@
 # Main UI Snapshot observer
 
-`main` is the source of truth for the workflows, observer and tests. The dedicated `ci/main-with-full-process` branch is a code-bearing validation target. Pull requests to it run the full native snapshot inventory against the actual PR merge candidate. Ordinary PRs run only logic checks.
+`main` is the source of truth for the workflows, observer and tests. Pull requests into `ci/main` run the native UI E2E workflow (`.github/workflows/native-ui-e2e.yml`), which validates the verified CI delivery in a real Herdr app. Ordinary PRs into `main` run only the CI logic checks.
 
 ## Run
 For a local macOS run, explicitly opt in to controlling the foreground desktop:
@@ -9,10 +9,9 @@ python3 ui-snapshot/capture.py --target . --out /tmp/herdr-ui-snapshot --local
 ```
 The observer uses a temporary HOME, app configuration, Git configuration and unique core session. It opens and focuses its own Herdr window, sends real input, and stops if that window loses focus. Keep the desktop unlocked during the run. After a fixture paste it restores the clipboard if another process has not changed it; an interrupted paste can leave fixture text there. The report records failures and incomplete observations; a local pass does not replace the macOS CI run.
 
-Full-process PRs run the complete custom UI scenario inventory. The runner uploads PNGs, a manifest and browser-ready gallery; no generated files are committed to a branch.
+PRs into `ci/main` run the complete custom UI scenario inventory. The runner uploads PNGs, a manifest and browser-ready gallery; no generated files are committed to a branch.
 
-Open or update a PR targeting `ci/main-with-full-process` (sync that branch from main before testing).
-No manual dispatch, schedule, main push or ordinary PR triggers native capture.
+Open or update a PR targeting `ci/main`. Native capture runs only for PRs into `ci/main`; no manual dispatch, schedule, main push or ordinary PR triggers it.
 
 Open the browser-gallery artifact from the Full CI PR run and open index.html. The full-process-ui-snapshot artifact retains original PNGs. Every attempted operation has an ordered before/after PNG (or diagnostic on failure), command or AX label, native status, and image metadata/hash in manifest.json. The report identifies candidate and observer SHAs and upstream app/core versions. Actual native AXPress attempts are distinguished from command-driven navigation; these are not physical mouse clicks, and blocked AX permissions/ambiguous labels are reported as incomplete coverage rather than fabricated successes. GUI runner failure is also reported. This is an observational suite, not a guarantee of visual correctness.
 

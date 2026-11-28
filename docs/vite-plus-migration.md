@@ -10,9 +10,9 @@ This file records what is proven, not what is planned.
 
 - Vite+ 1.8.0 is pinned in the root `package.json` and lockfile. It supplies Oxlint,
   tsrs, Vitest and Pack; the candidate uses Node 24 in CI.
-- `.github/workflows/vite-plus-candidate.yml` now targets `main`, not the retired
-  `fix/sidebar-branch-tooltip` branch. Run `46019435396` at `9d93f15` passed on both
-  Ubuntu and macOS, including native `herdr-app check` over the packed delivery.
+- The Vite+ candidate workflow was retired; its native `herdr-app check` moved to
+  `native-ui-e2e.yml`, which validates the CI delivery artifact on macOS. Earlier run
+  `46019435396` at `9d93f15` is historical evidence only.
 - `ci.yml` builds one delivery payload with `npm run pack:delivery`, verifies it with
   `verify-output.mjs --delivery`, zips it once, and runs the native check and the
   production package from that same zip. The old `git archive` package path is gone.
@@ -60,8 +60,9 @@ a blocker rather than an unexplained PASS.
    byte-preserving legacy JavaScript with one compiled TypeScript module, not a
    fresh-clone, source-only build.
 4. **Custom build/lint infrastructure.** `scripts/build-orca-ui.mjs`, `compare-lint.mjs`
-   and `compare-runtime.py` remain necessary while the legacy path is the production
-   source. They can only be deleted after blockers 1–3 close.
+   and `compare-lint.mjs` remain necessary while the legacy path is the production
+   source. They can only be deleted after blockers 1–3 close. (`compare-runtime.py` was
+   deleted with the candidate workflow.)
 
 ## Gates that must stay true
 
