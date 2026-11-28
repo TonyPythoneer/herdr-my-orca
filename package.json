@@ -1,0 +1,18 @@
+{
+  "name": "herdr-my-orca",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:ts": "vp lint src test --type-aware --type-check --max-warnings 0",
+    "test:ts": "vp test run test",
+    "check:herdr-types": "vpx src/tooling/herdr-types.ts --check",
+    "pack:ts": "vp pack",
+    "pack:delivery": "vpx src/tooling/pack-delivery.ts"
+  },
+  "devDependencies": {
+    "@babel/parser": "7.29.15",
+    "@types/node": "24.19.4",
+    "@vitest/coverage-v8": "5.1.1",
+    "vite-plus": "1.8.0"
+  }
+}

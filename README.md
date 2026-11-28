@@ -143,20 +143,24 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 - Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
   (see [.agents/skills/herdr-app-dev-sync/SKILL.md](.agents/skills/herdr-app-dev-sync/SKILL.md)).
 - Checks: `node --test mods scripts orca-ui/features`, `herdr-app check <mod>`, `herdr-app status`,
-  `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npx eslint@9 -c eslint.config.mjs mods scripts orca-ui`
+  `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npm ci` then `npx --no-install vp lint mods scripts orca-ui`
   (complexity, nesting, function length, parameters, shadowing; generated files are skipped) and
   `node --test --experimental-test-coverage mods scripts orca-ui/features`.
   CI runs unit/contract and behavior suites separately; the aggregate check requires both.
   The synthetic Git branch-header benchmark (`python3 scripts/benchmark-git-status.py`) reports paired p50/p95 timings, not native UI latency.
-- CI runs the full suite: `.github/workflows/quality.yml` runs the tests, coverage, lint and the drift
-  check on every pull request and on pushes to `main`, `plan/**` and `refactor/**`. It posts one
-  comment on the pull request (updated in place) and uploads `report.json` and `report.md` as the
-  `quality-report` artifact; `report.json` has a stable schema (`schemaVersion`) meant for an AI to
-  read, with a `nextActions` list for the next improvement step. Agents and local runs only need
-  `node --test mods/<mod>` for the mod they touched. `node scripts/metrics.mjs --out <dir>` produces
-  the same report locally; `--update-baseline` rewrites `metrics/baseline.json` after a deliberate,
-  reviewed improvement. A pull request fails when tests fail, the drift check fails, lint findings
-  rise above the baseline, or line coverage drops more than 1 point.
+- CI does not gate on coverage. Coverage is reported only: it is measured locally by the metrics
+  tool, and no CI job fails on the percentage.
+- Show the coverage percentage locally (a few minutes; it runs the full test suite):
+
+  ```sh
+  OUT="$(mktemp -d)"
+  ./node_modules/.bin/vpx src/tooling/metrics.ts --out "$OUT"
+  node -e 'const r=require(process.argv[1]); console.log(r.coverage.overall)' "$OUT/report.json"
+  ```
+
+  `coverage.overall.line` is the line percentage (`lineCovered` / `lineTotal`). The same file holds
+  test counts and lint totals. The command exits 1 only when tests, lint or the drift check fail;
+  coverage is reported and never fails it. Run `vp pack` first if `dist/typed` is missing.
 - Not used: a bundler. Measured on two sample mods with Vite+, source maps doubled the output and
   herdr-app 0.1.17 ignores them, so errors would name bundle lines.
 

@@ -7,7 +7,7 @@
 //   --baseline         metrics/baseline.json by default; deltas and gates are computed against it
 //   --update-baseline  write the new numbers to the baseline file (a deliberate, reviewed change)
 //   --skip-tests       reuse nothing: only lint, size and the drift check (fast local look)
-// Env: ESLINT_BIN picks the eslint binary (default `npx --yes eslint@9`).
+// Env: VP_BIN overrides the pinned local Vite+ binary for diagnostic testing.
 // Exit 0 when every gate holds, 1 when a gate fails, 2 on a usage error.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -42,7 +42,34 @@ export function parseTestSummary(text) {
   return { tests: n("tests"), pass: n("pass"), fail: n("fail"), skipped: n("skipped"), durationMs: Math.round(Number(text.match(/^ℹ duration_ms ([\d.]+)/m)?.[1] ?? 0)) };
 }
 
-// eslint --format json -> counts by rule and by area, plus the worst complexity numbers.
+// Normalize Oxlint's JSON to the stable report schema (legacy rule names and source lines).
+function validateOxlintReport(report) {
+  if (!Array.isArray(report?.diagnostics) || !Number.isInteger(report.number_of_files) || report.number_of_files < 1) {
+    throw new Error("Oxlint did not report a nonempty file scope");
+  }
+}
+
+function normalizeDiagnostic(d, root) {
+  const line = d.labels?.[0]?.span?.line;
+  if (typeof d.filename !== "string" || !Number.isInteger(line) || typeof d.message !== "string") {
+    throw new Error("Malformed Oxlint diagnostic");
+  }
+  const ruleId = d.code?.match(/^eslint\(([^)]+)\)$/)?.[1] ?? d.code?.replace(/^eslint\//, "") ?? "parse";
+  return { filePath: resolve(root, d.filename), message: { ruleId, message: d.message, line } };
+}
+
+export function normalizeOxlint(report, root = ROOT) {
+  validateOxlintReport(report);
+  const files = new Map();
+  for (const d of report.diagnostics) {
+    const { filePath, message } = normalizeDiagnostic(d, root);
+    if (!files.has(filePath)) files.set(filePath, { filePath, messages: [] });
+    files.get(filePath).messages.push(message);
+  }
+  return [...files.values()];
+}
+
+// Counts by rule and area, plus the worst complexity numbers.
 export function summarizeLint(results, root = ROOT) {
   const byRule = {};
   const byArea = {};
@@ -57,7 +84,7 @@ export function summarizeLint(results, root = ROOT) {
       if (score) worst.push({ where: `${rel}:${m.line}`, complexity: score });
     }
   }
-  return { total: Object.values(byRule).reduce((a, b) => a + b, 0), byRule, byArea, worstComplexity: worst.sort((a, b) => b.complexity - a.complexity).slice(0, 8) };
+  return { total: Object.values(byRule).reduce((a, b) => a + b, 0), byRule, byArea, worstComplexity: worst.sort((a, b) => b.complexity - a.complexity || a.where.localeCompare(b.where)).slice(0, 8) };
 }
 
 // Average a list of coverage rows by mod, so a mod with one bad file stands out.
@@ -94,7 +121,7 @@ export function judge(current, baseline) {
   const failures = [];
   if (current.tests.fail > GATES.failedTests) failures.push(`${current.tests.fail} test(s) fail`);
   if (current.tests.executionError) failures.push(current.tests.executionError);
-  if (current.lint.total < 0 || current.lint.error) failures.push("eslint did not produce a valid report");
+  if (current.lint.total < 0 || current.lint.error) failures.push("Oxlint did not produce a valid report");
   if (current.drift.exitCode !== 0) failures.push("build-orca-ui --check reports drift");
   const compared = baseline ? againstBaseline(current, baseline) : { failures: [], warnings: [] };
   failures.push(...compared.failures);
@@ -104,11 +131,11 @@ export function judge(current, baseline) {
 // What the next iteration of the improvement loop should look at, worst first.
 export function nextActions(report) {
   const actions = [];
-  for (const [area, n] of Object.entries(report.lint.byArea).sort((a, b) => b[1] - a[1]).slice(0, 3)) actions.push(`Lint: ${area} has ${n} finding(s); run eslint on it and fix the largest complexity first.`);
+  for (const [area, n] of Object.entries(report.lint.byArea).sort((a, b) => b[1] - a[1]).slice(0, 3)) actions.push(`Lint: ${area} has ${n} finding(s); run vp lint on it and fix the largest complexity first.`);
   for (const w of report.lint.worstComplexity.slice(0, 3)) actions.push(`Complexity ${w.complexity} at ${w.where}: extract functions.`);
   const low = Object.entries(report.coverage.byMod).filter(([, c]) => c.line < 80).sort((a, b) => a[1].line - b[1].line).slice(0, 3);
   for (const [mod, c] of low) actions.push(`Coverage: ${mod} is at ${c.line}% lines; write characterization tests before refactoring it.`);
-  return actions.length ? actions : ["Nothing over threshold: tighten a gate in scripts/metrics.mjs or in eslint.config.mjs."];
+  return actions.length ? actions : ["Nothing over threshold: tighten a gate in scripts/metrics.mjs or in vite.config.ts."];
 }
 
 export function toMarkdown(report, verdict, baseline) {
@@ -177,13 +204,13 @@ function collectTests() {
 }
 
 function collectLint() {
-  const eslint = process.env.ESLINT_BIN ? [process.env.ESLINT_BIN] : ["npx", "--yes", "eslint@9"];
-  const lintRun = run(eslint[0], [...eslint.slice(1), "-c", "eslint.config.mjs", "--format", "json", "mods", "scripts", "orca-ui"]);
+  const vp = process.env.VP_BIN ?? join(ROOT, "node_modules", ".bin", "vp");
+  const lintRun = run(vp, ["lint", "--format", "json", "mods", "scripts", "orca-ui"]);
   let lint;
   try {
-    if (lintRun.status !== 0 && lintRun.status !== 1) throw new Error("eslint execution failed");
-    lint = summarizeLint(JSON.parse(lintRun.stdout));
-  } catch { lint = { total: -1, byRule: {}, byArea: {}, worstComplexity: [], error: (lintRun.stderr || "eslint produced no JSON").slice(0, 300) }; }
+    if (lintRun.status !== 0 && lintRun.status !== 1) throw new Error("Oxlint execution failed");
+    lint = summarizeLint(normalizeOxlint(JSON.parse(lintRun.stdout)));
+  } catch { lint = { total: -1, byRule: {}, byArea: {}, worstComplexity: [], error: (lintRun.stderr || "Oxlint produced no valid JSON").slice(0, 300) }; }
   return lint;
 }
 

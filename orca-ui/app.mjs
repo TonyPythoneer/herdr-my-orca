@@ -54,17 +54,7 @@ export const inPlace = [
     "shared": [
       "orca-agent-flyout"
     ],
-    "tests": [
-      "mods/orca-agent-flyout/agent-flyout.test.js",
-      "mods/orca-agent-flyout/argv.golden.test.js",
-      "mods/orca-agent-flyout/codex-provider.test.js",
-      "mods/orca-agent-flyout/flyout.golden.test.js",
-      "mods/orca-agent-flyout/launch.test.js",
-      "mods/orca-agent-flyout/lists.test.js",
-      "mods/orca-agent-flyout/quickstart-wrapper.test.js",
-      "mods/orca-agent-flyout/render.golden.test.js",
-      "mods/orca-agent-flyout/settings.flow.test.js"
-    ],
+    "tests": [],
     "next": [
       "mods/orca-files/main.js"
     ]
@@ -91,18 +81,6 @@ export const inPlace = [
       "agent-manager.toggle-agent"
     ],
     "tests": [
-      "mods/orca-agent-settings/agent-rail.test.js",
-      "mods/orca-agent-settings/install.test.js",
-      "mods/orca-agent-settings/manager-flow.test.js",
-      "mods/orca-agent-settings/manager-logic.test.js",
-      "mods/orca-agent-settings/manager-page.test.js",
-      "mods/orca-agent-settings/permission-menu.test.js",
-      "mods/orca-agent-settings/permissions.flow.test.js",
-      "mods/orca-agent-settings/permissions.test.js",
-      "mods/orca-agent-settings/provider.flow.test.js",
-      "mods/orca-agent-settings/render.test.js",
-      "mods/orca-agent-settings/state.test.js",
-      "mods/orca-agent-settings/util.test.js"
     ]
   },
   {
@@ -117,7 +95,6 @@ export const inPlace = [
       "agent.focus"
     ],
     "tests": [
-      "mods/orca-right-sidebar-agents/agents-flow.test.js"
     ]
   },
   {
@@ -142,16 +119,6 @@ export const inPlace = [
       "orca-diff.target"
     ],
     "tests": [
-      "mods/orca-changes/commit-push.test.js",
-      "mods/orca-changes/conflict-safety.test.js",
-      "mods/orca-changes/create-pr.test.js",
-      "mods/orca-changes/discard-snapshot.test.js",
-      "mods/orca-changes/git-matrix.test.js",
-      "mods/orca-changes/main.golden.test.js",
-      "mods/orca-changes/operation-target.test.js",
-      "mods/orca-changes/push-target.test.js",
-      "mods/orca-changes/refresh.flow.test.js",
-      "mods/orca-changes/section-view.test.js"
     ],
     "next": [
       "mods/orca-diff/main.js",
@@ -177,7 +144,6 @@ export const inPlace = [
       "tasks.resets"
     ],
     "tests": [
-      "mods/orca-status-footer/footer-flow.test.js"
     ],
     "next": [
       "mods/orca-status-footer/scheduler.js",
@@ -198,8 +164,6 @@ export const inPlace = [
       "props.confirmShared.key (dynamic set)"
     ],
     "tests": [
-      "mods/orca-confirm/confirm.flow.test.js",
-      "mods/orca-confirm/render.flow.test.js"
     ]
   },
   {
@@ -217,12 +181,6 @@ export const inPlace = [
       "orca-diff.target"
     ],
     "tests": [
-      "mods/orca-diff/data.flow.test.js",
-      "mods/orca-diff/diff-data.test.js",
-      "mods/orca-diff/diff-load.test.js",
-      "mods/orca-diff/diff.test.js",
-      "mods/orca-diff/pane.flow.test.js",
-      "mods/orca-diff/view.flow.test.js"
     ]
   },
   {
@@ -293,9 +251,6 @@ export const inPlace = [
       "orca-float-workspace.attention"
     ],
     "tests": [
-      "mods/orca-float-workspace/golden.test.js",
-      "mods/orca-float-workspace/panel.flow.test.js",
-      "mods/orca-float-workspace/workspace.flow.test.js"
     ],
     "next": [
       "mods/orca-new-menu/main.js"
@@ -312,8 +267,6 @@ export const inPlace = [
       "overlay:dialog opened by orca-context-menu (handoff and fork items)"
     ],
     "tests": [
-      "mods/orca-handoff/dialog.flow.test.js",
-      "mods/orca-handoff/main.golden.test.js"
     ]
   },
   {
@@ -328,9 +281,6 @@ export const inPlace = [
       "overlay:orca-new-menu"
     ],
     "tests": [
-      "mods/orca-landing/buttons.flow.test.js",
-      "mods/orca-landing/golden.test.js",
-      "mods/orca-landing/shortcuts.test.js"
     ],
     "next": [
       "mods/orca-new-menu/main.js"
@@ -359,11 +309,6 @@ export const inPlace = [
       "orca-header.action"
     ],
     "tests": [
-      "mods/orca-context-menu/close-row.test.js",
-      "mods/orca-context-menu/close-sides.test.js",
-      "mods/orca-context-menu/close-space.test.js",
-      "mods/orca-context-menu/menu.flow.test.js",
-      "mods/orca-context-menu/menu.golden.test.js"
     ],
     "next": [
       "mods/orca-header/main.js",
@@ -395,7 +340,6 @@ export const inPlace = [
       "projects.count"
     ],
     "tests": [
-      "mods/orca-sidebar-top/refresh.test.js"
     ],
     "next": [
       "mods/orca-new-menu/main.js"
@@ -421,10 +365,6 @@ export const inPlace = [
       "orca-agent-flyout"
     ],
     "tests": [
-      "mods/orca-new-menu/inventory.test.js",
-      "mods/orca-new-menu/menu.flow.test.js",
-      "mods/orca-new-menu/menu.golden.test.js",
-      "mods/orca-new-menu/rows.test.js"
     ],
     "next": [
       "mods/orca-worktree/main.js",
@@ -454,9 +394,6 @@ export const inPlace = [
       "orca-header.action"
     ],
     "tests": [
-      "mods/orca-pane-header/crew.test.js",
-      "mods/orca-pane-header/golden.test.js",
-      "mods/orca-pane-header/interactions.flow.test.js"
     ],
     "next": [
       "mods/orca-context-menu/main.js"
@@ -474,7 +411,6 @@ export const inPlace = [
     ],
     "props": "tab: workspaces|pr-checks|checks|ports",
     "tests": [
-      "mods/orca-right-sidebar-placeholders/panel-motion.test.js"
     ]
   },
   {
@@ -507,15 +443,6 @@ export const inPlace = [
       "agent-manager.toggle-agent"
     ],
     "tests": [
-      "mods/orca-sidebar-projects/agent-rail.test.js",
-      "mods/orca-sidebar-projects/card-agents.test.js",
-      "mods/orca-sidebar-projects/git-refresh.test.js",
-      "mods/orca-sidebar-projects/left-sidebar-agents.test.js",
-      "mods/orca-sidebar-projects/render.test.js",
-      "mods/orca-sidebar-projects/retained-row.test.js",
-      "mods/orca-sidebar-projects/review-store.test.js",
-      "mods/orca-sidebar-projects/storage.test.js",
-      "mods/orca-sidebar-projects/worktree-plan.test.js"
     ],
     "next": [
       "mods/orca-context-menu/main.js"
@@ -540,8 +467,6 @@ export const inPlace = [
       "mod.open:orca-split-menu (keys.json)"
     ],
     "tests": [
-      "mods/orca-split-menu/actions.flow.test.js",
-      "mods/orca-split-menu/menu.golden.test.js"
     ],
     "next": [
       "mods/orca-files/main.js",
@@ -567,7 +492,6 @@ export const inPlace = [
       "orca-status-ports.overlay"
     ],
     "tests": [
-      "mods/orca-status-ports/scan.test.js"
     ]
   },
   {
@@ -594,12 +518,6 @@ export const inPlace = [
       "orca-float-workspace.attention"
     ],
     "tests": [
-      "mods/orca-status-bar/claude-statusline.test.js",
-      "mods/orca-status-bar/local-usage.test.js",
-      "mods/orca-status-bar/status-flow.test.js",
-      "mods/orca-status-bar/usage-edge.test.js",
-      "mods/orca-status-bar/usage.test.js",
-      "mods/orca-status-bar/wt-follow.test.js"
     ],
     "next": [
       "mods/orca-float-workspace/main.js"
@@ -642,18 +560,6 @@ export const inPlace = [
       "panel.openPx"
     ],
     "tests": [
-      "mods/orca-header/agent-settings-route.test.js",
-      "mods/orca-header/close-plan.test.js",
-      "mods/orca-header/drop-zone.test.js",
-      "mods/orca-header/golden.test.js",
-      "mods/orca-header/interactions.flow.test.js",
-      "mods/orca-header/new-tab.test.js",
-      "mods/orca-header/sidebar-motion.test.js",
-      "mods/orca-header/sidebar-native.test.js",
-      "mods/orca-header/tab-panes.test.js",
-      "mods/orca-header/tab-strip-scroll.test.js",
-      "mods/orca-header/tab-title.test.js",
-      "mods/orca-header/unofficial-apps.test.js"
     ],
     "next": [
       "mods/orca-context-menu/main.js",
@@ -680,8 +586,6 @@ export const inPlace = [
       "tasks.request"
     ],
     "tests": [
-      "mods/orca-tasks/tasks-flow.test.js",
-      "mods/orca-tasks/tasks.test.js"
     ],
     "next": [
       "mods/orca-status-footer/scheduler.js"
@@ -699,12 +603,6 @@ export const inPlace = [
       "overlay:dialog with props.action new|open|remove (from orca-new-menu, orca-context-menu)"
     ],
     "tests": [
-      "mods/orca-worktree/create.test.js",
-      "mods/orca-worktree/dialog.flow.test.js",
-      "mods/orca-worktree/helpers.test.js",
-      "mods/orca-worktree/main.golden.test.js",
-      "mods/orca-worktree/remove.test.js",
-      "mods/orca-worktree/switch.test.js"
     ]
   }
 ];

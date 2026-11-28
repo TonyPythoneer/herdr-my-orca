@@ -1,44 +1,63 @@
-// Unofficial coding CLIs: Herdr sees the interpreter they run under (freebuff runs as Node) and
-// they report no app of their own, so its program table cannot give a tab their name or icon.
-// The new-tab menu knows them; match their launch command instead. The icon itself lives with the
-// tab mod's other agent marks, as every mod carries its own assets.
-export const UNOFFICIAL_APPS = [
-  { key: "freebuff", name: "freebuff" },
-];
+export const UNOFFICIAL_APPS = [{ key: "freebuff", name: "freebuff" }];
 
-// A shell command string is the part after a `-c`-style option, or the command after `exec`.
-// Only words in executable positions count: a prompt or a `--flag` value may mention the CLI
-// without launching it (`claude --append-system-prompt "fix freebuff tab icon"`).
 const SHELL_COMMAND_FLAG = /^-[a-z]*c[a-z]*$/i;
+const MAX_COMMAND_WORDS_INPUT = 4096;
+const COMMAND_SEPARATOR = /[\s"'`;|&()<>]/;
+
+function commandNextMatches(next, current) {
+  return Boolean(
+    next &&
+      ((current.argumentIndex === next.argumentIndex && current.wordIndex > next.wordIndex) ||
+        current.argumentIndex === next.argumentIndex + 1),
+  );
+}
+
+function commandNextExpired(next, current) {
+  return Boolean(next && current.argumentIndex > next.argumentIndex + 1);
+}
 
 function base(word) {
   return String(word ?? "").split(/[\\/]/).pop();
 }
 
-function commandWords(text) {
-  return String(text ?? "").split(/[\s"'`;|&()<>]+/).filter(Boolean);
+function commandWords(text, argumentIndex) {
+  if (typeof text !== "string") return [];
+  const truncated = text.length > MAX_COMMAND_WORDS_INPUT;
+  const prefix = text.slice(0, MAX_COMMAND_WORDS_INPUT);
+  const words = prefix.split(/[\s"'`;|&()<>]+/).filter(Boolean);
+  if (
+    truncated &&
+    !COMMAND_SEPARATOR.test(prefix[prefix.length - 1] ?? "") &&
+    !COMMAND_SEPARATOR.test(text[MAX_COMMAND_WORDS_INPUT])
+  )
+    words.pop();
+  return words.map((word, wordIndex) => ({ word, argumentIndex, wordIndex }));
 }
 
 function executableWords(argv) {
-  const flat = (Array.isArray(argv) ? argv : []).flatMap(commandWords);
+  const flat = (Array.isArray(argv) ? argv : []).flatMap((item, argumentIndex) =>
+    commandWords(item, argumentIndex),
+  );
   if (!flat.length) return [];
-  const words = [base(flat[0])];
-  let commandNext = false;
+  const words = [base(flat[0].word)];
+  let commandNext = null;
   for (let i = 0; i < flat.length; i++) {
-    const word = flat[i];
-    if (commandNext) {
+    const current = flat[i];
+    const { word, argumentIndex, wordIndex } = current;
+    if (commandNextMatches(commandNext, current)) {
       words.push(base(word));
-      commandNext = false;
+      commandNext = null;
     }
+    if (commandNextExpired(commandNext, current)) commandNext = null;
     if (SHELL_COMMAND_FLAG.test(word)) {
-      commandNext = true;
+      commandNext = { argumentIndex, wordIndex };
       continue;
     }
     if (!["exec", "command", "env"].includes(word)) continue;
-    // `env FOO=1 freebuff` runs the word after the assignments.
+
     let k = i + 1;
-    while (flat[k] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(flat[k])) k++;
-    if (flat[k]) words.push(base(flat[k]));
+    while (flat[k] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(flat[k].word)) k++;
+    if (flat[k]) words.push(base(flat[k].word));
   }
   return words;
 }
@@ -48,7 +67,6 @@ export function matchUnofficialApp(argv, apps = UNOFFICIAL_APPS) {
   return apps.find((a) => words.some((w) => w === a.key)) ?? null;
 }
 
-// One pass over the terminal list per render instead of one per tab.
 export function unofficialByTerminal(list, apps = UNOFFICIAL_APPS) {
   const byTerminal = new Map();
   for (const term of list ?? []) {

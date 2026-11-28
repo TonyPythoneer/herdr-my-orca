@@ -1,46 +1,75 @@
 {
   "files": [
     {
-      "source": "orca-ui/shared/clip.js",
+      "source": "src/shared/agent-catalog.ts",
       "outputs": [
+        "mods/orca-agent-flyout/agent-catalog.js",
+        "mods/orca-agent-settings/agent-catalog.js",
+        "mods/orca-float-workspace/agent-catalog.js",
+        "mods/orca-header/agent-catalog.js",
+        "mods/orca-new-menu/agent-catalog.js",
+        "mods/orca-pane-header/agent-catalog.js",
+        "mods/orca-right-sidebar-agents/agent-catalog.js",
+        "mods/orca-status-footer/agent-catalog.js",
+        "mods/orca-tasks/agent-catalog.js"
+      ]
+    },
+    {
+      "source": "src/shared/agent-config-view.ts",
+      "outputs": [
+        "mods/orca-agent-flyout/agent-config-view.js",
+        "mods/orca-agent-settings/agent-config-view.js"
+      ]
+    },
+    {
+      "source": "src/shared/agent-flyout.ts",
+      "outputs": [
+        "mods/orca-agent-flyout/agent-flyout.js",
+        "mods/orca-agent-settings/agent-flyout.js",
+        "mods/orca-new-menu/agent-flyout.js"
+      ]
+    },
+    {
+      "source": "src/shared/clip.ts",
+      "outputs": [
+        "mods/orca-agent-settings/clip.js",
         "mods/orca-changes/clip.js",
+        "mods/orca-context-menu/clip.js",
         "mods/orca-files/clip.js",
         "mods/orca-handoff/clip.js",
-        "mods/orca-context-menu/clip.js",
-        "mods/orca-agent-settings/clip.js",
         "mods/orca-status-ports/clip.js"
       ]
     },
     {
-      "source": "orca-ui/shared/transcript.js",
-      "outputs": [
-        "mods/orca-handoff/transcript.js",
-        "mods/orca-context-menu/transcript.js"
-      ]
-    },
-    {
-      "source": "orca-ui/shared/review-store.js",
-      "outputs": [
-        "mods/orca-sidebar-projects/review-store.js"
-      ]
-    },
-    {
-      "source": "orca-ui/shared/codex-provider.js",
+      "source": "src/shared/codex-provider.ts",
       "outputs": [
         "mods/orca-agent-flyout/codex-provider.js",
         "mods/orca-agent-settings/codex-provider.js"
       ]
     },
     {
-      "source": "orca-ui/shared/agent-flyout.js",
+      "source": "src/shared/dialog-button.ts",
       "outputs": [
-        "mods/orca-agent-flyout/agent-flyout.js",
-        "mods/orca-new-menu/agent-flyout.js",
-        "mods/orca-agent-settings/agent-flyout.js"
+        "mods/orca-changes/dialog-button.js",
+        "mods/orca-handoff/dialog-button.js",
+        "mods/orca-header/dialog-button.js",
+        "mods/orca-tasks/dialog-button.js"
       ]
     },
     {
-      "source": "orca-ui/shared/list-viewport.js",
+      "source": "src/shared/icon-button.ts",
+      "outputs": [
+        "mods/orca-agent-settings/icon-button.js",
+        "mods/orca-float-workspace/icon-button.js",
+        "mods/orca-header/icon-button.js",
+        "mods/orca-pane-header/icon-button.js",
+        "mods/orca-sidebar-top/icon-button.js",
+        "mods/orca-status-footer/icon-button.js",
+        "mods/orca-status-ports/icon-button.js"
+      ]
+    },
+    {
+      "source": "src/shared/list-viewport.ts",
       "outputs": [
         "mods/orca-agent-flyout/list-viewport.js",
         "mods/orca-agent-settings/list-viewport.js",
@@ -48,14 +77,7 @@
       ]
     },
     {
-      "source": "orca-ui/shared/tasks.js",
-      "outputs": [
-        "mods/orca-status-footer/tasks.js",
-        "mods/orca-tasks/tasks.js"
-      ]
-    },
-    {
-      "source": "orca-ui/shared/panel-motion.js",
+      "source": "src/shared/panel-motion.ts",
       "outputs": [
         "mods/orca-files/panel-motion.js",
         "mods/orca-changes/panel-motion.js",
@@ -64,46 +86,70 @@
       ]
     },
     {
-      "source": "orca-ui/shared/agent-config-view.js",
+      "source": "src/shared/review-store.ts",
       "outputs": [
-        "mods/orca-agent-flyout/agent-config-view.js",
-        "mods/orca-agent-settings/agent-config-view.js"
+        "mods/orca-sidebar-projects/review-store.js"
       ]
     },
     {
-      "source": "orca-ui/shared/ui-settings.js",
+      "source": "src/shared/scan.ts",
+      "outputs": [
+        "mods/orca-status-ports/scan.js"
+      ]
+    },
+    {
+      "source": "src/shared/selection-ui.ts",
+      "outputs": [
+        "mods/orca-agent-flyout/selection-ui.js",
+        "mods/orca-agent-settings/selection-ui.js",
+        "mods/orca-sidebar-projects/selection-ui.js"
+      ]
+    },
+    {
+      "source": "src/shared/tasks.ts",
+      "outputs": [
+        "mods/orca-status-footer/tasks.js",
+        "mods/orca-tasks/tasks.js"
+      ]
+    },
+    {
+      "source": "src/shared/theme-color.ts",
+      "outputs": [
+        "mods/orca-agent-flyout/theme-color.js",
+        "mods/orca-agent-settings/theme-color.js",
+        "mods/orca-changes/theme-color.js",
+        "mods/orca-confirm/theme-color.js",
+        "mods/orca-context-menu/theme-color.js",
+        "mods/orca-diff/theme-color.js",
+        "mods/orca-files/theme-color.js",
+        "mods/orca-float-workspace/theme-color.js",
+        "mods/orca-handoff/theme-color.js",
+        "mods/orca-header/theme-color.js",
+        "mods/orca-landing/theme-color.js",
+        "mods/orca-pane-header/theme-color.js",
+        "mods/orca-right-sidebar-agents/theme-color.js",
+        "mods/orca-right-sidebar-placeholders/theme-color.js",
+        "mods/orca-sidebar-projects/theme-color.js",
+        "mods/orca-sidebar-top/theme-color.js",
+        "mods/orca-status-bar/theme-color.js",
+        "mods/orca-status-footer/theme-color.js",
+        "mods/orca-status-ports/theme-color.js",
+        "mods/orca-tasks/theme-color.js",
+        "mods/orca-worktree/theme-color.js"
+      ]
+    },
+    {
+      "source": "src/shared/transcript.ts",
+      "outputs": [
+        "mods/orca-context-menu/transcript.js",
+        "mods/orca-handoff/transcript.js"
+      ]
+    },
+    {
+      "source": "src/shared/ui-settings.ts",
       "outputs": [
         "mods/orca-files/ui-settings.js",
         "mods/orca-status-bar/ui-settings.js"
-      ]
-    },
-    {
-      "source": "orca-ui/shared/selection-ui.js",
-      "outputs": [
-        "mods/orca-sidebar-projects/selection-ui.js",
-        "mods/orca-agent-settings/selection-ui.js",
-        "mods/orca-agent-flyout/selection-ui.js"
-      ]
-    },
-    {
-      "source": "orca-ui/shared/icon-button.js",
-      "outputs": [
-        "mods/orca-agent-settings/icon-button.js",
-        "mods/orca-sidebar-top/icon-button.js",
-        "mods/orca-status-ports/icon-button.js",
-        "mods/orca-status-footer/icon-button.js",
-        "mods/orca-header/icon-button.js",
-        "mods/orca-pane-header/icon-button.js",
-        "mods/orca-float-workspace/icon-button.js"
-      ]
-    },
-    {
-      "source": "orca-ui/shared/dialog-button.js",
-      "outputs": [
-        "mods/orca-header/dialog-button.js",
-        "mods/orca-changes/dialog-button.js",
-        "mods/orca-tasks/dialog-button.js",
-        "mods/orca-handoff/dialog-button.js"
       ]
     }
   ]

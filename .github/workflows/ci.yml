@@ -66,6 +66,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install pinned Vite+ for quality checks
+        if: needs.plan.outputs.lint != '[]'
+        run: npm ci --no-audit --no-fund
       - name: Check Python and shell availability
         run: |
           python3 --version
@@ -89,9 +94,12 @@ jobs:
               elif name.endswith(".sh"):
                   subprocess.run(["bash", "-n", name], check=True)
           PY
+      - name: Pack TypeScript outputs
+        if: needs.plan.outputs.config == 'true'
+        run: npm run pack:ts
       - name: Check generated Orca UI and shared helpers
         if: needs.plan.outputs.config == 'true'
-        run: node scripts/build-orca-ui.mjs --check --out .
+        run: ./node_modules/.bin/vpx src/tooling/build-orca-ui.ts --check --out .
       - name: Run UI snapshot observer unit tests (no GUI)
         if: needs.plan.outputs.snapshot == 'true'
         run: python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
@@ -101,7 +109,10 @@ jobs:
           LINT_PATHS: ${{ needs.plan.outputs.lint }}
         run: |
           mapfile -t paths < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["LINT_PATHS"])))')
-          npx --yes eslint@9 -c eslint.config.mjs --max-warnings 0 --no-warn-ignored --no-error-on-unmatched-pattern "${paths[@]}"
+          ./node_modules/.bin/vp lint --max-warnings 0 --no-error-on-unmatched-pattern "${paths[@]}"
+      - name: Type check migrated source (complete TS project)
+        if: needs.plan.outputs.lint != '[]'
+        run: npm run check:ts
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
       - name: Paired Git branch-header microbenchmark
@@ -125,7 +136,7 @@ jobs:
           if-no-files-found: error
       - name: Benchmark workspace projection at increasing sizes
         if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        run: node scripts/benchmark-worktree-plan.mjs "$RUNNER_TEMP/worktree-projection.json"
+        run: ./node_modules/.bin/vpx src/tooling/benchmark-worktree-plan.ts "$RUNNER_TEMP/worktree-projection.json"
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
         with:
@@ -187,9 +198,42 @@ jobs:
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 
+  typescript:
+    name: TypeScript checks and tests
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install isolated herdr-app test stand-in
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status-bar.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
+          chmod +x "$RUNNER_TEMP/bin/herdr-app"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Type-aware lint and type check
+        run: npm run check:ts
+      - name: Pack TypeScript outputs
+        run: npm run pack:ts
+      - name: Vitest suite
+        run: |
+          export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
+          npm run test:ts
+      - name: Ensure tests did not modify tracked files
+        run: git diff --exit-code
+
   checks:
     name: Tests and config validation
-    needs: [plan, validate, tests]
+    needs: [plan, validate, tests, typescript]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -200,11 +244,13 @@ jobs:
         env:
           VALIDATION: ${{ needs.validate.result }}
           TESTS: ${{ needs.tests.result }}
+          TYPESCRIPT: ${{ needs.typescript.result }}
           PLAN: ${{ needs.plan.result }}
           HAS_TESTS: ${{ needs.plan.outputs.has_tests }}
         run: |
           test "$PLAN" = success
           test "$VALIDATION" = success
+          test "$TYPESCRIPT" = success
           if [ "$HAS_TESTS" = true ]; then test "$TESTS" = success; else test "$TESTS" = skipped; fi
       - uses: actions/download-artifact@v4
         if: always() && needs.plan.result == 'success'
@@ -244,20 +290,55 @@ jobs:
             if (old) await github.rest.issues.updateComment({owner, repo, comment_id: old.id, body});
             else await github.rest.issues.createComment({owner, repo, issue_number, body});
 
-  package:
-    name: Package validated config
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  delivery:
+    name: Build validated delivery
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: checks
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Package tracked installation files
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frozen toolchain
+        run: npm ci --no-audit --no-fund
+      - name: Build and verify delivery
         run: |
-          git archive --format=zip --output=herdr-my-orca.zip HEAD layouts mods themes keys.json programs.json settings.json
+          npm run pack:delivery
+          ./node_modules/.bin/vpx src/tooling/verify-output.ts --delivery
+      - name: Package delivery artifact
+        run: |
+          cd tools/vite-plus-pilot/dist/delivery
+          zip -qr "$GITHUB_WORKSPACE/herdr-my-orca.zip" .
+          cd "$GITHUB_WORKSPACE"
           sha256sum herdr-my-orca.zip > herdr-my-orca.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herdr-delivery-${{ github.sha }}
+          path: |
+            herdr-my-orca.zip
+            herdr-my-orca.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  package:
+    name: Package validated config
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks, delivery]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: herdr-delivery-${{ github.sha }}
+      - name: Publish the validated artifact
+        run: |
+          sha256sum -c herdr-my-orca.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: herdr-my-orca-${{ github.sha }}
@@ -270,25 +351,27 @@ jobs:
   native:
     name: Herdr native mod check (isolated)
     if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-    needs: [plan, checks]
+    needs: delivery
     runs-on: macos-15
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          persist-credentials: false
+          name: herdr-delivery-${{ github.sha }}
+      - name: Verify delivery checksum
+        run: shasum -a 256 -c herdr-my-orca.zip.sha256
       - name: Install upstream Herdr app
         run: |
           test "$(uname -m)" = arm64
           curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
           sh "$RUNNER_TEMP/herdr-install.sh"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Validate all mods in an isolated Herdr app home
+      - name: Validate the delivered mods in an isolated Herdr app home
         shell: bash
         run: |
           export HERDR_APP_HOME="$RUNNER_TEMP/herdr-ci-home"
           mkdir -p "$HERDR_APP_HOME"
-          git archive HEAD | tar -x -C "$HERDR_APP_HOME"
+          unzip -q herdr-my-orca.zip -d "$HERDR_APP_HOME"
           cd "$HERDR_APP_HOME"
           test "$(find mods -mindepth 2 -maxdepth 2 -name mod.json | wc -l | tr -d ' ')" -gt 0
           failed=0

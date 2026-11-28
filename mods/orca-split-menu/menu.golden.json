@@ -1,7 +1,7 @@
 {
  "two panes, target given": {
   "rows": "cbfa3646d9ea08b6033bf198883d27bbe8edc083",
-  "render": "dbf893a5357f5a7b60e5ab0cd9db8bc94e8edea8",
+  "render": "75709e061ed1ae1946b1a47140dab3fa6dc99032",
   "keys": "6035d99899e1d5de1a7654f107de34389f16b63c",
   "choose": "ce55eca5b7df41d2c6b08e497401843c5ea72330",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
@@ -9,7 +9,7 @@
  },
  "two panes, zoomed focus": {
   "rows": "d50693ac575bdd885ce1d1265698660536597653",
-  "render": "39864cf4105b979ab66c8312516fd83139db774d",
+  "render": "c9b6e8b9fb8266c736baf998f9858e3bdc9286fe",
   "keys": "f0db1e7fea3377f8a7a3da85167fc8e4b9de2eb9",
   "choose": "6f9b25612ebf85bd37f06f73e34658a2bf90b6ad",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
@@ -17,7 +17,7 @@
  },
  "one pane": {
   "rows": "0995c227f2f255198e6af061d00340339d0d6170",
-  "render": "4bbb90cd4b764ed5da3805e85052f77597da62bd",
+  "render": "1a66e4a682a382e88aebe08306cb43f404ba7e89",
   "keys": "9706c9dda8316ffd9ecd10aec24050cfea171183",
   "choose": "ba1171940004642a69eb59fc975e27a63038f28f",
   "hover": "e83537b1a1f15130ccb6fa15bc7aa858e96d14bb",
@@ -25,7 +25,7 @@
  },
  "unknown target falls back to focus": {
   "rows": "cbfa3646d9ea08b6033bf198883d27bbe8edc083",
-  "render": "f67f614c3a8734d7f829962a5bc9bc790132886b",
+  "render": "f1896a7d6ee439ccac24a9cfd76f1a6a65acc5be",
   "keys": "6035d99899e1d5de1a7654f107de34389f16b63c",
   "choose": "ce55eca5b7df41d2c6b08e497401843c5ea72330",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
@@ -33,7 +33,7 @@
  },
  "no focus, no target": {
   "rows": "cbfa3646d9ea08b6033bf198883d27bbe8edc083",
-  "render": "dbf893a5357f5a7b60e5ab0cd9db8bc94e8edea8",
+  "render": "75709e061ed1ae1946b1a47140dab3fa6dc99032",
   "keys": "f235f1efcb1edbfc86dd58198aebccfec2281321",
   "choose": "4f9124b5551db1457557358145a9d09fcc313638",
   "hover": "f765463c60e72ccc2207774316a9e42a358566af",
@@ -41,7 +41,7 @@
  },
  "no panes": {
   "rows": "0995c227f2f255198e6af061d00340339d0d6170",
-  "render": "4bbb90cd4b764ed5da3805e85052f77597da62bd",
+  "render": "1a66e4a682a382e88aebe08306cb43f404ba7e89",
   "keys": "7868ce3e19b2fe05178263627ba997de9a80dbe0",
   "choose": "35437f475f110a839c26e6c87d303ed9b3d94b85",
   "hover": "e83537b1a1f15130ccb6fa15bc7aa858e96d14bb",
@@ -49,7 +49,7 @@
  },
  "panes unavailable": {
   "rows": "0995c227f2f255198e6af061d00340339d0d6170",
-  "render": "4bbb90cd4b764ed5da3805e85052f77597da62bd",
+  "render": "1a66e4a682a382e88aebe08306cb43f404ba7e89",
   "keys": "99975820acf5c9369b63df0a5559ff759fa8352b",
   "choose": "3b21301b4fd5372b839a3946eff551dbd01d87bd",
   "hover": "e83537b1a1f15130ccb6fa15bc7aa858e96d14bb",

@@ -368,7 +368,7 @@ export default class Spaces extends View {
     ]);
   }
 
-  retainedRow(r, t, ps, mine, groupBy, sortBy) {
+  retainedRow(r, t, ps, mine, { groupBy, sortBy } = {}) {
     const key = r.w.id;
     const data = { r, t, ps, mine, groupBy, sortBy };
     const keyboardMode = this.retainedKeyboardMode ?? Boolean(shared("t3-focus"));
@@ -886,7 +886,7 @@ export default class Spaces extends View {
     const sortBy = workspaceOptions().sortBy;
     const draw = (r, i) => {
       const pos = this.rowIndex?.get(r.w.id) ?? i;
-      return this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps, rowAgents.get(r), groupBy, sortBy);
+      return this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos }, t, ps, rowAgents.get(r), { groupBy, sortBy });
     };
     // The descriptors reference row positions, so equal signatures can reuse them with fresh row data.
     const repairing = new Set([...Object.keys(this.reconnecting), ...this.machines.filter(m => this.rebuilt(m)).map(m => m.name)]);

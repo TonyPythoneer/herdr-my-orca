@@ -1,0 +1,457 @@
+import {
+  View,
+  div,
+  svg,
+  type AsyncContext,
+  type Color,
+  type Context,
+  type FocusHandle,
+  type NativeElement,
+} from "gpui-kit";
+import { v_flex, h_flex } from "gpui-base";
+import {
+  run,
+  props,
+  closeOverlay,
+  theme,
+  panes,
+  agents,
+  knownAgents,
+  spaces,
+  hc,
+  exec,
+} from "herdr";
+import { copyText } from "../../shared/clip.js";
+import { DialogButton } from "../../shared/dialog-button.js";
+import {
+  buildAgentSessionForkPrompt,
+  buildAgentSessionContinuationPrompt,
+} from "../../shared/transcript.js";
+
+type AgentSpec = { id: string; name: string; run: string[] };
+
+type HandoffProps = {
+  overlay?: string;
+  action?: string;
+  terminal?: string;
+  pane?: string;
+};
+
+type HandoffTheme = {
+  popover: Color;
+  border: Color;
+  foreground: Color;
+  muted: Color;
+  hover: Color;
+  background: Color;
+  selected: Color;
+};
+
+type HandoffAction = "handoff" | "fork";
+
+const AGENT_CATALOG: AgentSpec[] = [
+  { id: "claude", name: "Claude Code", run: ["claude"] },
+  { id: "opencode", name: "OpenCode", run: ["opencode"] },
+  { id: "codex", name: "Codex", run: ["codex"] },
+  { id: "pi", name: "Pi", run: ["pi"] },
+  { id: "gemini", name: "Gemini", run: ["gemini"] },
+  { id: "agy", name: "Antigravity", run: ["agy"] },
+  { id: "cursor", name: "Cursor Agent", run: ["cursor-agent"] },
+  { id: "aider", name: "Aider", run: ["aider"] },
+];
+
+const COPY_CLOSE_DELAY_MS = 600;
+const FORK_TAB_FALLBACK_NAME = "Session Fork";
+
+const overlayId = (): string => (props() as HandoffProps | undefined)?.overlay as string;
+
+export default class HandoffDialog extends View {
+  handle!: FocusHandle;
+  action: HandoffAction = "handoff";
+  terminal = "";
+  paneId = "";
+  cwd = "";
+  paneTitle = "";
+  sourceAgent = "Agent";
+  sourceMachine: string | null = null;
+  sourceSpaceId: string | undefined;
+  agentCatalog: AgentSpec[] = AGENT_CATALOG;
+  selectedAgentIndex = 0;
+  loading = true;
+  loadingAgents = false;
+  capturedText = "";
+  copied = false;
+  busy = false;
+  statusMessage = "";
+
+  init(_props: unknown, cx: AsyncContext): void {
+    this.handle = cx.focus_handle();
+    this.handle.focus();
+    this.loading = true;
+    this.capturedText = "";
+    this.selectedAgentIndex = 0;
+    this.copied = false;
+    this.busy = false;
+    this.statusMessage = "";
+
+    const p = (props() ?? {}) as HandoffProps;
+    this.action = p.action === "fork" ? "fork" : "handoff";
+    this.terminal = p.terminal ?? "";
+    this.paneId = p.pane ?? "";
+
+    this.resolveSource();
+    this.startCapture(cx);
+    if (this.action === "handoff") this.loadAgentCatalog(cx);
+  }
+
+  resolveSource(): void {
+    const pane = panes().find((x) => x.pane === this.paneId || x.terminal === this.terminal);
+    this.cwd = pane?.cwd || "";
+    this.paneTitle = pane?.title || "";
+    this.resolveSourceSpace(pane);
+
+    const agent = agents().find((a) => a.address === this.terminal || a.pane === this.paneId);
+    this.sourceAgent = agent?.app || agent?.program?.name || "Agent";
+
+    this.agentCatalog = AGENT_CATALOG;
+    const initialIndex = this.agentCatalog.findIndex(
+      (a) => a.id !== this.sourceAgent.toLowerCase(),
+    );
+    if (initialIndex >= 0) {
+      this.selectedAgentIndex = initialIndex;
+    }
+  }
+
+  resolveSourceSpace(pane: ReturnType<typeof panes>[number] | undefined): void {
+    const sourceSpace = spaces().find((space) => space.tabs?.some((tab) => tab.id === pane?.tab));
+    this.sourceMachine = sourceSpace?.machine ?? null;
+    this.sourceSpaceId = sourceSpace?.id;
+  }
+
+  loadAgentCatalog(cx: AsyncContext): void {
+    this.loadingAgents = true;
+    cx.spawn(async (taskCx) => {
+      try {
+        const entries = await knownAgents({ on: this.sourceMachine });
+        const previous = this.agentCatalog[this.selectedAgentIndex]?.id;
+        this.agentCatalog = entries
+          .filter((agent) => agent.installed && agent.run?.length)
+          .map((agent) => ({ id: agent.key, name: agent.name, run: agent.run }));
+        const index = this.agentCatalog.findIndex((agent) => agent.id === previous);
+        const alternative = this.agentCatalog.findIndex(
+          (agent) => agent.id !== this.sourceAgent.toLowerCase(),
+        );
+        this.selectedAgentIndex = index >= 0 ? index : Math.max(0, alternative);
+        if (!this.agentCatalog.length)
+          this.statusMessage = "No installed target agents on this machine";
+      } catch {
+        this.statusMessage = "Agent discovery unavailable; using standard launch commands";
+      } finally {
+        this.loadingAgents = false;
+        taskCx.notify();
+      }
+    });
+  }
+
+  startCapture(cx: AsyncContext): void {
+    if (!this.terminal) {
+      this.loading = false;
+      return;
+    }
+    cx.spawn(async (taskCx) => {
+      const res = await hc(["read", this.terminal]).catch(() => null);
+      this.capturedText = res && res.code === 0 && res.stdout ? res.stdout : "";
+      this.loading = false;
+      taskCx.notify();
+    });
+  }
+
+  getContinuationPrompt(): string | null {
+    return buildAgentSessionContinuationPrompt({
+      sourceAgent: this.sourceAgent,
+      sourceWorkingDirectory: this.cwd,
+      capturedText: this.capturedText,
+    });
+  }
+
+  getForkPrompt(): string | null {
+    return buildAgentSessionForkPrompt({
+      capturedText: this.capturedText,
+      sourceLabel: this.paneTitle || this.paneId || "Original Terminal",
+      agentLabel: this.sourceAgent,
+    });
+  }
+
+  async copyCurrentPrompt(cx: Context): Promise<void> {
+    const prompt = this.action === "fork" ? this.getForkPrompt() : this.getContinuationPrompt();
+    if (!prompt) {
+      this.statusMessage = "No terminal context available";
+      cx.notify();
+      return;
+    }
+    await copyText(prompt, cx);
+    this.copied = true;
+    this.statusMessage = "Prompt copied to clipboard";
+    cx.notify();
+    cx.timer.after(COPY_CLOSE_DELAY_MS, () => {
+      closeOverlay(overlayId());
+    });
+  }
+
+  async executeHandoff(cx: Context): Promise<void> {
+    if (this.busy || this.loadingAgents) return;
+    const catalog = this.agentCatalog ?? AGENT_CATALOG;
+    const targetAgent = catalog[this.selectedAgentIndex] ?? catalog[0];
+    if (!targetAgent) return;
+    this.busy = true;
+    cx.notify();
+    const prompt = this.getContinuationPrompt();
+
+    run("tab.new", {
+      name: `${targetAgent.name} (Handoff)`,
+      ...(this.sourceSpaceId ? { space: this.sourceSpaceId } : {}),
+      folder: this.cwd || undefined,
+      argv: targetAgent.run,
+      task: prompt || undefined,
+    });
+
+    closeOverlay(overlayId());
+  }
+
+  async executeFork(cx: Context): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    cx.notify();
+
+    const prompt = this.getForkPrompt();
+    const name = await this.forkTabName();
+
+    run("tab.new", {
+      name,
+      folder: this.cwd || undefined,
+      task: prompt || undefined,
+    });
+
+    closeOverlay(overlayId());
+  }
+
+  async forkTabName(): Promise<string> {
+    if (!this.cwd) return FORK_TAB_FALLBACK_NAME;
+
+    const gitTop = await exec("git", ["rev-parse", "--show-toplevel"], {
+      cwd: this.cwd,
+    }).catch(() => null);
+    if (gitTop?.code !== 0) return FORK_TAB_FALLBACK_NAME;
+    const branchRes = await exec("git", ["branch", "--show-current"], {
+      cwd: this.cwd,
+    }).catch(() => null);
+    const currentBranch = branchRes?.code === 0 ? branchRes.stdout.trim() : "main";
+    return `Fork: ${currentBranch || "session"}-fork`;
+  }
+
+  render(_cx: Context): NativeElement {
+    const t = theme() as unknown as HandoffTheme;
+    const isFork = this.action === "fork";
+
+    return v_flex()
+      .id("orca-handoff-dialog")
+      .track_focus(this.handle)
+      .w_full()
+      .p(16)
+      .gap(12)
+      .bg(t.popover)
+      .border(1)
+      .border_color(t.border)
+      .rounded(12)
+      .text_size(13)
+      .on_key_down((e, cx) => {
+        if (e.key === "escape") {
+          closeOverlay(overlayId());
+        } else if (e.key === "enter" && !this.loading && !this.busy) {
+          this.startAction(isFork, cx);
+        }
+      })
+      .children([
+        this.headerView(t, isFork),
+        this.metadataCard(t),
+        ...(!isFork ? [this.agentPicker(t)] : []),
+        ...(this.statusMessage ? [this.statusBanner(t)] : []),
+        this.actionFooter(t, isFork),
+      ]);
+  }
+
+  startAction(isFork: boolean, cx: Context): void {
+    if (isFork) void this.executeFork(cx);
+    else void this.executeHandoff(cx);
+  }
+
+  headerView(t: HandoffTheme, isFork: boolean): NativeElement {
+    const title = isFork ? "Fork Agent Session" : "Hand off to another agent";
+    const description = isFork
+      ? "Create an independent session fork with captured context from this terminal."
+      : "Start a fresh Agent session from this stopping point. The original session stays unchanged.";
+    const iconName = isFork ? "git-fork" : "message-square-plus";
+
+    return h_flex()
+      .w_full()
+      .items_start()
+      .justify_between()
+      .child(
+        v_flex()
+          .gap(3)
+          .child(
+            h_flex()
+              .gap(8)
+              .items_center()
+              .child(
+                svg(sharedAsset(`mods/orca-handoff/${iconName}.svg`))
+                  .size(16)
+                  .text_color(t.foreground),
+              )
+              .child(div().font_semibold().text_size(14).text_color(t.foreground).child(title)),
+          )
+          .child(div().text_size(11).text_color(t.muted).child(description)),
+      )
+      .child(
+        div()
+          .id("dialog-close")
+          .size(20)
+          .rounded(4)
+          .flex()
+          .items_center()
+          .justify_center()
+          .cursor_pointer()
+          .hover((s) => s.bg(t.hover))
+          .on_click(() => closeOverlay(overlayId()))
+          .child(svg("mods/orca-assets/x--orca-context-menu.svg").size(12).text_color(t.muted)),
+      );
+  }
+
+  metadataCard(t: HandoffTheme): NativeElement {
+    return v_flex()
+      .w_full()
+      .p(10)
+      .gap(4)
+      .rounded(6)
+      .border(1)
+      .border_color(t.border)
+      .bg(t.background)
+      .children([
+        h_flex()
+          .w_full()
+          .justify_between()
+          .items_center()
+          .child(
+            h_flex()
+              .gap(6)
+              .items_center()
+              .child(
+                div()
+                  .font_medium()
+                  .text_size(12)
+                  .text_color(t.foreground)
+                  .child(this.paneTitle || "Active Terminal"),
+              )
+              .child(div().text_size(11).text_color(t.muted).child(`· ${this.sourceAgent}`)),
+          )
+          .child(
+            div()
+              .text_size(11)
+              .text_color(t.muted)
+              .child(this.loading ? "Capturing transcript…" : `${this.capturedText.length} chars`),
+          ),
+        div()
+          .text_size(11)
+          .text_color(t.muted)
+          .truncate()
+          .child(this.cwd || "Working directory: (not set)"),
+      ]);
+  }
+
+  agentPicker(t: HandoffTheme): NativeElement {
+    return v_flex()
+      .gap(6)
+      .child(div().text_size(11).font_medium().text_color(t.muted).child("Target Agent"))
+      .child(
+        h_flex()
+          .w_full()
+          .gap(6)
+          .flex_wrap()
+          .children(
+            (this.agentCatalog ?? AGENT_CATALOG).map((agent, i) => {
+              const selected = this.selectedAgentIndex === i;
+              return div()
+                .id(`agent-opt-${agent.id}`)
+                .px(8)
+                .py(4)
+                .rounded(5)
+                .border(1)
+                .border_color(selected ? t.foreground : t.border)
+                .bg(selected ? t.selected : t.background)
+                .text_color(selected ? t.foreground : t.muted)
+                .cursor_pointer()
+                .hover((s) => s.bg(t.hover))
+                .on_click((_e, cx) => {
+                  this.selectedAgentIndex = i;
+                  cx.notify();
+                })
+                .child(div().text_size(11).font_medium().child(agent.name));
+            }),
+          ),
+      );
+  }
+
+  statusBanner(t: HandoffTheme): NativeElement {
+    return div()
+      .px(8)
+      .py(4)
+      .rounded(4)
+      .bg(t.selected)
+      .text_size(11)
+      .text_color(t.foreground)
+      .child(this.statusMessage);
+  }
+
+  startLabel(isFork: boolean): string {
+    if (this.busy) return "Launching…";
+    return isFork ? "Start Fork" : "Start Session";
+  }
+
+  actionFooter(t: HandoffTheme, isFork: boolean): NativeElement {
+    return h_flex()
+      .w_full()
+      .mt(8)
+      .items_center()
+      .justify_end()
+      .gap(8)
+      .children([
+        DialogButton("btn-copy-prompt", this.copied ? "Copied!" : "Copy Prompt", {
+          t,
+          h: 28,
+          px: 10,
+          border: t.border,
+          hoverBg: t.hover,
+          name: "Copy prompt",
+          icon: svg("mods/orca-assets/copy.svg").size(12).text_color(t.foreground),
+          onClick: (_e, cx) => void this.copyCurrentPrompt(cx),
+        }),
+        DialogButton("btn-start-action", this.startLabel(isFork), {
+          t,
+          h: 28,
+          px: 12,
+          bg: t.foreground,
+          color: t.background,
+          medium: true,
+          hoverOpacity: 0.9,
+          onClick: (_e, cx) => this.startAction(isFork, cx),
+        }),
+      ]);
+  }
+}
+
+const SHARED_ASSET_PATHS: Readonly<Record<string, string>> = Object.freeze({
+  "mods/orca-handoff/x.svg": "mods/orca-assets/x--orca-context-menu.svg",
+});
+function sharedAsset(path: string): string {
+  return SHARED_ASSET_PATHS[path] ?? `mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`;
+}

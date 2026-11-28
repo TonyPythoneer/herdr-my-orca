@@ -68,7 +68,7 @@ def dependent_tests(root, files, changed, tests):
     tracked = set(files)
     reverse = defaultdict(set)
     for path in tracked:
-        if not path.startswith(("mods/", "scripts/", "orca-ui/")) or not path.endswith((".js", ".mjs", ".cjs", ".py")):
+        if not path.startswith(("mods/", "scripts/", "orca-ui/")) or not path.endswith((".js", ".mjs", ".cjs", ".ts", ".mts", ".cts", ".py")):
             continue
         source = (root / path).read_text(errors="replace")
         for target in re.findall(r"""['"](\.{1,2}/[^'"\n]+)['"]""", source):
@@ -167,7 +167,7 @@ def select(root, files, changed, force=False):
             matching.update(t for t in tests if t.startswith("scripts/") and Path(path).name in (root / t).read_text(errors="replace"))
             if matching:
                 selected.update(matching)
-                if path.endswith((".js", ".mjs", ".cjs")) and path in files:
+                if path.endswith((".js", ".mjs", ".cjs", ".ts", ".mts", ".cts")) and path in files:
                     lint.add(path)
                 reasons[path] = "script dependency tests"
             else:
@@ -206,7 +206,7 @@ def select(root, files, changed, force=False):
     if full:
         lint.update(("mods", "scripts", "orca-ui"))
     else:
-        lint.update(p for p in changed if p.endswith((".js", ".mjs", ".cjs")) and not TEST.search(p))
+        lint.update(p for p in changed if p.endswith((".js", ".mjs", ".cjs", ".ts", ".mts", ".cts")) and not TEST.search(p))
     groups = defaultdict(list)
     for l, s, p in sorted(page_keys):
         groups[l, s].append(p)

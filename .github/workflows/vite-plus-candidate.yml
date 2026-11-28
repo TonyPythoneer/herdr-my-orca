@@ -1,0 +1,85 @@
+name: Vite+ migration candidate
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: vite-plus-candidate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pilot:
+    if: github.head_ref == 'refactor/vite-plus-migration'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frozen toolchain
+        run: npm ci --no-audit --no-fund
+      - name: Pack TypeScript outputs
+        run: npm run pack:ts
+      - name: Verify type-aware lint and type checking
+        run: npm run check:ts
+      - name: Run TypeScript tests
+        run: npm run test:ts
+      - name: Verify TypeScript output
+        run: ./node_modules/.bin/vpx src/tooling/verify-output.ts
+      - name: Build full isolated installation candidate
+        if: always() && !cancelled()
+        run: |
+          npm run pack:delivery
+          ./node_modules/.bin/vpx src/tooling/verify-output.ts --delivery
+      - name: Compare parent, source and packed behavior
+        if: matrix.os == 'ubuntu-latest' && success()
+        run: python3 tools/vite-plus-pilot/compare-runtime.py
+      - name: Install upstream Herdr (isolated native validation)
+        if: matrix.os == 'macos-latest' && success()
+        run: |
+          curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
+          sh "$RUNNER_TEMP/herdr-install.sh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate packed mods in isolated Herdr app home
+        if: matrix.os == 'macos-latest' && success()
+        shell: bash
+        run: |
+          export HERDR_APP_HOME="$RUNNER_TEMP/herdr-packed-home"
+          mkdir -p "$HERDR_APP_HOME"
+          cp -R tools/vite-plus-pilot/dist/delivery/. "$HERDR_APP_HOME/"
+          cd "$HERDR_APP_HOME"
+          failed=0
+          count=0
+          while IFS= read -r mod; do
+            count=$((count+1))
+            echo "::group::$mod"
+            if ! herdr-app check "$mod"; then
+              echo "::error::Native check failed for $mod"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done < <(find mods -mindepth 2 -maxdepth 2 -name mod.json -print | sort | sed 's|/mod.json$||')
+          test "$count" -gt 0
+          echo "Checked $count generated mods"
+          exit "$failed"
+      - name: Verify no tracked production files changed
+        if: always()
+        run: git diff --exit-code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vite-plus-candidate-${{ matrix.os }}
+          path: |
+            tools/vite-plus-pilot/dist/
+            package-lock.json

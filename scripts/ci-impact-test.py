@@ -54,11 +54,11 @@ class ImpactTest(unittest.TestCase):
         self.assertEqual(p["native_routes"], p["total_native_routes"])
 
     def test_single_test(self):
-        p = self.plan("mods/orca-sidebar-projects/git-refresh.test.js")
+        p = self.plan("mods/orca-files/delete-target.test.js")
         self.assertEqual(p["selected_test_files"], 1)
         self.assertFalse(p["native_mods"])
         self.assertEqual(p["native_routes"], 0)
-        self.assertEqual(p["syntax_paths"], ["mods/orca-sidebar-projects/git-refresh.test.js"])
+        self.assertEqual(p["syntax_paths"], ["mods/orca-files/delete-target.test.js"])
 
     def test_git(self):
         p = self.plan("mods/orca-sidebar-projects/main.js")
@@ -66,10 +66,10 @@ class ImpactTest(unittest.TestCase):
         self.assertIn("orca-sidebar-projects", p["native_mods"])
         self.assertEqual(p["native_routes"], 0)
         self.assertLess(p["selected_test_files"], p["total_test_files"])
-        self.assertIn("scripts/perf-spaces-virtual.test.js", [f for row in p["test_matrix"]["include"] for f in row["files"]])
+        self.assertNotIn("scripts/perf-spaces-virtual.test.js", [f for row in p["test_matrix"]["include"] for f in row["files"]])
 
     def test_test_fixtures_do_not_launch_native(self):
-        p = self.plan("mods/orca-sidebar-projects/flow.golden.json")
+        p = self.plan("mods/orca-files/files-ui.golden.json")
         self.assertGreater(p["selected_test_files"], 0)
         self.assertFalse(p["native_mods"])
         self.assertEqual(p["native_routes"], 0)
@@ -82,7 +82,7 @@ class ImpactTest(unittest.TestCase):
         self.assertTrue(p["projection_benchmark"])
         self.assertFalse(p["git_benchmark"])
         self.assertEqual(p["native_routes"], 0)
-        self.assertIn("scripts/perf-spaces-virtual.test.js", [f for row in p["test_matrix"]["include"] for f in row["files"]])
+        self.assertNotIn("scripts/perf-spaces-virtual.test.js", [f for row in p["test_matrix"]["include"] for f in row["files"]])
 
     def test_files_page(self):
         p = self.plan("mods/orca-files/main.js")
@@ -101,7 +101,7 @@ class ImpactTest(unittest.TestCase):
         self.assertIn("scripts/shared-config-assets.test.mjs", [f for row in p["test_matrix"]["include"] for f in row["files"]])
 
     def test_shared(self):
-        p = self.plan("orca-ui/shared/panel-motion.js")
+        p = self.plan("src/shared/panel-motion.ts")
         self.assertIn("orca-files", p["native_mods"])
         self.assertIn("orca-changes", p["native_mods"])
         self.assertFalse(p["full"])
@@ -109,6 +109,11 @@ class ImpactTest(unittest.TestCase):
     def test_lint_tracks_changed_files_only(self):
         p = self.plan("mods/orca-status-bar/main.js")
         self.assertEqual(p["lint_paths"], ["mods/orca-status-bar/main.js"])
+
+    def test_typescript_changes_select_lint(self):
+        p = self.plan("orca-ui/shared/future.ts")
+        self.assertTrue(p["full"])
+        self.assertIn("orca-ui", p["lint_paths"])
 
     def test_fallback(self):
         p = self.plan("unknown-source.rs")

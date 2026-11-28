@@ -1,0 +1,13 @@
+{
+  "version": "0.1.18",
+  "targets": {
+    "linux-x86_64": {
+      "url": "https://releases.herdr.dev/app/0.1.18/herdr-app-linux-x86_64.tar.gz",
+      "sha256": "8a11edd79dd40b349f7286cf51910b62e21136daf8f03005a9fd2c4dc5830f83"
+    },
+    "macos-aarch64": {
+      "url": "https://releases.herdr.dev/app/0.1.18/herdr-app-macos-aarch64.tar.gz",
+      "sha256": "fd646b4a6db2c3e9b4700be7d10153440cb799c960b082d4ab60a5fd63f9372a"
+    }
+  }
+}
