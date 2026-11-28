@@ -19,7 +19,7 @@ import {
   type RailGeometry,
   type RailRow,
 } from "./agent-rail.js";
-import { hoverHighlight } from "../../shared/selection-ui.js";
+import { hoverHighlight } from "../../primitives/selection-ui.js";
 import {
   applyRailOrder,
   dragSlot,

@@ -26,7 +26,7 @@ describe("verifier manifest row selection", () => {
   it("keeps each output row for shared TypeScript sources and build-entry sources", () => {
     const files = [
       {
-        source: "src/shared/list-viewport.ts",
+        source: "src/primitives/list-viewport.ts",
         outputs: ["mods/a/list-viewport.js", "mods/b/list-viewport.js"],
       },
       {

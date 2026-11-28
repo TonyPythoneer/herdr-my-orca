@@ -71,7 +71,7 @@ describe("manifest output verification", () => {
   });
 
   it("uses viewport geometry probes for the shared list viewport module", async () => {
-    const row = { source: "src/shared/list-viewport.ts", outputs: ["mods/a/list-viewport.js"] };
+    const row = { source: "src/primitives/list-viewport.ts", outputs: ["mods/a/list-viewport.js"] };
     const modules = {
       "typed/list-viewport.js": viewport,
       "mods/a/list-viewport.js": viewport,

@@ -69,7 +69,7 @@
       ]
     },
     {
-      "source": "src/shared/list-viewport.ts",
+      "source": "src/primitives/list-viewport.ts",
       "outputs": [
         "mods/orca-agent-flyout/list-viewport.js",
         "mods/orca-agent-settings/list-viewport.js",
@@ -94,7 +94,7 @@
       "outputs": ["mods/orca-status-ports/scan.js"]
     },
     {
-      "source": "src/shared/selection-ui.ts",
+      "source": "src/primitives/selection-ui.ts",
       "outputs": [
         "mods/orca-agent-flyout/selection-ui.js",
         "mods/orca-agent-settings/selection-ui.js",

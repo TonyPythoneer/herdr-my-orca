@@ -1,4 +1,4 @@
-import { viewportHeight, scrolls } from "../../shared/list-viewport.js";
+import { viewportHeight, scrolls } from "../../primitives/list-viewport.js";
 
 export const RAIL = Object.freeze({
   width: 76,

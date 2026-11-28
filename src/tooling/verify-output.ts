@@ -211,7 +211,7 @@ export async function verifyManifestOutputs(
     const sourceName = row.source.split("/").at(-1)?.replace(/\.ts$/, ".js") ?? "";
     const candidate = await load(new URL(`typed/${sourceName}`, dist));
     const original = await load(new URL(row.outputs[0], root));
-    if (row.source === "src/shared/list-viewport.ts")
+    if (row.source === "src/primitives/list-viewport.ts")
       compareViewport(
         candidate as ViewportModule,
         original as ViewportModule,
@@ -221,12 +221,12 @@ export async function verifyManifestOutputs(
     for (const path of row.outputs) {
       const copy = await load(new URL(path, root));
       compareExports(copy, original, path);
-      if (row.source === "src/shared/list-viewport.ts")
+      if (row.source === "src/primitives/list-viewport.ts")
         compareViewport(copy as ViewportModule, original as ViewportModule, path);
       if (delivery) {
         const packed = await load(new URL(`delivery/${path}`, dist));
         compareExports(packed, original, `packed ${path}`);
-        if (row.source === "src/shared/list-viewport.ts")
+        if (row.source === "src/primitives/list-viewport.ts")
           compareViewport(packed as ViewportModule, original as ViewportModule, `packed ${path}`);
       }
     }

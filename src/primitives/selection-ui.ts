@@ -1,6 +1,6 @@
 import { div, svg, type AbsoluteLength, type Color, type NativeElement } from "gpui-kit";
 import type { ColorTokens } from "gpui-base";
-import { themeColor } from "./theme-color.js";
+import { themeColor } from "../shared/theme-color.js";
 
 type SelectionColors = Pick<ColorTokens, "accent" | "surface"> & { hover: Color };
 

@@ -48,8 +48,8 @@ import {
   type ModelInfo,
   type Provider,
 } from "./codex-provider.js";
-import { viewportHeight, scrolls, ROW, VISIBLE_ROWS } from "./list-viewport.js";
-import { selectionMark } from "./selection-ui.js";
+import { viewportHeight, scrolls, ROW, VISIBLE_ROWS } from "../primitives/list-viewport.js";
+import { selectionMark } from "../primitives/selection-ui.js";
 import { themeColor } from "./theme-color.js";
 import {
   SPECS,
