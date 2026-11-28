@@ -6,11 +6,7 @@
   "files": ["mod.json"],
   "tests": [],
   "layoutSlots": {
-    "orca": [
-      "panel-head"
-    ]
+    "orca": ["panel-head"]
   },
-  "keys": [
-    "layout:orca"
-  ]
+  "keys": ["layout:orca"]
 }

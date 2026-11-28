@@ -4,9 +4,7 @@
       "name": "OMP",
       "icon": "icons/omp.svg",
       "tint": false,
-      "run": [
-        "omp"
-      ],
+      "run": ["omp"],
       "tile": "#1c1d21",
       "color": "#ffffff"
     },
@@ -20,77 +18,40 @@
       ]
     },
     "claude": {
-      "run": [
-        "claude",
-        "--dangerously-skip-permissions"
-      ]
+      "run": ["claude", "--dangerously-skip-permissions"]
     },
     "cursor": {
-      "run": [
-        "agent",
-        "--yolo"
-      ]
+      "run": ["agent", "--yolo"]
     },
     "copilot": {
-      "run": [
-        "copilot",
-        "--yolo"
-      ]
+      "run": ["copilot", "--yolo"]
     },
     "amp": {
-      "run": [
-        "amp",
-        "--dangerously-allow-all"
-      ]
+      "run": ["amp", "--dangerously-allow-all"]
     },
     "gemini": {
-      "run": [
-        "gemini",
-        "--yolo"
-      ]
+      "run": ["gemini", "--yolo"]
     },
     "grok": {
-      "run": [
-        "grok",
-        "--permission-mode",
-        "bypassPermissions"
-      ]
+      "run": ["grok", "--permission-mode", "bypassPermissions"]
     },
     "antigravity": {
-      "run": [
-        "agy",
-        "--dangerously-skip-permissions"
-      ]
+      "run": ["agy", "--dangerously-skip-permissions"]
     },
     "crush": {
-      "run": [
-        "crush",
-        "--yolo"
-      ]
+      "run": ["crush", "--yolo"]
     },
     "hermes": {
-      "run": [
-        "hermes",
-        "--yolo"
-      ]
+      "run": ["hermes", "--yolo"]
     },
     "kimi": {
-      "run": [
-        "kimi",
-        "--auto"
-      ]
+      "run": ["kimi", "--auto"]
     },
     "kiro": {
-      "run": [
-        "kiro-cli",
-        "--trust-all-tools"
-      ]
+      "run": ["kiro-cli", "--trust-all-tools"]
     },
     "qoder": {
-      "run": [
-        "qodercli",
-        "--dangerously-skip-permissions"
-      ]
+      "run": ["qodercli", "--dangerously-skip-permissions"]
     }
   }
 }

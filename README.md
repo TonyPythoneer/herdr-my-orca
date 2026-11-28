@@ -226,14 +226,14 @@ measurement exits nonzero. Unmeasured pages are marked separately, not treated a
 
 ### Performance budgets and review policy
 
-| Metric | Project target | Measurement contract |
-| --- | --- | --- |
-| First visible feedback | <=100 ms; investigate >200 ms | CLI dispatch to first distinguishable screenshot change; proxy, may include unrelated changes |
-| Warm page transition | P95 <=200 ms; investigate >500 ms | CLI dispatch to approved reference match, including capture overhead |
-| Local data ready | P95 <=500 ms; investigate >1000 ms | Reference match only where reviewed ROI proves relevant content is loaded; not a general data-ready event |
-| Cold startup | <=1000 ms; investigate >2000 ms | Process launch to first successful screenshot, not proof of fully interactive app |
-| 60 Hz frame budget | 16.7 ms | Actual individual frames need native tracing; upstream aggregate CPU-frame mean is diagnostic only |
-| Frozen frame | >=700 ms, target zero | Requires individual frame timing; not inferable from per-second aggregates |
+| Metric                 | Project target                     | Measurement contract                                                                                      |
+| ---------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| First visible feedback | <=100 ms; investigate >200 ms      | CLI dispatch to first distinguishable screenshot change; proxy, may include unrelated changes             |
+| Warm page transition   | P95 <=200 ms; investigate >500 ms  | CLI dispatch to approved reference match, including capture overhead                                      |
+| Local data ready       | P95 <=500 ms; investigate >1000 ms | Reference match only where reviewed ROI proves relevant content is loaded; not a general data-ready event |
+| Cold startup           | <=1000 ms; investigate >2000 ms    | Process launch to first successful screenshot, not proof of fully interactive app                         |
+| 60 Hz frame budget     | 16.7 ms                            | Actual individual frames need native tracing; upstream aggregate CPU-frame mean is diagnostic only        |
+| Frozen frame           | >=700 ms, target zero              | Requires individual frame timing; not inferable from per-second aggregates                                |
 
 References: [NN/g response time](https://www.nngroup.com/articles/powers-of-10-time-scales-in-ux/),
 [Google INP](https://web.dev/articles/inp), [Android startup timing](https://developer.android.com/topic/performance/vitals/launch-time),
@@ -250,7 +250,6 @@ Do not gate merge on noisy hosted-runner wall-clock timings until a representati
 No claimed result for GPU presentation, scroll jank, real network/CLI latency, or data not included
 in the approved ROI. Use Herdr's frame counter and Instruments/native tracing to diagnose those
 separately.
-
 
 ### Diagnose and compare
 
@@ -299,7 +298,6 @@ functional tests and compare a non-instrumented benchmark. Call counts alone can
 duplicates. Per-frame GPU timing, async critical path tracing, idle CPU/RSS, leak testing,
 and contextual interaction scenarios still require native validation or additional probes.
 
-
 ### Idle CPU and retained memory
 
 Each matched page settles for the configured interval, then measures the app process's
@@ -336,6 +334,7 @@ not treated as zero cost or used in the primary latency measurements.
 A final Linux job runs even after a failed matrix, downloads the raw artifacts, checks
 checkout SHA, exact route coverage, sample counts, reference evidence and runner
 outcomes, then publishes:
+
 - **ai-benchmark-report/ai-report.json**: versioned machine-readable route metrics,
   failures, environment, diagnostic hot groups and evidence pointers.
 - **report.md**: ranked compact Markdown with complete/provisional/invalid/missing

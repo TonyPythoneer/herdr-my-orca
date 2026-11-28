@@ -8,14 +8,14 @@ Read this file once. For a UI task, load `.agents/skills/orca-ui/SKILL.md` befor
 
 ## First move: ask the code, don't read everything
 
-| You need | Run |
-| --- | --- |
-| what already exists for a button/list/dialog | `node scripts/ui.mjs find button` |
-| the source line of a visible control | `node scripts/ui.mjs where am-back` |
-| a mod's builders, ids and labels | `node scripts/ui.mjs outline orca-files` |
-| which layout page mounts a mod | `node scripts/ui.mjs pages` |
-| the running window, with the builder of each text | `node scripts/ui.mjs tree --map` |
-| click, type, scroll and see what changed | `node scripts/ui.mjs click --id agent-settings-back` |
+| You need                                          | Run                                                  |
+| ------------------------------------------------- | ---------------------------------------------------- |
+| what already exists for a button/list/dialog      | `node scripts/ui.mjs find button`                    |
+| the source line of a visible control              | `node scripts/ui.mjs where am-back`                  |
+| a mod's builders, ids and labels                  | `node scripts/ui.mjs outline orca-files`             |
+| which layout page mounts a mod                    | `node scripts/ui.mjs pages`                          |
+| the running window, with the builder of each text | `node scripts/ui.mjs tree --map`                     |
+| click, type, scroll and see what changed          | `node scripts/ui.mjs click --id agent-settings-back` |
 
 The index is built from source on every run (`scripts/ui-index.mjs`), so it cannot go stale.
 Discovery and inspection commands accept `--json`. Prefer one of these over grepping the repo or reading the
@@ -72,15 +72,15 @@ Quality gates, CI and the error-to-file lookup (`scripts/where-error.mjs`) are d
 
 ## Where things are
 
-| Path | What |
-| --- | --- |
-| `layouts/orca.json` | the window, and which mod mounts in each block |
-| `mods/orca-*` | delivered mods (generated copies included) |
-| `orca-ui/features/**` | source of generated mods + their manifest |
-| `orca-ui/shared/` | helpers copied into mods; edit here |
-| `scripts/ui.mjs` | the discovery + live-drive CLI |
-| `scripts/ui-index.mjs` | source parser behind the CLI |
-| `ui-snapshot/` | native screenshot/OCR/AX suite used by CI |
+| Path                   | What                                           |
+| ---------------------- | ---------------------------------------------- |
+| `layouts/orca.json`    | the window, and which mod mounts in each block |
+| `mods/orca-*`          | delivered mods (generated copies included)     |
+| `orca-ui/features/**`  | source of generated mods + their manifest      |
+| `orca-ui/shared/`      | helpers copied into mods; edit here            |
+| `scripts/ui.mjs`       | the discovery + live-drive CLI                 |
+| `scripts/ui-index.mjs` | source parser behind the CLI                   |
+| `ui-snapshot/`         | native screenshot/OCR/AX suite used by CI      |
 
 ## Deliberate gaps (do not re-invent)
 

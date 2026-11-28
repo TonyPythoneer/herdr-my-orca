@@ -86,7 +86,7 @@ jobs:
           path: ${{ runner.temp }}/delivery
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - name: Install Herdr and screenshot dependency
         run: |
           test "$(uname -m)" = arm64
@@ -212,7 +212,7 @@ jobs:
           path: ${{ runner.temp }}/delivery
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - name: Install Herdr and screenshot dependency
         run: |
           test "$(uname -m)" = arm64
@@ -264,7 +264,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install frozen toolchain

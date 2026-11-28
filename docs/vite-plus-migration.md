@@ -31,11 +31,11 @@ The baseline was lowered from `95.99%` on 129 loaded files to `93.58%` on 152 lo
 files before this audit. That is not treated as a silent pass. Replaying the tree that
 published the 95.99 baseline (`6a600c0`; its baseline file records `3f0c4b2`) gives:
 
-| Scope | Loaded files | Line coverage |
-| --- | ---: | ---: |
-| Baseline replay (`6a600c0`) | 125 | 96.29% |
-| Current branch | 152 | 92.8–92.9% |
-| Paths present in both | 51 | 94.24% → 93.35% (−0.89) |
+| Scope                       | Loaded files |           Line coverage |
+| --------------------------- | -----------: | ----------------------: |
+| Baseline replay (`6a600c0`) |          125 |                  96.29% |
+| Current branch              |          152 |              92.8–92.9% |
+| Paths present in both       |           51 | 94.24% → 93.35% (−0.89) |
 
 74 old paths were removed or renamed and 101 new paths are measured. On the comparable
 paths the drop is 0.89 points, inside the one-point gate; the larger overall change is

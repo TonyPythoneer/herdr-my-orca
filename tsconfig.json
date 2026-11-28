@@ -8,14 +8,7 @@
     "allowJs": true,
     "checkJs": false,
     "skipLibCheck": false,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "types/**/*.d.ts",
-    "src/**/*.ts",
-    "test/**/*.ts",
-    "vite.config.ts"
-  ]
+  "include": ["types/**/*.d.ts", "src/**/*.ts", "test/**/*.ts", "vite.config.ts"]
 }

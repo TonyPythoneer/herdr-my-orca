@@ -6,15 +6,9 @@
   },
   "type": "column",
   "titlebar": "none",
-  "traffic_lights": [
-    12,
-    8
-  ],
+  "traffic_lights": [12, 8],
   "background": "canvas",
-  "terminal_padding": [
-    14,
-    12
-  ],
+  "terminal_padding": [14, 12],
   "preview": "layouts/orca.svg",
   "theme": "orca-dark",
   "terminal_menu": "orca-context-menu",

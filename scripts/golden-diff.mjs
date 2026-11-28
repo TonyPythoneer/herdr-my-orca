@@ -21,15 +21,19 @@ export function parseDump(text) {
   }
 }
 
-const isChildCall = (entry) => Array.isArray(entry) && (entry[0] === "child" || entry[0] === "children");
+const isChildCall = (entry) =>
+  Array.isArray(entry) && (entry[0] === "child" || entry[0] === "children");
 
 function elementId(node, fallback) {
-  return (node.c ?? []).find(e => Array.isArray(e) && e[0] === "id")?.[1]?.[0] ?? fallback;
+  return (node.c ?? []).find((e) => Array.isArray(e) && e[0] === "id")?.[1]?.[0] ?? fallback;
 }
 
 function recordCall(entry, out, id, withIds) {
   if (!Array.isArray(entry)) return;
-  if (isChildCall(entry)) { callSet(entry[1], out, id, withIds); return; }
+  if (isChildCall(entry)) {
+    callSet(entry[1], out, id, withIds);
+    return;
+  }
   const call = `${entry[0]}${JSON.stringify(entry[1])}`;
   const key = withIds ? `${id} ${call}` : call;
   out.set(key, (out.get(key) ?? 0) + 1);
@@ -58,13 +62,19 @@ function arrayDifference(a, b, id) {
 
 function callDifference(ca, cb, id) {
   for (let i = 0; i < Math.max(ca.length, cb.length); i++) {
-    const ea = ca[i], eb = cb[i];
+    const ea = ca[i],
+      eb = cb[i];
     if (JSON.stringify(ea) === JSON.stringify(eb)) continue;
     if (isChildCall(ea) && isChildCall(eb) && ea[0] === eb[0]) {
       const found = firstDifference(ea[1], eb[1], id);
       if (found) return found;
     }
-    return { id, what: `call #${i}`, a: JSON.stringify(ea)?.slice(0, 120), b: JSON.stringify(eb)?.slice(0, 120) };
+    return {
+      id,
+      what: `call #${i}`,
+      a: JSON.stringify(ea)?.slice(0, 120),
+      b: JSON.stringify(eb)?.slice(0, 120),
+    };
   }
   return null;
 }
@@ -103,15 +113,26 @@ export function pairs(baseValue, nowValue, keys = []) {
   }
   const base = Array.isArray(baseValue) ? baseValue : null;
   const now = Array.isArray(nowValue) ? nowValue : null;
-  if (base && now) return Array.from({ length: Math.max(base.length, now.length) }, (_, i) => {
-    const before = base[i], after = now[i];
-    return [before?.name ?? after?.name ?? `case ${i}`, before?.trees ?? before, after?.trees ?? after];
-  });
-  return [...new Set([...Object.keys(baseValue), ...Object.keys(nowValue)])].map((key) => [key, baseValue[key], nowValue[key]]);
+  if (base && now)
+    return Array.from({ length: Math.max(base.length, now.length) }, (_, i) => {
+      const before = base[i],
+        after = now[i];
+      return [
+        before?.name ?? after?.name ?? `case ${i}`,
+        before?.trees ?? before,
+        after?.trees ?? after,
+      ];
+    });
+  return [...new Set([...Object.keys(baseValue), ...Object.keys(nowValue)])].map((key) => [
+    key,
+    baseValue[key],
+    nowValue[key],
+  ]);
 }
 
 export function semantic(label, a, b, withIds = true) {
-  const setA = callSet(a, new Map(), "", withIds), setB = callSet(b, new Map(), "", withIds);
+  const setA = callSet(a, new Map(), "", withIds),
+    setB = callSet(b, new Map(), "", withIds);
   const onlyA = [...setA.keys()].filter((k) => !setB.has(k));
   const onlyB = [...setB.keys()].filter((k) => !setA.has(k));
   return { label, same: onlyA.length === 0 && onlyB.length === 0, onlyBase: onlyA, onlyNow: onlyB };
@@ -130,7 +151,11 @@ function main(argv) {
   const keys = [];
   for (let i = 0; i < rest.length; i++) if (rest[i] === "--key") keys.push(rest[++i]);
   const withIds = !rest.includes("--noid");
-  const rows = pairs(parseDump(readFileSync(baseFile, "utf8")), parseDump(readFileSync(nowFile, "utf8")), keys);
+  const rows = pairs(
+    parseDump(readFileSync(baseFile, "utf8")),
+    parseDump(readFileSync(nowFile, "utf8")),
+    keys,
+  );
   let differing = 0;
   for (const [label, a, b] of rows) {
     if (mode === "semantic") {
@@ -152,4 +177,5 @@ function main(argv) {
   return differing ? 1 : 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main(process.argv.slice(2));
+if (import.meta.url === pathToFileURL(process.argv[1]).href)
+  process.exitCode = main(process.argv.slice(2));

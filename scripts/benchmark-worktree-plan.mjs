@@ -6,19 +6,39 @@ import { performance } from "node:perf_hooks";
 import * as candidate from "../mods/orca-sidebar-projects/worktree-plan.js";
 
 function fixture(count) {
-  const spaces = [], gitState = {};
+  const spaces = [],
+    gitState = {};
   for (let i = 0; i < count; i++) {
     const folder = "/fixture/project-" + i;
     const repo = JSON.stringify([null, folder + "/.git"]);
-    spaces.push({ id: String(i), folder, tabs: [], name: "project-" + i, status: "idle", machine: null });
-    gitState[JSON.stringify([null, folder])] = { repo, top: folder, name: "project-" + i, branch: "main", linked: false, worktrees: [{ path: folder, branch: "main" }] };
+    spaces.push({
+      id: String(i),
+      folder,
+      tabs: [],
+      name: "project-" + i,
+      status: "idle",
+      machine: null,
+    });
+    gitState[JSON.stringify([null, folder])] = {
+      repo,
+      top: folder,
+      name: "project-" + i,
+      branch: "main",
+      linked: false,
+      worktrees: [{ path: folder, branch: "main" }],
+    };
   }
   return { spaces, gitState, loaded: true };
 }
 
 function calculate(implementation, input) {
   const projection = implementation.projectWorktreePlan(input);
-  const rendered = implementation.planRenderRows(projection.visibleRows, "repo", new Set(), new Set());
+  const rendered = implementation.planRenderRows(
+    projection.visibleRows,
+    "repo",
+    new Set(),
+    new Set(),
+  );
   return { projection, rendered };
 }
 
@@ -27,7 +47,7 @@ function percentile(samples, p) {
 }
 
 function stats(samples) {
-  return { p50_ms: percentile(samples, .5), p95_ms: percentile(samples, .95), raw_ms: samples };
+  return { p50_ms: percentile(samples, 0.5), p95_ms: percentile(samples, 0.95), raw_ms: samples };
 }
 
 function measure(run, before, verify, count, workload) {
@@ -42,7 +62,8 @@ function measure(run, before, verify, count, workload) {
     if (before) run(before);
     run(candidate);
   }
-  const afterTimes = [], beforeTimes = [];
+  const afterTimes = [],
+    beforeTimes = [];
   const timed = (implementation, samples) => {
     const start = performance.now();
     let output;
@@ -57,24 +78,45 @@ function measure(run, before, verify, count, workload) {
   }
   const after = stats(afterTimes);
   const baseline = before ? stats(beforeTimes) : null;
-  const reduction = (key) => baseline && baseline[key] > 0 ? (1 - after[key] / baseline[key]) * 100 : null;
-  return { workload, workspaces: count, samples: afterTimes.length, iterations_per_sample: iterations, ...after, baseline,
-    p50_ms_reduction_pct: reduction("p50_ms"), p95_ms_reduction_pct: reduction("p95_ms"), correctness: "pass" };
+  const reduction = (key) =>
+    baseline && baseline[key] > 0 ? (1 - after[key] / baseline[key]) * 100 : null;
+  return {
+    workload,
+    workspaces: count,
+    samples: afterTimes.length,
+    iterations_per_sample: iterations,
+    ...after,
+    baseline,
+    p50_ms_reduction_pct: reduction("p50_ms"),
+    p95_ms_reduction_pct: reduction("p95_ms"),
+    correctness: "pass",
+  };
 }
 
 function projectionCase(count, before) {
   const input = fixture(count);
-  return measure(implementation => calculate(implementation, input), before, output => {
-    assert.equal(output.projection.visibleRows.length, count);
-    assert.equal(output.rendered.filter(r => r.kind === "row").length, count);
-  }, count, "projection");
+  return measure(
+    (implementation) => calculate(implementation, input),
+    before,
+    (output) => {
+      assert.equal(output.projection.visibleRows.length, count);
+      assert.equal(output.rendered.filter((r) => r.kind === "row").length, count);
+    },
+    count,
+    "projection",
+  );
 }
 
 function groupCase(count, before) {
   const ids = Array.from({ length: count }, (_, i) => "w" + i);
-  const group = { rows: ids.map(id => ({ w: { id }, also: [{ w: { id } }] })) };
-  return measure(implementation => implementation.groupSpaceIds(group, ids), before,
-    output => assert.deepEqual(output, ids), count, "group-space-ids");
+  const group = { rows: ids.map((id) => ({ w: { id }, also: [{ w: { id } }] })) };
+  return measure(
+    (implementation) => implementation.groupSpaceIds(group, ids),
+    before,
+    (output) => assert.deepEqual(output, ids),
+    count,
+    "group-space-ids",
+  );
 }
 
 function baseRef() {
@@ -90,10 +132,15 @@ async function baselineModule(sha) {
   const path = sha + ":mods/orca-sidebar-projects/worktree-plan.js";
   let source;
   try {
-    source = execFileSync("git", ["show", path], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    source = execFileSync("git", ["show", path], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
   } catch {
     // CI checkout is shallow. Retrieve only the exact comparison commit.
-    execFileSync("git", ["fetch", "--no-tags", "--depth=1", "origin", sha], { stdio: ["ignore", "pipe", "pipe"] });
+    execFileSync("git", ["fetch", "--no-tags", "--depth=1", "origin", sha], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     source = execFileSync("git", ["show", path], { encoding: "utf8" });
   }
   // This pure projection module has no relative imports; keep the base outside the worktree.
@@ -103,13 +150,16 @@ async function baselineModule(sha) {
 const baselineSha = baseRef();
 const before = await baselineModule(baselineSha);
 const report = {
-  schema: 1, scope: "CPU-only workspace projection; not native UI latency",
+  schema: 1,
+  scope: "CPU-only workspace projection; not native UI latency",
   baseline_sha: before ? baselineSha : null,
   candidate_sha: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
   comparison: before ? "paired_same_runner_alternating" : "candidate_only",
-  node: process.version, platform: process.platform, architecture: process.arch,
-  cases: [20, 200, 1000].map(count => projectionCase(count, before)),
-  group_cases: [20, 200, 1000].map(count => groupCase(count, before)),
+  node: process.version,
+  platform: process.platform,
+  architecture: process.arch,
+  cases: [20, 200, 1000].map((count) => projectionCase(count, before)),
+  group_cases: [20, 200, 1000].map((count) => groupCase(count, before)),
 };
 const json = JSON.stringify(report, null, 2) + "\n";
 if (process.argv[2]) writeFileSync(process.argv[2], json);

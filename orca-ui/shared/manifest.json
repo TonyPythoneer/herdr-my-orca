@@ -87,15 +87,11 @@
     },
     {
       "source": "src/shared/review-store.ts",
-      "outputs": [
-        "mods/orca-sidebar-projects/review-store.js"
-      ]
+      "outputs": ["mods/orca-sidebar-projects/review-store.js"]
     },
     {
       "source": "src/shared/scan.ts",
-      "outputs": [
-        "mods/orca-status-ports/scan.js"
-      ]
+      "outputs": ["mods/orca-status-ports/scan.js"]
     },
     {
       "source": "src/shared/selection-ui.ts",
@@ -107,10 +103,7 @@
     },
     {
       "source": "src/shared/tasks.ts",
-      "outputs": [
-        "mods/orca-status-footer/tasks.js",
-        "mods/orca-tasks/tasks.js"
-      ]
+      "outputs": ["mods/orca-status-footer/tasks.js", "mods/orca-tasks/tasks.js"]
     },
     {
       "source": "src/shared/theme-color.ts",
@@ -140,17 +133,11 @@
     },
     {
       "source": "src/shared/transcript.ts",
-      "outputs": [
-        "mods/orca-context-menu/transcript.js",
-        "mods/orca-handoff/transcript.js"
-      ]
+      "outputs": ["mods/orca-context-menu/transcript.js", "mods/orca-handoff/transcript.js"]
     },
     {
       "source": "src/shared/ui-settings.ts",
-      "outputs": [
-        "mods/orca-files/ui-settings.js",
-        "mods/orca-status-bar/ui-settings.js"
-      ]
+      "outputs": ["mods/orca-files/ui-settings.js", "mods/orca-status-bar/ui-settings.js"]
     }
   ]
 }

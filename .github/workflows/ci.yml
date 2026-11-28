@@ -28,14 +28,14 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install frozen toolchain
         run: npm ci --no-audit --no-fund
       # Formatting is not enforced: 14 src/test files and most mods/ copies are not formatted yet.
-      - name: Lint and type checks (vp check --no-fmt)
-        run: ./node_modules/.bin/vp check --no-fmt
+      - name: Format, lint and type checks (vp check)
+        run: ./node_modules/.bin/vp check
       - name: Type-aware lint and type check (src, test)
         run: npm run check:ts
       - name: Validate configuration and mod manifests
@@ -56,7 +56,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install frozen toolchain
@@ -127,7 +127,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install frozen toolchain

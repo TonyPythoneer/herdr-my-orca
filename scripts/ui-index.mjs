@@ -9,36 +9,61 @@ export const SCHEMA_VERSION = 1;
 const SKIP_FILE = /\.test\.(?:js|mjs)$|\.loader\.(?:js|mjs)$|\.json$/;
 const GENERATED_COPY = /^\/\/ Generated from /;
 // A top-level declaration starts at column 0; anything indented belongs to the one above it.
-const DECL = /^(export\s+)?(?:(?:default|async)\s+)*(function|class|const|let|var)\s+([A-Za-z_$][\w$]*)?/;
+const DECL =
+  /^(export\s+)?(?:(?:default|async)\s+)*(function|class|const|let|var)\s+([A-Za-z_$][\w$]*)?/;
 const METHOD = /^  (?:static\s+)?(?:async\s+)?(?:get\s+|set\s+)?([A-Za-z_$][\w$]*)\s*\(/;
-const UI_CALL = /\b(?:div|h_flex|v_flex|svg|image|Button|IconButton|Input|InputState|TextareaState|Table|List|Link|Scrollbar)\s*\(/;
+const UI_CALL =
+  /\b(?:div|h_flex|v_flex|svg|image|Button|IconButton|Input|InputState|TextareaState|Table|List|Link|Scrollbar)\s*\(/;
 const CLICK = /\.on_click\s*\(/;
 // Shared controls are called with their literal id and label, e.g. `IconButton("<id>", "<label>", ...)`, so the
 // call site is where the index reads them. The helper declarations themselves are not screen controls.
 export const SHARED_CONTROLS = ["IconButton", "DialogButton"];
 // Their helper files: every internal function there belongs to the control, not to a screen.
-export const SHARED_CONTROL_FILES = new Set(["orca-ui/shared/icon-button.js", "orca-ui/shared/dialog-button.js"]);
+export const SHARED_CONTROL_FILES = new Set([
+  "orca-ui/shared/icon-button.js",
+  "orca-ui/shared/dialog-button.js",
+]);
 const CONTROL_CALL = new RegExp(`(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(`);
 // A dynamic label (a ternary or a template) is left unnamed; the id is always a literal.
-const CONTROL_LITERALS = new RegExp(`(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(\\s*(["'\`])([^"'\`]+)\\1(?:\\s*,\\s*(["'\`])([^"'\`]+)\\3)?`, "g");
+const CONTROL_LITERALS = new RegExp(
+  `(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(\\s*(["'\`])([^"'\`]+)\\1(?:\\s*,\\s*(["'\`])([^"'\`]+)\\3)?`,
+  "g",
+);
 const ICON_TOOLTIP = /\btooltip:\s*(["'`])([^"'`]+)\1/g;
 const QUOTED = (name) => new RegExp(`\\.${name}\\(\\s*["'\`]([^"'\`]+)["'\`]`, "g");
-const attr = (body, name) => [...body.matchAll(QUOTED(name))].map((m) => m[1].trim()).filter(Boolean);
+const attr = (body, name) =>
+  [...body.matchAll(QUOTED(name))].map((m) => m[1].trim()).filter(Boolean);
 const iconButtonIds = (body) => [...body.matchAll(CONTROL_LITERALS)].map((m) => m[2].trim());
-const iconButtonLabels = (body) => [...body.matchAll(CONTROL_LITERALS)].map((m) => m[4]?.trim()).filter((text) => text && !text.includes("${"));
+const iconButtonLabels = (body) =>
+  [...body.matchAll(CONTROL_LITERALS)]
+    .map((m) => m[4]?.trim())
+    .filter((text) => text && !text.includes("${"));
 // id -> label, read per call site, so a builder that draws several controls names each one correctly.
-const controlLabelFor = (body) => Object.fromEntries([...body.matchAll(CONTROL_LITERALS)]
-  .map((m) => [m[2].trim(), m[4] && !m[4].includes("${") ? m[4].trim() : ""]));
-const iconButtonTooltips = (body) => [...body.matchAll(ICON_TOOLTIP)].map((m) => m[2].trim()).filter((text) => !text.includes("${"));
+const controlLabelFor = (body) =>
+  Object.fromEntries(
+    [...body.matchAll(CONTROL_LITERALS)].map((m) => [
+      m[2].trim(),
+      m[4] && !m[4].includes("${") ? m[4].trim() : "",
+    ]),
+  );
+const iconButtonTooltips = (body) =>
+  [...body.matchAll(ICON_TOOLTIP)].map((m) => m[2].trim()).filter((text) => !text.includes("${"));
 const unique = (values) => [...new Set(values)];
 
-export const normalize = (text) => String(text ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export const normalize = (text) =>
+  String(text ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 
 function readDirFiles(dir) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.(?:js|mjs)$/.test(entry.name) && !SKIP_FILE.test(entry.name))
-    .map((entry) => entry.name).sort();
+    .filter(
+      (entry) => entry.isFile() && /\.(?:js|mjs)$/.test(entry.name) && !SKIP_FILE.test(entry.name),
+    )
+    .map((entry) => entry.name)
+    .sort();
 }
 
 function docAbove(lines, index) {
@@ -65,7 +90,7 @@ function endOfBlock(lines, start, stopAtColumnZero) {
   return lines.length;
 }
 
-// A 
+// A
 function kindOf(body) {
   if (CLICK.test(body) || CONTROL_CALL.test(body)) return "control";
   if (UI_CALL.test(body)) return "view";
@@ -91,8 +116,13 @@ function component(parts) {
     labels: unique([...attr(body, "accessibility_label"), ...iconButtonLabels(body)]),
     labelFor: controlLabelFor(body),
     controlIds: unique(iconButtonIds(body)),
-    tooltips: unique([...attr(body, "tooltip"), ...(CONTROL_CALL.test(body) ? iconButtonTooltips(body) : [])]),
-    texts: unique([...attr(body, "child"), ...attr(body, "placeholder")]).filter((text) => !text.includes("${")).slice(0, 12),
+    tooltips: unique([
+      ...attr(body, "tooltip"),
+      ...(CONTROL_CALL.test(body) ? iconButtonTooltips(body) : []),
+    ]),
+    texts: unique([...attr(body, "child"), ...attr(body, "placeholder")])
+      .filter((text) => !text.includes("${"))
+      .slice(0, 12),
     lines: parts.end - parts.start,
   };
 }
@@ -101,17 +131,29 @@ function classMembers(lines, meta, start, end, out) {
   const methods = [];
   for (let at = start + 1; at < end; at++) {
     const match = METHOD.exec(lines[at]);
-    if (match && match[1] !== "if" && match[1] !== "for" && match[1] !== "while" && match[1] !== "switch") {
+    if (
+      match &&
+      match[1] !== "if" &&
+      match[1] !== "for" &&
+      match[1] !== "while" &&
+      match[1] !== "switch"
+    ) {
       methods.push({ index: at, name: match[1] });
     }
   }
   for (let i = 0; i < methods.length; i++) {
     const member = methods[i];
-    out.push(component({
-      ...meta, lines, start: member.index,
-      end: i + 1 < methods.length ? methods[i + 1].index : end,
-      name: `${meta.className}.${member.name}`, label: `${meta.className}.${member.name}`, exported: false,
-    }));
+    out.push(
+      component({
+        ...meta,
+        lines,
+        start: member.index,
+        end: i + 1 < methods.length ? methods[i + 1].index : end,
+        name: `${meta.className}.${member.name}`,
+        label: `${meta.className}.${member.name}`,
+        exported: false,
+      }),
+    );
   }
   return methods.length;
 }
@@ -126,11 +168,45 @@ export function parseComponents(source, mod, file) {
     if (!decl) continue;
     const end = decl.sort === "class" ? endOfBlock(lines, at, true) : endOfBlock(lines, at, false);
     if (decl.sort === "class") {
-      const members = classMembers(lines, { mod, file, fileName: basename(file), className: decl.name }, at, end, out);
-      out.push({ id: `${mod}:${basename(file)}:${decl.name}`, name: decl.name, label: decl.name, mod, file, line: at + 1,
-        exported: decl.exported, kind: "class", description: docAbove(lines, at), ids: [], roles: [], labels: [], tooltips: [], texts: [], members, lines: end - at });
+      const members = classMembers(
+        lines,
+        { mod, file, fileName: basename(file), className: decl.name },
+        at,
+        end,
+        out,
+      );
+      out.push({
+        id: `${mod}:${basename(file)}:${decl.name}`,
+        name: decl.name,
+        label: decl.name,
+        mod,
+        file,
+        line: at + 1,
+        exported: decl.exported,
+        kind: "class",
+        description: docAbove(lines, at),
+        ids: [],
+        roles: [],
+        labels: [],
+        tooltips: [],
+        texts: [],
+        members,
+        lines: end - at,
+      });
     } else {
-      out.push(component({ mod, file, fileName: basename(file), lines, start: at, end, name: decl.name, label: decl.name, exported: decl.exported }));
+      out.push(
+        component({
+          mod,
+          file,
+          fileName: basename(file),
+          lines,
+          start: at,
+          end,
+          name: decl.name,
+          label: decl.name,
+          exported: decl.exported,
+        }),
+      );
     }
     at = end - 1;
   }
@@ -153,8 +229,16 @@ function walkLayout(node, stack, layout, out) {
   if (!node || typeof node !== "object") return;
   const inner = node.type === "stack" ? node.id : stack;
   const mod = node.content?.mod;
-  if (mod) out.push({ layout, node: node.id, stack: stack ?? null, mod, props: node.content.props ?? null });
-  else if (node.type === "block") out.push({ layout, node: node.id, stack: stack ?? null, mod: null, props: null });
+  if (mod)
+    out.push({
+      layout,
+      node: node.id,
+      stack: stack ?? null,
+      mod,
+      props: node.content.props ?? null,
+    });
+  else if (node.type === "block")
+    out.push({ layout, node: node.id, stack: stack ?? null, mod: null, props: null });
   for (const child of node.children ?? []) walkLayout(child, inner, layout, out);
 }
 
@@ -162,9 +246,15 @@ function readPages(root) {
   const dir = join(root, "layouts");
   if (!existsSync(dir)) return [];
   const pages = [];
-  for (const name of readdirSync(dir).filter((n) => n.endsWith(".json")).sort()) {
+  for (const name of readdirSync(dir)
+    .filter((n) => n.endsWith(".json"))
+    .sort()) {
     let layout;
-    try { layout = JSON.parse(readFileSync(join(dir, name), "utf8")); } catch { continue; }
+    try {
+      layout = JSON.parse(readFileSync(join(dir, name), "utf8"));
+    } catch {
+      continue;
+    }
     const out = [];
     walkLayout(layout, null, name.replace(/\.json$/, ""), out);
     pages.push(...out);
@@ -197,7 +287,11 @@ function attachFiles(root, mods, components, featureMods) {
     const feature = featureMods.get(name);
     const { prefix, files } = sourceLocation(name, feature);
     mod.files = deliveredFiles(root, prefix, files);
-    const declared = feature ? feature.manifest.tests.filter((file) => /\.test\.js$/.test(file)).map((file) => `${prefix}/${file}`) : mod.tests ?? [];
+    const declared = feature
+      ? feature.manifest.tests
+          .filter((file) => /\.test\.js$/.test(file))
+          .map((file) => `${prefix}/${file}`)
+      : (mod.tests ?? []);
     mod.tests = declared.filter((test) => existsSync(join(root, test)));
     if (!mod.tests.length) mod.tests = mod.files.filter((file) => /\.test\./.test(file));
     mod.componentCount = components.filter((item) => item.mod === name).length;
@@ -216,25 +310,53 @@ function sharedComponents(root) {
 
 export async function buildIndex(root) {
   const { features, inPlace } = await readReadingMap(root);
-  const featureMods = new Map(features.filter((feature) => feature.manifest?.mod).map((feature) => [feature.manifest.mod, feature]));
+  const featureMods = new Map(
+    features
+      .filter((feature) => feature.manifest?.mod)
+      .map((feature) => [feature.manifest.mod, feature]),
+  );
   const mods = attachMods(root, inPlace);
   for (const [name, feature] of featureMods) {
-    mods[name] = { ...(mods[name] ?? { name }), area: feature.area ?? mods[name]?.area, description: mods[name]?.description || feature.description };
+    mods[name] = {
+      ...(mods[name] ?? { name }),
+      area: feature.area ?? mods[name]?.area,
+      description: mods[name]?.description || feature.description,
+    };
   }
   const components = readModComponents(root, mods, featureMods);
   const shared = sharedComponents(root);
   components.push(...shared);
-  mods.shared = { name: "shared", area: "shared", description: "Helpers copied into mods by scripts/build-orca-ui.mjs; edit these files, never a copy.", files: [...new Set(shared.map((item) => item.file))], tests: [], pageNodes: [] };
+  mods.shared = {
+    name: "shared",
+    area: "shared",
+    description:
+      "Helpers copied into mods by scripts/build-orca-ui.mjs; edit these files, never a copy.",
+    files: [...new Set(shared.map((item) => item.file))],
+    tests: [],
+    pageNodes: [],
+  };
   const pages = readPages(root);
   for (const [name, mod] of Object.entries(mods)) {
     mod.pageNodes = pages.filter((page) => page.mod === name).map((page) => page.node);
   }
   attachFiles(root, mods, components, featureMods);
-  return { schemaVersion: SCHEMA_VERSION, root, mods, components, ids: collectIds(components), pages, shared: sharedHelpers(root) };
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    root,
+    mods,
+    components,
+    ids: collectIds(components),
+    pages,
+    shared: sharedHelpers(root),
+  };
 }
 
 function sourceLocation(mod, feature) {
-  if (feature) return { prefix: feature.manifest.source, files: feature.manifest.files.filter((file) => file.endsWith(".js")) };
+  if (feature)
+    return {
+      prefix: feature.manifest.source,
+      files: feature.manifest.files.filter((file) => file.endsWith(".js")),
+    };
   return { prefix: `mods/${mod}`, files: null };
 }
 
@@ -255,7 +377,18 @@ function readModComponents(root, mods, featureMods) {
 function collectIds(components) {
   const ids = {};
   for (const item of components) {
-    for (const id of item.ids) ids[id] ??= { id, mod: item.mod, file: item.file, line: item.line, component: item.name, label: item.labelFor?.[id] ?? (item.ids.length === 1 ? item.labels[0] : undefined) ?? "", role: item.controlIds?.includes(id) ? "button" : (item.ids.length === 1 ? item.roles[0] : undefined) ?? "" };
+    for (const id of item.ids)
+      ids[id] ??= {
+        id,
+        mod: item.mod,
+        file: item.file,
+        line: item.line,
+        component: item.name,
+        label: item.labelFor?.[id] ?? (item.ids.length === 1 ? item.labels[0] : undefined) ?? "",
+        role: item.controlIds?.includes(id)
+          ? "button"
+          : ((item.ids.length === 1 ? item.roles[0] : undefined) ?? ""),
+      };
   }
   return ids;
 }
@@ -266,7 +399,16 @@ export function searchIndex(index, term, limit = 20) {
   const hits = [];
   for (const [name, mod] of Object.entries(index.mods)) {
     const hay = normalize([name, mod.description, mod.area].join(" "));
-    if (hay.includes(query)) hits.push({ type: "mod", mod: name, name, description: mod.description ?? "", file: `mods/${name}`, line: 0, score: normalize(name) === query ? 70 : 40 });
+    if (hay.includes(query))
+      hits.push({
+        type: "mod",
+        mod: name,
+        name,
+        description: mod.description ?? "",
+        file: `mods/${name}`,
+        line: 0,
+        score: normalize(name) === query ? 70 : 40,
+      });
   }
   for (const item of index.components) {
     const score = componentScore(item, query);
@@ -286,7 +428,12 @@ function componentScore(item, query) {
   if (texts.includes(query)) return 88;
   if (name === query) return 85;
   if (name.includes(query)) return 60;
-  if (ids.some((id) => id.includes(query)) || labels.some((label) => label.includes(query)) || texts.some((text) => text.includes(query))) return 55;
+  if (
+    ids.some((id) => id.includes(query)) ||
+    labels.some((label) => label.includes(query)) ||
+    texts.some((text) => text.includes(query))
+  )
+    return 55;
   if (normalize(item.description).includes(query)) return 40;
   if (normalize(item.file).includes(query)) return 30;
   return 0;
@@ -297,12 +444,52 @@ export function findEntity(index, term) {
   if (!query) return null;
   const id = Object.values(index.ids).find((entry) => normalize(entry.id) === query);
   if (id) return { type: "id", ...id };
-  const exact = index.components.find((item) => item.labels.some((label) => normalize(label) === query));
-  if (exact) return { type: "component", mod: exact.mod, name: exact.name, file: exact.file, line: exact.line, ids: exact.ids, labels: exact.labels, roles: exact.roles, description: exact.description, kind: exact.kind };
+  const exact = index.components.find((item) =>
+    item.labels.some((label) => normalize(label) === query),
+  );
+  if (exact)
+    return {
+      type: "component",
+      mod: exact.mod,
+      name: exact.name,
+      file: exact.file,
+      line: exact.line,
+      ids: exact.ids,
+      labels: exact.labels,
+      roles: exact.roles,
+      description: exact.description,
+      kind: exact.kind,
+    };
   const named = index.components.find((item) => normalize(item.name) === query);
-  if (named) return { type: "component", mod: named.mod, name: named.name, file: named.file, line: named.line, ids: named.ids, labels: named.labels, roles: named.roles, description: named.description, kind: named.kind };
-  const drawn = index.components.find((item) => item.texts.some((text) => normalize(text) === query));
-  if (drawn) return { type: "component", mod: drawn.mod, name: drawn.name, file: drawn.file, line: drawn.line, ids: drawn.ids, labels: drawn.labels, roles: drawn.roles, description: drawn.description, kind: drawn.kind };
+  if (named)
+    return {
+      type: "component",
+      mod: named.mod,
+      name: named.name,
+      file: named.file,
+      line: named.line,
+      ids: named.ids,
+      labels: named.labels,
+      roles: named.roles,
+      description: named.description,
+      kind: named.kind,
+    };
+  const drawn = index.components.find((item) =>
+    item.texts.some((text) => normalize(text) === query),
+  );
+  if (drawn)
+    return {
+      type: "component",
+      mod: drawn.mod,
+      name: drawn.name,
+      file: drawn.file,
+      line: drawn.line,
+      ids: drawn.ids,
+      labels: drawn.labels,
+      roles: drawn.roles,
+      description: drawn.description,
+      kind: drawn.kind,
+    };
   return null;
 }
 
@@ -323,7 +510,9 @@ export function textMap(index) {
 
 export function outline(index, mod) {
   const byFile = {};
-  for (const item of index.components.filter((entry) => entry.mod === mod).sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
+  for (const item of index.components
+    .filter((entry) => entry.mod === mod)
+    .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
     (byFile[item.file] ??= []).push(item);
   }
   return byFile;
@@ -331,8 +520,12 @@ export function outline(index, mod) {
 
 export function audit(index) {
   // The shared helpers are not screen controls: each call site supplies its id and label.
-  const interactive = index.components.filter((item) => item.kind === "control" && !SHARED_CONTROLS.includes(item.name)
-    && !SHARED_CONTROL_FILES.has(item.file));
+  const interactive = index.components.filter(
+    (item) =>
+      item.kind === "control" &&
+      !SHARED_CONTROLS.includes(item.name) &&
+      !SHARED_CONTROL_FILES.has(item.file),
+  );
   const bare = interactive.filter((item) => !item.ids.length);
   const seen = new Map();
   const duplicateIds = [];
@@ -340,14 +533,27 @@ export function audit(index) {
     for (const id of item.ids) {
       if (id.includes("${")) continue;
       const first = seen.get(id);
-      if (first) duplicateIds.push({ id, first: `${first.file}:${first.line}`, second: `${item.file}:${item.line}` });
+      if (first)
+        duplicateIds.push({
+          id,
+          first: `${first.file}:${first.line}`,
+          second: `${item.file}:${item.line}`,
+        });
       else seen.set(id, item);
     }
   }
   return {
     interactive: interactive.length,
-    missingIds: bare.map(({ mod, name, file, line, labels }) => ({ mod, name, file, line, labels })),
-    missingLabels: interactive.filter((item) => !item.labels.length).map(({ mod, name, file, line }) => ({ mod, name, file, line })),
+    missingIds: bare.map(({ mod, name, file, line, labels }) => ({
+      mod,
+      name,
+      file,
+      line,
+      labels,
+    })),
+    missingLabels: interactive
+      .filter((item) => !item.labels.length)
+      .map(({ mod, name, file, line }) => ({ mod, name, file, line })),
     duplicateIds,
   };
 }
