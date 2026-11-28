@@ -70,41 +70,141 @@ export function environmentCardView(owner, t) {
     );
 }
 
-export function gatewayCardView(owner, t) {
-  const on = owner.litellmEnabled;
-  const local = owner.litellmStatus?.local;
-  const quickstart = local?.quickstart;
-  const remote = owner.litellmStatus?.remote;
-  let health;
-  if (owner.litellmMode === "local") {
-    if (local?.running && local.healthy && local.usable) health = { text: "Healthy · Managed LiteLLM gateway", color: t.done };
-    else if (local?.running && !local.healthy) health = { text: "Gateway process is running but its health check failed", color: t.blocked };
-    else if (local?.running) health = { text: "Managed LiteLLM gateway is running", color: t.blocked };
-    else if (local?.usable) health = { text: "Ready · Managed LiteLLM installation found; gateway starts on first launch", color: t.muted };
-    else if (quickstart?.usable) health = { text: `Local LiteLLM Gateway is ready · ${quickstart.version ?? "version unknown"}; switch to Quickstart to use it`, color: t.done };
-    else if (quickstart?.installed) health = { text: `litellm-gateway found at ${quickstart.cli}; the local service is not running`, color: t.blocked };
-    else if (local?.installed) health = { text: "Managed LiteLLM installation found but not ready", color: t.blocked };
-    else if (local?.cli) health = { text: `CLI found at ${local.cli}; managed installation is not usable`, color: t.blocked };
-    else health = { text: "No managed LiteLLM CLI found", color: t.blocked };
-  } else if (remote?.healthy) {
-    health = remote.models.length
-      ? { text: `Reachable · ${remote.models.length} models available`, color: t.done }
-      : { text: "Reachable · no models advertised", color: t.done };
-  } else {
-    health = { text: remote?.error ?? (owner.litellmMode === "quickstart" ? "Quickstart has not been checked" : "Existing connection has not been checked"), color: remote ? t.blocked : t.muted };
-  }
-  const field = (id, label, state) => v_flex().w_full().gap(4)
+function gatewayField(t, id, label, state) {
+  return v_flex().w_full().gap(4)
     .child(div().text_size(10).font_semibold().text_color(t.dim).child(label))
     .child(h_flex().w_full().h(32).px(8).rounded(6).border_1().border_color(t.input).bg(t.background)
       .child(Input.new(state).flex_1().min_w(0).text_size(12).text_color(t.foreground).bg("#00000000")));
-  const keyField = owner.litellmHasApiKey && !owner.litellmReplaceKey
-    ? h_flex().w_full().items_center().gap(8)
-      .child(div().flex_1().text_size(11).text_color(t.muted).child("API key saved securely"))
-      .child(owner.button("am-litellm-replace-key", "Replace", t, (_event, cx) => {
-        owner.litellmReplaceKey = true;
-        cx.notify();
-      }, { height: 24, px: 8, color: t.muted }))
-    : field("am-litellm-api-key", "API KEY", owner.litellmApiKey);
+}
+
+function gatewayKeyField(owner, t) {
+  if (!owner.litellmHasApiKey || owner.litellmReplaceKey) return gatewayField(t, "am-litellm-api-key", "API KEY", owner.litellmApiKey);
+  return h_flex().w_full().items_center().gap(8)
+    .child(div().flex_1().text_size(11).text_color(t.muted).child("API key saved securely"))
+    .child(owner.button("am-litellm-replace-key", "Replace", t, (_event, cx) => {
+      owner.litellmReplaceKey = true;
+      cx.notify();
+    }, { height: 24, px: 8, color: t.muted }));
+}
+
+function runningGatewayHealth(local, t) {
+  if (!local.healthy) return { text: "Gateway process is running but its health check failed", color: t.blocked };
+  if (local.usable) return { text: "Healthy · Managed LiteLLM gateway", color: t.done };
+  return { text: "Managed LiteLLM gateway is running", color: t.blocked };
+}
+
+function installedGatewayHealth(local, quickstart, t) {
+  if (quickstart?.usable) return { text: `Local LiteLLM Gateway is ready · ${quickstart.version ?? "version unknown"}; switch to Quickstart to use it`, color: t.done };
+  if (quickstart?.installed) return { text: `litellm-gateway found at ${quickstart.cli}; the local service is not running`, color: t.blocked };
+  if (local?.installed) return { text: "Managed LiteLLM installation found but not ready", color: t.blocked };
+  if (local?.cli) return { text: `CLI found at ${local.cli}; managed installation is not usable`, color: t.blocked };
+  return { text: "No managed LiteLLM CLI found", color: t.blocked };
+}
+
+function localGatewayHealth(local, quickstart, t) {
+  if (local?.running) return runningGatewayHealth(local, t);
+  if (local?.usable) return { text: "Ready · Managed LiteLLM installation found; gateway starts on first launch", color: t.muted };
+  return installedGatewayHealth(local, quickstart, t);
+}
+function gatewayHealth(owner, t) {
+  const local = owner.litellmStatus?.local;
+  const quickstart = local?.quickstart;
+  const remote = owner.litellmStatus?.remote;
+  if (owner.litellmMode === "local") return localGatewayHealth(local, quickstart, t);
+  if (remote?.healthy) return remote.models.length
+    ? { text: `Reachable · ${remote.models.length} models available`, color: t.done }
+    : { text: "Reachable · no models advertised", color: t.done };
+  return {
+    text: remote?.error ?? (owner.litellmMode === "quickstart" ? "Quickstart has not been checked" : "Existing connection has not been checked"),
+    color: remote ? t.blocked : t.muted,
+  };
+}
+
+function gatewayHeader(owner, t, on) {
+  return h_flex().w_full().items_center().gap(16)
+    .child(v_flex().flex_1().min_w(0).gap(3)
+      .child(h_flex().items_center().gap(6)
+        .child(image("mods/orca-assets/litellm_favicon_light_32.png").w(16).h(16).rounded_full())
+        .child(div().text_size(13).font_semibold().text_color(t.foreground).child("LiteLLM")))
+      .child(div().text_size(11).line_height("16px").text_color(t.muted)
+        .child("Managed records usage; existing checks health. Running sessions keep their current route.")))
+    .child(div().id("am-litellm-toggle").w(36).h(20).flex_none().flex().items_center().p(2).rounded_full()
+      .bg(on ? t.foreground : t.input)
+      .when(owner.litellmBusy, el => el.opacity(0.45))
+      .when(!owner.litellmBusy, el => el.cursor_pointer())
+      .role("switch").checked(on)
+      .accessibility_label("Enable LiteLLM for Model Provider launches")
+      .tooltip(owner.litellmBusy ? "Saving…" : "Applies to new Model Provider launches")
+      .when(!owner.litellmBusy, el => el.on_click((_event, cx) => owner.toggleLiteLLM(cx)))
+      .child(h_flex().w_full().items_center().when(on, el => el.justify_end())
+        .when(!on, el => el.justify_start())
+        .child(div().size(16).rounded_full().bg(on ? t.background : t.muted))));
+}
+
+function gatewayModeButtons(owner, t) {
+  return h_flex().gap(6)
+    .child(owner.button("am-litellm-local", "Managed", t, (_event, cx) => owner.setLiteLLMMode("local", cx), { primary: owner.litellmMode === "local", disabled: owner.litellmBusy || owner.litellmEnabled }))
+    .child(owner.button("am-litellm-quickstart", "Quickstart", t, (_event, cx) => owner.setLiteLLMMode("quickstart", cx), { primary: owner.litellmMode === "quickstart", disabled: owner.litellmBusy || owner.litellmEnabled }))
+    .child(owner.button("am-litellm-remote", "Existing", t, (_event, cx) => owner.setLiteLLMMode("remote", cx), { primary: owner.litellmMode === "remote", disabled: owner.litellmBusy || owner.litellmEnabled }));
+}
+
+function gatewayLocalSection(owner, t, local, health) {
+  return v_flex().gap(6)
+    .child(div().text_size(11).text_color(health.color).child(health.text))
+    .when(Boolean(local?.cli), inner => inner.child(div().min_w(0).truncate().text_size(10).text_color(t.dim).child(local.cli)))
+    .when(Boolean(local) && !local.cli, inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
+      .child("Managed mode uses Herdr's managed CLI, not Docker. Choose Quickstart for a running local server, or Existing for another one.")))
+    .child(Link.new("am-litellm-repo").href("https://github.com/BerriAI/litellm")
+      .text_size(11).text_color(t.accent).underline()
+      .tooltip("Open the LiteLLM repository on GitHub")
+      .child("LiteLLM on GitHub ↗"))
+    .child(h_flex().items_center().gap(8)
+      .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check local LiteLLM", t,
+        (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
+      .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))));
+}
+
+function gatewayQuickstartSection(owner, t, remote, health, on) {
+  return v_flex().w_full().gap(8)
+    .child(div().text_size(10).line_height("15px").text_color(t.dim)
+      .child("Uses the LiteLLM quickstart running on this Mac. Its address and key are read from its folder each time and are never saved here."))
+    .child(div().text_size(11).text_color(health.color).child(health.text))
+    .when(remote?.healthy && remote.models.length === 0, inner => inner.child(div().text_size(11).line_height("16px").text_color(t.blocked)
+      .child(on ? "The quickstart is running but advertises no models. New Model Provider launches will fail until it returns one."
+        : "The quickstart is running but advertises no models. Add one in its Admin UI before enabling LiteLLM.")))
+    .when(Boolean(remote?.models?.length), inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
+      .child(`Models: ${remote.models.slice(0, 5).join(", ")}${remote.models.length > 5 ? ", …" : ""}`)))
+    .child(h_flex().items_center().gap(8)
+      .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check quickstart", t,
+        (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
+      .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))));
+}
+
+function gatewayRemoteSection(owner, t, remote, health, on) {
+  return v_flex().w_full().gap(8)
+    .child(gatewayField(t, "am-litellm-host", "API HOST", owner.litellmHost))
+    .child(gatewayKeyField(owner, t))
+    .child(div().text_size(10).text_color(t.dim).child("Use an inference-only LiteLLM API key where available."))
+    .child(div().text_size(11).text_color(health.color).child(health.text))
+    .when(remote?.healthy && remote.models.length === 0, inner => inner.child(div().text_size(11).line_height("16px").text_color(t.blocked)
+      .child(on ? "The server is reachable, but advertises no models. New Model Provider launches will fail until it returns one."
+        : "The server is reachable, but advertises no models. Add one before enabling LiteLLM.")))
+    .when(Boolean(remote?.models?.length), inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
+      .child(`Models: ${remote.models.slice(0, 5).join(", ")}${remote.models.length > 5 ? ", …" : ""}`)))
+    .when(owner.litellmRemoteDirty, inner => inner.child(div().text_size(10).text_color(t.dim).child("Connection status is for the saved settings.")))
+    .child(h_flex().items_center().gap(8)
+      .child(owner.button("am-litellm-save-remote", owner.litellmBusy ? "Checking…" : "Save & check", t,
+        (_event, cx) => owner.saveRemoteLiteLLM(cx), { height: 24, px: 8, primary: true, disabled: owner.litellmBusy }))
+      .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check server", t,
+        (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
+      .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))));
+}
+
+export function gatewayCardView(owner, t) {
+  const on = owner.litellmEnabled;
+  const local = owner.litellmStatus?.local;
+  const remote = owner.litellmStatus?.remote;
+  const health = gatewayHealth(owner, t);
   return v_flex()
     .id("am-litellm-card")
     .w_full()
@@ -114,79 +214,16 @@ export function gatewayCardView(owner, t) {
     .border_1()
     .border_color(t.border)
     .bg(t.surface)
-    .child(
-      h_flex().w_full().items_center().gap(16)
-        .child(v_flex().flex_1().min_w(0).gap(3)
-          .child(h_flex().items_center().gap(6)
-            .child(image("mods/orca-assets/litellm_favicon_light_32.png").w(16).h(16).rounded_full())
-            .child(div().text_size(13).font_semibold().text_color(t.foreground).child("LiteLLM")))
-          .child(div().text_size(11).line_height("16px").text_color(t.muted)
-            .child("Managed records usage; existing checks health. Running sessions keep their current route.")))
-        .child(div().id("am-litellm-toggle").w(36).h(20).flex_none().flex().items_center().p(2).rounded_full()
-          .bg(on ? t.foreground : t.input)
-          .when(owner.litellmBusy, el => el.opacity(0.45))
-          .when(!owner.litellmBusy, el => el.cursor_pointer())
-          .role("switch").checked(on)
-          .accessibility_label("Enable LiteLLM for Model Provider launches")
-          .tooltip(owner.litellmBusy ? "Saving…" : "Applies to new Model Provider launches")
-          .when(!owner.litellmBusy, el => el.on_click((_event, cx) => owner.toggleLiteLLM(cx)))
-          .child(h_flex().w_full().items_center().when(on, el => el.justify_end())
-            .when(!on, el => el.justify_start())
-            .child(div().size(16).rounded_full().bg(on ? t.background : t.muted)))),
-    )
-    .child(h_flex().gap(6)
-      .child(owner.button("am-litellm-local", "Managed", t, (_event, cx) => owner.setLiteLLMMode("local", cx), { primary: owner.litellmMode === "local", disabled: owner.litellmBusy || owner.litellmEnabled }))
-      .child(owner.button("am-litellm-quickstart", "Quickstart", t, (_event, cx) => owner.setLiteLLMMode("quickstart", cx), { primary: owner.litellmMode === "quickstart", disabled: owner.litellmBusy || owner.litellmEnabled }))
-      .child(owner.button("am-litellm-remote", "Existing", t, (_event, cx) => owner.setLiteLLMMode("remote", cx), { primary: owner.litellmMode === "remote", disabled: owner.litellmBusy || owner.litellmEnabled })))
+    .child(gatewayHeader(owner, t, on))
+    .child(gatewayModeButtons(owner, t))
     .when(on, el => el.child(div().text_size(11).text_color(t.muted).child("Turn off LiteLLM to change mode.")))
     .when(on && owner.litellmMode === "local" && Boolean(local) && !local.usable, el => el.child(div().text_size(11).line_height("16px").text_color(t.blocked)
       .child("LiteLLM is on, but the managed gateway is not ready. New Model Provider launches will fail. If you use litellm-gateway, switch to Quickstart.")))
-    .when(owner.litellmMode === "local", el => el.child(v_flex().gap(6)
-      .child(div().text_size(11).text_color(health.color).child(health.text))
-      .when(Boolean(local?.cli), inner => inner.child(div().min_w(0).truncate().text_size(10).text_color(t.dim).child(local.cli)))
-      .when(Boolean(local) && !local.cli, inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
-        .child("Managed mode uses Herdr's managed CLI, not Docker. Choose Quickstart for a running local server, or Existing for another one.")))
-      .child(Link.new("am-litellm-repo").href("https://github.com/BerriAI/litellm")
-        .text_size(11).text_color(t.accent).underline()
-        .tooltip("Open the LiteLLM repository on GitHub")
-        .child("LiteLLM on GitHub ↗"))
-      .child(h_flex().items_center().gap(8)
-        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check local LiteLLM", t,
-          (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
-        .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))))))
-    .when(owner.litellmMode === "quickstart", el => el.child(v_flex().w_full().gap(8)
-      .child(div().text_size(10).line_height("15px").text_color(t.dim)
-        .child("Uses the LiteLLM quickstart running on this Mac. Its address and key are read from its folder each time and are never saved here."))
-      .child(div().text_size(11).text_color(health.color).child(health.text))
-      .when(remote?.healthy && remote.models.length === 0, inner => inner.child(div().text_size(11).line_height("16px").text_color(t.blocked)
-        .child(on ? "The quickstart is running but advertises no models. New Model Provider launches will fail until it returns one."
-          : "The quickstart is running but advertises no models. Add one in its Admin UI before enabling LiteLLM.")))
-      .when(Boolean(remote?.models?.length), inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
-        .child(`Models: ${remote.models.slice(0, 5).join(", ")}${remote.models.length > 5 ? ", …" : ""}`)))
-      .child(h_flex().items_center().gap(8)
-        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check quickstart", t,
-          (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
-        .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))))))
-    .when(owner.litellmMode === "remote", el => el.child(v_flex().w_full().gap(8)
-      .child(field("am-litellm-host", "API HOST", owner.litellmHost))
-      .child(keyField)
-      .child(div().text_size(10).text_color(t.dim).child("Use an inference-only LiteLLM API key where available."))
-      .child(div().text_size(11).text_color(health.color).child(health.text))
-      .when(remote?.healthy && remote.models.length === 0, inner => inner.child(div().text_size(11).line_height("16px").text_color(t.blocked)
-        .child(on ? "The server is reachable, but advertises no models. New Model Provider launches will fail until it returns one."
-          : "The server is reachable, but advertises no models. Add one before enabling LiteLLM.")))
-      .when(Boolean(remote?.models?.length), inner => inner.child(div().text_size(10).line_height("15px").text_color(t.dim)
-        .child(`Models: ${remote.models.slice(0, 5).join(", ")}${remote.models.length > 5 ? ", …" : ""}`)))
-      .when(owner.litellmRemoteDirty, inner => inner.child(div().text_size(10).text_color(t.dim).child("Connection status is for the saved settings.")))
-      .child(h_flex().items_center().gap(8)
-        .child(owner.button("am-litellm-save-remote", owner.litellmBusy ? "Checking…" : "Save & check", t,
-          (_event, cx) => owner.saveRemoteLiteLLM(cx), { height: 24, px: 8, primary: true, disabled: owner.litellmBusy }))
-        .child(owner.button("am-litellm-refresh", owner.litellmBusy ? "Checking…" : "Check server", t,
-          (_event, cx) => owner.refreshLiteLLMStatus(cx), { height: 24, px: 8, color: t.muted, disabled: owner.litellmBusy }))
-        .child(div().text_size(10).text_color(t.dim).child(timeLabel(owner.litellmCheckedAt))))))
+    .when(owner.litellmMode === "local", el => el.child(gatewayLocalSection(owner, t, local, health)))
+    .when(owner.litellmMode === "quickstart", el => el.child(gatewayQuickstartSection(owner, t, remote, health, on)))
+    .when(owner.litellmMode === "remote", el => el.child(gatewayRemoteSection(owner, t, remote, health, on)))
     .when(Boolean(owner.litellmError), el => el.child(div().text_size(11).text_color(t.blocked).child(owner.litellmError)));
 }
-
 function permissionTitleRow(owner, managed, permissions, t, compact) {
   // In the settings rail, the detail column may be only 280px wide.
   // Stack the trigger below the description rather than squeezing it to a word per line.

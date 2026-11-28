@@ -1,0 +1,229 @@
+{
+  "entries": [
+    {
+      "id": "orca-agent-flyout-pi-provider",
+      "source": "src/mods/orca-agent-flyout/pi-provider.ts",
+      "output": "mods/orca-agent-flyout/pi-provider.js"
+    },
+    {
+      "id": "orca-right-sidebar-placeholders-main",
+      "source": "src/mods/orca-right-sidebar-placeholders/main.ts",
+      "output": "mods/orca-right-sidebar-placeholders/main.js"
+    },
+    {
+      "id": "orca-sidebar-projects-worktree-plan",
+      "source": "src/mods/orca-sidebar-projects/worktree-plan.ts",
+      "output": "mods/orca-sidebar-projects/worktree-plan.js"
+    },
+    {
+      "id": "orca-status-ports-main",
+      "source": "src/mods/orca-status-ports/main.ts",
+      "output": "mods/orca-status-ports/main.js"
+    },
+    {
+      "id": "orca-confirm-main",
+      "source": "src/mods/orca-confirm/main.ts",
+      "output": "mods/orca-confirm/main.js"
+    },
+    {
+      "id": "orca-landing-main",
+      "source": "src/mods/orca-landing/main.ts",
+      "output": "mods/orca-landing/main.js"
+    },
+    {
+      "id": "orca-float-workspace-main",
+      "source": "src/mods/orca-float-workspace/main.ts",
+      "output": "mods/orca-float-workspace/main.js"
+    },
+    {
+      "id": "orca-split-menu-main",
+      "source": "src/mods/orca-split-menu/main.ts",
+      "output": "mods/orca-split-menu/main.js"
+    },
+    {
+      "id": "crew",
+      "source": "src/mods/orca-pane-header/crew.ts",
+      "output": "mods/orca-pane-header/crew.js"
+    },
+    {
+      "id": "status",
+      "source": "src/mods/orca-pane-header/status.ts",
+      "output": "mods/orca-pane-header/status.js"
+    },
+    {
+      "id": "scheduler",
+      "source": "src/mods/orca-status-footer/scheduler.ts",
+      "output": "mods/orca-status-footer/scheduler.js"
+    },
+    {
+      "id": "orca-tasks-main",
+      "source": "src/mods/orca-tasks/main.ts",
+      "output": "mods/orca-tasks/main.js"
+    },
+    {
+      "id": "models",
+      "source": "src/mods/orca-new-menu/models.ts",
+      "output": "mods/orca-new-menu/models.js"
+    },
+    {
+      "id": "rows",
+      "source": "src/mods/orca-new-menu/rows.ts",
+      "output": "mods/orca-new-menu/rows.js"
+    },
+    {
+      "id": "freebuff",
+      "source": "src/mods/orca-new-menu/freebuff.ts",
+      "output": "mods/orca-new-menu/freebuff.js"
+    },
+    {
+      "id": "sidebar-top-main",
+      "source": "src/mods/orca-sidebar-top/main.ts",
+      "output": "mods/orca-sidebar-top/main.js"
+    },
+    {
+      "id": "right-sidebar-agents-main",
+      "source": "src/mods/orca-right-sidebar-agents/main.ts",
+      "output": "mods/orca-right-sidebar-agents/main.js"
+    },
+    {
+      "id": "orca-right-sidebar-header-main",
+      "source": "src/mods/orca-right-sidebar-header/main.ts",
+      "output": "mods/orca-right-sidebar-header/main.js"
+    },
+    {
+      "id": "orca-right-sidebar-header-panel-gating",
+      "source": "src/mods/orca-right-sidebar-header/panel-gating.ts",
+      "output": "mods/orca-right-sidebar-header/panel-gating.js"
+    },
+    {
+      "id": "orca-right-sidebar-header-panel-views",
+      "source": "src/mods/orca-right-sidebar-header/panel-views.ts",
+      "output": "mods/orca-right-sidebar-header/panel-views.js"
+    },
+    {
+      "id": "diff-data",
+      "source": "src/mods/orca-diff/diff-data.ts",
+      "output": "mods/orca-diff/diff-data.js"
+    },
+    {
+      "id": "diff-rows",
+      "source": "src/mods/orca-diff/diff-rows.ts",
+      "output": "mods/orca-diff/diff-rows.js"
+    },
+    {
+      "id": "diff",
+      "source": "src/mods/orca-diff/diff.ts",
+      "output": "mods/orca-diff/diff.js"
+    },
+    {
+      "id": "orca-diff-main",
+      "source": "src/mods/orca-diff/main.ts",
+      "output": "mods/orca-diff/main.js"
+    },
+    {
+      "id": "helpers",
+      "source": "src/mods/orca-worktree/helpers.ts",
+      "output": "mods/orca-worktree/helpers.js"
+    },
+    {
+      "id": "remove",
+      "source": "src/mods/orca-worktree/remove.ts",
+      "output": "mods/orca-worktree/remove.js"
+    },
+    {
+      "id": "orca-worktree-main",
+      "source": "src/mods/orca-worktree/main.ts",
+      "output": "mods/orca-worktree/main.js"
+    },
+    {
+      "id": "close-sides",
+      "source": "src/mods/orca-context-menu/close-sides.ts",
+      "output": "mods/orca-context-menu/close-sides.js"
+    },
+    {
+      "id": "close-space",
+      "source": "src/mods/orca-context-menu/close-space.ts",
+      "output": "mods/orca-context-menu/close-space.js"
+    },
+    {
+      "id": "orca-context-menu-main",
+      "source": "src/mods/orca-context-menu/main.ts",
+      "output": "mods/orca-context-menu/main.js"
+    },
+    {
+      "id": "constants",
+      "source": "src/mods/orca-context-menu/constants.ts",
+      "output": "mods/orca-context-menu/constants.js"
+    },
+    {
+      "id": "orca-new-menu-main",
+      "source": "src/mods/orca-new-menu/main.ts",
+      "output": "mods/orca-new-menu/main.js"
+    },
+    {
+      "id": "orca-handoff-main",
+      "source": "src/mods/orca-handoff/main.ts",
+      "output": "mods/orca-handoff/main.js"
+    },
+    {
+      "id": "orca-pane-header-main",
+      "source": "src/mods/orca-pane-header/main.ts",
+      "output": "mods/orca-pane-header/main.js"
+    },
+    {
+      "id": "orca-status-footer-main",
+      "source": "src/mods/orca-status-footer/main.ts",
+      "output": "mods/orca-status-footer/main.js"
+    },
+    {
+      "id": "orca-agent-settings-agent-rail",
+      "source": "src/mods/orca-agent-settings/agent-rail.ts",
+      "output": "mods/orca-agent-settings/agent-rail.js"
+    },
+    {
+      "id": "orca-agent-settings-install",
+      "source": "src/mods/orca-agent-settings/install.ts",
+      "output": "mods/orca-agent-settings/install.js"
+    },
+    {
+      "id": "orca-agent-settings-parts",
+      "source": "src/mods/orca-agent-settings/parts.ts",
+      "output": "mods/orca-agent-settings/parts.js"
+    },
+    {
+      "id": "orca-agent-settings-permission-menu",
+      "source": "src/mods/orca-agent-settings/permission-menu.ts",
+      "output": "mods/orca-agent-settings/permission-menu.js"
+    },
+    {
+      "id": "orca-agent-settings-permission-plan",
+      "source": "src/mods/orca-agent-settings/permission-plan.ts",
+      "output": "mods/orca-agent-settings/permission-plan.js"
+    },
+    {
+      "id": "orca-agent-settings-permissions",
+      "source": "src/mods/orca-agent-settings/permissions.ts",
+      "output": "mods/orca-agent-settings/permissions.js"
+    },
+    {
+      "id": "orca-agent-settings-provider-view",
+      "source": "src/mods/orca-agent-settings/provider-view.ts",
+      "output": "mods/orca-agent-settings/provider-view.js"
+    },
+    {
+      "id": "orca-agent-settings-state",
+      "source": "src/mods/orca-agent-settings/state.ts",
+      "output": "mods/orca-agent-settings/state.js"
+    },
+    {
+      "id": "orca-agent-settings-util",
+      "source": "src/mods/orca-agent-settings/util.ts",
+      "output": "mods/orca-agent-settings/util.js"
+    },
+    {
+      "id": "orca-agent-settings-views",
+      "source": "src/mods/orca-agent-settings/views.ts",
+      "output": "mods/orca-agent-settings/views.js"
+    }
+  ]
+}

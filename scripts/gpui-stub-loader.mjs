@@ -5,7 +5,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const STUBS = new Set(["gpui-kit", "gpui-base", "herdr"]);
-const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() => ({})", knownAgents: "() => []", props: "() => globalThis.__herdrProps?.() ?? ({})", theme: "() => globalThis.__herdrTheme?.() ?? ({})", terminals: "() => []", checking: "() => false",
+const HERDR = {
+  appHome: "() => '/home'",
+  home: "() => '/home'",
+  settings: "() => ({})",
+  knownAgents: "() => []",
+  props: "() => globalThis.__herdrProps?.() ?? ({})",
+  theme: "() => globalThis.__herdrTheme?.() ?? ({})",
+  terminals: "() => []",
+  checking: "() => false",
   spaces: "() => globalThis.__herdrSpaces?.() ?? []",
   machines: "() => globalThis.__herdrMachines?.() ?? []",
   layout: "() => globalThis.__herdrLayout?.()",
@@ -20,22 +28,40 @@ const HERDR = { appHome: "() => '/home'", home: "() => '/home'", settings: "() =
   // Shared values go through `globalThis.__herdrShared`, so a test can show what another mod published.
   shared: "(key) => globalThis.__herdrShared?.(key)",
   // Programs go through `globalThis.__herdrExec` too, so a flow test can answer curl, chmod and stat.
-  exec: "async (cmd, args, options) => { const prepare = cmd === 'python3' && args?.[0]?.endsWith('/litellm_gateway.py') && args?.[2] === 'prepare'; if (globalThis.__herdrExec) { const result = await globalThis.__herdrExec(cmd, args, options); return prepare && result?.code === 0 && !String(result.stdout ?? '').trim() ? ({ code: 0, stdout: '{\"direct\":true}', stderr: '' }) : result; } return prepare ? ({ code: 0, stdout: '{\"direct\":true}', stderr: '' }) : ({ code: 0, stdout: '', stderr: '' }); }" };
+  exec: "async (cmd, args, options) => { const prepare = cmd === 'python3' && args?.[0]?.endsWith('/litellm_gateway.py') && args?.[2] === 'prepare'; if (globalThis.__herdrExec) { const result = await globalThis.__herdrExec(cmd, args, options); return prepare && result?.code === 0 && !String(result.stdout ?? '').trim() ? ({ code: 0, stdout: '{\"direct\":true}', stderr: '' }) : result; } return prepare ? ({ code: 0, stdout: '{\"direct\":true}', stderr: '' }) : ({ code: 0, stdout: '', stderr: '' }); }",
+};
 
 export async function resolve(specifier, context, next) {
   if (!STUBS.has(specifier)) return next(specifier, context);
   const source = readFileSync(fileURLToPath(context.parentURL), "utf8");
-  const names = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"([^"]+)"/g)].filter((m) => m[2] === specifier).flatMap((m) => m[1].split(",").map((n) => n.trim().split(/\s+as\s+/)[0]).filter(Boolean));
-  return { url: `stub:${specifier}?names=${[...new Set(names)].join(",")}&parent=${encodeURIComponent(context.parentURL)}`, shortCircuit: true };
+  const names = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"([^"]+)"/g)]
+    .filter((m) => m[2] === specifier)
+    .flatMap((m) =>
+      m[1]
+        .split(",")
+        .map((n) => n.trim().split(/\s+as\s+/)[0])
+        .filter(Boolean),
+    );
+  return {
+    url: `stub:${specifier}?names=${[...new Set(names)].join(",")}&parent=${encodeURIComponent(context.parentURL)}`,
+    shortCircuit: true,
+  };
 }
 
 export async function load(url, context, next) {
   if (!url.startsWith("stub:")) return next(url, context);
   const { pathname, searchParams } = new URL(url);
   const names = searchParams.get("names").split(",").filter(Boolean);
-  const body = pathname === "herdr"
-    ? names.map((n) => `export const ${n} = ${HERDR[n] ?? "() => undefined"};`).join("\n")
-    : names.map((n) => n === "View" ? "export class View {}" : `export const ${n} = recorder(${JSON.stringify(n)});`).join("\n");
+  const body =
+    pathname === "herdr"
+      ? names.map((n) => `export const ${n} = ${HERDR[n] ?? "() => undefined"};`).join("\n")
+      : names
+          .map((n) =>
+            n === "View"
+              ? "export class View {}"
+              : `export const ${n} = recorder(${JSON.stringify(n)});`,
+          )
+          .join("\n");
   return { format: "module", shortCircuit: true, source: `${RECORDER}\n${body}` };
 }
 

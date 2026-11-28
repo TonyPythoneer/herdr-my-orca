@@ -1,68 +1,59 @@
-// Pure row policy for the Start an agent menu. No herdr or gpui imports: node --test runs this
-// directly. The supported catalog still comes from knownAgents(); this file only decides which
-// entries are launch choices.
+import { OFFICIAL_AGENT_KEYS } from "./agent-catalog.js";
 
-// shortcut: the catalog is a Herdr version snapshot, update all three lists when Herdr adds agents.
-const OFFICIAL = new Set("claude codex pi opencode cursor copilot amp gemini grok antigravity boldcreate crush dsh-tui empryo goose hermes kimi kiro omp pig qoder swival".split(" "));
-
-/** The agent bar shows five full icons and half of the next; arrows step one icon. */
-export function agentWindow(total, start, full = 5) {
-  const last = Math.max(0, total - full);
-  const at = Math.max(0, Math.min(start, last));
-  return { start: at, count: Math.min(total - at, at < last ? full + 1 : full), left: at > 0, right: at < last };
+                                 
+function agentWindow(total, start, full = 5) {
+	const last = Math.max(0, total - full);
+	const at = Math.max(0, Math.min(start, last));
+	return {
+		start: at,
+		count: Math.min(total - at, at < last ? full + 1 : full),
+		left: at > 0,
+		right: at < last
+	};
+}
+function installedEnabledAgents(agents, disabled) {
+	const seen =                 new Set();
+	return (agents ?? []).filter((agent) => {
+		if (!agent || typeof agent.key !== "string" || !OFFICIAL_AGENT_KEYS.has(agent.key) || disabled.has(agent.key) || seen.has(agent.key)) return false;
+		if (!agent.installed) return false;
+		seen.add(agent.key);
+		return true;
+	});
+}
+const offeredAgents = installedEnabledAgents;
+function freebuffVisible(detected) {
+	return detected === true;
+}
+function freebuffRun(agents) {
+	const run = (agents ?? []).find((agent) => agent?.key === "freebuff")?.run;
+	if (Array.isArray(run) && run.length && run.every((part) => typeof part === "string")) return [...run];
+	return [
+		"zsh",
+		"-lic",
+		"exec freebuff"
+	];
+}
+function emptyAgentState(officialCount, freebuff) {
+	return officialCount === 0 && !freebuff;
+}
+function mergeInventory(known, inventory) {
+	if (!Array.isArray(inventory) || inventory.length === 0) return known ?? [];
+	if (!Array.isArray(known) || known.length === 0) return inventory;
+	const fresh = new Map(inventory.filter((agent) => agent?.key).map((agent) => [agent.key, agent]));
+	return known.map((agent) => {
+		const current = fresh.get(agent.key);
+		if (!current) return agent;
+		const run = Array.isArray(current.run) && current.run.length ? [...current.run] : agent.run;
+		return {
+			...agent,
+			installed: Boolean(current.installed),
+			run
+		};
+	});
+}
+function currentInventory(inventory, now = Date.now()) {
+	const value = inventory;
+	return value && Array.isArray(value.agents) && now - Number(value.at) < 12e4 ? value : null;
 }
 
-/** Only officially supported, installed, enabled agents; registry order is preserved. */
-export function installedEnabledAgents(agents, disabled) {
-  const seen = new Set();
-  return (agents ?? []).filter((agent) => {
-    if (!agent || !OFFICIAL.has(agent.key) || disabled.has(agent.key) || seen.has(agent.key)) {
-      return false;
-    }
-    if (!agent.installed) return false;
-    seen.add(agent.key);
-    return true;
-  });
-}
-
-/** Backwards-compatible name used by older callers; the policy is the same. */
-export const offeredAgents = installedEnabledAgents;
-
-/** FreeBuff is the only unofficial integration. It appears only when its executable is present. */
-export function freebuffVisible(detected) {
-  return detected === true;
-}
-
-/** Use a configured FreeBuff launch command when there is one; otherwise the existing integration. */
-export function freebuffRun(agents) {
-  const configured = (agents ?? []).find((agent) => agent?.key === "freebuff");
-  const run = configured?.run;
-  if (Array.isArray(run) && run.length && run.every((part) => typeof part === "string")) return [...run];
-  return ["zsh", "-lic", "exec freebuff"];
-}
-
-/** The agent section has exactly one row when nothing official and no FreeBuff is available. */
-export function emptyAgentState(officialCount, freebuff) {
-  return officialCount === 0 && !freebuff;
-}
-
-/**
- * Merge the Agent Settings's recently refreshed local inventory (installed flags and effective
- * runs) into Herdr's catalog. The catalog keeps identity, icons and order.
- */
-export function mergeInventory(known, inventory) {
-  if (!Array.isArray(inventory) || inventory.length === 0) return known ?? [];
-  if (!Array.isArray(known) || known.length === 0) return inventory;
-  const fresh = new Map(inventory.filter((agent) => agent?.key).map((agent) => [agent.key, agent]));
-  return known.map((agent) => {
-    const current = fresh.get(agent.key);
-    if (!current) return agent;
-    const run = Array.isArray(current.run) && current.run.length ? [...current.run] : agent.run;
-    return { ...agent, installed: Boolean(current.installed), run };
-  });
-}
-
-/** Use a fresh manager snapshot; Herdr refreshes its own cache within a minute. */
-export function currentInventory(inventory, now = Date.now()) {
-  return inventory && Array.isArray(inventory.agents) && now - Number(inventory.at) < 120_000 ? inventory : null;
-}
+export { agentWindow, currentInventory, emptyAgentState, freebuffRun, freebuffVisible, installedEnabledAgents, mergeInventory, offeredAgents };

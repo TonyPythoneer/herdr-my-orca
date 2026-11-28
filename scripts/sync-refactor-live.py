@@ -107,7 +107,7 @@ def app_errors(live):
 
 
 def apply_copies(copies, live):
-    subprocess.run(["node", "scripts/build-orca-ui.mjs", "--check", "--out", "."], cwd=ROOT, check=True)
+    subprocess.run([str(ROOT / "node_modules/.bin/vpx"), "src/tooling/build-orca-ui.ts", "--check", "--out", "."], cwd=ROOT, check=True)
     before = app_errors(live)
     for relative, src, dst, expected, old, expected_mode, old_mode in copies:
         if safe_path(live, relative) != dst or safe_path(ROOT, relative) != src:

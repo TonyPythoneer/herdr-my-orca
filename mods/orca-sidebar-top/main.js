@@ -1,485 +1,565 @@
-// Orca's left sidebar: history arrows, Search, the Tasks / Automations / Orca Mobile rows, then
-// the Projects header. The project tree under the header is orca-sidebar-projects; the three rows open
-// pages in the middle column (`page-tasks` …), which the `orca` layout puts in the `main`
-// stack. Bare rows rather than an omission: each page states its own gap (ADR 0004).
-import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
-import { theme, run, openOverlay, closeOverlay, shared, setShared, window, layout, pickFolder, props, spaces, machines } from "herdr";
 import { IconButton } from "./icon-button.js";
+import { themeColor } from "./theme-color.js";
+import { View, div, svg } from "gpui-kit";
+import { h_flex, v_flex } from "gpui-base";
+import { closeOverlay, layout, machines, openOverlay, pickFolder, props, run, setShared, shared, spaces, theme, window } from "herdr";
 
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, id);
-    if (found) return found;
-  }
-  return null;
-}
-
-// Orca keeps the Workspace options in PersistedUIState (`persisted-ui-state-types.ts:39-89`):
-// groupBy, sortBy, projectOrderBy, filterRepoIds, visibleWorkspaceHostIds, the hide* filters and
-// worktreeCardProperties. Herdr localStorage is scoped by mod and props, so it cannot hand
-// options from this popup to orca-sidebar-projects or a later popup with a different overlay id.
-// Use the persisted app-wide shared store instead. Defaults are Orca's NO_WORKSPACE_ROW_FILTERS
-// (`workspace-row-filters.ts:45-56`) plus repo grouping and manual sort.
-const OPTIONS_KEY = "workspace.options.v1";
-const OPTIONS_DEFAULTS = {
-  groupBy: "repo",              // none | workspace-status | repo
-  sortBy: "manual",             // name | smart | recent | repo | manual
-  projectOrderBy: "manual",     // manual | name | recent
-  filterRepoIds: [],
-  visibleWorkspaceHostIds: null,
-  hideSleepingWorkspaces: false,
-  alwaysShowDefaultBranchWorkspace: true,
-  hideDefaultBranchWorkspace: false,
-  hideAutomationGeneratedWorkspaces: false,
-  hideCliCreatedWorkspaces: false,
-  hideWorkspacesFromOtherDevices: false,
-  hideDetachedHeadWorkspaces: false,
+                                    
+const ROW = {
+	label: "label",
+	heading: "heading",
+	separator: "separator",
+	gap: "gap",
+	groupby: "groupby",
+	action: "action",
+	page: "page",
+	back: "back",
+	toggle: "toggle",
+	radio: "radio",
+	host: "host",
+	hostAll: "hostAll",
+	project: "project",
+	projectClear: "projectClear"
 };
-
-function readOptions() {
-  let saved = shared(OPTIONS_KEY);
-  if (!saved || typeof saved !== "object" || Array.isArray(saved)) {
-    try { saved = JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? "null"); } catch { saved = null; } // a hand-edited or truncated value falls back to the defaults
-  }
-  return saved && typeof saved === "object" && !Array.isArray(saved)
-    ? { ...OPTIONS_DEFAULTS, ...saved }
-    : { ...OPTIONS_DEFAULTS };
-}
-
-function writeOptions(patch) {
-  const next = { ...readOptions(), ...patch };
-  localStorage.setItem(OPTIONS_KEY, JSON.stringify(next));
-  // Shared state is persisted and re-renders every mod, including the sidebar's row projection.
-  setShared(OPTIONS_KEY, next);
-  return next;
-}
-
-// CountActiveWorkspaceFilters (workspace-row-filters.ts:182-194): each narrowing boolean, plus
-// one per selected project and the host scope when narrowed. The default-branch exemption
-// counts only while the sleeping sweep is on.
-function activeFilterCount(o) {
-  let n = 0;
-  if (o.hideSleepingWorkspaces) n++;
-  if (o.hideSleepingWorkspaces && o.alwaysShowDefaultBranchWorkspace === false) n++;
-  if (o.hideDefaultBranchWorkspace) n++;
-  if (o.hideAutomationGeneratedWorkspaces) n++;
-  if (o.hideCliCreatedWorkspaces) n++;
-  if (o.hideWorkspacesFromOtherDevices) n++;
-  if (o.hideDetachedHeadWorkspaces) n++;
-  if (o.visibleWorkspaceHostIds !== null) n++;
-  n += o.filterRepoIds.length;
-  return n;
-}
-
-// Host sections: every machine a space lives on, plus this computer. Orca's picker hides a host
-// with no rows (`host-section-rows.ts:236-246`), so spaces() is the source, not machines().
-function hostChoices() {
-  const seen = new Map();
-  for (const s of spaces()) seen.set(s.machine ?? null, s.machine ?? "This computer");
-  for (const m of machines()) if (!seen.has(m.name)) seen.set(m.name, m.name ?? "This computer");
-  return [...seen].map(([id, label]) => ({ id, label }));
-}
-
-// Projects are repo identities: `git.cache.v2` keys rows by `[machine, common dir]` and its value
-// carries the display name (`main.js` hydrateGit). A folder workspace is not a project filter
-// target (workspace-row-filters.ts:119-121 exempts folder rows), so only g.repo entries appear.
-function projectChoices() {
-  try {
-    const cache = JSON.parse(localStorage.getItem("git.cache.v2") ?? "{}") ?? {};
-    const seen = new Map();
-    for (const g of Object.values(cache)) if (g?.repo) seen.set(g.repo, g.name ?? g.repo);
-    return [...seen].map(([id, label]) => ({ id, label }));
-  } catch {
-    return []; // an unreadable cache means no known projects, so the Projects page just hides
-  }
-}
-
+const PAGE = {
+	hosts: "hosts",
+	projects: "projects",
+	sort: "sort",
+	projectOrder: "projectOrder"
+};
+const WORKSPACE_OPTIONS_MENU = "workspace-options";
+const SELF_MOD = "orca-sidebar-top";
+const PICKER_MOD = "picker";
+const NEW_MENU_MOD = "orca-new-menu";
+const LEFT_SIDEBAR_ID = "left-sidebar";
+const LEFT_SIDEBAR_OPEN_PX_KEY = "left-sidebar.openPx";
+const PROJECTS_ALL_COLLAPSED_KEY = "projects.allCollapsed";
+const PROJECTS_COUNT_KEY = "projects.count";
+const PROJECTS_SAVED_KEY = "projects.saved.v1";
+const GIT_CACHE_KEY = "git.cache.v2";
+const OPTIONS_KEY = "workspace.options.v1";
+const OPTIONS_DEFAULT_GROUP = "repo";
+const OPTIONS_DEFAULT_SORT = "manual";
+const WORKSPACE_OPTIONS_LABEL = "Workspace options";
+const ALL_PROJECTS_LABEL = "All projects";
+const THIS_COMPUTER_LABEL = "This computer";
+const PROJECTS_LABEL = "Projects";
+const BACK_LABEL = "Back";
+const UNAVAILABLE_LABEL = "Unavailable";
+const BADGE_MAX = 9;
+const BADGE_OVERFLOW_TEXT = "9+";
+const CHECK_MARK = "✓";
+const RADIO_MARK = "●";
+const HEX6 = /^#[0-9a-f]{6}$/i;
+const ICON = {
+	search: "mods/orca-assets/search--orca-right-sidebar-agents.svg",
+	chevronsUpDown: "mods/orca-assets/chevrons-up-down.svg",
+	chevronsDownUp: "mods/orca-assets/chevrons-down-up.svg",
+	slidersHorizontal: "mods/orca-assets/sliders-horizontal.svg",
+	folderPlus: "mods/orca-assets/folder-plus--orca-sidebar-top.svg",
+	plus: "mods/orca-assets/plus--orca-sidebar-top.svg"
+};
+const COLOR = {
+	searchBg: "#f0f0f00d",
+	searchHoverBg: "#f0f0f014",
+	searchText: "#f0f0f099",
+	searchIcon: "#f0f0f04d",
+	groupSelectedBg: "#f0f0f01a",
+	projectsTitle: "#8a8a8a"
+};
+const OPTIONS_DEFAULTS = {
+	groupBy: OPTIONS_DEFAULT_GROUP,
+	sortBy: OPTIONS_DEFAULT_SORT,
+	projectOrderBy: OPTIONS_DEFAULT_SORT,
+	filterRepoIds: [],
+	visibleWorkspaceHostIds: null,
+	hideSleepingWorkspaces: false,
+	alwaysShowDefaultBranchWorkspace: true,
+	hideDefaultBranchWorkspace: false,
+	hideAutomationGeneratedWorkspaces: false,
+	hideCliCreatedWorkspaces: false,
+	hideWorkspacesFromOtherDevices: false,
+	hideDetachedHeadWorkspaces: false
+};
 const SORT_CHOICES = [
-  ["name", "Name"],
-  ["smart", "Agent Activity"],
-  ["recent", "Recent"],
-  ["repo", "Project"],
-  ["manual", "Manual"],
+	["name", "Name"],
+	["smart", "Agent Activity"],
+	["recent", "Recent"],
+	["repo", "Project"],
+	["manual", "Manual"]
 ];
 const PROJECT_ORDER_CHOICES = [
-  ["manual", "Manual"],
-  ["name", "Name"],
-  ["recent", "Recent"],
+	["manual", "Manual"],
+	["name", "Name"],
+	["recent", "Recent"]
 ];
 const GROUP_BY_CHOICES = [
-  ["none", "None"],
-  ["workspace-status", "Status"],
-  ["repo", "Project"],
+	["none", "None"],
+	["workspace-status", "Status"],
+	["repo", "Project"]
 ];
-
+const NON_NAV_KINDS =                 new Set([
+	ROW.separator,
+	ROW.label,
+	ROW.heading,
+	ROW.gap,
+	ROW.groupby
+]);
+const CHECK_KINDS =                 new Set([
+	ROW.radio,
+	ROW.host,
+	ROW.hostAll,
+	ROW.project,
+	ROW.toggle
+]);
+function readTheme() {
+	const raw = theme();
+	return {
+		surface: themeColor(raw.surface),
+		background: themeColor(raw.background),
+		dim: themeColor(raw.dim),
+		border: themeColor(raw.border),
+		foreground: themeColor(raw.foreground),
+		muted: themeColor(raw.muted),
+		popover: themeColor(raw.popover),
+		selected: themeColor(raw.selected),
+		hover: themeColor(raw.hover),
+		accent: themeColor(raw.accent),
+		accent_foreground: themeColor(raw.accent_foreground)
+	};
+}
+function find(node, id) {
+	if (node?.id === id) return node;
+	for (const child of node?.children ?? []) {
+		const found = find(child, id);
+		if (found) return found;
+	}
+	return null;
+}
+function isOptions(value) {
+	return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function storedOptions() {
+	try {
+		return JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? "null");
+	} catch {
+		return null;
+	}
+}
+function readOptions() {
+	let saved = shared(OPTIONS_KEY);
+	if (!isOptions(saved)) saved = storedOptions();
+	return isOptions(saved) ? {
+		...OPTIONS_DEFAULTS,
+		...saved
+	} : { ...OPTIONS_DEFAULTS };
+}
+function writeOptions(patch) {
+	const next = {
+		...readOptions(),
+		...patch
+	};
+	localStorage.setItem(OPTIONS_KEY, JSON.stringify(next));
+	setShared(OPTIONS_KEY, next);
+	return next;
+}
+function activeFilterCount(o) {
+	let n = 0;
+	if (o.hideSleepingWorkspaces) n++;
+	if (o.hideSleepingWorkspaces && o.alwaysShowDefaultBranchWorkspace === false) n++;
+	if (o.hideDefaultBranchWorkspace) n++;
+	if (o.hideAutomationGeneratedWorkspaces) n++;
+	if (o.hideCliCreatedWorkspaces) n++;
+	if (o.hideWorkspacesFromOtherDevices) n++;
+	if (o.hideDetachedHeadWorkspaces) n++;
+	if (o.visibleWorkspaceHostIds !== null) n++;
+	n += o.filterRepoIds.length;
+	return n;
+}
+function hostChoices() {
+	const seen =                 new Map();
+	for (const s of spaces()) seen.set(s.machine ?? null, s.machine ?? THIS_COMPUTER_LABEL);
+	for (const m of machines()) if (!seen.has(m.name)) seen.set(m.name, m.name ?? THIS_COMPUTER_LABEL);
+	return [...seen].map(([id, label]) => ({
+		id,
+		label
+	}));
+}
+function projectChoices() {
+	try {
+		const cache = JSON.parse(localStorage.getItem(GIT_CACHE_KEY) ?? "{}") ?? {};
+		const seen =                 new Map();
+		for (const g of Object.values(cache)) if (g?.repo) seen.set(g.repo, g.name ?? g.repo);
+		return [...seen].map(([id, label]) => ({
+			id,
+			label
+		}));
+	} catch {
+		return [];
+	}
+}
 function labelOf(choices, value) {
-  return choices.find(([id]) => id === value)?.[1] ?? choices[0][1];
+	return choices.find(([id]) => id === value)?.[1] ?? choices[0][1];
 }
-
-
-// While the sidebar is stepped narrower (orca-header `toggleSidebar`) its content
-// keeps the open width and only fades and slides, so nothing reflows or truncates on the way.
-// Opacity clamp((k-.15)/.85) and a -28px*(1-k) shift are the approved prototype's numbers.
-// Untouched (returns `inner`) whenever the sidebar is at its open width or no open width is shared.
+function filterCount(count) {
+	return `${count} filter${count === 1 ? "" : "s"}`;
+}
+function withAlpha(color, alpha) {
+	return `${color}${alpha}`;
+}
 function sidebarFrame(inner) {
-  const open = shared("left-sidebar.openPx");
-  const px = find(layout(), "left-sidebar")?.size?.px;
-  if (!(open > 0) || !(px > 0) || px >= open - 0.5) return inner;
-  const k = px / open;
-  // GPU cost: a group `opacity` makes the GPU draw the whole subtree off-screen every frame. A flat
-  // cover in the sidebar's own colour, with the alpha the fade needs, is one blended quad.
-  const bg = theme().surface;
-  const cover = Math.max(0, Math.min(1, 1 - (k - 0.15) / 0.85));
-  const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
-  return div().size_full().overflow_hidden().relative()
-    .child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner))
-    .child(div().absolute().top(0).left(0).right(0).bottom(0).bg(/^#[0-9a-f]{6}$/i.test(bg) ? `${bg}${alpha}` : bg));
+	const open = shared(LEFT_SIDEBAR_OPEN_PX_KEY);
+	const px = find(layout(), LEFT_SIDEBAR_ID)?.size?.px;
+	if (!(open > 0) || !(px > 0) || px >= open - .5) return inner;
+	const k = px / open;
+	const surface = themeColor(theme().surface);
+	const cover = Math.max(0, Math.min(1, 1 - (k - .15) / .85));
+	const alpha = Math.round(cover * 255).toString(16).padStart(2, "0");
+	return div().size_full().overflow_hidden().relative().child(div().w(open).h_full().relative().left(-(1 - k) * 28).child(inner)).child(div().absolute().top(0).left(0).right(0).bottom(0).bg(HEX6.test(surface) ? withAlpha(surface, alpha) : surface));
 }
-
-// SidebarNav.tsx:90-118 — container gap-0.5 px-2; Search is a button, not an input: full width,
-// gap 8, rounded 6, bg foreground/5, px 8, py-1.5, text 13 medium foreground/60, icon 16 at /30.
-// py-1.5 (6+6) + 13px text at preflight's inherited line-height 1.5 (19.5) = Orca's 31.5px row.
-// :92 opens `worktree-palette`; Herdr's counterpart is the picker mod, not the command palette.
 function searchButton() {
-  return h_flex().id("nav-search").w_full().h(31.5).px(8).gap(8).items_center().rounded(6)
-    .bg("#f0f0f00d").text_size(13).font_medium().text_color("#f0f0f099").cursor_pointer()
-    .role("button").accessibility_label("Search worktrees")
-    .hover(s => s.bg("#f0f0f014"))
-    .on_click(() => run("mod.open", { name: "picker" }))
-    .child(svg("mods/orca-assets/search--orca-right-sidebar-agents.svg").size(16).flex_none().text_color("#f0f0f04d"))
-    .child(div().flex_1().child("Search"));
+	return h_flex().id("nav-search").w_full().h(31.5).px(8).gap(8).items_center().rounded(6).bg(COLOR.searchBg).text_size(13).font_medium().text_color(COLOR.searchText).cursor_pointer().role("button").accessibility_label("Search worktrees").hover((s) => s.bg(COLOR.searchHoverBg)).on_click(() => run("mod.open", { name: PICKER_MOD })).child(svg(ICON.search).size(16).flex_none().text_color(COLOR.searchIcon)).child(div().flex_1().child("Search"));
 }
-
 function collapseAllButton(t, allCollapsed) {
-  // ProjectsCollapseAllButton.tsx:51 renders a bare `<Icon />`, so the icon-xs
-  // `[&_svg:not([class*='size-'])]:size-3` rule (button.tsx:59) applies: 12px.
-  return IconButton("proj-collapse-all", allCollapsed ? "Expand all projects" : "Collapse all projects",
-    svg(allCollapsed ? "mods/orca-assets/chevrons-up-down.svg" : "mods/orca-assets/chevrons-down-up.svg").size(12),
-    { t, onClick: () => run(allCollapsed ? "orca-sidebar-projects.expand-all" : "orca-sidebar-projects.collapse-all") });
+	return IconButton("proj-collapse-all", allCollapsed ? "Expand all projects" : "Collapse all projects", svg(allCollapsed ? ICON.chevronsUpDown : ICON.chevronsDownUp).size(12), {
+		t,
+		onClick: () => run(allCollapsed ? "orca-sidebar-projects.expand-all" : "orca-sidebar-projects.collapse-all")
+	});
 }
-
-// SidebarWorkspaceOptionsMenu.tsx:43-68 — a ghost icon-xs button (24x24) holding
-// SlidersHorizontal `size-3.5` with the explicit `strokeWidth={2.25}` (:66), plus the
-// corner filter badge. `sidebar-header-actions.tsx:92` places it before AddProject.
-// Herdr has no Radix DropdownMenu, so the menu is this mod's own popup overlay, opened
-// with the same openOverlay({kind:"popup"}) call orca-context-menu and new-menu use; the props
-// select optionsView in render(). Choices persist in shared state as "workspace.options.v1" and
-// orca-sidebar-projects reads them in ordered().
+function badge(t, filters) {
+	return div().absolute().top(-2).right(-2).h(12).min_w(12).px(2).rounded_full().bg(t.accent).flex().items_center().justify_center().text_size(9).line_height("9px").text_color(t.accent_foreground).child(filters > BADGE_MAX ? BADGE_OVERFLOW_TEXT : String(filters));
+}
 function optionsButton(t) {
-  // `OptionsFilterCountBadge` (options-filter-count-badge.tsx): a corner badge on the trigger,
-  // 12px tall, 9px text, primary fill; 9+ past nine.
-  const filters = activeFilterCount(readOptions());
-  return IconButton("proj-options", filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"} active)` : "Workspace options",
-    svg("mods/orca-assets/sliders-horizontal.svg").size(14).flex_none(),
-    { t, tooltip: filters ? `Workspace options (${filters} filter${filters === 1 ? "" : "s"})` : "Workspace options",
-      onClick: () => openOverlay({ mod: "orca-sidebar-top", kind: "popup", width: 288, height: 560, props: { navMenu: "workspace-options" } }) })
-    .relative()
-    .when(filters > 0, el => el.child(div().absolute().top(-2).right(-2).h(12).min_w(12).px(2).rounded_full().bg(t.accent).flex().items_center().justify_center()
-      .text_size(9).line_height("9px").text_color(t.accent_foreground).child(filters > 9 ? "9+" : String(filters))));
+	const filters = activeFilterCount(readOptions());
+	const summary = filters ? `${WORKSPACE_OPTIONS_LABEL} (${filterCount(filters)})` : WORKSPACE_OPTIONS_LABEL;
+	return IconButton("proj-options", filters ? `${WORKSPACE_OPTIONS_LABEL} (${filterCount(filters)} active)` : WORKSPACE_OPTIONS_LABEL, svg(ICON.slidersHorizontal).size(14).flex_none(), {
+		t,
+		tooltip: summary,
+		onClick: () => openOverlay({
+			mod: SELF_MOD,
+			kind: "popup",
+			width: 288,
+			height: 560,
+			props: { navMenu: WORKSPACE_OPTIONS_MENU }
+		})
+	}).relative().when(filters > 0, (el) => el.child(badge(t, filters)));
 }
-
-// Appends the picked folder to the persisted project list (once) and opens a space on it.
 function addProject(folder) {
-  if (!folder) return;
-  let existing = [];
-  try {
-    const value = JSON.parse(localStorage.getItem("projects.saved.v1") || "[]");
-    if (Array.isArray(value)) existing = value;
-  } catch { /* A corrupted project list must not block adding a new folder. */ }
-  if (!existing.includes(folder)) {
-    existing.push(folder);
-    localStorage.setItem("projects.saved.v1", JSON.stringify(existing));
-  }
-  run("space.new", { folder });
+	if (!folder) return;
+	let existing = [];
+	try {
+		const value = JSON.parse(localStorage.getItem(PROJECTS_SAVED_KEY) || "[]");
+		if (Array.isArray(value)) existing = value;
+	} catch {}
+	if (!existing.includes(folder)) {
+		existing.push(folder);
+		localStorage.setItem(PROJECTS_SAVED_KEY, JSON.stringify(existing));
+	}
+	run("space.new", { folder });
 }
-
-// AddProjectButton (:27-31) — FolderPlus `size-3.5` at the explicit `strokeWidth={2.25}`.
 function addProjectButton(t) {
-  // herdr.d.ts:39 — the folder picker is async: `Promise<string | null>`.
-  // Taking the promise as a value stored "[object Promise]" as the folder.
-  return IconButton("proj-add-repo", "Add project", svg("mods/orca-assets/folder-plus--orca-sidebar-top.svg").size(14),
-    { t, onClick: () => { void pickFolder().then(addProject); } });
+	return IconButton("proj-add-repo", "Add project", svg(ICON.folderPlus).size(14), {
+		t,
+		onClick: () => {
+			pickFolder().then(addProject);
+		}
+	});
 }
-
-// NewWorkspaceButton (:60-64) — Plus `size-3.5`, same 2.25 stroke. Orca's header
-// actions are `size="icon-xs"` buttons, which are 24x24, so this is not wider than
-// the options slot.
 function newWorkspaceButton(t) {
-  // tab-bar-surface.tsx:232 — the create menu is `w-72` (288).
-  return IconButton("proj-new", "New workspace", svg("mods/orca-assets/plus--orca-sidebar-top.svg").size(14),
-    { t, onClick: () => openOverlay({ mod: "orca-new-menu", kind: "popup", width: 288 }) });
+	return IconButton("proj-new", "New workspace", svg(ICON.plus).size(14), {
+		t,
+		onClick: () => openOverlay({
+			mod: NEW_MENU_MOD,
+			kind: "popup",
+			width: 288
+		})
+	});
 }
-
-// Activating one of these rows writes one option patch and redraws. A `null` patch is the one
-// row that must not write: Orca disables the last checked host so the sidebar cannot show none.
 function hostPatch(row, o) {
-  const all = hostChoices().map((h) => h.id);
-  const current = o.visibleWorkspaceHostIds === null ? all : o.visibleWorkspaceHostIds;
-  const next = current.includes(row.host) ? current.filter((id) => id !== row.host) : [...current, row.host];
-  if (next.length === 0) return null;
-  return { visibleWorkspaceHostIds: next.length === all.length ? null : next };
+	const all = hostChoices().map((h) => h.id);
+	const host = row.host;
+	const current = o.visibleWorkspaceHostIds === null ? all : o.visibleWorkspaceHostIds;
+	const next = current.includes(host) ? current.filter((id) => id !== host) : [...current, host];
+	if (next.length === 0) return null;
+	return { visibleWorkspaceHostIds: next.length === all.length ? null : next };
 }
-
 const OPTION_PATCH = {
-  __proto__: null,
-  toggle: (row, o) => ({ [row.key]: !o[row.key] }),
-  radio: (row) => ({ [row.key]: row.value }),
-  groupby: (row) => ({ groupBy: row.value }),
-  hostAll: () => ({ visibleWorkspaceHostIds: null }),
-  host: hostPatch,
-  projectClear: () => ({ filterRepoIds: [] }),
-  project: (row, o) => ({
-    filterRepoIds: o.filterRepoIds.includes(row.project)
-      ? o.filterRepoIds.filter((id) => id !== row.project)
-      : [...o.filterRepoIds, row.project],
-  }),
+	[ROW.toggle]: (row, o) => {
+		const key = row.key;
+		return { [key]: !o[key] };
+	},
+	[ROW.radio]: (row) => {
+		return { [row.key]: row.value };
+	},
+	[ROW.groupby]: (row) => ({ groupBy: row.value }),
+	[ROW.hostAll]: () => ({ visibleWorkspaceHostIds: null }),
+	[ROW.host]: hostPatch,
+	[ROW.projectClear]: () => ({ filterRepoIds: [] }),
+	[ROW.project]: (row, o) => {
+		const project = row.project;
+		return { filterRepoIds: o.filterRepoIds.includes(project) ? o.filterRepoIds.filter((id) => id !== project) : [...o.filterRepoIds, project] };
+	}
+};
+function staticRow(row, t) {
+	if (row.kind === ROW.separator) return div().mx(10).my(5).h(1).bg(t.border);
+	if (row.kind === ROW.label) return div().px(10).pt(5).text_size(14).text_color(t.foreground).child(row.text);
+	if (row.kind === ROW.heading) return div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child(row.text);
+	return null;
+}
+function checkMark(row) {
+	if (!row.checked) return "";
+	return row.kind === ROW.radio ? RADIO_MARK : CHECK_MARK;
+}
+const VALUE_TEXT = {
+	[ROW.page]: (row) => `${row.value} ›`,
+	[ROW.action]: (row) => row.value,
+	[ROW.gap]: () => UNAVAILABLE_LABEL
+};
+function valueText(row) {
+	const format = VALUE_TEXT[row.kind];
+	return format ? format(row) : "";
+}
+function heading(text) {
+	return {
+		kind: ROW.heading,
+		text
+	};
+}
+function separator() {
+	return { kind: ROW.separator };
+}
+function gap(label, note) {
+	return {
+		kind: ROW.gap,
+		label,
+		note
+	};
+}
+function toggle(key, label) {
+	return {
+		kind: ROW.toggle,
+		key,
+		label
+	};
+}
+function showRows(o, hostCount, projectCount) {
+	const showHosts = hostCount > 1 || o.visibleWorkspaceHostIds !== null;
+	const showProjects = projectCount > 1;
+	const rows = [];
+	if (showHosts || showProjects) rows.push(heading("Show"));
+	if (showHosts) rows.push({
+		kind: ROW.page,
+		page: PAGE.hosts,
+		label: "Hosts",
+		value: o.visibleWorkspaceHostIds === null ? "All hosts" : `${o.visibleWorkspaceHostIds.length} hosts`
+	});
+	if (showProjects) rows.push({
+		kind: ROW.page,
+		page: PAGE.projects,
+		label: PROJECTS_LABEL,
+		value: o.filterRepoIds.length ? `${o.filterRepoIds.length} projects` : ALL_PROJECTS_LABEL
+	});
+	return rows;
+}
+function groupRows() {
+	return [
+		separator(),
+		heading("Group by"),
+		{ kind: ROW.groupby },
+		separator()
+	];
+}
+function sortRows(o) {
+	const rows = [{
+		kind: ROW.page,
+		page: PAGE.sort,
+		label: "Worktree sort",
+		value: labelOf(SORT_CHOICES, o.sortBy)
+	}];
+	if (o.groupBy === "repo") rows.push({
+		kind: ROW.page,
+		page: PAGE.projectOrder,
+		label: "Project sort",
+		value: labelOf(PROJECT_ORDER_CHOICES, o.projectOrderBy)
+	});
+	rows.push(gap("Card layout", "Herdr draws one card style; worktree-card-surface.tsx has no compact layout."), gap("Show properties", "Herdr's card has no per-property model; branch and review badge are fixed."), separator());
+	return rows;
+}
+function filterRows() {
+	const rows = [
+		heading("Filters"),
+		gap("Hide sleeping", "Herdr has no sleep state; Model::status is working, blocked, done or idle."),
+		toggle("hideDefaultBranchWorkspace", "Hide default branch"),
+		gap("Hide automation-created", "Herdr records no automation provenance for a space."),
+		gap("Hide CLI-created", "Herdr records no CLI provenance for a space.")
+	];
+	if (machines().length > 1) rows.push(gap("Hide other-client workspaces", "Herdr records no other-client provenance for a space."));
+	rows.push(toggle("hideDetachedHeadWorkspaces", "Hide detached HEAD"));
+	return rows;
+}
+function hostsPageRows(o) {
+	const all = o.visibleWorkspaceHostIds === null;
+	const rows = [{
+		kind: ROW.hostAll,
+		label: "All hosts",
+		checked: all
+	}];
+	for (const h of hostChoices()) rows.push({
+		kind: ROW.host,
+		host: h.id,
+		label: h.label,
+		checked: o.visibleWorkspaceHostIds === null || o.visibleWorkspaceHostIds.includes(h.id)
+	});
+	return rows;
+}
+function projectsPageRows(o) {
+	const rows = [{
+		kind: ROW.projectClear,
+		label: "Clear",
+		disabled: o.filterRepoIds.length === 0
+	}];
+	for (const p of projectChoices()) rows.push({
+		kind: ROW.project,
+		project: p.id,
+		label: p.label,
+		checked: o.filterRepoIds.includes(p.id)
+	});
+	return rows;
+}
+function choicePageRows(o, page) {
+	const choices = page === PAGE.sort ? SORT_CHOICES : PROJECT_ORDER_CHOICES;
+	const key = page === PAGE.sort ? "sortBy" : "projectOrderBy";
+	return choices.map(([value, label]) => ({
+		kind: ROW.radio,
+		key,
+		value,
+		label,
+		checked: o[key] === value
+	}));
+}
+function groupToggleItem(value, label, o, t) {
+	return div().id(`opt-group-${value}`).flex_1().h(24).flex().items_center().justify_center().px(4).text_size(10).cursor_pointer().when(o.groupBy === value, (el) => el.bg(COLOR.groupSelectedBg).font_semibold().text_color(t.foreground)).when(o.groupBy !== value, (el) => el.text_color(t.muted).hover((s) => s.text_color(t.foreground))).on_click((_e, clickCx) => {
+		writeOptions({ groupBy: value });
+		clickCx.notify();
+	}).child(label);
+}
+var Nav = class extends View {
+	at = -1;
+	page = null;
+	handle;
+	headerHover;
+	init(_props, cx) {
+		if (!props()?.navMenu) return;
+		this.at = -1;
+		this.page = null;
+		this.handle = cx.focus_handle();
+		this.handle.focus();
+	}
+	render(cx) {
+		return props()?.navMenu ? this.renderBody(cx) : sidebarFrame(this.renderBody(cx));
+	}
+	renderBody(cx) {
+		if (props()?.navMenu === WORKSPACE_OPTIONS_MENU) return this.optionsView(cx);
+		const t = readTheme();
+		return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(t.surface).child(searchButton()).child(this.projectsHeader(t));
+	}
+	projectsHeader(t) {
+		return h_flex().w_full().h(32).mt(8).gap(6).items_center().justify_between().on_hover((on, eventCx) => {
+			const live = on && window().active;
+			if (live !== this.headerHover) {
+				this.headerHover = live;
+				eventCx.notify();
+			}
+		}).child(this.projectsTitle(t)).child(h_flex().flex_none().items_center().gap(4).child(optionsButton(t)).child(addProjectButton(t)).child(newWorkspaceButton(t)));
+	}
+	projectsTitle(t) {
+		const allCollapsed = Boolean(shared(PROJECTS_ALL_COLLAPSED_KEY));
+		const projectCount = Number(shared(PROJECTS_COUNT_KEY) ?? 0);
+		return h_flex().min_w(0).items_center().child(div().pl(8).pr(2).text_size(12).font_semibold().text_color(COLOR.projectsTitle).child(PROJECTS_LABEL)).when(projectCount > 0 && this.headerHover, (el) => el.child(collapseAllButton(t, allCollapsed)));
+	}
+	optionsView(cx) {
+		const t = readTheme();
+		const rows = this.page ? this.pageRows(this.page) : this.rootRows();
+		const nav = rows.filter((r) => !NON_NAV_KINDS.has(r.kind));
+		if (!nav.includes(rows[this.at])) this.at = rows.indexOf(nav[0] ?? rows[0]);
+		return v_flex().id(WORKSPACE_OPTIONS_MENU).track_focus(this.handle).w_full().min_h(0).p(4).bg(t.popover).text_size(13).on_key_down((e, eventCx) => {
+			if (e.key === "down" || e.key === "up") {
+				const i = Math.max(0, nav.indexOf(rows[this.at]));
+				const next = e.key === "down" ? (i + 1) % nav.length : (i + nav.length - 1) % nav.length;
+				this.at = rows.indexOf(nav[next]);
+			} else if (e.key === "home") this.at = rows.indexOf(nav[0]);
+			else if (e.key === "end") this.at = rows.indexOf(nav[nav.length - 1]);
+			else if (e.key === "enter" || e.key === "space") {
+				const row = rows[this.at];
+				if (row) this.act(row, eventCx);
+			} else if (e.key === "escape") closeOverlay(props()?.overlay);
+			else return;
+			eventCx.notify();
+		}).children(rows.map((row, i) => this.menuRow(row, i, t)));
+	}
+	rootRows() {
+		const o = readOptions();
+		return [
+			{
+				kind: ROW.label,
+				text: WORKSPACE_OPTIONS_LABEL
+			},
+			{
+				kind: ROW.action,
+				command: "refresh",
+				label: "Refresh branches",
+				value: ALL_PROJECTS_LABEL
+			},
+			...showRows(o, hostChoices().length, projectChoices().length),
+			...groupRows(),
+			...sortRows(o),
+			...filterRows()
+		];
+	}
+	pageRows(page) {
+		const o = readOptions();
+		const rows = [{
+			kind: ROW.back,
+			label: BACK_LABEL
+		}];
+		if (page === PAGE.hosts) return [...rows, ...hostsPageRows(o)];
+		if (page === PAGE.projects) return [...rows, ...projectsPageRows(o)];
+		return [...rows, ...choicePageRows(o, page)];
+	}
+	act(row, cx) {
+		if (row.kind === ROW.action) {
+			run(`orca-sidebar-projects.${row.command}`);
+			closeOverlay(props()?.overlay);
+			return;
+		}
+		if (row.kind === ROW.back || row.kind === ROW.page) {
+			this.page = row.kind === ROW.back ? null : row.page;
+			this.at = -1;
+			cx.notify();
+			return;
+		}
+		const patch = OPTION_PATCH[row.kind]?.(row, readOptions());
+		if (!patch) return;
+		writeOptions(patch);
+		cx.notify();
+	}
+	menuRow(row, i, t) {
+		if (row.kind === ROW.groupby) return this.groupToggle(readOptions(), t);
+		return staticRow(row, t) ?? this.optionRow(row, i, t);
+	}
+	optionRow(row, i, t) {
+		const current = this.at === i;
+		const disabled = row.kind === ROW.gap || Boolean(row.disabled);
+		return h_flex().id(`opt-${i}`).h(24).px(10).gap(8).items_center().justify_between().rounded(6).text_size(13).line_height("16px").text_color(disabled ? t.muted : t.foreground).when(disabled, (el) => el.opacity(.4).tooltip(row.note)).when(current && !disabled, (el) => el.bg(t.selected)).when(!disabled, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover)).on_hover((on, hoverCx) => {
+			if (on && this.at !== i) {
+				this.at = i;
+				hoverCx.notify();
+			}
+		}).on_click((_e, clickCx) => this.act(row, clickCx))).when(CHECK_KINDS.has(row.kind), (el) => el.child(div().w(14).flex_none().text_size(12).child(checkMark(row)))).child(div().flex_1().min_w(0).truncate().child(row.label)).child(div().flex_none().max_w(150).truncate().text_size(11).font_medium().text_color(t.muted).child(valueText(row)));
+	}
+	groupToggle(o, t) {
+		return h_flex().mx(8).mt(2).mb(4).h(24).rounded(6).border_1().border_color(t.border).children(GROUP_BY_CHOICES.map(([value, label]) => groupToggleItem(value, label, o, t)));
+	}
 };
 
-// Rows that need no state: rules and headings, in dropdown-menu.tsx's geometry.
-function staticRow(row, t) {
-  if (row.kind === "separator") return div().mx(10).my(5).h(1).bg(t.border);
-  if (row.kind === "label") return div().px(10).pt(5).text_size(14).text_color(t.foreground).child(row.text);
-  if (row.kind === "heading") return div().px(10).pt(5).pb(3).text_size(11).font_semibold().text_color(t.muted).child(row.text);
-  return null;
-}
-
-const CHECK_KINDS = new Set(["radio", "host", "hostAll", "project", "toggle"]);
-function checkMark(row) {
-  if (!row.checked) return "";
-  return row.kind === "radio" ? "●" : "✓";
-}
-
-const VALUE_TEXT = { __proto__: null, page: (row) => `${row.value} ›`, action: (row) => row.value, gap: () => "Unavailable" };
-function valueText(row) {
-  return row.kind in VALUE_TEXT ? VALUE_TEXT[row.kind](row) : "";
-}
-
-export default class Nav extends View {
-  // The placed nav is not focusable; the popup copy is. Its keyboard list starts at the first row
-  // (dropdown-menu.tsx:115 data-[current=true]), and Esc closes it (SidebarWorkspaceOptionsMenu
-  // closes its Radix DropdownMenu).
-  init(_props, cx) {
-    if (!props()?.navMenu) return;
-    this.at = -1;
-    this.page = null;
-    this.handle = cx.focus_handle();
-    this.handle.focus();
-  }
-
-  // The workspace-options popup is its own overlay, not sidebar content, so it never slides or fades.
-  render(cx) { return props()?.navMenu ? this.renderBody(cx) : sidebarFrame(this.renderBody(cx)); }
-
-  renderBody(cx) {
-    if (props()?.navMenu === "workspace-options") return this.optionsView(cx);
-    const t = theme();
-    return v_flex().w_full().flex_none().px(8).pt(8).pb(4).gap(2).bg(t.surface)
-      .child(searchButton())
-      .child(this.projectsHeader(t));
-  }
-
-  // Projects header — SidebarHeader.tsx:60-63: `group/sidebar-header mt-2 flex h-8 min-w-0
-  // shrink-0 items-center justify-between gap-1.5 px-2`; title `pl-2 pr-0.5 text-xs
-  // font-semibold text-muted-foreground/80`; actions group `flex shrink-0 items-center gap-1`.
-  // Icons are plain Lucide at their default stroke-width 2 — there is no global override in
-  // Orca's CSS (main.css:3090 is a feature-wall decoration, not icons).
-  projectsHeader(t) {
-    return h_flex().w_full().h(32).mt(8).gap(6).items_center().justify_between()
-      // `SidebarHeader.tsx:61` is `group/sidebar-header`; the collapse-all wrapper is
-      // `can-hover:w-0 can-hover:opacity-0`, becoming `w-6 opacity-100` on that hover or on
-      // `focus-within` (ProjectsCollapseAllButton.tsx:35-38). Herdr has no descendant selector,
-      // so the row's `.on_hover` is the gate and the button mounts only then. Dropped:
-      // `focus-within`, since the button is not mounted while hidden.
-      .on_hover((on, eventCx) => {
-        // Hover is only ever cleared by a pointer transition. A window that goes
-        // inactive (pointer on another window, no move events delivered here) keeps
-        // the last value, so the button stays mounted after the pointer left.
-        // `window().active` reports that state; clearing here is where the stale
-        // value originates, not a guard applied downstream.
-        const live = on && window().active;
-        if (live !== this.headerHover) { this.headerHover = live; eventCx.notify(); }
-      })
-      .child(this.projectsTitle(t))
-      // ORDER, from SidebarHeader.tsx:76-100 — `SidebarHeaderActions` runs
-      // options -> AddProject -> NewWorkspace.
-      // SidebarHeader.tsx:101 — the bell swaps the sidebar body to agents; orca-right-sidebar-agents is a right-sidebar panel, so there is no second body.
-      .child(h_flex().flex_none().items_center().gap(4)
-        .child(optionsButton(t))
-        .child(addProjectButton(t))
-        .child(newWorkspaceButton(t)));
-  }
-
-  projectsTitle(t) {
-    // `allCollapsed` arrives over `setShared` from orca-sidebar-projects, which owns the fold state.
-    const allCollapsed = Boolean(shared("projects.allCollapsed"));
-    // `WorktreeList.tsx:290` — the collapse-all button is mounted only when there is at least
-    // one collapsible project (`projectCollapseKeys.length > 0`). orca-sidebar-projects publishes that
-    // count because the header has no view of the row plan. Zero projects means no button,
-    // not a disabled one.
-    const projectCount = Number(shared("projects.count") ?? 0);
-    return h_flex().min_w(0).items_center()
-      // `text-muted-foreground/80`: main.css:365 #acacac at 80% = #8a8a8a.
-      .child(div().pl(8).pr(2).text_size(12).font_semibold().text_color("#8a8a8a").child("Projects"))
-      .when(projectCount > 0 && this.headerHover, el => el.child(collapseAllButton(t, allCollapsed)));
-  }
-
-  // ---- Workspace options overlay (SidebarWorkspaceOptionsMenu.tsx + workspace-options-menu-items.tsx) ----
-  // One popup page at a time stands in for Radix's DropdownMenuSub (Herdr has no submenu
-  // primitive); a back row returns to the root. Row geometry follows dropdown-menu.tsx:
-  // items h-24 px-2.5 rounded-md text-13; separators mx-2.5 my-[5px] h-px; labels 11px semibold.
-  optionsView(cx) {
-    const t = theme();
-    const rows = this.page ? this.pageRows(this.page) : this.rootRows();
-    // The group-by row is the segmented control itself, so keyboard activation skips it.
-    const nav = rows.filter((r) => r.kind !== "separator" && r.kind !== "label" && r.kind !== "heading" && r.kind !== "gap" && r.kind !== "groupby");
-    if (!nav.includes(rows[this.at])) this.at = rows.indexOf(nav[0] ?? rows[0]);
-    return v_flex().id("workspace-options").track_focus(this.handle).w_full().min_h(0).p(4).bg(t.popover).text_size(13)
-      .on_key_down((e, eventCx) => {
-        // Radix menu keyboard: up/down move the current row, Home/End jump, Enter/Space activate
-        // (dropdown-menu.tsx:115 data-[current=true]; context-menu.tsx:31-62).
-        if (e.key === "down" || e.key === "up") {
-          const i = Math.max(0, nav.indexOf(rows[this.at]));
-          const next = e.key === "down" ? (i + 1) % nav.length : (i + nav.length - 1) % nav.length;
-          this.at = rows.indexOf(nav[next]);
-        } else if (e.key === "home") this.at = rows.indexOf(nav[0]);
-        else if (e.key === "end") this.at = rows.indexOf(nav[nav.length - 1]);
-        else if (e.key === "enter" || e.key === "space") { const row = rows[this.at]; if (row) this.act(row, eventCx); }
-        else if (e.key === "escape") closeOverlay(props()?.overlay);
-        else return;
-        eventCx.notify();
-      })
-      .children(rows.map((row, i) => this.menuRow(row, i, t)));
-  }
-
-  rootRows() {
-    const o = readOptions();
-    const hosts = hostChoices();
-    const projects = projectChoices();
-    const rows = [];
-    const push = (row) => rows.push(row);
-    // WorkspaceOptionsMenuItems (:299-307): the title label, then sections separated by rules.
-    push({ kind: "label", text: "Workspace options" });
-    // Not an Orca row. Orca's sidebar rescans a repo whenever a dialog asks (the visibility
-    // dialog's Refresh scans again), so it needs no manual one; Herdr learns a project's
-    // branches from orca-sidebar-projects' own git read, whose fallback is 60 s and which a checkout in
-    // another app can outrun. This asks orca-sidebar-projects for the same pass on purpose.
-    push({ kind: "action", command: "refresh", label: "Refresh branches", value: "All projects" });
-    // Show — getShownWorkspaceViewSections SHOWN (workspace-view-options.ts:120-141):
-    // hosts only with another host, projects only with more than one project.
-    if (hosts.length > 1 || o.visibleWorkspaceHostIds !== null) {
-      if (!rows.some((r) => r.kind === "heading")) push({ kind: "heading", text: "Show" });
-      push({ kind: "page", page: "hosts", label: "Hosts", value: o.visibleWorkspaceHostIds === null ? "All hosts" : `${o.visibleWorkspaceHostIds.length} hosts` });
-    }
-    if (projects.length > 1) {
-      if (!rows.some((r) => r.kind === "heading")) push({ kind: "heading", text: "Show" });
-      push({ kind: "page", page: "projects", label: "Projects", value: o.filterRepoIds.length ? `${o.filterRepoIds.length} projects` : "All projects" });
-    }
-    // Group by — SidebarGroupByToggle.tsx is an inline segmented control, not a submenu.
-    push({ kind: "separator" });
-    push({ kind: "heading", text: "Group by" });
-    push({ kind: "groupby" });
-    // Arrange — no heading in WORKSPACE_VIEW_SECTION_LABELS (:89-94).
-    push({ kind: "separator" });
-    push({ kind: "page", page: "sort", label: "Worktree sort", value: labelOf(SORT_CHOICES, o.sortBy) });
-    // projectOrderBy is shown only under repo grouping (workspace-view-options.ts:133).
-    if (o.groupBy === "repo") push({ kind: "page", page: "projectOrder", label: "Project sort", value: labelOf(PROJECT_ORDER_CHOICES, o.projectOrderBy) });
-    // Card layout and Show properties exist in Orca's legacy card surface; Herdr's
-    // worktree-card-surface port has one fixed shape, so these keep Orca's disabled-row
-    // geometry (`data-[disabled]:opacity-40`, dropdown-menu.tsx:115) and name the gap.
-    push({ kind: "gap", label: "Card layout", note: "Herdr draws one card style; worktree-card-surface.tsx has no compact layout." });
-    push({ kind: "gap", label: "Show properties", note: "Herdr's card has no per-property model; branch and review badge are fixed." });
-    // Filters — workspace-filter-option-row.tsx FILTER_ROWS ordering.
-    push({ kind: "separator" });
-    push({ kind: "heading", text: "Filters" });
-    push({ kind: "gap", label: "Hide sleeping", note: "Herdr has no sleep state; Model::status is working, blocked, done or idle." });
-    push({ kind: "toggle", key: "hideDefaultBranchWorkspace", label: "Hide default branch" });
-    push({ kind: "gap", label: "Hide automation-created", note: "Herdr records no automation provenance for a space." });
-    push({ kind: "gap", label: "Hide CLI-created", note: "Herdr records no CLI provenance for a space." });
-    if (machines().length > 1) push({ kind: "gap", label: "Hide other-client workspaces", note: "Herdr records no other-client provenance for a space." });
-    push({ kind: "toggle", key: "hideDetachedHeadWorkspaces", label: "Hide detached HEAD" });
-    return rows;
-  }
-
-  pageRows(page) {
-    const o = readOptions();
-    const rows = [{ kind: "back", label: "Back" }];
-    if (page === "hosts") {
-      const all = o.visibleWorkspaceHostIds === null;
-      rows.push({ kind: "hostAll", label: "All hosts", checked: all });
-      for (const h of hostChoices()) rows.push({ kind: "host", host: h.id, label: h.label, checked: all || o.visibleWorkspaceHostIds.includes(h.id) });
-    } else if (page === "projects") {
-      rows.push({ kind: "projectClear", label: "Clear", disabled: o.filterRepoIds.length === 0 });
-      for (const p of projectChoices()) rows.push({ kind: "project", project: p.id, label: p.label, checked: o.filterRepoIds.includes(p.id) });
-    } else {
-      const choices = page === "sort" ? SORT_CHOICES : PROJECT_ORDER_CHOICES;
-      const key = page === "sort" ? "sortBy" : "projectOrderBy";
-      for (const [value, label] of choices) rows.push({ kind: "radio", key, value, label, checked: o[key] === value });
-    }
-    return rows;
-  }
-
-  act(row, cx) {
-    if (row.kind === "action") {
-      run(`orca-sidebar-projects.${row.command}`);
-      closeOverlay(props()?.overlay);
-      return;
-    }
-    if (row.kind === "back" || row.kind === "page") {
-      this.page = row.kind === "back" ? null : row.page;
-      this.at = -1;
-      cx.notify();
-      return;
-    }
-    const patch = OPTION_PATCH[row.kind]?.(row, readOptions());
-    if (!patch) return;
-    writeOptions(patch);
-    cx.notify();
-  }
-
-  menuRow(row, i, t) {
-    if (row.kind === "groupby") return this.groupToggle(readOptions(), t);
-    return staticRow(row, t) ?? this.optionRow(row, i, t);
-  }
-
-  optionRow(row, i, t) {
-    const current = this.at === i;
-    const disabled = row.kind === "gap" || Boolean(row.disabled);
-    // Row shape: `rounded-md px-2.5 py-1 text-[13px] leading-4` = 24px; disabled is
-    // `pointer-events-none opacity-40` (dropdown-menu.tsx:115).
-    return h_flex().id(`opt-${i}`).h(24).px(10).gap(8).items_center().justify_between().rounded(6)
-      .text_size(13).line_height("16px").text_color(disabled ? t.muted : t.foreground)
-      .when(disabled, (el) => el.opacity(0.4).tooltip(row.note))
-      .when(current && !disabled, (el) => el.bg(t.selected))
-      .when(!disabled, (el) => el.cursor_pointer().hover((s) => s.bg(t.hover))
-        .on_hover((on, hoverCx) => { if (on && this.at !== i) { this.at = i; hoverCx.notify(); } })
-        .on_click((_e, clickCx) => this.act(row, clickCx)))
-      .when(CHECK_KINDS.has(row.kind), (el) => el.child(div().w(14).flex_none().text_size(12).child(checkMark(row))))
-      .child(div().flex_1().min_w(0).truncate().child(row.label))
-      // Right value: `ml-auto text-[11px] font-medium text-muted-foreground` (:93-147).
-      .child(div().flex_none().max_w(150).truncate().text_size(11).font_medium().text_color(t.muted).child(valueText(row)));
-  }
-
-  // SidebarGroupByToggle.tsx: `h-6 w-full`, each item `h-6 grow basis-0 px-1 text-[10px]`,
-  // selected `bg-foreground/10 font-semibold text-foreground`.
-  groupToggle(o, t) {
-    return h_flex().mx(8).mt(2).mb(4).h(24).rounded(6).border_1().border_color(t.border)
-      .children(GROUP_BY_CHOICES.map(([value, label]) => div().id(`opt-group-${value}`)
-        .flex_1().h(24).flex().items_center().justify_center().px(4).text_size(10).cursor_pointer()
-        .when(o.groupBy === value, (el) => el.bg("#f0f0f01a").font_semibold().text_color(t.foreground))
-        .when(o.groupBy !== value, (el) => el.text_color(t.muted).hover((s) => s.text_color(t.foreground)))
-        .on_click((_e, clickCx) => { writeOptions({ groupBy: value }); clickCx.notify(); })
-        .child(label)));
-  }
-}
-
-const SHARED_ASSET_PATHS = Object.freeze({
-  "mods/orca-sidebar-top/bell.svg": "mods/orca-assets/bell--orca-sidebar-top.svg",
-  "mods/orca-sidebar-top/folder-plus.svg": "mods/orca-assets/folder-plus--orca-sidebar-top.svg",
-  "mods/orca-sidebar-top/list-checks.svg": "mods/orca-assets/list-checks--orca-sidebar-top.svg",
-  "mods/orca-sidebar-top/plus.svg": "mods/orca-assets/plus--orca-sidebar-top.svg",
-  "mods/orca-sidebar-top/search.svg": "mods/orca-assets/search--orca-right-sidebar-agents.svg"
-});
-function sharedAsset(path) {
-  return SHARED_ASSET_PATHS[path] ?? sharedAsset(`mods/orca-assets/${path.slice(path.lastIndexOf("/") + 1)}`);
-}
+export { Nav as default };

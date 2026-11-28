@@ -1122,7 +1122,7 @@ export default class Tabs extends View {
     if (this.settingsPageRequest?.page === currentPage) this.settingsPageRequest = null;
     const requestedPage = this.settingsPageRequest?.page ?? currentPage;
     const tabs = find(layout(), "tabs");
-    if (tabs?.size?.px !== SETTINGS_HEADER_HEIGHT) run("layout.resize", { id: "tabs", px: SETTINGS_HEADER_HEIGHT });
+    if (tabs && tabs.size?.px !== SETTINGS_HEADER_HEIGHT) run("layout.resize", { id: "tabs", px: SETTINGS_HEADER_HEIGHT });
     this.syncSettingsSidebar(cx, requestedPage === "main-agents");
     if (requestedPage === "main-agents") this.closePanelForSettings(cx);
     let frame;

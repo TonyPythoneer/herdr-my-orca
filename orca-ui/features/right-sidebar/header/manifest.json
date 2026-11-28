@@ -3,24 +3,10 @@
   "mod": "orca-right-sidebar-header",
   "source": "orca-ui/features/right-sidebar/header",
   "output": "mods/orca-right-sidebar-header",
-  "files": [
-    "mod.json",
-    "main.js",
-    "panel-gating.js",
-    "panel-views.js"
-  ],
-  "tests": [
-    "panel-gating.test.js",
-    "panel-views.test.js",
-    "render.test.js",
-    "render.golden.json"
-  ],
+  "files": ["mod.json"],
+  "tests": [],
   "layoutSlots": {
-    "orca": [
-      "panel-head"
-    ]
+    "orca": ["panel-head"]
   },
-  "keys": [
-    "layout:orca"
-  ]
+  "keys": ["layout:orca"]
 }

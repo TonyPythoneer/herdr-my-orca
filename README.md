@@ -143,20 +143,11 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
 - Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
   (see [.agents/skills/herdr-app-dev-sync/SKILL.md](.agents/skills/herdr-app-dev-sync/SKILL.md)).
 - Checks: `node --test mods scripts orca-ui/features`, `herdr-app check <mod>`, `herdr-app status`,
-  `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npx eslint@9 -c eslint.config.mjs mods scripts orca-ui`
+  `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npm ci` then `npx --no-install vp lint mods scripts orca-ui`
   (complexity, nesting, function length, parameters, shadowing; generated files are skipped) and
   `node --test --experimental-test-coverage mods scripts orca-ui/features`.
   CI runs unit/contract and behavior suites separately; the aggregate check requires both.
   The synthetic Git branch-header benchmark (`python3 scripts/benchmark-git-status.py`) reports paired p50/p95 timings, not native UI latency.
-- CI runs the full suite: `.github/workflows/quality.yml` runs the tests, coverage, lint and the drift
-  check on every pull request and on pushes to `main`, `plan/**` and `refactor/**`. It posts one
-  comment on the pull request (updated in place) and uploads `report.json` and `report.md` as the
-  `quality-report` artifact; `report.json` has a stable schema (`schemaVersion`) meant for an AI to
-  read, with a `nextActions` list for the next improvement step. Agents and local runs only need
-  `node --test mods/<mod>` for the mod they touched. `node scripts/metrics.mjs --out <dir>` produces
-  the same report locally; `--update-baseline` rewrites `metrics/baseline.json` after a deliberate,
-  reviewed improvement. A pull request fails when tests fail, the drift check fails, lint findings
-  rise above the baseline, or line coverage drops more than 1 point.
 - Not used: a bundler. Measured on two sample mods with Vite+, source maps doubled the output and
   herdr-app 0.1.17 ignores them, so errors would name bundle lines.
 
@@ -235,14 +226,14 @@ measurement exits nonzero. Unmeasured pages are marked separately, not treated a
 
 ### Performance budgets and review policy
 
-| Metric | Project target | Measurement contract |
-| --- | --- | --- |
-| First visible feedback | <=100 ms; investigate >200 ms | CLI dispatch to first distinguishable screenshot change; proxy, may include unrelated changes |
-| Warm page transition | P95 <=200 ms; investigate >500 ms | CLI dispatch to approved reference match, including capture overhead |
-| Local data ready | P95 <=500 ms; investigate >1000 ms | Reference match only where reviewed ROI proves relevant content is loaded; not a general data-ready event |
-| Cold startup | <=1000 ms; investigate >2000 ms | Process launch to first successful screenshot, not proof of fully interactive app |
-| 60 Hz frame budget | 16.7 ms | Actual individual frames need native tracing; upstream aggregate CPU-frame mean is diagnostic only |
-| Frozen frame | >=700 ms, target zero | Requires individual frame timing; not inferable from per-second aggregates |
+| Metric                 | Project target                     | Measurement contract                                                                                      |
+| ---------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| First visible feedback | <=100 ms; investigate >200 ms      | CLI dispatch to first distinguishable screenshot change; proxy, may include unrelated changes             |
+| Warm page transition   | P95 <=200 ms; investigate >500 ms  | CLI dispatch to approved reference match, including capture overhead                                      |
+| Local data ready       | P95 <=500 ms; investigate >1000 ms | Reference match only where reviewed ROI proves relevant content is loaded; not a general data-ready event |
+| Cold startup           | <=1000 ms; investigate >2000 ms    | Process launch to first successful screenshot, not proof of fully interactive app                         |
+| 60 Hz frame budget     | 16.7 ms                            | Actual individual frames need native tracing; upstream aggregate CPU-frame mean is diagnostic only        |
+| Frozen frame           | >=700 ms, target zero              | Requires individual frame timing; not inferable from per-second aggregates                                |
 
 References: [NN/g response time](https://www.nngroup.com/articles/powers-of-10-time-scales-in-ux/),
 [Google INP](https://web.dev/articles/inp), [Android startup timing](https://developer.android.com/topic/performance/vitals/launch-time),
@@ -259,7 +250,6 @@ Do not gate merge on noisy hosted-runner wall-clock timings until a representati
 No claimed result for GPU presentation, scroll jank, real network/CLI latency, or data not included
 in the approved ROI. Use Herdr's frame counter and Instruments/native tracing to diagnose those
 separately.
-
 
 ### Diagnose and compare
 
@@ -308,7 +298,6 @@ functional tests and compare a non-instrumented benchmark. Call counts alone can
 duplicates. Per-frame GPU timing, async critical path tracing, idle CPU/RSS, leak testing,
 and contextual interaction scenarios still require native validation or additional probes.
 
-
 ### Idle CPU and retained memory
 
 Each matched page settles for the configured interval, then measures the app process's
@@ -345,6 +334,7 @@ not treated as zero cost or used in the primary latency measurements.
 A final Linux job runs even after a failed matrix, downloads the raw artifacts, checks
 checkout SHA, exact route coverage, sample counts, reference evidence and runner
 outcomes, then publishes:
+
 - **ai-benchmark-report/ai-report.json**: versioned machine-readable route metrics,
   failures, environment, diagnostic hot groups and evidence pointers.
 - **report.md**: ranked compact Markdown with complete/provisional/invalid/missing

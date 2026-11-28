@@ -189,7 +189,7 @@ def build(destination):
     replace_once('cx.timer.every(250, cx => { this.virtualProjected = this.ordered(); this.prepareVirtualRows(); this.syncRetained(cx); cx.notify(); });', 'cx.timer.every(250, cx => { this.projectVirtualRows(cx); this.prepareVirtualRows(); if (this.syncRetained(cx)) cx.notify(); });')
     replace_once('  prepareVirtualRows(preferVisible = false) {', """  projectVirtualRows(cx) {
     const t = theme(), ps = panes(), rows = this.ordered();
-    const groupBy = workspaceOptions().groupBy;
+    const { groupBy, sortBy } = workspaceOptions();
     const rowAgents = agentsByRow(rows, agents());
     const counts = new Map((this.plan?.groups ?? []).map(group => [group.key, group.rows.length]));
     const repairing = new Set([...Object.keys(this.reconnecting), ...this.machines.filter(m => this.rebuilt(m)).map(m => m.name)]);
@@ -217,7 +217,7 @@ def build(destination):
       r = { ...r, virtualKey: item.kind === "row" ? JSON.stringify(["workspace", r.w.id]) : JSON.stringify([item.kind, host, item.machine ?? item.label]) };
       const i = this.virtualProjected.length;
       this.virtualProjected.push(r);
-      this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos: this.rowIndex?.get(r.w.id) ?? i }, t, ps, mine, groupBy);
+      this.retainedRow({ ...r, count: counts.get(foldKey(r)) ?? 0, pos: this.rowIndex?.get(r.w.id) ?? i }, t, ps, mine, { groupBy, sortBy });
     }
     this.virtualRows = [...this.virtualCurrent.values()];
     this.virtualItemSizes = this.virtualProjected.map(r => Math.max(1, this.virtualSizes.get(r.virtualKey) ?? 64));
@@ -236,7 +236,7 @@ def build(destination):
     replace_once('    const t = theme(), ps = panes(), rows = this.ordered();', '    const t = theme(), ps = panes(), rows = this.ordered(), sp = spaces();\n' + unread + '\n' + colors)
     avatar_loop = '    for (const g of Object.values(this.git)) if (g?.owner) ensureAvatar(g.owner, cx);'
     replace_once(avatar_loop, '')
-    replace_once('    const groupBy = workspaceOptions().groupBy;\n    const rowAgents =', avatar_loop + '\n    const groupBy = workspaceOptions().groupBy;\n    const rowAgents =')
+    replace_once('    const { groupBy, sortBy } = workspaceOptions();\n    const rowAgents =', avatar_loop + '\n    const { groupBy, sortBy } = workspaceOptions();\n    const rowAgents =')
     replace_once('  rowElements({ r, t, ps, mine, groupBy }) {', '''  rowElements({ r, t, ps, mine, groupBy }) {
     const descriptor = r.w.descriptor;
     if (descriptor?.kind === "status") return [this.statusHead(descriptor.label, descriptor.count, t)];
@@ -261,7 +261,7 @@ def build(destination):
         this.virtualIds({ r, groupBy }).includes(focused) ? focused : null]);
     }
     const fold = foldKey(r);''')
-    replace_once('  retainedRow(r, t, ps, mine, groupBy) {\n    const key = r.w.id;', '  retainedRow(r, t, ps, mine, groupBy) {\n    const key = r.virtualKey;')
+    replace_once('  retainedRow(r, t, ps, mine, { groupBy, sortBy } = {}) {\n    const key = r.w.id;', '  retainedRow(r, t, ps, mine, { groupBy, sortBy } = {}) {\n    const key = r.virtualKey;')
     replace_once('i => rows[i].w.id', 'i => rows[i].virtualKey')
     replace_once('this.retainedRows.get(rows[i].w.id)', 'this.retainedRows.get(rows[i].virtualKey)')
     replace_once('    this.refreshRetained();\n    this.syncRetained(this.ownerCx);', '    this.refreshRetained();\n    this.prepareVirtualRows(true);\n    this.syncRetained(this.ownerCx);')

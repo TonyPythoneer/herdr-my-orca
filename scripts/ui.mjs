@@ -44,11 +44,17 @@ function parseArgs(argv) {
   const flags = { _: [] };
   for (let at = 0; at < argv.length; at++) {
     const arg = argv[at];
-    if (!arg.startsWith("--")) { flags._.push(arg); continue; }
+    if (!arg.startsWith("--")) {
+      flags._.push(arg);
+      continue;
+    }
     const key = arg.slice(2);
     const next = argv[at + 1];
     if (next === undefined || next.startsWith("--")) flags[key] = true;
-    else { flags[key] = next; at++; }
+    else {
+      flags[key] = next;
+      at++;
+    }
   }
   return flags;
 }
@@ -59,8 +65,16 @@ async function index() {
   return cached;
 }
 
-const oneLine = (text, width = 96) => String(text ?? "").replace(/\s+/g, " " ).trim().slice(0, width);
-const quoted = (values) => values.filter(Boolean).map((value) => `"${value}"`).join(", ");
+const oneLine = (text, width = 96) =>
+  String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, width);
+const quoted = (values) =>
+  values
+    .filter(Boolean)
+    .map((value) => `"${value}"`)
+    .join(", ");
 const emit = (value, json) => console.log(json ? JSON.stringify(value, null, 2) : value);
 
 function componentLine(item) {
@@ -73,7 +87,12 @@ function componentLine(item) {
 
 // Every file the index knows about, read once per process while answering a `where`.
 function knownSources(indexed) {
-  return [...new Set([...Object.values(indexed.mods).flatMap((mod) => mod.files ?? []), ...indexed.shared.map((helper) => helper.source)])];
+  return [
+    ...new Set([
+      ...Object.values(indexed.mods).flatMap((mod) => mod.files ?? []),
+      ...indexed.shared.map((helper) => helper.source),
+    ]),
+  ];
 }
 
 function references(root, needle, limit = 12) {
@@ -81,7 +100,11 @@ function references(root, needle, limit = 12) {
   const hits = [];
   for (const file of knownSources(cached)) {
     let text;
-    try { text = readFileSync(join(root, file), "utf8"); } catch { continue; }
+    try {
+      text = readFileSync(join(root, file), "utf8");
+    } catch {
+      continue;
+    }
     text.split(/\r?\n/).forEach((line, at) => {
       if (line.includes(needle)) hits.push(`${file}:${at + 1}`);
     });
@@ -95,13 +118,15 @@ function cmdFind(indexed, flags) {
   if (!term) throw new Error("find needs a term, for example: find toggle");
   const hits = searchIndex(indexed, term, Number(flags.limit ?? 25));
   if (flags.json) return emit(hits, true);
-  if (!hits.length) return console.log('nothing matches "' + term + '". Try: find list, find dialog, find <mod name>.');
+  if (!hits.length)
+    return console.log(
+      'nothing matches "' + term + '". Try: find list, find dialog, find <mod name>.',
+    );
   for (const hit of hits) {
     if (hit.type === "mod") {
       const where = hit.mod === "shared" ? "orca-ui/shared" : `mods/${hit.mod}`;
       console.log(where.padEnd(36) + `mod  — ${oneLine(hit.description)}`);
-    }
-    else console.log(componentLine(hit));
+    } else console.log(componentLine(hit));
   }
 }
 
@@ -113,10 +138,17 @@ function cmdWhere(indexed, flags) {
     const near = searchIndex(indexed, term, 5);
     if (!near.length) return console.log(`no match for "${term}".`);
     console.log(`no exact match for "${term}"; closest:`);
-    for (const item of near) console.log(item.type === "mod" ? `  mods/${item.mod}` : `  ${componentLine(item)}`);
+    for (const item of near)
+      console.log(item.type === "mod" ? `  mods/${item.mod}` : `  ${componentLine(item)}`);
     return;
   }
-  const used = [...new Set([hit.labels?.[0], hit.id, hit.name, hit.component].filter(Boolean).flatMap((needle) => references(ROOT, needle, 4)))].slice(0, 12);
+  const used = [
+    ...new Set(
+      [hit.labels?.[0], hit.id, hit.name, hit.component]
+        .filter(Boolean)
+        .flatMap((needle) => references(ROOT, needle, 4)),
+    ),
+  ].slice(0, 12);
   if (flags.json) return emit({ ...hit, references: used }, true);
   printWhere(hit, used);
 }
@@ -136,7 +168,12 @@ function cmdMod(indexed, flags) {
   if (!mod) return console.log(`unknown mod "${name}". Run: node scripts/ui.mjs find <term>`);
   if (flags.json) return emit(mod, true);
   const extras = [
-    ["pages", mod.pageNodes?.length ? `${mod.pageNodes.join(", ")}   (node scripts/ui.mjs open ${mod.pageNodes[0]})` : ""],
+    [
+      "pages",
+      mod.pageNodes?.length
+        ? `${mod.pageNodes.join(", ")}   (node scripts/ui.mjs open ${mod.pageNodes[0]})`
+        : "",
+    ],
     ["tests", (mod.tests ?? []).join(", ")],
     ["shared", (mod.shared ?? []).join(", ")],
     ["next", (mod.next ?? []).join(", ")],
@@ -174,38 +211,55 @@ function cmdPages(indexed, flags) {
   if (flags.json) return emit(indexed.pages, true);
   for (const page of indexed.pages) {
     const open = page.stack ? `node scripts/ui.mjs open ${page.node}` : `mod ${page.mod}`;
-    console.log(`${page.layout}  ${String(page.node).padEnd(16)} ${(page.mod ?? "(native)").padEnd(30)} ${open}`);
+    console.log(
+      `${page.layout}  ${String(page.node).padEnd(16)} ${(page.mod ?? "(native)").padEnd(30)} ${open}`,
+    );
   }
 }
 
 function cmdAudit(indexed, flags) {
   const report = audit(indexed);
   if (flags.json) return emit(report, true);
-  const percent = report.interactive ? Math.round((report.missingIds.length / report.interactive) * 100) : 0;
-  console.log(`interactive builders: ${report.interactive}  without a stable id: ${report.missingIds.length} (${percent}%)`);
+  const percent = report.interactive
+    ? Math.round((report.missingIds.length / report.interactive) * 100)
+    : 0;
+  console.log(
+    `interactive builders: ${report.interactive}  without a stable id: ${report.missingIds.length} (${percent}%)`,
+  );
   console.log(`literal ids reused on more than one builder: ${report.duplicateIds.length}`);
-  for (const duplicate of report.duplicateIds.slice(0, 5)) console.log(`  ${duplicate.id}: ${duplicate.first} and ${duplicate.second}`);
+  for (const duplicate of report.duplicateIds.slice(0, 5))
+    console.log(`  ${duplicate.id}: ${duplicate.first} and ${duplicate.second}`);
   const byMod = {};
   for (const item of report.missingIds) byMod[item.mod] = (byMod[item.mod] ?? 0) + 1;
-  for (const [mod, count] of Object.entries(byMod).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
+  for (const [mod, count] of Object.entries(byMod).sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  )) {
     console.log(`  ${mod.padEnd(32)} ${count}`);
   }
-  console.log("Add .id(\"<mod>-<name>\") and .accessibility_label(\"<what it does>\") to a control before writing a new one.");
+  console.log(
+    'Add .id("<mod>-<name>") and .accessibility_label("<what it does>") to a control before writing a new one.',
+  );
 }
 
 function cmdStatus(flags) {
   const status = live.appStatus();
   if (flags.json) return emit(status, true);
-  console.log(`layout=${status.layout} space=${status.space} tab=${status.tab} agent=${status.agent ?? "-"}`);
+  console.log(
+    `layout=${status.layout} space=${status.space} tab=${status.tab} agent=${status.agent ?? "-"}`,
+  );
   console.log(`overlays=${(status.overlays ?? []).length} errors=${(status.errors ?? []).length}`);
   for (const error of status.errors ?? []) console.log(`  ! ${error}`);
 }
 
 function resolvePage(indexed, term) {
   const query = String(term).toLowerCase();
-  return indexed.pages.find((page) => page.node?.toLowerCase() === query)
-    ?? indexed.pages.find((page) => page.mod?.toLowerCase() === query)
-    ?? indexed.pages.find((page) => page.node?.toLowerCase().includes(query) || page.mod?.toLowerCase().includes(query));
+  return (
+    indexed.pages.find((page) => page.node?.toLowerCase() === query) ??
+    indexed.pages.find((page) => page.mod?.toLowerCase() === query) ??
+    indexed.pages.find(
+      (page) => page.node?.toLowerCase().includes(query) || page.mod?.toLowerCase().includes(query),
+    )
+  );
 }
 
 function openResult(page, term) {
@@ -250,14 +304,29 @@ function currentRows(flags) {
 function cmdTree(indexed, flags) {
   const { path, rows } = currentRows(flags);
   const map = flags.map ? textMap(indexed) : null;
-  const annotate = (row) => (map?.get(live.normalize(row.text)) ?? []).map((item) => ({ id: item.ids[0] ?? null, name: item.name, file: item.file, line: item.line }));
+  const annotate = (row) =>
+    (map?.get(live.normalize(row.text)) ?? []).map((item) => ({
+      id: item.ids[0] ?? null,
+      name: item.name,
+      file: item.file,
+      line: item.line,
+    }));
   const ordered = live.readingOrder(rows).map((row) => ({ ...row, components: annotate(row) }));
   let status = null;
-  try { status = live.appStatus(); } catch { /* the window may be starting */ }
+  try {
+    status = live.appStatus();
+  } catch {
+    /* the window may be starting */
+  }
   if (flags.json) return emit({ shot: path, layout: status?.layout ?? null, rows: ordered }, true);
-  if (status) console.log(`# ${status.layout} space=${status.space} tab=${status.tab} overlays=${(status.overlays ?? []).length}`);
+  if (status)
+    console.log(
+      `# ${status.layout} space=${status.space} tab=${status.tab} overlays=${(status.overlays ?? []).length}`,
+    );
   for (const row of ordered) {
-    const tag = row.components.length ? `  <- ${row.components.map((item) => item.id ?? item.name).join(", ")}` : "";
+    const tag = row.components.length
+      ? `  <- ${row.components.map((item) => item.id ?? item.name).join(", ")}`
+      : "";
     console.log(`${row.y.toFixed(3)}  x=${row.x.toFixed(3)}  ${row.text}${tag}`);
   }
 }
@@ -279,18 +348,28 @@ async function cmdFindText(flags) {
   const text = flags._.join(" ");
   if (!text) throw new Error("find-text needs text");
   const found = await rowsWithText(text, flags);
-  const matches = found.matches.map((row) => ({ text: row.text, point: live.pointOf(row), confidence: row.confidence }));
+  const matches = found.matches.map((row) => ({
+    text: row.text,
+    point: live.pointOf(row),
+    confidence: row.confidence,
+  }));
   if (flags.json) return emit({ shot: found.path, matches }, true);
-  if (!matches.length) return console.log(`"${text}" is not visible. Run: node scripts/ui.mjs tree`);
-  for (const match of matches) console.log(`${match.point[0].toFixed(3)},${match.point[1].toFixed(3)}  "${match.text}"  (${match.confidence.toFixed(2)})`);
+  if (!matches.length)
+    return console.log(`"${text}" is not visible. Run: node scripts/ui.mjs tree`);
+  for (const match of matches)
+    console.log(
+      `${match.point[0].toFixed(3)},${match.point[1].toFixed(3)}  "${match.text}"  (${match.confidence.toFixed(2)})`,
+    );
 }
 
 function targetText(indexed, flags) {
   if (flags.text) return String(flags.text);
   if (!flags.id) return null;
   const entry = indexed.ids[flags.id];
-  if (!entry) throw new Error(`unknown id "${flags.id}"; run: node scripts/ui.mjs find ${flags.id}`);
-  if (!entry.label || entry.label.includes("${")) throw new Error(`id ${flags.id} has no fixed accessible label; use --text`);
+  if (!entry)
+    throw new Error(`unknown id "${flags.id}"; run: node scripts/ui.mjs find ${flags.id}`);
+  if (!entry.label || entry.label.includes("${"))
+    throw new Error(`id ${flags.id} has no fixed accessible label; use --text`);
   return entry.label;
 }
 
@@ -325,7 +404,9 @@ async function cmdClick(indexed, flags) {
   const result = await driveClick(indexed, flags);
   if (!result) return;
   if (flags.json) return emit(result, true);
-  console.log(`clicked ${result.label} at ${result.point[0].toFixed(3)},${result.point[1].toFixed(3)}`);
+  console.log(
+    `clicked ${result.label} at ${result.point[0].toFixed(3)},${result.point[1].toFixed(3)}`,
+  );
   console.log(`  before: ${result.before}`);
   console.log(`  after:  ${result.after}`);
   console.log(`  changed text: +${result.added.length} -${result.removed.length}`);
@@ -346,8 +427,16 @@ function cmdKey(flags) {
   if (!key) throw new Error("key needs a name, for example: key escape");
   if (key === "escape") {
     let overlays = 0;
-    try { overlays = (live.appStatus().overlays ?? []).length; } catch { /* the window may be starting */ }
-    if (overlays) { live.appDo(["overlay.close"]); console.log(`closed ${overlays} overlay with herdr-app do overlay.close`); return; }
+    try {
+      overlays = (live.appStatus().overlays ?? []).length;
+    } catch {
+      /* the window may be starting */
+    }
+    if (overlays) {
+      live.appDo(["overlay.close"]);
+      console.log(`closed ${overlays} overlay with herdr-app do overlay.close`);
+      return;
+    }
   }
   console.log(live.pressKey(live.appPid(), key));
 }
@@ -359,7 +448,10 @@ async function cmdScroll(indexed, flags) {
   const bounds = live.windowBounds(pid);
   let point = flags.point ? String(flags.point).split(",").map(Number) : [0.5, 0.5];
   if (flags.text) {
-    const word = live.pickWord((await rowsWithText(String(flags.text), { out: join(ARTIFACTS, "scroll.png") })).matches, flags.occurrence);
+    const word = live.pickWord(
+      (await rowsWithText(String(flags.text), { out: join(ARTIFACTS, "scroll.png") })).matches,
+      flags.occurrence,
+    );
     if (!word) throw new Error(`"${flags.text}" is not visible`);
     point = live.pointOf(word);
   }
@@ -389,7 +481,12 @@ async function main() {
     type: () => cmdType(flags),
     key: () => cmdKey(flags),
     scroll: () => cmdScroll(indexed, flags),
-    index: () => (flags.out ? writeFileSync(String(flags.out), JSON.stringify(indexed, null, 2)) : console.log(`${Object.keys(indexed.mods).length} mods, ${indexed.components.length} components, ${Object.keys(indexed.ids).length} ids, ${indexed.pages.length} pages`)),
+    index: () =>
+      flags.out
+        ? writeFileSync(String(flags.out), JSON.stringify(indexed, null, 2))
+        : console.log(
+            `${Object.keys(indexed.mods).length} mods, ${indexed.components.length} components, ${Object.keys(indexed.ids).length} ids, ${indexed.pages.length} pages`,
+          ),
   };
   if (!local[command]) throw new Error(`unknown command "${command}"\n\n${USAGE}`);
   await local[command]();

@@ -1,7 +1,9 @@
 name: CI
 
+# Native UI jobs are separate workflows that wait for this run's artifact (see native-ui-e2e.yml).
 on:
   pull_request:
+    branches: [main, ci/main]
     types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
@@ -11,295 +13,179 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  plan:
-    name: Select impacted validation
-    runs-on: ubuntu-latest
-    outputs:
-      tests: ${{ steps.plan.outputs.tests }}
-      has_tests: ${{ steps.plan.outputs.has_tests }}
-      mods: ${{ steps.plan.outputs.mods }}
-      has_mods: ${{ steps.plan.outputs.has_mods }}
-      config: ${{ steps.plan.outputs.config }}
-      snapshot: ${{ steps.plan.outputs.snapshot }}
-      git_benchmark: ${{ steps.plan.outputs.git_benchmark }}
-      projection_benchmark: ${{ steps.plan.outputs.projection_benchmark }}
-      lint: ${{ steps.plan.outputs.lint }}
-      syntax: ${{ steps.plan.outputs.syntax }}
-      native: ${{ steps.plan.outputs.native }}
-      has_native: ${{ steps.plan.outputs.has_native }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Verify selector contracts
-        run: |
-          python3 scripts/ci-impact-test.py
-          python3 scripts/test-ci-routing.py
-      - name: Resolve change scope
-        id: plan
-        env:
-          FULL_PROCESS: ${{ github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process' }}
-        run: |
-          args=()
-          if [[ "$FULL_PROCESS" == "true" ]]; then args+=(--force-full); fi
-          python3 scripts/ci-impact.py "${args[@]}" --output impact-plan.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: impact-plan
-          path: impact-plan.json
-          retention-days: 14
-
-  validate:
-    name: Config and syntax validation
-    needs: plan
+  check:
+    name: Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-      - name: Check Python and shell availability
-        run: |
-          python3 --version
-          bash --version | head -n 1
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frozen toolchain
+        run: npm ci --no-audit --no-fund
+      # Formatting is not enforced: 14 src/test files and most mods/ copies are not formatted yet.
+      - name: Format, lint and type checks (vp check)
+        run: ./node_modules/.bin/vp check
+      - name: Type-aware lint and type check (src, test)
+        run: npm run check:ts
       - name: Validate configuration and mod manifests
-        if: needs.plan.outputs.config == 'true'
         run: node scripts/check-config.mjs
-      - name: Check impacted source syntax
-        if: needs.plan.outputs.syntax != '[]'
-        env:
-          SYNTAX_PATHS: ${{ needs.plan.outputs.syntax }}
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import json, os, subprocess
-          for name in json.loads(os.environ["SYNTAX_PATHS"]):
-              if name.endswith((".js", ".mjs", ".cjs")):
-                  subprocess.run(["node", "--check", name], check=True)
-              elif name.endswith(".py"):
-                  compile(Path(name).read_bytes(), name, "exec")
-              elif name.endswith(".sh"):
-                  subprocess.run(["bash", "-n", name], check=True)
-          PY
-      - name: Check generated Orca UI and shared helpers
-        if: needs.plan.outputs.config == 'true'
-        run: node scripts/build-orca-ui.mjs --check --out .
-      - name: Run UI snapshot observer unit tests (no GUI)
-        if: needs.plan.outputs.snapshot == 'true'
-        run: python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
-      - name: Lint impacted handwritten code
-        if: needs.plan.outputs.lint != '[]'
-        env:
-          LINT_PATHS: ${{ needs.plan.outputs.lint }}
-        run: |
-          mapfile -t paths < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["LINT_PATHS"])))')
-          npx --yes eslint@9 -c eslint.config.mjs --max-warnings 0 --no-warn-ignored --no-error-on-unmatched-pattern "${paths[@]}"
-      - name: Ensure tests did not modify tracked files
-        run: git diff --exit-code
-      - name: Paired Git branch-header microbenchmark
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        run: |
-          python3 scripts/benchmark-git-status.py --output "$RUNNER_TEMP/git-status-benchmark.json"
-          python3 - "$RUNNER_TEMP/git-status-benchmark.json" <<'PY'
-          import json, sys, os
-          d = json.load(open(sys.argv[1]))
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write("## Git branch-header microbenchmark (synthetic, not app latency)\n")
-              f.write("| Metric | Before ms | After ms | Reduction |\n|---|---:|---:|---:|\n")
-              for m in ("p50_ms", "p95_ms"):
-                  f.write(f"| {m} | {d['before'][m]} | {d['after'][m]} | {d[m + '_reduction_pct']}% |\n")
-          PY
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        with:
-          name: git-status-benchmark
-          path: ${{ runner.temp }}/git-status-benchmark.json
-          if-no-files-found: error
-      - name: Benchmark workspace projection at increasing sizes
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        run: node scripts/benchmark-worktree-plan.mjs "$RUNNER_TEMP/worktree-projection.json"
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-        with:
-          name: worktree-projection-benchmark
-          path: ${{ runner.temp }}/worktree-projection.json
-          if-no-files-found: error
 
-  tests:
-    name: Tests (${{ matrix.suite }})
-    needs: plan
-    if: needs.plan.outputs.has_tests == 'true'
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.tests) }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frozen toolchain
+        run: npm ci --no-audit --no-fund
       - name: Install isolated herdr-app test stand-in
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           printf '#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = do ] && [ "$2" = orca-status-bar.refresh ]; then echo "$@" >> "$RUNNER_TEMP/stub.log"; exit 0; fi\nexit 1\n' > "$RUNNER_TEMP/bin/herdr-app"
           chmod +x "$RUNNER_TEMP/bin/herdr-app"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Run assigned test suite
-        shell: bash
-        env:
-          SELECTED_TESTS: ${{ toJSON(matrix.files) }}
+      # Some tests read the compiled typed modules; build them from source in this job first.
+      - name: Pack TypeScript to JavaScript (vp pack)
+        run: npm run pack:ts
+      - name: Vitest suite with coverage (from source)
         run: |
           export HOME="$(mktemp -d)" HERDR_APP_HOME="$(mktemp -d)"
-          mapfile -t selected < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["SELECTED_TESTS"])))')
-          test "${#selected[@]}" -gt 0
-          set -o pipefail
-          node --test --test-timeout=60000 --experimental-test-coverage --test-coverage-exclude='**/*.test.*' "${selected[@]}" | tee "$RUNNER_TEMP/selected-tests.log"
-      - name: Extract machine-readable performance contracts
-        if: always()
+          ./node_modules/.bin/vp test run test --coverage
+      - name: Python tests (no GUI, no LiteLLM install, no network)
         run: |
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          root = Path(os.environ["RUNNER_TEMP"])
-          log = root / "selected-tests.log"
-          rows = [json.loads(line.split("PERF_CONTRACT ", 1)[1]) for line in log.read_text().splitlines() if "PERF_CONTRACT " in line and line.split("PERF_CONTRACT ", 1)[1].startswith("{")] if log.exists() else []
-          (root / "performance-contracts.json").write_text(json.dumps({"schema":1,"scope":"selected test fixtures, not native latency","contracts":rows}, indent=2))
-          PY
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: selected-tests-${{ matrix.suite }}
-          path: |
-            ${{ runner.temp }}/selected-tests.log
-            ${{ runner.temp }}/performance-contracts.json
-          retention-days: 14
+          python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
+          python3 -I scripts/litellm-remote-health-test.py
+          python3 -I scripts/litellm-quickstart-test.py
+          python3 -I scripts/benchmark-pages-test.py
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
-
-  checks:
-    name: Tests and config validation
-    needs: [plan, validate, tests]
-    if: always()
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Require all suites and validation
-        env:
-          VALIDATION: ${{ needs.validate.result }}
-          TESTS: ${{ needs.tests.result }}
-          PLAN: ${{ needs.plan.result }}
-          HAS_TESTS: ${{ needs.plan.outputs.has_tests }}
-        run: |
-          test "$PLAN" = success
-          test "$VALIDATION" = success
-          if [ "$HAS_TESTS" = true ]; then test "$TESTS" = success; else test "$TESTS" = skipped; fi
-      - uses: actions/download-artifact@v4
-        if: always() && needs.plan.result == 'success'
+      - uses: actions/upload-artifact@v4
         with:
-          name: impact-plan
-      - name: Upsert scoped CI feedback
-        if: always() && needs.plan.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
+          name: coverage-summary
+          path: coverage/coverage-summary.json
+          if-no-files-found: error
+          retention-days: 90
+      # Baseline = latest successful push to main. Missing baseline is reported, never fatal.
+      - name: Fetch main coverage baseline
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
         env:
-          TEST_RESULT: ${{ needs.tests.result }}
-          VALIDATION_RESULT: ${{ needs.validate.result }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n coverage-summary -D "$RUNNER_TEMP/baseline"
+      - name: Render coverage table
+        if: github.event_name == 'pull_request' && hashFiles('coverage/coverage-summary.json') != ''
+        run: node scripts/coverage-comment.mjs coverage/coverage-summary.json "$RUNNER_TEMP/baseline/coverage-summary.json" > "$RUNNER_TEMP/coverage-comment.md"
+      - name: Upsert one coverage comment on the PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && hashFiles('coverage/coverage-summary.json') != ''
+        continue-on-error: true
+        uses: actions/github-script@v7
         with:
           script: |
             const fs = require('node:fs');
-            const p = JSON.parse(fs.readFileSync('impact-plan.json', 'utf8'));
-            const {owner, repo} = context.repo;
+            const body = fs.readFileSync(process.env.RUNNER_TEMP + '/coverage-comment.md', 'utf8');
+            const marker = '<!-- herdr-coverage-report -->';
             const issue_number = context.issue.number;
-            const {data: current} = await github.rest.pulls.get({owner, repo, pull_number: issue_number});
-            if (current.state !== 'open' || current.head.sha !== context.payload.pull_request.head.sha) return;
-            const marker = '<!-- herdr-ci-impact:v1 -->';
-            const url = process.env.GITHUB_SERVER_URL + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID;
-            const body = [
-              marker, '## Change-aware CI feedback',
-              'Head: `' + current.head.sha.slice(0,12) + '`',
-              '| Scope | Selected | Total | Result |', '|---|---:|---:|---|',
-              '| JS test files | ' + p.selected_test_files + ' | ' + p.total_test_files + ' | ' + process.env.TEST_RESULT + ' |',
-              '| Native page routes | ' + (current.base.ref === 'ci/main-with-full-process' ? p.total_native_routes : 0) + ' | ' + p.total_native_routes + ' | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' |',
-              '| Native mod checks | ' + (current.base.ref === 'ci/main-with-full-process' ? 'all' : '0') + ' | — | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' |',
-              '| Config / syntax / lint | — | — | ' + process.env.VALIDATION_RESULT + ' |',
-              '| Git benchmark | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' | — | see validation |',
-              '| Workspace projection | ' + (current.base.ref === 'ci/main-with-full-process' ? 'full process' : 'skipped (fast CI)') + ' | — | see validation |',
-              '', 'Full fallback: ' + p.full + '. Unselected work is not a passing measurement.',
-              '', '[Impact plan and scoped coverage artifacts](' + url + ')'
-            ].join('\n');
+            const {owner, repo} = context.repo;
             const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
             const old = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.startsWith(marker));
             if (old) await github.rest.issues.updateComment({owner, repo, comment_id: old.id, body});
             else await github.rest.issues.createComment({owner, repo, issue_number, body});
 
-  package:
-    name: Package validated config
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: checks
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Package tracked installation files
-        run: |
-          git archive --format=zip --output=herdr-my-orca.zip HEAD layouts mods themes keys.json programs.json settings.json
-          sha256sum herdr-my-orca.zip > herdr-my-orca.zip.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: herdr-my-orca-${{ github.sha }}
-          path: |
-            herdr-my-orca.zip
-            herdr-my-orca.zip.sha256
-          if-no-files-found: error
-          retention-days: 14
-
-  native:
-    name: Herdr native mod check (isolated)
-    if: github.event_name == 'pull_request' && github.base_ref == 'ci/main-with-full-process'
-    needs: [plan, checks]
-    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Install upstream Herdr app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frozen toolchain
+        run: npm ci --no-audit --no-fund
+      # No Vite+ task cache: every run rebuilds; timings are written to the job summary.
+      - name: Pack TypeScript to JavaScript (vp pack)
         run: |
-          test "$(uname -m)" = arm64
-          curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
-          sh "$RUNNER_TEMP/herdr-install.sh"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Validate all mods in an isolated Herdr app home
-        shell: bash
+          start=$SECONDS
+          npm run pack:ts
+          echo "- vp pack: $((SECONDS-start))s" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify generated Orca UI and shared helpers
+        run: ./node_modules/.bin/vpx src/tooling/build-orca-ui.ts --check --out .
+      - name: Build delivery
         run: |
-          export HERDR_APP_HOME="$RUNNER_TEMP/herdr-ci-home"
-          mkdir -p "$HERDR_APP_HOME"
-          git archive HEAD | tar -x -C "$HERDR_APP_HOME"
-          cd "$HERDR_APP_HOME"
-          test "$(find mods -mindepth 2 -maxdepth 2 -name mod.json | wc -l | tr -d ' ')" -gt 0
-          failed=0
-          while IFS= read -r name; do
-            mod="$HERDR_APP_HOME/mods/$name"
-            test -f "$mod/mod.json" || exit 1
-            echo "::group::${mod##*/}"
-            if ! herdr-app check "$mod"; then
-              echo "::error::Native check failed for ${mod##*/}"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done < <(find mods -mindepth 2 -maxdepth 2 -name mod.json -print | sort | sed 's|^mods/||;s|/mod.json$||')
-          exit "$failed"
+          start=$SECONDS
+          npm run pack:delivery
+          echo "- pack:delivery: $((SECONDS-start))s" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify delivery
+        run: ./node_modules/.bin/vpx src/tooling/verify-output.ts --delivery
+      - name: Package one artifact with a manifest
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          cd tools/vite-plus-pilot/dist/delivery
+          zip -qr "$GITHUB_WORKSPACE/herdr-my-orca.zip" .
+          cd "$GITHUB_WORKSPACE"
+          sha256sum herdr-my-orca.zip > herdr-my-orca.zip.sha256
+          python3 -I - <<'PY'
+          import hashlib, json, os, subprocess
+          zip_sha = hashlib.sha256(open("herdr-my-orca.zip", "rb").read()).hexdigest()
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          manifest = {"schema": 1, "commit": commit, "pr_head_sha": os.environ["PR_HEAD_SHA"] or None,
+                      "base_ref": os.environ["BASE_REF"] or None, "zip": "herdr-my-orca.zip", "zip_sha256": zip_sha}
+          json.dump(manifest, open("manifest.json", "w"), indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herdr-delivery-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            herdr-my-orca.zip
+            herdr-my-orca.zip.sha256
+            manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
+  gate:
+    name: CI
+    needs: [check, test, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to succeed (no fail-fast)
+        env:
+          CHECK: ${{ needs.check.result }}
+          TEST: ${{ needs.test.result }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          test "$CHECK" = success
+          test "$TEST" = success
+          test "$BUILD" = success
