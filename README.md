@@ -148,19 +148,6 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   `node --test --experimental-test-coverage mods scripts orca-ui/features`.
   CI runs unit/contract and behavior suites separately; the aggregate check requires both.
   The synthetic Git branch-header benchmark (`python3 scripts/benchmark-git-status.py`) reports paired p50/p95 timings, not native UI latency.
-- CI does not gate on coverage. Coverage is reported only: it is measured locally by the metrics
-  tool, and no CI job fails on the percentage.
-- Show the coverage percentage locally (a few minutes; it runs the full test suite):
-
-  ```sh
-  OUT="$(mktemp -d)"
-  ./node_modules/.bin/vpx src/tooling/metrics.ts --out "$OUT"
-  node -e 'const r=require(process.argv[1]); console.log(r.coverage.overall)' "$OUT/report.json"
-  ```
-
-  `coverage.overall.line` is the line percentage (`lineCovered` / `lineTotal`). The same file holds
-  test counts and lint totals. The command exits 1 only when tests, lint or the drift check fail;
-  coverage is reported and never fails it. Run `vp pack` first if `dist/typed` is missing.
 - Not used: a bundler. Measured on two sample mods with Vite+, source maps doubled the output and
   herdr-app 0.1.17 ignores them, so errors would name bundle lines.
 

@@ -26,7 +26,6 @@ const entries = Object.fromEntries(
     )
     .map(({ source, packId }) => [packId, source]),
 );
-const metricsMode = process.env.ORCA_COVERAGE_MODE === "metrics";
 
 export default defineConfig({
   lint: {
@@ -83,10 +82,7 @@ export default defineConfig({
     clean: true,
   },
   test: {
-    include: metricsMode
-      ? ["test/**/*.test.ts"]
-      : ["test/**/*.test.ts"],
-    testTimeout: metricsMode ? 60_000 : undefined,
+    include: ["test/**/*.test.ts"],
     alias: {
       "gpui-kit": new URL("./test/stubs/gpui-kit.ts", import.meta.url).pathname,
       "gpui-base": new URL("./test/stubs/gpui-base.ts", import.meta.url).pathname,
@@ -95,15 +91,7 @@ export default defineConfig({
     coverage: {
       reporter: ["json-summary"],
       autoAttachSubprocess: true,
-      include: metricsMode
-        ? [
-            "mods/**/*.{js,mjs,cjs}",
-            "orca-ui/**/*.{js,mjs,cjs}",
-            "scripts/**/*.{js,mjs,cjs}",
-            "src/**/*.{js,mjs,cjs,ts,mts,cts}",
-            "tools/**/*.{js,mjs,cjs}",
-          ]
-        : ["src/**/*.ts"],
+      include: ["src/**/*.ts"],
       exclude: [
         "**/*.test.*",
         "**/flow-harness.mjs",
