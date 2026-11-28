@@ -330,7 +330,7 @@ export async function buildIndex(root) {
     name: "shared",
     area: "shared",
     description:
-      "Helpers copied into mods by scripts/build-orca-ui.mjs; edit these files, never a copy.",
+      "Helpers copied into mods by src/tooling/build-orca-ui.ts; edit these files, never a copy.",
     files: [...new Set(shared.map((item) => item.file))],
     tests: [],
     pageNodes: [],
