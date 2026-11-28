@@ -211,11 +211,7 @@ export const inPlace = [
       "orca-files.openIn",
       "orca-files.target.<token>"
     ],
-    "tests": [
-      "mods/orca-files/files-data.flow.test.js",
-      "mods/orca-files/files-ui.flow.test.js",
-      "mods/orca-files/pure.flow.test.js"
-    ],
+    "tests": [],
     "next": [
       "mods/orca-confirm/main.js"
     ]

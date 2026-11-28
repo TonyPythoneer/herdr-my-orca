@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { goldenSuite } from "./golden.mjs";
-import { mutateFile } from "./file-mutation.js";
-import { deleteTarget } from "./delete-target.js";
-import { resolveTreeKey, parentIndex } from "./tree-nav.js";
-import { canEditPath, writeEditorFile } from "./editor-path.js";
+import { goldenSuite } from "../../support/golden.ts";
+import { mutateFile } from "../../../mods/orca-files/file-mutation.js";
+import { deleteTarget } from "../../../mods/orca-files/delete-target.js";
+import { resolveTreeKey, parentIndex } from "../../../mods/orca-files/tree-nav.js";
+import { canEditPath, writeEditorFile } from "../../../mods/orca-files/editor-path.js";
 
 const sha = (text) => createHash("sha1").update(text).digest("hex").slice(0, 10);
 // Runs `fn` against a recording exec: an error message, or the call with its shell script reduced to a hash.
@@ -120,4 +120,4 @@ goldenSuite("files-pure", {
     out.writes = calls;
     return out;
   },
-});
+}, new URL(".", import.meta.url));
