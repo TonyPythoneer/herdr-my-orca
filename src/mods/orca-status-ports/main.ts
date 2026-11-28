@@ -39,7 +39,7 @@ import {
   type Port,
 } from "../../shared/scan.js";
 import { copyText } from "../../shared/clip.js";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 const MOD = "orca-status-ports";

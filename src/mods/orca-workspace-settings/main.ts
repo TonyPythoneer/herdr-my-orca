@@ -23,7 +23,7 @@ import {
   spaces,
   machines,
 } from "herdr";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 type NavTheme = {

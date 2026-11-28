@@ -4,7 +4,7 @@ import { settings } from "herdr";
 import { themeColor } from "../../shared/theme-color.js";
 import { LIST_HEADER_HEIGHT } from "./state.js";
 import { PERMISSION_SHORT_LABELS, type StoredPermission } from "./permissions.js";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 
 export type PartsTheme = Pick<
   ColorTokens,

@@ -57,7 +57,7 @@
       ]
     },
     {
-      "source": "src/shared/icon-button.ts",
+      "source": "src/primitives/icon-button.ts",
       "outputs": [
         "mods/orca-agent-settings/icon-button.js",
         "mods/orca-float-workspace/icon-button.js",

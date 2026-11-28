@@ -2,7 +2,7 @@ import { View, div, svg, type AsyncContext, type Color, type NativeElement } fro
 import { h_flex } from "gpui-base";
 import { theme, run, layout } from "herdr";
 import { startTaskRunner } from "./scheduler.js";
-import { IconButton } from "../../shared/icon-button.js";
+import { IconButton } from "../../primitives/icon-button.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 type LayoutNode = {

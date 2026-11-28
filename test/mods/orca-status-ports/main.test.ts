@@ -106,7 +106,7 @@ vi.mock("herdr", () => ({
 vi.mock("../../../src/shared/clip.ts", () => ({
   copyText: (value: string) => elements.copied.push(value),
 }));
-vi.mock("../../../src/shared/icon-button.ts", () => ({
+vi.mock("../../../src/primitives/icon-button.ts", () => ({
   IconButton: (
     id: string,
     label: string,

@@ -49,7 +49,7 @@ it("audit skips the IconButton helper but still counts other shared controls", (
   assert.ok(
     report.missingIds.every(
       (item) =>
-        !item.file.startsWith("src/shared/icon-button.ts") &&
+        !item.file.startsWith("src/primitives/icon-button.ts") &&
         !item.file.startsWith("src/shared/dialog-button.ts"),
     ),
     "helper internals are not screen controls",
