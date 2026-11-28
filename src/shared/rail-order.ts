@@ -62,3 +62,15 @@ export function swapOrderIds(order: readonly string[], a: string, b: string): st
   next[bi] = a;
   return next;
 }
+
+// Drag to swap: the icon pressed (`from`) takes the place of the one released on (`to`) in `base`,
+// the order on screen. Returns the new order, or null when nothing moves.
+export function dragSwapOrder(
+  base: readonly string[],
+  from: string | null,
+  to: string,
+): string[] | null {
+  if (!from || from === to) return null;
+  const next = swapOrderIds(base, from, to);
+  return next.every((key, i) => key === base[i]) ? null : next;
+}

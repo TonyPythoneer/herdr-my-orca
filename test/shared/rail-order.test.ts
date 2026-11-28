@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   RAIL_ORDER_KEY,
   applyRailOrder,
+  dragSwapOrder,
   persistRailOrder,
   readRailOrder,
   swapOrderIds,
@@ -106,5 +107,22 @@ describe("rail order", () => {
       delete host.__herdrShared;
       delete host.__herdrSetShared;
     }
+  });
+});
+
+describe("dragSwapOrder", () => {
+  it("swaps the pressed and released icons in the on-screen order", () => {
+    assert.deepEqual(dragSwapOrder(["freebuff", "claude", "codex"], "codex", "freebuff"), [
+      "codex",
+      "claude",
+      "freebuff",
+    ]);
+  });
+
+  it("does nothing for a release on the same icon, no press, or an unknown icon", () => {
+    const base = ["freebuff", "claude"];
+    assert.equal(dragSwapOrder(base, "claude", "claude"), null);
+    assert.equal(dragSwapOrder(base, null, "claude"), null);
+    assert.equal(dragSwapOrder(base, "claude", "nope"), null);
   });
 });

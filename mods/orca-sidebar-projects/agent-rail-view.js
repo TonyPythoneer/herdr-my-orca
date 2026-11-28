@@ -5,7 +5,7 @@ import { h_flex, v_flex, Link } from "gpui-base";
 import { appHome } from "herdr";
 import { RAIL, railGeometry, railViewport, railRows, railControl } from "./agent-rail.js";
 import { hoverHighlight, selectedCheck } from "./selection-ui.js";
-import { applyRailOrder, persistRailOrder, readRailOrder, swapOrderIds } from "./rail-order.js";
+import { applyRailOrder, dragSwapOrder, persistRailOrder, readRailOrder } from "./rail-order.js";
 
 const MOTION = { duration: 200, easing: "ease-out" };
 const LITELLM_ICON = "mods/orca-assets/litellm_favicon_light_32.png";
@@ -56,7 +56,8 @@ export function railItem(owner, row, t, tile = t.raised, swapGroup = null) {
       .child(global ? svg("mods/orca-assets/bot.svg").size(25).text_color(t.foreground)
         : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))
       .when(!global && owner.litellmEnabled, el => el.child(litellmBadge(t)))));
-  return item.child(railAction(owner, row, t, control, label)).when(swapGroup, el => el.child(railSwapButton(owner, swapGroup, row.key, label, t)));
+  return item.child(railAction(owner, row, t, control, label)).opacity(isDragging(owner, swapGroup, row.key) ? 0.5 : 1)
+    .when(swapGroup, el => el.on_mouse_down("left", (_e, cx) => railSwapPress(owner, swapGroup, row.key, cx)).on_mouse_up("left", (_e, cx) => railSwapRelease(owner, swapGroup, row.key, cx)));
 }
 
 function providerItem(owner, provider, t) {
@@ -86,7 +87,9 @@ function providerItem(owner, provider, t) {
         .child(src ? image(src).w(28).h(28).rounded(6) : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted))
         .child(selectedCheck(selected, t))
         .child(div().absolute().right(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label))));
-  return item.child(railSwapButton(owner, "providers", provider.id, label, t));
+  return item.opacity(isDragging(owner, "providers", provider.id) ? 0.5 : 1)
+    .on_mouse_down("left", (_e, cx) => railSwapPress(owner, "providers", provider.id, cx))
+    .on_mouse_up("left", (_e, cx) => railSwapRelease(owner, "providers", provider.id, cx));
 }
 
 function providerAddItem(owner, t) {
@@ -164,33 +167,32 @@ function railAction(owner, row, t, control, label) {
 }
 
 // A Discord-style rounded group has a folder toggle at the top and agent tiles beneath it.
-// Swap two icons inside one group: tap one swap button, then another in the same group.
-function railSwapButton(owner, group, key, label, t) {
-  const source = owner.railSwapSource;
-  const active = Boolean(source && source.group === group && source.key === key);
-  return div().id("am-rail-swap-" + key).absolute().top(8).right(10).size(14).rounded_full()
-    .bg(active ? t.accent : t.raised).border_1().border_color(active ? t.foreground : t.border)
-    .flex().items_center().justify_center().cursor_pointer().role("button")
-    .accessibility_label(active ? "Swap " + label + " — tap another icon in this group" : "Swap " + label)
-    .tooltip(active ? "Tap another icon in this group to swap positions" : "Swap position")
-    .on_click((_e, cx) => handleRailSwap(owner, group, key, cx))
-    .text_size(11).text_color(active ? t.surface : t.muted)
-    .child("⇄");
+// Drag to swap: press an icon, release on another icon of the same group. The swap works on the
+// order on screen (owner.railDisplayed), so it works before any order has been saved.
+function isDragging(owner, group, key) {
+  return Boolean(group && owner.railSwapSource?.group === group && owner.railSwapSource.key === key);
 }
 
-function handleRailSwap(owner, group, key, cx) {
-  const cur = owner.railSwapSource ?? null;
-  if (cur && cur.group === group && cur.key !== key) {
-    const saved = readRailOrder();
-    const list = group === "unofficial" ? saved.unofficial : saved.providers;
-    const next = swapOrderIds(list, cur.key, key);
-    const updated = group === "unofficial" ? { ...saved, unofficial: next } : { ...saved, providers: next };
-    persistRailOrder(updated);
-    owner.railSwapSource = null;
-    cx.notify();
-    return;
+function railSwapPress(owner, group, key, cx) {
+  owner.railSwapSource = { group, key };
+  cx.notify();
+}
+
+function railSwapRelease(owner, group, key, cx) {
+  const source = owner.railSwapSource ?? null;
+  owner.railSwapSource = null;
+  if (source?.group === group) {
+    const base = owner.railDisplayed?.[group] ?? readRailOrder()[group];
+    const next = dragSwapOrder(base, source.key, key);
+    if (next) persistRailOrder({ ...readRailOrder(), [group]: next });
   }
-  owner.railSwapSource = cur && cur.group === group && cur.key === key ? null : { group, key };
+  cx.notify();
+}
+
+// A release on the group's list but not on an icon ends the drag without a swap.
+function railSwapCancel(owner, cx) {
+  if (!owner.railSwapSource) return;
+  owner.railSwapSource = null;
   cx.notify();
 }
 
@@ -202,6 +204,7 @@ function groupView(owner, title, rows, scroll, t) {
   const isUnofficial = title === "Unofficial";
   const swapGroup = isUnofficial ? "unofficial" : null;
   const displayed = isUnofficial ? applyRailOrder(railRows(rows), readRailOrder().unofficial, row => row.key) : railRows(rows);
+  if (isUnofficial) owner.railDisplayed = {...owner.railDisplayed, unofficial: displayed.map(row => row.key)};
   const {height,scroll:overflow} = railViewport(displayed.length);
   const id = "am-rail-list-" + title.toLowerCase();
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
@@ -217,7 +220,7 @@ function groupView(owner, title, rows, scroll, t) {
       .child(div().relative().w(RAIL.width).h(open ? height : 0).overflow_hidden().transition("height", MOTION)
         .opacity(open ? 1 : 0).transition("opacity", MOTION)
         .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
-        .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
+        .child(v_flex().id(id).on_mouse_up("left", (_e, cx) => railSwapCancel(owner, cx)).w(RAIL.width).track_scroll(scroll)
           .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
           .children(displayed.map(row => railItem(owner,row,t,t.surface,swapGroup)))))));
 }
@@ -226,6 +229,7 @@ function providerGroupView(owner, providers, t) {
   const open = owner.providerRailOpen !== false;
   const action = `${open ? "Collapse" : "Expand"} Model providers`;
   const displayed = applyRailOrder(providers, readRailOrder().providers, provider => provider.id);
+  owner.railDisplayed = {...owner.railDisplayed, providers: displayed.map(provider => provider.id)};
   const {height,scroll:overflow} = railViewport(displayed.length + 1);
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
@@ -244,7 +248,7 @@ function providerGroupView(owner, providers, t) {
           .child(
             div().relative().w(RAIL.width).h(height).overflow_hidden()
               .child(
-                v_flex().id("am-rail-list-model-providers").w(RAIL.width).track_scroll(owner.providerRailScroll)
+                v_flex().id("am-rail-list-model-providers").on_mouse_up("left", (_e, cx) => railSwapCancel(owner, cx)).w(RAIL.width).track_scroll(owner.providerRailScroll)
                   .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
                   .children(displayed.map(provider => providerItem(owner,provider,t)))
                   .child(providerAddItem(owner,t)),

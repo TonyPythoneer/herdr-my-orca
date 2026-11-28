@@ -14,10 +14,9 @@ import {
 import { hoverHighlight, selectedCheck } from "../../shared/selection-ui.js";
 import {
   applyRailOrder,
+  dragSwapOrder,
   persistRailOrder,
   readRailOrder,
-  swapOrderIds,
-  type RailOrder,
 } from "../../shared/rail-order.js";
 
 export type RailTheme = {
@@ -45,6 +44,7 @@ export type RailOwner = {
   railHover: string | null;
   railControlHover?: string | null;
   railSwapSource?: { group: "unofficial" | "providers"; key: string } | null;
+  railDisplayed?: { unofficial?: string[]; providers?: string[] };
   railSelection: string;
   readonly litellmEnabled: boolean;
   officialRailOpen?: boolean;
@@ -240,8 +240,11 @@ export function railItem(
     .child(indicator(row.key, s.geometry, t))
     .child(avatar(owner, row, t, tile, s))
     .child(railAction(owner, row, t, control, s.label))
+    .opacity(isDragging(owner, swapGroup, row.key) ? 0.5 : 1)
     .when(swapGroup, (inner) =>
-      inner.child(railSwapButton(owner, swapGroup!, row.key, s.label, t)),
+      inner
+        .on_mouse_down("left", (_e, cx) => railSwapPress(owner, swapGroup!, row.key, cx))
+        .on_mouse_up("left", (_e, cx) => railSwapRelease(owner, swapGroup!, row.key, cx)),
     );
 }
 
@@ -330,7 +333,9 @@ function providerItem(owner: RailOwner, provider: ProviderRow, t: RailTheme): Na
     .on_hover(hoverTracker(owner, s.key))
     .child(indicator(s.key, s.geometry, t))
     .child(providerAvatar(owner, s, t))
-    .child(railSwapButton(owner, "providers", provider.id, s.label, t));
+    .opacity(isDragging(owner, "providers", provider.id) ? 0.5 : 1)
+    .on_mouse_down("left", (_e, cx) => railSwapPress(owner, "providers", provider.id, cx))
+    .on_mouse_up("left", (_e, cx) => railSwapRelease(owner, "providers", provider.id, cx));
 }
 
 function providerAddItem(owner: RailOwner, t: RailTheme): NativeElement {
@@ -599,57 +604,32 @@ function groupShell(
 
 type RailSwapGroup = "unofficial" | "providers";
 
-function railSwapButton(
-  owner: RailOwner,
-  group: RailSwapGroup,
-  key: string,
-  label: string,
-  t: RailTheme,
-): NativeElement {
-  const source = owner.railSwapSource;
-  const active = Boolean(source && source.group === group && source.key === key);
-  return div()
-    .id("am-rail-swap-" + key)
-    .absolute()
-    .top(8)
-    .right(10)
-    .size(14)
-    .rounded_full()
-    .bg(active ? t.accent : t.raised)
-    .border_1()
-    .border_color(active ? t.foreground : t.border)
-    .flex()
-    .items_center()
-    .justify_center()
-    .cursor_pointer()
-    .role("button")
-    .accessibility_label(active ? "Swap " + label + " — tap another icon in this group" : "Swap " + label)
-    .tooltip(active ? "Tap another icon in this group to swap positions" : "Swap position")
-    .on_click((_e, cx) => handleRailSwap(owner, group, key, cx))
-    .text_size(11)
-    .text_color(active ? t.surface : t.muted)
-    .child("⇄");
+// Drag to swap: press an icon, release on another icon of the same group. The swap works on the
+// order on screen (owner.railDisplayed), so it works before any order has been saved.
+function isDragging(owner: RailOwner, group: RailSwapGroup | null, key: string): boolean {
+  return Boolean(group && owner.railSwapSource?.group === group && owner.railSwapSource.key === key);
 }
 
-function handleRailSwap(
-  owner: RailOwner,
-  group: RailSwapGroup,
-  key: string,
-  cx: Context,
-): void {
-  const cur = owner.railSwapSource ?? null;
-  if (cur && cur.group === group && cur.key !== key) {
-    const saved = readRailOrder();
-    const list = group === "unofficial" ? saved.unofficial : saved.providers;
-    const next = swapOrderIds(list, cur.key, key);
-    const updated: RailOrder =
-      group === "unofficial" ? { ...saved, unofficial: next } : { ...saved, providers: next };
-    persistRailOrder(updated);
-    owner.railSwapSource = null;
-    cx.notify();
-    return;
+function railSwapPress(owner: RailOwner, group: RailSwapGroup, key: string, cx: Context): void {
+  owner.railSwapSource = { group, key };
+  cx.notify();
+}
+
+function railSwapRelease(owner: RailOwner, group: RailSwapGroup, key: string, cx: Context): void {
+  const source = owner.railSwapSource ?? null;
+  owner.railSwapSource = null;
+  if (source?.group === group) {
+    const base = owner.railDisplayed?.[group] ?? readRailOrder()[group];
+    const next = dragSwapOrder(base, source.key, key);
+    if (next) persistRailOrder({ ...readRailOrder(), [group]: next });
   }
-  owner.railSwapSource = cur && cur.group === group && cur.key === key ? null : { group, key };
+  cx.notify();
+}
+
+// A release on the group's list but not on an icon ends the drag without a swap.
+function railSwapCancel(owner: RailOwner, cx: Context): void {
+  if (!owner.railSwapSource) return;
+  owner.railSwapSource = null;
   cx.notify();
 }
 
@@ -670,6 +650,7 @@ function groupView(
   const displayed = isUnofficial
     ? applyRailOrder(rowsInGroup, readRailOrder().unofficial, (row) => row.key)
     : rowsInGroup;
+  if (isUnofficial) owner.railDisplayed = { ...owner.railDisplayed, unofficial: displayed.map((row) => row.key) };
   const { height, scroll: overflow } = railViewport(displayed.length);
   const folder = folderTile(
     "am-rail-folder-" + title.toLowerCase(),
@@ -683,6 +664,7 @@ function groupView(
   );
   const list = v_flex()
     .id("am-rail-list-" + title.toLowerCase())
+    .on_mouse_up("left", (_e, cx) => railSwapCancel(owner, cx))
     .w(RAIL.width)
     .track_scroll(scroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
@@ -698,6 +680,7 @@ function providerGroupView(
   const open = owner.providerRailOpen !== false;
   const action = `${open ? "Collapse" : "Expand"} Model providers`;
   const displayed = applyRailOrder(providers, readRailOrder().providers, (provider) => provider.id);
+  owner.railDisplayed = { ...owner.railDisplayed, providers: displayed.map((provider) => provider.id) };
   const { height, scroll: overflow } = railViewport(displayed.length + 1);
   const folder = folderTile(
     "am-rail-folder-model-providers",
@@ -723,6 +706,7 @@ function providerGroupView(
   );
   const list = v_flex()
     .id("am-rail-list-model-providers")
+    .on_mouse_up("left", (_e, cx) => railSwapCancel(owner, cx))
     .w(RAIL.width)
     .track_scroll(owner.providerRailScroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
