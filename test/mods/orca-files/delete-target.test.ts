@@ -1,10 +1,10 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { deleteTarget } from "./delete-target.js";
+import { deleteTarget } from "../../../mods/orca-files/delete-target.js";
 
 test("delete keeps the captured workspace and host, and rejects changed targets", async () => {
   const temp = mkdtempSync(join(tmpdir(), "orca-delete-"));

@@ -1,6 +1,6 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
-import { resolveTreeKey, parentIndex } from "./tree-nav.js";
+import { resolveTreeKey, parentIndex } from "../../../mods/orca-files/tree-nav.js";
 
 // Visible projection: a folder (open) with one file, a closed folder, then a file.
 const rows = [

@@ -1,13 +1,13 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { queueSave } from "./save-queue.js";
+import { queueSave } from "../../../mods/orca-files/save-queue.js";
 
 function fixture(write, check = async () => true) {
   let disk = "disk", jobs = [];
   const calls = [];
-  const source = readFileSync(new URL("./main.js", import.meta.url), "utf8")
+  const source = readFileSync(new URL("../../../mods/orca-files/main.js", import.meta.url), "utf8")
     .replace(/^import .*;$/gm, "").replace("export default class Files", "class Files");
   const scope = {
     View: class {}, queueSave, canEditPath: check, exec: async () => ({ code: 0 }),

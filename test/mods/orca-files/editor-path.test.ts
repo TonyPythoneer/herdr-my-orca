@@ -1,10 +1,10 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { canEditPath, writeEditorFile } from "./editor-path.js";
+import { canEditPath, writeEditorFile } from "../../../mods/orca-files/editor-path.js";
 
 test("only regular files reached without symlinks under the workspace are editable", async () => {
   const temp = mkdtempSync(join(tmpdir(), "orca-editor-"));

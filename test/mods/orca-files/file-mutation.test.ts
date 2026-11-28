@@ -1,10 +1,10 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, symlinkSync, existsSync, chmodSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { mutateFile } from "./file-mutation.js";
+import { mutateFile } from "../../../mods/orca-files/file-mutation.js";
 
 test("file actions reject escapes and collisions without modifying files", async () => {
   const temp = mkdtempSync(join(tmpdir(), "orca-mutate-"));

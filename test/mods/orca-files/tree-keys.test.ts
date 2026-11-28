@@ -1,12 +1,12 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { resolveTreeKey } from "./tree-nav.js";
+import { resolveTreeKey } from "../../../mods/orca-files/tree-nav.js";
 
 function fixture() {
   const space = { active: true, folder: "/repo", machine: null, id: "space" };
-  const source = readFileSync(new URL("./main.js", import.meta.url), "utf8")
+  const source = readFileSync(new URL("../../../mods/orca-files/main.js", import.meta.url), "utf8")
     .replace(/^import .*;$/gm, "").replace("export default class Files", "class Files");
   const overlays = [], copied = [];
   const scope = {

@@ -1,6 +1,6 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
-import { queueSave } from "./save-queue.js";
+import { queueSave } from "../../../mods/orca-files/save-queue.js";
 
 test("autosave and leaving are serialized against the last successful snapshot", async () => {
   const doc = { full: "/file", disk: "original" }, calls = [];
