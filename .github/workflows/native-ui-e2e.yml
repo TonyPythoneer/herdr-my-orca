@@ -1,0 +1,121 @@
+name: Native UI E2E
+
+# Runs only for PRs into ci/main. It waits for the CI run of the PR head (it does not compile)
+# and validates the verified delivery in a real Herdr app on macOS.
+on:
+  pull_request:
+    branches: [ci/main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ui-e2e-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  artifact:
+    name: Fetch verified CI delivery
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Wait for CI on the PR head, download and verify its delivery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/ci-delivery.sh fetch "$RUNNER_TEMP/delivery"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-delivery
+          path: ${{ runner.temp }}/delivery
+          if-no-files-found: error
+          retention-days: 14
+
+  e2e:
+    name: Native UI E2E (macOS)
+    needs: artifact
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-delivery
+          path: ${{ runner.temp }}/delivery
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Herdr and screenshot dependency
+        run: |
+          test "$(uname -m)" = arm64
+          curl --fail --silent --show-error --location --retry 3 https://releases.herdr.dev/app/install.sh -o "$RUNNER_TEMP/herdr-install.sh"
+          sh "$RUNNER_TEMP/herdr-install.sh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          python -m pip install Pillow
+      - name: Verify the delivery manifest and checksum
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/ci-delivery.sh verify "$RUNNER_TEMP/delivery"
+      - name: Validate each delivered mod with herdr-app check
+        shell: bash
+        run: |
+          export HERDR_APP_HOME="$RUNNER_TEMP/herdr-e2e-home"
+          rm -rf "$HERDR_APP_HOME" && mkdir -p "$HERDR_APP_HOME"
+          unzip -q "$RUNNER_TEMP/delivery/herdr-my-orca.zip" -d "$HERDR_APP_HOME"
+          cd "$HERDR_APP_HOME"
+          test "$(find mods -mindepth 2 -maxdepth 2 -name mod.json | wc -l | tr -d ' ')" -gt 0
+          failed=0
+          while IFS= read -r name; do
+            mod="$HERDR_APP_HOME/mods/$name"
+            test -f "$mod/mod.json" || exit 1
+            echo "::group::${mod##*/}"
+            if ! herdr-app check "$mod"; then
+              echo "::error::Native check failed for ${mod##*/}"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done < <(find mods -mindepth 2 -maxdepth 2 -name mod.json -print | sort | sed 's|^mods/||;s|/mod.json$||')
+          exit "$failed"
+      - name: Observer unit tests (no GUI)
+        run: python3 -m unittest discover -s ui-snapshot -p 'test_*.py'
+      # The observer installs its config from this checkout, whose tree the manifest verified above.
+      - name: Observe native UI and capture screenshots
+        run: python3 ui-snapshot/capture.py --target "$GITHUB_WORKSPACE" --out "$RUNNER_TEMP/ui-snapshot"
+      - name: Build browser-ready gallery
+        if: always() && !cancelled()
+        run: python3 ui-snapshot/gallery.py --input "$RUNNER_TEMP/ui-snapshot" --output "$RUNNER_TEMP/ui-gallery"
+      - name: Report
+        if: always()
+        run: |
+          echo "## Native UI E2E" >> "$GITHUB_STEP_SUMMARY"
+          if test -f "$RUNNER_TEMP/ui-snapshot/summary.md"; then
+            cat "$RUNNER_TEMP/ui-snapshot/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Capture did not start; inspect installation/runner logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-ui-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ui-snapshot/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always() && !cancelled()
+        with:
+          name: native-ui-gallery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ui-gallery/
+          if-no-files-found: error
+          retention-days: 14
