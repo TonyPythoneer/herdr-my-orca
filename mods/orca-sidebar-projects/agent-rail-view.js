@@ -4,7 +4,7 @@ import { div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Link } from "gpui-base";
 import { appHome } from "herdr";
 import { RAIL, railGeometry, railViewport, railRows, railControl } from "./agent-rail.js";
-import { hoverHighlight, selectedCheck } from "./selection-ui.js";
+import { hoverHighlight } from "./selection-ui.js";
 import { applyRailOrder, dragSwapOrder, persistRailOrder, readRailOrder } from "./rail-order.js";
 
 const MOTION = { duration: 200, easing: "ease-out" };
@@ -85,7 +85,6 @@ function providerItem(owner, provider, t) {
       .child(div().size_full().relative().flex().items_center().justify_center()
         .child(hoverHighlight(hovered && !selected, t, RAIL.avatarRadius))
         .child(src ? image(src).w(28).h(28).rounded(6) : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted))
-        .child(selectedCheck(selected, t))
         .child(div().absolute().right(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label))));
   return item.opacity(isDragging(owner, "providers", provider.id) ? 0.5 : 1)
     .on_mouse_down("left", (_e, cx) => railSwapPress(owner, "providers", provider.id, cx))

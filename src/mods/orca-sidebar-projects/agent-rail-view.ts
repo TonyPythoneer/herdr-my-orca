@@ -11,7 +11,7 @@ import {
   type RailGeometry,
   type RailRow,
 } from "./agent-rail.js";
-import { hoverHighlight, selectedCheck } from "../../shared/selection-ui.js";
+import { hoverHighlight } from "../../shared/selection-ui.js";
 import {
   applyRailOrder,
   dragSwapOrder,
@@ -306,7 +306,6 @@ function providerAvatar(owner: RailOwner, s: ProviderState, t: RailTheme): Nativ
             ? image(s.src).w(28).h(28).rounded(6)
             : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted),
         )
-        .child(selectedCheck(s.selected, t))
         .child(
           div()
             .absolute()
