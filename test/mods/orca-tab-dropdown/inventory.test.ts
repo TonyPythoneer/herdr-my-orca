@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, test, vi } from "vite-plus/test";
 import assert from "node:assert/strict";
-import NewMenu from "../../../src/mods/orca-new-menu/main.js";
-import type { AgentRow } from "../../../src/mods/orca-new-menu/rows.js";
+import NewMenu from "../../../src/mods/orca-tab-dropdown/main.js";
+import type { AgentRow } from "../../../src/mods/orca-tab-dropdown/rows.js";
 
 type Job = (cx: unknown) => unknown;
 type TestHost = typeof globalThis & {
@@ -45,7 +45,7 @@ function context() {
   return { cx, jobs };
 }
 
-test("orca-new-menu falls back to Herdr after the manager inventory expires", async () => {
+test("orca-tab-dropdown falls back to Herdr after the manager inventory expires", async () => {
   const known: AgentRow = { key: "codex", installed: false, run: ["codex"] };
   const fresh: AgentRow = { key: "codex", installed: true, run: ["/custom/codex"] };
   const shared = new Map<string, unknown>([

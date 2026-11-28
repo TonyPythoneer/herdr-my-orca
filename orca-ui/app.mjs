@@ -47,7 +47,7 @@ export const inPlace = [
       "Agent setup flyout with model, effort and option pickers beside a chosen agent row.",
     opens: ["tab.new(mod:orca-files)", "tab.new", "layout.select"],
     reachedBy: [
-      "overlay:flyout opened from an orca-new-menu row chevron, props {menu,space,name,key,argv}",
+      "overlay:flyout opened from an orca-tab-dropdown row chevron, props {menu,space,name,key,argv}",
     ],
     shared: ["orca-agent-flyout"],
     tests: [],
@@ -141,7 +141,7 @@ export const inPlace = [
       "command:search",
       "command:refresh",
       "command:remove-<name>",
-      "tab/pane mod:orca-files from orca-new-menu, orca-split-menu, orca-changes",
+      "tab/pane mod:orca-files from orca-tab-dropdown, orca-split-menu, orca-changes",
       "orca-right-sidebar-header reveals (search)",
     ],
     shared: [
@@ -160,11 +160,11 @@ export const inPlace = [
     layouts: ["orca#float-workspace"],
     props: "floating: edge bottom, align end",
     keys: ["layout:orca:ctrl-alt-a"],
-    opens: ["overlay:orca-new-menu", "tab.new", "agent.focus"],
+    opens: ["overlay:orca-tab-dropdown", "tab.new", "agent.focus"],
     reachedBy: ["command:toggle (orca-float-workspace.toggle)"],
     shared: ["orca-float-workspace.open", "orca-float-workspace.attention"],
     tests: [],
-    next: ["mods/orca-new-menu/main.js"],
+    next: ["mods/orca-tab-dropdown/main.js"],
   },
   {
     mod: "orca-handoff",
@@ -179,9 +179,9 @@ export const inPlace = [
     area: "center",
     description: "Welcome page shown with no workspace open; tiles start a new space or tab.",
     layouts: ["orca#main-landing"],
-    opens: ["space.new", "overlay:orca-new-menu"],
+    opens: ["space.new", "overlay:orca-tab-dropdown"],
     tests: [],
-    next: ["mods/orca-new-menu/main.js"],
+    next: ["mods/orca-tab-dropdown/main.js"],
   },
   {
     mod: "orca-context-menu",
@@ -203,7 +203,7 @@ export const inPlace = [
     next: ["mods/orca-header/main.js", "mods/orca-handoff/main.js", "mods/orca-worktree/main.js"],
   },
   {
-    mod: "orca-sidebar-top",
+    mod: "orca-workspace-settings",
     area: "sidebar-left",
     description: "Sidebar top: search field, page rows (Tasks etc.), and the Projects header.",
     layouts: ["orca#nav-top"],
@@ -213,15 +213,15 @@ export const inPlace = [
       "orca-sidebar-projects.expand-all",
       "orca-sidebar-projects.collapse-all",
       "space.new",
-      "overlay:orca-new-menu",
+      "overlay:orca-tab-dropdown",
     ],
     reachedBy: ["overlay:popup props.navMenu=workspace-options"],
     shared: ["left-sidebar.openPx", "projects.allCollapsed", "projects.count"],
     tests: [],
-    next: ["mods/orca-new-menu/main.js"],
+    next: ["mods/orca-tab-dropdown/main.js"],
   },
   {
-    mod: "orca-new-menu",
+    mod: "orca-tab-dropdown",
     area: "overlay-or-menu",
     description: "The + dropdown: omnibox, new terminal, worktree rows and agent launch entries.",
     opens: [
@@ -233,7 +233,7 @@ export const inPlace = [
       "overlay:orca-agent-flyout",
     ],
     reachedBy: [
-      "overlay:popup 288x512 from the + buttons in orca-header, orca-landing, orca-sidebar-top, orca-float-workspace",
+      "overlay:popup 288x512 from the + buttons in orca-header, orca-landing, orca-workspace-settings, orca-float-workspace",
     ],
     shared: ["agent-manager.inventory", "orca-agent-flyout"],
     tests: [],
@@ -349,7 +349,7 @@ export const inPlace = [
     ],
     opens: [
       "overlay:orca-context-menu",
-      "overlay:orca-new-menu",
+      "overlay:orca-tab-dropdown",
       "tab.new",
       "terminal.park",
       "terminal.keep",
@@ -365,7 +365,7 @@ export const inPlace = [
       "panel.openPx",
     ],
     tests: [],
-    next: ["mods/orca-context-menu/main.js", "mods/orca-new-menu/main.js"],
+    next: ["mods/orca-context-menu/main.js", "mods/orca-tab-dropdown/main.js"],
   },
   {
     mod: "orca-tasks",
@@ -390,12 +390,12 @@ export const inPlace = [
     description: "Worktree dialog: create, open or remove a git worktree for a folder or space.",
     opens: ["space.new", "space.select"],
     reachedBy: [
-      "overlay:dialog with props.action new|open|remove (from orca-new-menu, orca-context-menu)",
+      "overlay:dialog with props.action new|open|remove (from orca-tab-dropdown, orca-context-menu)",
     ],
     tests: [],
   },
 ];
 
 // Not mapped here, on purpose: `keys.json`, `settings.json` and `programs.json` are seed-once user
-// settings that the builder never writes, and the builder itself is `scripts/build-orca-ui.mjs`
-// (`node scripts/build-orca-ui.mjs --check --out .` is the read-only drift check).
+// settings that the builder never writes, and the builder itself is `src/tooling/build-orca-ui.ts`
+// (`npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --check --out .` is the read-only drift check).

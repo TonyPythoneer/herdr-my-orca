@@ -2,8 +2,8 @@ import { test, vi } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import type MenuClass from "../../../src/mods/orca-new-menu/main.js";
-import type { AgentRow } from "../../../src/mods/orca-new-menu/rows.js";
+import type MenuClass from "../../../src/mods/orca-tab-dropdown/main.js";
+import type { AgentRow } from "../../../src/mods/orca-tab-dropdown/rows.js";
 
 type Fn = (...args: unknown[]) => unknown;
 type Rec = { n: string; a: unknown[]; c: unknown[] };
@@ -207,7 +207,7 @@ vi.mock("herdr", () => {
   };
 });
 
-const GOLDEN = new URL("../../../mods/orca-new-menu/menu.golden.json", import.meta.url);
+const GOLDEN = new URL("../../../mods/orca-tab-dropdown/menu.golden.json", import.meta.url);
 const { plain } = rig;
 
 const canon = (x: unknown): unknown => {
@@ -446,7 +446,7 @@ async function start(host: Host, effects: Effects): Promise<Opened> {
   live.world = world;
   stubBrowserGlobals(world);
   vi.resetModules();
-  const { default: NewMenu } = await import("../../../src/mods/orca-new-menu/main.js");
+  const { default: NewMenu } = await import("../../../src/mods/orca-tab-dropdown/main.js");
   const jobs: Job[] = [];
   const timers: [number, () => void][] = [];
   const cx: Cx = {
@@ -769,11 +769,11 @@ test("New Terminal and FreeBuff use the light pointer tooltip and release it on 
     w.menu.tipHot = tip;
     const lit = JSON.stringify(treeOf(w.menu.render()));
     assert.match(lit, new RegExp(label));
-    assert.match(lit, /tip-arrow--orca-new-menu\.svg/);
+    assert.match(lit, /tip-arrow--orca-tab-dropdown\.svg/);
     assert.match(lit, /#f4f4f5/);
   }
   w.menu.tipHot = null;
-  assert.doesNotMatch(JSON.stringify(treeOf(w.menu.render())), /tip-arrow--orca-new-menu\.svg/);
+  assert.doesNotMatch(JSON.stringify(treeOf(w.menu.render())), /tip-arrow--orca-tab-dropdown\.svg/);
 });
 
 test("crossing onto a non-agent action drops the open agent flyout", async () => {

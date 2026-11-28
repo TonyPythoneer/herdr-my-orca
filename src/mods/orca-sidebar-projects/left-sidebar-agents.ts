@@ -27,6 +27,7 @@ export function agentSettingsOpen(): boolean {
 export function agentRailOwner(): RailOwner {
   return {
     railHover: null,
+    railDrag: null,
     officialRailScroll: ScrollHandle.new(),
     unofficialRailScroll: ScrollHandle.new(),
     providerRailScroll: ScrollHandle.new(),

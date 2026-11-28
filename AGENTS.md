@@ -48,12 +48,12 @@ config, not for changing it.
   `herdr` module (`run`, `shared`, `setShared`, `openOverlay`, `exec`, `nextCommand`). Do not
   add a custom bridge, parser or window helper for something Herdr already exposes.
 - Edit `orca-ui/shared/<file>.js`, never a copy in `mods/`: the last line of a copy says
-  `Generated from ...`. Run `node scripts/build-orca-ui.mjs --out .` after the edit.
+  `Generated from ...`. Run `npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --out .` after the edit.
 - A mod listed under `orca-ui/features/**/manifest.json` is edited in its feature folder, then
   regenerated; see `README.md` > How the repo is organized.
 - A mod may import only files in its own folder. Cross-mod code belongs in `orca-ui/shared/`.
 - Never edit a generated copy to "try" something. Re-run the builder.
-- Before changing UI files, follow `.agents/skills/herdr-app-dev-sync/SKILL.md` (repo and live
+- Before changing UI files, follow `.agents/skills/herdr-app-always-goes-live/SKILL.md` (repo and live
   config must match). Live input needs an unlocked Mac with Herdr frontmost; `open`, `shot` and
   `tree` work while locked.
 
@@ -63,7 +63,7 @@ config, not for changing it.
 node --test mods/<mod>                 # that mod
 node --test scripts/ui-index.test.mjs  # after touching the index or CLI
 herdr-app check mods/<mod>             # load the mod once; never against the live path
-node scripts/build-orca-ui.mjs --check --out .
+npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --check --out .
 npm ci && npx --no-install vp lint mods scripts orca-ui
 ```
 

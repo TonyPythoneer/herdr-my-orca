@@ -836,7 +836,7 @@ var AgentConfigCore = class {
 		return v_flex().gap(2).when(this.groupOption(), (el) => this.withGroupFilter(el, t)).child(this.scrollList("agent-config-models", rows, true)).child(div().id("refresh-models").mx(6).px(4).h(ROW.height).flex().items_center().text_size(11).text_color(t.muted).cursor_pointer().on_click((_e, cx) => this.refresh(cx)).child(this.refreshing ? "Refreshing…" : "↻ Refresh list"));
 	}
 	tipCard(label) {
-		return div().relative().mt(4).pt(7).child(h_flex().min_h(30).px(10).py(4).items_center().rounded(8).border_1().border_color("#e4e4e7").bg("#f4f4f5").shadow_md().child(div().max_w(260).text_size(12).font_medium().text_color("#18181b").child(label))).child(div().absolute().top(0).left(0).right(0).flex().justify_center().child(svg("mods/orca-assets/tip-arrow--orca-new-menu.svg").w(14).h(8).flex_none()));
+		return div().relative().mt(4).pt(7).child(h_flex().min_h(30).px(10).py(4).items_center().rounded(8).border_1().border_color("#e4e4e7").bg("#f4f4f5").shadow_md().child(div().max_w(260).text_size(12).font_medium().text_color("#18181b").child(label))).child(div().absolute().top(0).left(0).right(0).flex().justify_center().child(svg("mods/orca-assets/tip-arrow--orca-tab-dropdown.svg").w(14).h(8).flex_none()));
 	}
 	tip(id, label, trigger, full = false) {
 		const lit = div().id(`cfg-hot-${id}`).when(full, (el) => el.w_full().flex_none()).on_hover((hovered, cx) => {

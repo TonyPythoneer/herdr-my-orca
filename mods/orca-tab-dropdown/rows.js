@@ -1,6 +1,6 @@
 import { OFFICIAL_AGENT_KEYS } from "./agent-catalog.js";
 
-                                 
+                                     
 function agentWindow(total, start, full = 5) {
 	const last = Math.max(0, total - full);
 	const at = Math.max(0, Math.min(start, last));

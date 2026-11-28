@@ -1,4 +1,12 @@
-import { div, svg, image, type Color, type Context, type NativeElement } from "gpui-kit";
+import {
+  div,
+  svg,
+  image,
+  type Color,
+  type Context,
+  type MouseMoveEvent,
+  type NativeElement,
+} from "gpui-kit";
 import { h_flex, v_flex, Link, type ScrollHandle } from "gpui-base";
 import { appHome } from "herdr";
 import {
@@ -11,7 +19,14 @@ import {
   type RailGeometry,
   type RailRow,
 } from "./agent-rail.js";
-import { hoverHighlight, selectedCheck } from "../../shared/selection-ui.js";
+import { hoverHighlight } from "../../shared/selection-ui.js";
+import {
+  applyRailOrder,
+  dragSlot,
+  moveInOrder,
+  persistRailOrder,
+  readRailOrder,
+} from "../../shared/rail-order.js";
 
 export type RailTheme = {
   accent: Color;
@@ -37,6 +52,14 @@ export type ProviderRow = {
 export type RailOwner = {
   railHover: string | null;
   railControlHover?: string | null;
+  railDrag?: {
+    group: "unofficial" | "providers";
+    key: string;
+    base: string[];
+    pressOffset: number;
+    pointerY: number;
+  } | null;
+  railDisplayed?: { unofficial?: string[]; providers?: string[] };
   railSelection: string;
   readonly litellmEnabled: boolean;
   officialRailOpen?: boolean;
@@ -209,7 +232,7 @@ function avatar(
                 .when(!row.installed, (el) => el.opacity(0.45))
                 .child(icon(row, 28, t)),
         )
-        .when(s.global && owner.litellmEnabled, (el) => el.child(litellmBadge(t))),
+        .when(!s.global && owner.litellmEnabled, (el) => el.child(litellmBadge(t))),
     );
 }
 
@@ -291,11 +314,10 @@ function providerAvatar(owner: RailOwner, s: ProviderState, t: RailTheme): Nativ
             ? image(s.src).w(28).h(28).rounded(6)
             : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted),
         )
-        .child(selectedCheck(s.selected, t))
         .child(
           div()
             .absolute()
-            .left(2)
+            .right(2)
             .bottom(2)
             .size(11)
             .rounded_full()
@@ -303,8 +325,7 @@ function providerAvatar(owner: RailOwner, s: ProviderState, t: RailTheme): Nativ
             .border_2()
             .border_color(t.raised)
             .tooltip(s.label),
-        )
-        .when(owner.litellmEnabled, (el) => el.child(litellmBadge(t))),
+        ),
     );
 }
 
@@ -585,6 +606,87 @@ function groupShell(
     );
 }
 
+type RailSwapGroup = "unofficial" | "providers";
+
+// Drag to reorder (like a todo list): grab a row, it follows the pointer, and the other rows slide
+// to make room. Release commits the order on screen to the saved "rail.order".
+function railDragStart(
+  owner: RailOwner,
+  group: RailSwapGroup,
+  key: string,
+  pressOffset: number,
+  cx: Context,
+): void {
+  const base = owner.railDisplayed?.[group] ?? [];
+  const index = base.indexOf(key);
+  if (index < 0) return;
+  owner.railDrag = { group, key, base, pressOffset, pointerY: index * RAIL.row + pressOffset };
+  cx.notify();
+}
+
+function railDragMove(owner: RailOwner, group: RailSwapGroup, e: MouseMoveEvent, cx: Context): void {
+  const drag = owner.railDrag;
+  if (!drag || drag.group !== group) return;
+  drag.pointerY = e.local_position?.y ?? drag.pointerY;
+  cx.notify();
+}
+
+function railDragEnd(owner: RailOwner, cx: Context): void {
+  const drag = owner.railDrag;
+  owner.railDrag = null;
+  if (drag) {
+    const target = dragSlot(drag.pointerY, drag.pressOffset, RAIL.row, drag.base.length);
+    const next = moveInOrder(drag.base, drag.key, target);
+    if (next.some((key, i) => key !== drag.base[i])) {
+      persistRailOrder({ ...readRailOrder(), [drag.group]: next });
+    }
+  }
+  cx.notify();
+}
+
+// The rows of a draggable group. Each row sits in its slot; the dragged row sits under the pointer
+// and is lifted with a shadow, while the others move to the slots the drag order gives them.
+function dragRows<T>(
+  owner: RailOwner,
+  group: RailSwapGroup,
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  render: (item: T) => NativeElement,
+): NativeElement {
+  const drag = owner.railDrag && owner.railDrag.group === group ? owner.railDrag : null;
+  const byKey = new Map(items.map((item) => [keyOf(item), item]));
+  const keys = drag
+    ? moveInOrder(
+        drag.base,
+        drag.key,
+        dragSlot(drag.pointerY, drag.pressOffset, RAIL.row, drag.base.length),
+      )
+    : items.map(keyOf);
+  return div()
+    .relative()
+    .w(RAIL.width)
+    .h(keys.length * RAIL.row)
+    .children(
+      keys.map((key, slot) => {
+        const dragged = drag?.key === key;
+        const top = drag && dragged ? drag.pointerY - drag.pressOffset : slot * RAIL.row;
+        const item = byKey.get(key);
+        return div()
+          .absolute()
+          .left(0)
+          .top(top)
+          .w(RAIL.width)
+          .h(RAIL.row)
+          .when(!dragged, (el) => el.transition("top", MOTION))
+          .when(dragged, (el) => el.shadow_lg())
+          .on_mouse_down("left", (e, cx) =>
+            railDragStart(owner, group, key, e.local_position?.y ?? 0, cx),
+          )
+          .when(item !== undefined, (el) => el.child(render(item!)));
+      }),
+    );
+}
+
 function groupView(
   owner: RailOwner,
   title: string,
@@ -595,8 +697,14 @@ function groupView(
   const key = title === "Official" ? "officialRailOpen" : "unofficialRailOpen";
   const open = owner[key] !== false;
   const action = `${open ? "Collapse" : "Expand"} ${title}`;
-  const medal = title === "Official" ? "🥇" : "🥉";
-  const { height, scroll: overflow } = railViewport(rows.length);
+  const medal = title === "Official" ? "🏅" : "🥉";
+  const isUnofficial = title === "Unofficial";
+  const rowsInGroup = railRows(rows);
+  const displayed = isUnofficial
+    ? applyRailOrder(rowsInGroup, readRailOrder().unofficial, (row) => row.key)
+    : rowsInGroup;
+  if (isUnofficial) owner.railDisplayed = { ...owner.railDisplayed, unofficial: displayed.map((row) => row.key) };
+  const { height, scroll: overflow } = railViewport(displayed.length);
   const folder = folderTile(
     "am-rail-folder-" + title.toLowerCase(),
     action,
@@ -604,15 +712,32 @@ function groupView(
       owner[key] = !open;
       cx.notify();
     },
-    div().absolute().right(-7).bottom(-6).text_size(14).child(medal),
+    div().absolute().right(-7).bottom(-6).text_size(20).child(medal),
     t,
   );
   const list = v_flex()
     .id("am-rail-list-" + title.toLowerCase())
+    .when(isUnofficial, (el) =>
+      el
+        .on_mouse_move((e, cx) => railDragMove(owner, "unofficial", e, cx))
+        .on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx)),
+    )
     .w(RAIL.width)
     .track_scroll(scroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
-    .children(railRows(rows).map((row) => railItem(owner, row, t, t.surface)));
+    .children(
+      isUnofficial
+        ? [
+            dragRows(
+              owner,
+              "unofficial",
+              displayed,
+              (row) => row.key,
+              (row) => railItem(owner, row, t, t.surface),
+            ),
+          ]
+        : displayed.map((row) => railItem(owner, row, t, t.surface)),
+    );
   return groupShell(folder, list, open, height, t);
 }
 
@@ -623,7 +748,9 @@ function providerGroupView(
 ): NativeElement {
   const open = owner.providerRailOpen !== false;
   const action = `${open ? "Collapse" : "Expand"} Model providers`;
-  const { height, scroll: overflow } = railViewport(providers.length + 1);
+  const displayed = applyRailOrder(providers, readRailOrder().providers, (provider) => provider.id);
+  owner.railDisplayed = { ...owner.railDisplayed, providers: displayed.map((provider) => provider.id) };
+  const { height, scroll: overflow } = railViewport(displayed.length + 1);
   const folder = folderTile(
     "am-rail-folder-model-providers",
     action,
@@ -648,10 +775,20 @@ function providerGroupView(
   );
   const list = v_flex()
     .id("am-rail-list-model-providers")
+    .on_mouse_move((e, cx) => railDragMove(owner, "providers", e, cx))
+    .on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx))
     .w(RAIL.width)
     .track_scroll(owner.providerRailScroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
-    .children(providers.map((provider) => providerItem(owner, provider, t)))
+    .children([
+      dragRows(
+        owner,
+        "providers",
+        displayed,
+        (provider) => provider.id,
+        (provider) => providerItem(owner, provider, t),
+      ),
+    ])
     .child(providerAddItem(owner, t));
   return groupShell(folder, list, open, height, t);
 }

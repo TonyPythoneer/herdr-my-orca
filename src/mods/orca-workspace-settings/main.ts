@@ -96,9 +96,8 @@ const PAGE = {
   projectOrder: "projectOrder",
 } as const;
 const WORKSPACE_OPTIONS_MENU = "workspace-options";
-const SELF_MOD = "orca-sidebar-top";
+const SELF_MOD = "orca-workspace-settings";
 const PICKER_MOD = "picker";
-const NEW_MENU_MOD = "orca-new-menu";
 const LEFT_SIDEBAR_ID = "left-sidebar";
 const LEFT_SIDEBAR_OPEN_PX_KEY = "left-sidebar.openPx";
 const PROJECTS_ALL_COLLAPSED_KEY = "projects.allCollapsed";
@@ -423,13 +422,6 @@ function addProjectButton(t: NavTheme): NativeElement {
   });
 }
 
-function newWorkspaceButton(t: NavTheme): NativeElement {
-  return IconButton("proj-new", "New workspace", svg(ICON.plus).size(14), {
-    t,
-    onClick: () => openOverlay({ mod: NEW_MENU_MOD, kind: "popup", width: 288 }),
-  });
-}
-
 function hostPatch(row: Row, o: Options): Partial<Options> | null {
   const all = hostChoices().map((h) => h.id);
   const host = row.host as string | null;
@@ -710,8 +702,7 @@ export default class Nav extends View {
           .items_center()
           .gap(4)
           .child(optionsButton(t))
-          .child(addProjectButton(t))
-          .child(newWorkspaceButton(t)),
+          .child(addProjectButton(t)),
       );
   }
 

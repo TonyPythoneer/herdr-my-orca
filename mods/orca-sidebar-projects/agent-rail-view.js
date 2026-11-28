@@ -4,7 +4,8 @@ import { div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Link } from "gpui-base";
 import { appHome } from "herdr";
 import { RAIL, railGeometry, railViewport, railRows, railControl } from "./agent-rail.js";
-import { hoverHighlight, selectedCheck } from "./selection-ui.js";
+import { hoverHighlight } from "./selection-ui.js";
+import { applyRailOrder, dragSlot, moveInOrder, persistRailOrder, readRailOrder } from "./rail-order.js";
 
 const MOTION = { duration: 200, easing: "ease-out" };
 const LITELLM_ICON = "mods/orca-assets/litellm_favicon_light_32.png";
@@ -54,7 +55,7 @@ export function railItem(owner, row, t, tile = t.raised) {
     .child(div().size_full().relative().flex().items_center().justify_center()
       .child(global ? svg("mods/orca-assets/bot.svg").size(25).text_color(t.foreground)
         : div().when(!row.installed, el => el.opacity(0.45)).child(icon(row,28,t)))
-      .when(global && owner.litellmEnabled, el => el.child(litellmBadge(t)))));
+      .when(!global && owner.litellmEnabled, el => el.child(litellmBadge(t)))));
   return item.child(railAction(owner, row, t, control, label));
 }
 
@@ -67,7 +68,7 @@ function providerItem(owner, provider, t) {
   const tone = { healthy: t.done, checking: t.accent, unhealthy: t.blocked, unknown: t.dim }[health] ?? t.dim;
   const label = `${provider.name || "Model provider"} · ${{ healthy: "Healthy", checking: "Checking", unhealthy: "Unhealthy", unknown: "Not checked" }[health] ?? "Not checked"}`;
   const src = String(provider.iconPath ?? "").startsWith(`${appHome()}/`) ? String(provider.iconPath).slice(appHome().length + 1) : provider.iconPath;
-  return div().id(`am-rail-${key}`).relative().w(RAIL.width).h(RAIL.row).flex_none()
+  const item = div().id(`am-rail-${key}`).relative().w(RAIL.width).h(RAIL.row).flex_none()
     .on_hover((inside, cx) => {
       if (!inside && owner.railHover !== key) return;
       const next = inside ? key : null;
@@ -83,9 +84,8 @@ function providerItem(owner, provider, t) {
       .child(div().size_full().relative().flex().items_center().justify_center()
         .child(hoverHighlight(hovered && !selected, t, RAIL.avatarRadius))
         .child(src ? image(src).w(28).h(28).rounded(6) : svg("mods/orca-assets/hard-drive.svg").size(28).text_color(t.muted))
-        .child(selectedCheck(selected, t))
-        .child(div().absolute().left(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label))
-        .when(owner.litellmEnabled, el => el.child(litellmBadge(t)))));
+        .child(div().absolute().right(2).bottom(2).size(11).rounded_full().bg(tone).border_2().border_color(t.raised).tooltip(label))));
+  return item;
 }
 
 function providerAddItem(owner, t) {
@@ -163,12 +163,67 @@ function railAction(owner, row, t, control, label) {
 }
 
 // A Discord-style rounded group has a folder toggle at the top and agent tiles beneath it.
+// Drag to reorder (like a todo list): grab a row, it follows the pointer, and the other rows slide
+// to make room. Release commits the order on screen to the saved "rail.order".
+function railDragStart(owner, group, key, pressOffset, cx) {
+  const base = owner.railDisplayed?.[group] ?? [];
+  const index = base.indexOf(key);
+  if (index < 0) return;
+  owner.railDrag = { group, key, base, pressOffset, pointerY: index * RAIL.row + pressOffset };
+  cx.notify();
+}
+
+function railDragMove(owner, group, e, cx) {
+  const drag = owner.railDrag;
+  if (!drag || drag.group !== group) return;
+  drag.pointerY = e.local_position?.y ?? drag.pointerY;
+  cx.notify();
+}
+
+function railDragEnd(owner, cx) {
+  const drag = owner.railDrag;
+  owner.railDrag = null;
+  if (drag) {
+    const target = dragSlot(drag.pointerY, drag.pressOffset, RAIL.row, drag.base.length);
+    const next = moveInOrder(drag.base, drag.key, target);
+    if (next.some((key, i) => key !== drag.base[i])) {
+      persistRailOrder({ ...readRailOrder(), [drag.group]: next });
+    }
+  }
+  cx.notify();
+}
+
+// The rows of a draggable group. Each row sits in its slot; the dragged row sits under the pointer
+// and is lifted with a shadow, while the others move to the slots the drag order gives them.
+function dragRows(owner, group, items, keyOf, render) {
+  const drag = owner.railDrag && owner.railDrag.group === group ? owner.railDrag : null;
+  const byKey = new Map(items.map(item => [keyOf(item), item]));
+  const keys = drag
+    ? moveInOrder(drag.base, drag.key, dragSlot(drag.pointerY, drag.pressOffset, RAIL.row, drag.base.length))
+    : items.map(keyOf);
+  return div().relative().w(RAIL.width).h(keys.length * RAIL.row).children(
+    keys.map((key, slot) => {
+      const dragged = drag?.key === key;
+      const top = drag && dragged ? drag.pointerY - drag.pressOffset : slot * RAIL.row;
+      const item = byKey.get(key);
+      return div().absolute().left(0).top(top).w(RAIL.width).h(RAIL.row)
+        .when(!dragged, el => el.transition("top", MOTION))
+        .when(dragged, el => el.shadow_lg())
+        .on_mouse_down("left", (e, cx) => railDragStart(owner, group, key, e.local_position?.y ?? 0, cx))
+        .when(item !== undefined, el => el.child(render(item)));
+    }),
+  );
+}
+
 function groupView(owner, title, rows, scroll, t) {
   const key = title === "Official" ? "officialRailOpen" : "unofficialRailOpen";
   const open = owner[key] !== false;
   const action = `${open ? "Collapse" : "Expand"} ${title}`;
-  const medal = title === "Official" ? "🥇" : "🥉";
-  const {height,scroll:overflow} = railViewport(rows.length);
+  const medal = title === "Official" ? "🏅" : "🥉";
+  const isUnofficial = title === "Unofficial";
+  const displayed = isUnofficial ? applyRailOrder(railRows(rows), readRailOrder().unofficial, row => row.key) : railRows(rows);
+  if (isUnofficial) owner.railDisplayed = {...owner.railDisplayed, unofficial: displayed.map(row => row.key)};
+  const {height,scroll:overflow} = railViewport(displayed.length);
   const id = "am-rail-list-" + title.toLowerCase();
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
@@ -179,19 +234,25 @@ function groupView(owner, title, rows, scroll, t) {
         .on_click((_e,cx) => { owner[key] = !open; cx.notify(); })
         .child(div().relative().size(32).flex().items_center().justify_center()
           .child(svg("mods/orca-assets/folder--orca-sidebar-projects.svg").size(25).text_color(t.accent))
-          .child(div().absolute().right(-7).bottom(-6).text_size(14).child(medal))))
+          .child(div().absolute().right(-7).bottom(-6).text_size(20).child(medal))))
       .child(div().relative().w(RAIL.width).h(open ? height : 0).overflow_hidden().transition("height", MOTION)
         .opacity(open ? 1 : 0).transition("opacity", MOTION)
         .child(div().relative().w(RAIL.width).h(height).overflow_hidden()
-        .child(v_flex().id(id).w(RAIL.width).track_scroll(scroll)
+        .child(v_flex().id(id)
+          .when(isUnofficial, el => el.on_mouse_move((e, cx) => railDragMove(owner, "unofficial", e, cx)).on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx)))
+          .w(RAIL.width).track_scroll(scroll)
           .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
-          .children(railRows(rows).map(row => railItem(owner,row,t,t.surface)))))));
+          .children(isUnofficial
+            ? [dragRows(owner, "unofficial", displayed, row => row.key, row => railItem(owner,row,t,t.surface))]
+            : displayed.map(row => railItem(owner,row,t,t.surface)))))));
 }
 
 function providerGroupView(owner, providers, t) {
   const open = owner.providerRailOpen !== false;
   const action = `${open ? "Collapse" : "Expand"} Model providers`;
-  const {height,scroll:overflow} = railViewport(providers.length + 1);
+  const displayed = applyRailOrder(providers, readRailOrder().providers, provider => provider.id);
+  owner.railDisplayed = {...owner.railDisplayed, providers: displayed.map(provider => provider.id)};
+  const {height,scroll:overflow} = railViewport(displayed.length + 1);
   return div().relative().w(RAIL.width).flex_none().mb(RAIL.groupGap)
     .child(div().absolute().left(RAIL.groupLeft).w(RAIL.groupWidth).top(0).bottom(0).rounded(RAIL.groupRadius).bg(t.raised))
     .child(v_flex().w(RAIL.width)
@@ -209,9 +270,9 @@ function providerGroupView(owner, providers, t) {
           .child(
             div().relative().w(RAIL.width).h(height).overflow_hidden()
               .child(
-                v_flex().id("am-rail-list-model-providers").w(RAIL.width).track_scroll(owner.providerRailScroll)
+                v_flex().id("am-rail-list-model-providers").on_mouse_move((e, cx) => railDragMove(owner, "providers", e, cx)).on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx)).w(RAIL.width).track_scroll(owner.providerRailScroll)
                   .when(overflow, inner => inner.absolute().inset_0().overflow_y_scroll())
-                  .children(providers.map(provider => providerItem(owner,provider,t)))
+                  .children([dragRows(owner, "providers", displayed, provider => provider.id, provider => providerItem(owner,provider,t))])
                   .child(providerAddItem(owner,t)),
               ),
           ),

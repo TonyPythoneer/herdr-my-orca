@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test, vi } from "vite-plus/test";
-import NewMenu from "../../../src/mods/orca-new-menu/main.ts";
-import type { AgentRow } from "../../../src/mods/orca-new-menu/rows.ts";
+import NewMenu from "../../../src/mods/orca-tab-dropdown/main.ts";
+import type { AgentRow } from "../../../src/mods/orca-tab-dropdown/rows.ts";
 
 type Call = [string, unknown[]];
 const builder = vi.hoisted(() => {
@@ -137,7 +137,7 @@ test("local inventory is ready after probes, managed commands launch only while 
   );
   assert.match(
     JSON.stringify(collect(menu.render())),
-    /orca-new-menu[\s\S]*New Terminal[\s\S]*Agent Settings/,
+    /orca-tab-dropdown[\s\S]*New Terminal[\s\S]*Agent Settings/,
   );
   const row = menu.agentRows()[0];
   row.run?.();

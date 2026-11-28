@@ -26,7 +26,7 @@ helper that another mod may need.
 ## 2. Decide where the change belongs
 
 - Shared behaviour/UI used by more than one mod -> `orca-ui/shared/<name>.js`, then
-  `node scripts/build-orca-ui.mjs --out .`. Never edit the generated copy in `mods/`.
+  `npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --out .`. Never edit the generated copy in `mods/`.
 - A generated feature mod -> its `orca-ui/features/<area>/<feature>/` source, then the builder.
 - A hand-written mod -> `mods/<mod>/`, its own file. Keep pure logic in its own module with a
   test (the surrounding mods show the pattern).
@@ -45,7 +45,7 @@ Id shape: `<mod short name>-<name>`. Dynamic rows may use a template (`am-toggle
 ```sh
 node --test mods/<mod>
 herdr-app check mods/<mod>          # isolated tree, not the live path
-node scripts/build-orca-ui.mjs --check --out .
+npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --check --out .
 ```
 
 If a render snapshot changed on purpose, delete it and let the test re-record, then review the
@@ -72,7 +72,7 @@ back to `open` + `shot`/`tree` and say what was not verified.
 
 ## 5. Sync the live config
 
-Follow `.agents/skills/herdr-app-dev-sync/SKILL.md` for every changed file in `mods/`,
+Follow `.agents/skills/herdr-app-always-goes-live/SKILL.md` for every changed file in `mods/`,
 `layouts/`, `themes/`, or the JSON config. Repo first, then one `cp` per file, then `cmp`.
 
 ## Rules that save the next agent time

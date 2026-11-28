@@ -69,15 +69,8 @@ it("the shared control names are one list, used by both the reader and the audit
   assert.deepEqual(SHARED_CONTROLS, ["IconButton", "DialogButton"]);
 });
 
-it("an IconButton call site names its id, label and role for the index", () => {
-  const hit = findEntity(index, "proj-new");
-  assert.equal(hit.file, "src/mods/orca-sidebar-top/main.ts");
-  assert.equal(hit.label, "New workspace");
-  assert.equal(hit.role, "button");
-  assert.match(
-    readFileSync(`${ROOT}/${hit.file}`, "utf8").split(/\r?\n/)[hit.line - 1],
-    /function newWorkspaceButton/,
-  );
+it("the removed new-workspace IconButton is absent from the index", () => {
+  assert.equal(findEntity(index, "proj-new"), null);
 });
 
 it("each component points at a declaration with its name", () => {

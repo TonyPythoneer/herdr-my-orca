@@ -7,7 +7,7 @@
         "mods/orca-agent-settings/agent-catalog.js",
         "mods/orca-float-workspace/agent-catalog.js",
         "mods/orca-header/agent-catalog.js",
-        "mods/orca-new-menu/agent-catalog.js",
+        "mods/orca-tab-dropdown/agent-catalog.js",
         "mods/orca-pane-header/agent-catalog.js",
         "mods/orca-right-sidebar-agents/agent-catalog.js",
         "mods/orca-status-footer/agent-catalog.js",
@@ -26,7 +26,7 @@
       "outputs": [
         "mods/orca-agent-flyout/agent-flyout.js",
         "mods/orca-agent-settings/agent-flyout.js",
-        "mods/orca-new-menu/agent-flyout.js"
+        "mods/orca-tab-dropdown/agent-flyout.js"
       ]
     },
     {
@@ -63,7 +63,7 @@
         "mods/orca-float-workspace/icon-button.js",
         "mods/orca-header/icon-button.js",
         "mods/orca-pane-header/icon-button.js",
-        "mods/orca-sidebar-top/icon-button.js",
+        "mods/orca-workspace-settings/icon-button.js",
         "mods/orca-status-footer/icon-button.js",
         "mods/orca-status-ports/icon-button.js"
       ]
@@ -123,7 +123,7 @@
         "mods/orca-right-sidebar-agents/theme-color.js",
         "mods/orca-right-sidebar-placeholders/theme-color.js",
         "mods/orca-sidebar-projects/theme-color.js",
-        "mods/orca-sidebar-top/theme-color.js",
+        "mods/orca-workspace-settings/theme-color.js",
         "mods/orca-status-bar/theme-color.js",
         "mods/orca-status-footer/theme-color.js",
         "mods/orca-status-ports/theme-color.js",

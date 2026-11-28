@@ -108,7 +108,7 @@ it("add project runs space.new and create workspace opens the new menu", () => {
   callback(byId(tree, "landing-create"), "on_click")();
   assert.deepEqual(state.calls, [
     ["run", "space.new"],
-    ["open", { mod: "orca-new-menu", kind: "popup", width: 288 }],
+    ["open", { mod: "orca-tab-dropdown", kind: "popup", frame: "none", width: 288 }],
   ]);
 });
 

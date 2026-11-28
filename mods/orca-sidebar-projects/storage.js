@@ -16,7 +16,7 @@ export function stored(key, fallback) {
   } catch { return fallback; }
 }
 
-// Workspace options written by orca-sidebar-top's options popup (SidebarWorkspaceOptionsMenu.tsx:23-100).
+// Workspace options written by orca-workspace-settings's options popup (SidebarWorkspaceOptionsMenu.tsx:23-100).
 // Orca persists these in PersistedUIState (`persisted-ui-state-types.ts:39-89`). The options popup
 // publishes them in Herdr's app-wide shared store; localStorage is a fallback for older versions.
 // Defaults are NO_WORKSPACE_ROW_FILTERS

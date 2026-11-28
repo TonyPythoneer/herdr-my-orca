@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "vite-plus/test";
-import { MODELS } from "../../../src/mods/orca-new-menu/models.js";
+import { MODELS } from "../../../src/mods/orca-tab-dropdown/models.js";
 
 type Exec = (command: string, args?: string[]) => Promise<{ code: number; stdout?: string }>;
 const globals = globalThis as typeof globalThis & { __herdrExec?: Exec };

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test, vi } from "vite-plus/test";
 import { callsOf } from "../../stubs/gpui-kit";
-import Nav from "../../../src/mods/orca-sidebar-top/main";
+import Nav from "../../../src/mods/orca-workspace-settings/main";
 
 type Ctx = Parameters<Nav["render"]>[0];
 type Theme = Parameters<Nav["menuRow"]>[2];

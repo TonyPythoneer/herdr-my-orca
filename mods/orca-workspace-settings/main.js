@@ -4,7 +4,7 @@ import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { closeOverlay, layout, machines, openOverlay, pickFolder, props, run, setShared, shared, spaces, theme, window } from "herdr";
 
-                                    
+                                           
 const ROW = {
 	label: "label",
 	heading: "heading",
@@ -28,9 +28,8 @@ const PAGE = {
 	projectOrder: "projectOrder"
 };
 const WORKSPACE_OPTIONS_MENU = "workspace-options";
-const SELF_MOD = "orca-sidebar-top";
+const SELF_MOD = "orca-workspace-settings";
 const PICKER_MOD = "picker";
-const NEW_MENU_MOD = "orca-new-menu";
 const LEFT_SIDEBAR_ID = "left-sidebar";
 const LEFT_SIDEBAR_OPEN_PX_KEY = "left-sidebar.openPx";
 const PROJECTS_ALL_COLLAPSED_KEY = "projects.allCollapsed";
@@ -265,16 +264,6 @@ function addProjectButton(t) {
 		}
 	});
 }
-function newWorkspaceButton(t) {
-	return IconButton("proj-new", "New workspace", svg(ICON.plus).size(14), {
-		t,
-		onClick: () => openOverlay({
-			mod: NEW_MENU_MOD,
-			kind: "popup",
-			width: 288
-		})
-	});
-}
 function hostPatch(row, o) {
 	const all = hostChoices().map((h) => h.id);
 	const host = row.host;
@@ -470,7 +459,7 @@ var Nav = class extends View {
 				this.headerHover = live;
 				eventCx.notify();
 			}
-		}).child(this.projectsTitle(t)).child(h_flex().flex_none().items_center().gap(4).child(optionsButton(t)).child(addProjectButton(t)).child(newWorkspaceButton(t)));
+		}).child(this.projectsTitle(t)).child(h_flex().flex_none().items_center().gap(4).child(optionsButton(t)).child(addProjectButton(t)));
 	}
 	projectsTitle(t) {
 		const allCollapsed = Boolean(shared(PROJECTS_ALL_COLLAPSED_KEY));

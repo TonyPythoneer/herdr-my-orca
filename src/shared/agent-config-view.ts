@@ -1349,7 +1349,7 @@ class AgentConfigCore {
           .right(0)
           .flex()
           .justify_center()
-          .child(svg("mods/orca-assets/tip-arrow--orca-new-menu.svg").w(14).h(8).flex_none()),
+          .child(svg("mods/orca-assets/tip-arrow--orca-tab-dropdown.svg").w(14).h(8).flex_none()),
       );
   }
 

@@ -28,7 +28,7 @@ My [Herdr](https://herdr.dev) config: an Orca-style window built from Herdr's la
   one, a named tab keeps its name, and the window only follows when the moved tab was on screen.
   The watcher is `orca-status-bar/wt-follow.js` in the always-mounted bottom bar: it reads each agent's
   own process folder (`hc get` → `foreground.cwd`) and polls every 3 s.
-- **Custom**: `orca-new-menu` (the "Start an agent" menu with the `>` setup flyout), `orca-agent-flyout` (model and effort chooser, cached per CLI version), `orca-header` and `orca-right-sidebar-placeholders` changes.
+- **Custom**: `orca-tab-dropdown` (the "Start an agent" menu with the `>` setup flyout), `orca-agent-flyout` (model and effort chooser, cached per CLI version), `orca-header` and `orca-right-sidebar-placeholders` changes.
 - **Refresh branches**: the Projects header's Workspace options popup starts with it. It asks
   `orca-sidebar-projects` (`orca-sidebar-projects.refresh`) to re-read every project it knows — open or closed —
   instead of waiting for the 60-second fallback or a filesystem wake: each project's branch and
@@ -118,9 +118,9 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   mod (edited under `mods/<mod>/`) with its layout nodes, keys, what it opens or shares, tests and
   `next`. A test checks that all 23 mods are covered and that the entries match the repo. A feature is edited in
   `orca-ui/features/<area>/<feature>/` and regenerated with
-  `node scripts/build-orca-ui.mjs --out .`. Its `manifest.json` lists every managed output, test,
+  `npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --out .`. Its `manifest.json` lists every managed output, test,
   layout slot and key section, so the copy under `mods/` is delivery format, not an edit location.
-  `node scripts/build-orca-ui.mjs --check --out .` reports drift and undeclared files in a feature's
+  `npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --check --out .` reports drift and undeclared files in a feature's
   mod folder. A build stops, writing nothing, when a copy that differs is newer than its source
   (a likely hand edit, or a fresh `git checkout`); compare, then rerun with `--force` to overwrite.
   Run `--check` before you start editing to find existing drift. Anything no manifest lists is
@@ -141,9 +141,9 @@ The wrapper passes the payload on to `$HERDR_STATUSLINE`, then `ccstatusline` fr
   `gpui-base` and `herdr`, so `render.test.js` renders the real `main.js` and compares it with
   `render.snap.json` (delete the snapshot to re-record after an intended view change).
 - Live config is `~/.config/herdr-app`; changes are copied file by file, never mirrored
-  (see [.agents/skills/herdr-app-dev-sync/SKILL.md](.agents/skills/herdr-app-dev-sync/SKILL.md)).
+  (see [.agents/skills/herdr-app-always-goes-live/SKILL.md](.agents/skills/herdr-app-always-goes-live/SKILL.md)).
 - Checks: `node --test mods scripts orca-ui/features`, `herdr-app check <mod>`, `herdr-app status`,
-  `node scripts/build-orca-ui.mjs --check --out .`. Quality gates: `npm ci` then `npx --no-install vp lint mods scripts orca-ui`
+  `npx --no-install vp pack && npx --no-install vpx src/tooling/build-orca-ui.ts --check --out .`. Quality gates: `npm ci` then `npx --no-install vp lint mods scripts orca-ui`
   (complexity, nesting, function length, parameters, shadowing; generated files are skipped) and
   `node --test --experimental-test-coverage mods scripts orca-ui/features`.
   CI runs unit/contract and behavior suites separately; the aggregate check requires both.
