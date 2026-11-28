@@ -52,7 +52,6 @@ export function applyRailOrder<T>(
   return ordered;
 }
 
-// The order while an icon is dragged: `key` moves to slot `target`; the others keep their order.
 export function moveInOrder(base: readonly string[], key: string, target: number): string[] {
   if (!base.includes(key)) return base.slice();
   const rest = base.filter((item) => item !== key);
@@ -60,7 +59,6 @@ export function moveInOrder(base: readonly string[], key: string, target: number
   return rest;
 }
 
-// The slot under the pointer. `pressOffset` is where the icon was grabbed inside its own row.
 export function dragSlot(
   pointerY: number,
   pressOffset: number,

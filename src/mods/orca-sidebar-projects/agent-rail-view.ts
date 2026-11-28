@@ -26,7 +26,7 @@ import {
   moveInOrder,
   persistRailOrder,
   readRailOrder,
-} from "../../shared/rail-order.js";
+} from "../../services/agent-settings/sidebar-order.js";
 
 export type RailTheme = {
   accent: Color;
@@ -610,7 +610,7 @@ type RailSwapGroup = "unofficial" | "providers";
 
 // Drag to reorder (like a todo list): grab a row, it follows the pointer, and the other rows slide
 // to make room. Release commits the order on screen to the saved "rail.order".
-function railDragStart(
+function handleSidebarDragStart(
   owner: RailOwner,
   group: RailSwapGroup,
   key: string,
@@ -624,14 +624,14 @@ function railDragStart(
   cx.notify();
 }
 
-function railDragMove(owner: RailOwner, group: RailSwapGroup, e: MouseMoveEvent, cx: Context): void {
+function handleSidebarDragMove(owner: RailOwner, group: RailSwapGroup, e: MouseMoveEvent, cx: Context): void {
   const drag = owner.railDrag;
   if (!drag || drag.group !== group) return;
   drag.pointerY = e.local_position?.y ?? drag.pointerY;
   cx.notify();
 }
 
-function railDragEnd(owner: RailOwner, cx: Context): void {
+function handleSidebarDragEnd(owner: RailOwner, cx: Context): void {
   const drag = owner.railDrag;
   owner.railDrag = null;
   if (drag) {
@@ -646,7 +646,7 @@ function railDragEnd(owner: RailOwner, cx: Context): void {
 
 // The rows of a draggable group. Each row sits in its slot; the dragged row sits under the pointer
 // and is lifted with a shadow, while the others move to the slots the drag order gives them.
-function dragRows<T>(
+function DraggableAgentGroupRows<T>(
   owner: RailOwner,
   group: RailSwapGroup,
   items: readonly T[],
@@ -680,7 +680,7 @@ function dragRows<T>(
           .when(!dragged, (el) => el.transition("top", MOTION))
           .when(dragged, (el) => el.shadow_lg())
           .on_mouse_down("left", (e, cx) =>
-            railDragStart(owner, group, key, e.local_position?.y ?? 0, cx),
+            handleSidebarDragStart(owner, group, key, e.local_position?.y ?? 0, cx),
           )
           .when(item !== undefined, (el) => el.child(render(item!)));
       }),
@@ -719,8 +719,8 @@ function AgentCategoryGroup(
     .id("am-rail-list-" + title.toLowerCase())
     .when(isUnofficial, (el) =>
       el
-        .on_mouse_move((e, cx) => railDragMove(owner, "unofficial", e, cx))
-        .on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx)),
+        .on_mouse_move((e, cx) => handleSidebarDragMove(owner, "unofficial", e, cx))
+        .on_mouse_up("left", (_e, cx) => handleSidebarDragEnd(owner, cx)),
     )
     .w(SidebarUI.SIDEBAR__WIDTH_PX)
     .track_scroll(scroll)
@@ -728,7 +728,7 @@ function AgentCategoryGroup(
     .children(
       isUnofficial
         ? [
-            dragRows(
+            DraggableAgentGroupRows(
               owner,
               "unofficial",
               displayed,
@@ -775,13 +775,13 @@ function ModelProviderGroup(
   );
   const list = v_flex()
     .id("am-rail-list-model-providers")
-    .on_mouse_move((e, cx) => railDragMove(owner, "providers", e, cx))
-    .on_mouse_up("left", (_e, cx) => railDragEnd(owner, cx))
+    .on_mouse_move((e, cx) => handleSidebarDragMove(owner, "providers", e, cx))
+    .on_mouse_up("left", (_e, cx) => handleSidebarDragEnd(owner, cx))
     .w(SidebarUI.SIDEBAR__WIDTH_PX)
     .track_scroll(owner.providerRailScroll)
     .when(overflow, (inner) => inner.absolute().inset_0().overflow_y_scroll())
     .children([
-      dragRows(
+      DraggableAgentGroupRows(
         owner,
         "providers",
         displayed,

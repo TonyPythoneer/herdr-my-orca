@@ -419,7 +419,7 @@ function statusLetter(f: Entry, t: Palette): NativeElement {
     .child(f.status);
 }
 
-function hoverActions(t: Palette, buttons: NativeElement[]): NativeElement {
+function ChangeItemActionToolbar(t: Palette, buttons: NativeElement[]): NativeElement {
   return h_flex()
     .absolute()
     .right(0)
@@ -1278,7 +1278,7 @@ export default class Changes extends View {
       .when(f.add > 0 || f.del > 0, (e) => e.child(changeCounts(f, t)))
       .when(f.section === "conflicts", (e) => e.child(unresolvedBadge(t)))
       .when(f.section !== "conflicts", (e) => e.child(statusLetter(f, t)))
-      .when(hovered && buttons.length > 0, (e) => e.child(hoverActions(t, buttons)));
+      .when(hovered && buttons.length > 0, (e) => e.child(ChangeItemActionToolbar(t, buttons)));
   }
 
   openDiff(
@@ -1703,15 +1703,15 @@ export default class Changes extends View {
       .child("View all");
   }
 
-  commitArea(t: Palette, action: Action, cx: Context): NativeElement {
+  CommitForm(t: Palette, action: Action, cx: Context): NativeElement {
     return v_flex()
       .flex_none()
       .px(12)
       .pt(12)
       .pb(8)
       .child(this.commitBox(t))
-      .child(this.commitActions(t, action))
-      .when(this.menuOpen, (e) => e.child(this.actionMenu(t, action, cx)));
+      .child(this.CommitActionGroup(t, action))
+      .when(this.menuOpen, (e) => e.child(this.CommitActionMenuList(t, action, cx)));
   }
 
   commitBox(t: Palette): NativeElement {
@@ -1729,7 +1729,7 @@ export default class Changes extends View {
       .child(Textarea.new(this.input).w_full().text_size(12).text_color(themeColor(t.foreground)));
   }
 
-  commitActions(t: Palette, action: Action): NativeElement {
+  CommitActionGroup(t: Palette, action: Action): NativeElement {
     return h_flex()
       .mt(4)
       .gap(4)
@@ -1740,8 +1740,8 @@ export default class Changes extends View {
           .border_1()
           .border_color(themeColor(t.border))
           .items_stretch()
-          .child(this.commitPrimary(t, action))
-          .child(this.commitChevron(t)),
+          .child(this.CommitPrimaryActionButton(t, action))
+          .child(this.CommitActionsMenuTrigger(t)),
       )
       .when(Boolean(action.reason), (e) =>
         e.child(
@@ -1753,7 +1753,7 @@ export default class Changes extends View {
       );
   }
 
-  commitPrimary(t: Palette, action: Action): NativeElement {
+  CommitPrimaryActionButton(t: Palette, action: Action): NativeElement {
     return div()
       .id("commit-primary")
       .h(24)
@@ -1771,7 +1771,7 @@ export default class Changes extends View {
       .child(action.label);
   }
 
-  commitChevron(t: Palette): NativeElement {
+  CommitActionsMenuTrigger(t: Palette): NativeElement {
     return div()
       .id("commit-chevron")
       .h(24)
@@ -1796,7 +1796,7 @@ export default class Changes extends View {
       );
   }
 
-  actionMenu(t: Palette, action: Action, cx: Context): NativeElement {
+  CommitActionMenuList(t: Palette, action: Action, cx: Context): NativeElement {
     const canCommit = !action.disabled && action.kind === "commit";
     return v_flex()
       .w_full()
@@ -1977,7 +1977,7 @@ export default class Changes extends View {
       .text_size(13)
       .track_focus(this.handle)
       .on_key_down(rootKeyDown(this))
-      .child(this.commitArea(t, action, cx))
+      .child(this.CommitForm(t, action, cx))
       .when(this.limited, (e) => e.child(this.tooManyBanner(t, cx)))
       .child(
         v_flex()

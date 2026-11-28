@@ -399,7 +399,7 @@ export default class Tasks extends View {
     });
   }
 
-  togglePill(id: string, enabled: boolean, t: TasksTheme, action: Action): NativeElement {
+  TaskEnabledToggle(id: string, enabled: boolean, t: TasksTheme, action: Action): NativeElement {
     const label = enabled ? TURN_OFF : TURN_ON;
     return div()
       .id(id)
@@ -421,7 +421,7 @@ export default class Tasks extends View {
       .child(enabled ? "On" : "Off");
   }
 
-  disabledPill(t: TasksTheme): NativeElement {
+  TaskDisabledBadge(t: TasksTheme): NativeElement {
     return div()
       .h(20)
       .px(7)
@@ -704,10 +704,10 @@ export default class Tasks extends View {
               .truncate()
               .child(task.name),
           )
-          .when(disabled, (el) => el.child(this.disabledPill(t)))
+          .when(disabled, (el) => el.child(this.TaskDisabledBadge(t)))
           .when(!disabled, (el) =>
             el.child(
-              this.togglePill(`tm-on-${task.id}`, task.enabled, t, (_event, eventCx) =>
+              this.TaskEnabledToggle(`tm-on-${task.id}`, task.enabled, t, (_event, eventCx) =>
                 eventCx.spawn((taskCx) => this.toggle(taskCx, task)),
               ),
             ),

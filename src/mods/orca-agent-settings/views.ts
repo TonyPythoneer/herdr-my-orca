@@ -87,7 +87,7 @@ export function rowView(
         .py(0)
         .items_center()
         .overflow_hidden()
-        .child(rowIconTile(row, t, quiet))
+        .child(AgentLogoTile(row, t, quiet))
         .child(rowTitle(owner, row, t, open, quiet))
         .child(rowActions(owner, row, t, open)),
     )
@@ -104,7 +104,7 @@ export function rowView(
     );
 }
 
-function rowIconTile(row: ViewRow, t: PartsTheme, quiet: boolean): NativeElement {
+function AgentLogoTile(row: ViewRow, t: PartsTheme, quiet: boolean): NativeElement {
   return h_flex()
     .w(32)
     .h(32)
@@ -314,7 +314,7 @@ export function editorView(
     .pr(2)
     .pb(14)
     .gap(8)
-    .when(editor.conflict, (el) => el.child(conflictBox(owner, row, editor, t)))
+    .when(editor.conflict, (el) => el.child(AgentCommandConflictNotice(owner, row, editor, t)))
     .when(!(row.installed as boolean), (el) => el.child(notInstalledNotice(row, t)))
     .when(row.supports as boolean, (el) =>
       el.child(
@@ -442,7 +442,7 @@ function editorFooterActions(footer: NativeElement, options: EditorFooterOptions
     );
 }
 
-function conflictBox(
+function AgentCommandConflictNotice(
   owner: ViewOwner,
   row: ViewRow,
   editor: EditorLike,
@@ -736,10 +736,10 @@ export function uninstallSectionView(owner: ViewOwner, row: ViewRow, t: PartsThe
         ),
     )
     .when(Boolean(method) && (!request || phase === "error"), (el) =>
-      el.child(uninstallButtonRow(owner, row, t)),
+      el.child(AgentUninstallActions(owner, row, t)),
     )
-    .when(phase === "confirm", (el) => el.child(confirmBox(owner, row, request, t)))
-    .when(phase === "checking" || phase === "running", (el) => el.child(progressRow(request, t)))
+    .when(phase === "confirm", (el) => el.child(UninstallConfirmationContent(owner, row, request, t)))
+    .when(phase === "checking" || phase === "running", (el) => el.child(UninstallProgressStatus(request, t)))
     .when(phase === "error", (el) =>
       el.child(note(t.blocked, (request as { message?: string }).message as string)),
     )
@@ -755,7 +755,7 @@ export function uninstallSectionView(owner: ViewOwner, row: ViewRow, t: PartsThe
     );
 }
 
-function uninstallButtonRow(owner: ViewOwner, row: ViewRow, t: PartsTheme): NativeElement {
+function AgentUninstallActions(owner: ViewOwner, row: ViewRow, t: PartsTheme): NativeElement {
   return h_flex()
     .gap(8)
     .items_center()
@@ -796,7 +796,7 @@ function uninstallButtonRow(owner: ViewOwner, row: ViewRow, t: PartsTheme): Nati
     );
 }
 
-function confirmBox(
+function UninstallConfirmationContent(
   owner: ViewOwner,
   row: ViewRow,
   request: unknown,
@@ -846,7 +846,7 @@ function confirmActions(owner: ViewOwner, row: ViewRow, t: PartsTheme): NativeEl
     );
 }
 
-function progressRow(request: unknown, t: PartsTheme): NativeElement {
+function UninstallProgressStatus(request: unknown, t: PartsTheme): NativeElement {
   return h_flex()
     .gap(6)
     .items_center()

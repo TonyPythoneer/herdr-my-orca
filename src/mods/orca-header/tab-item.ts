@@ -102,7 +102,7 @@ function agentIcon(
     : image(program.icon).size(12);
 }
 
-function fillet(side: "left" | "right", t: HeaderTheme, flare: number): NativeElement {
+function ActiveTabBottomCurve(side: "left" | "right", t: HeaderTheme, flare: number): NativeElement {
   return div()
     .absolute()
     .bottom(0)
@@ -141,8 +141,8 @@ function tabSurface(
     .rounded_t(14)
     .bg(t.background)
     .opacity(tab.active ? 1 : 0)
-    .child(fillet("left", t, flare))
-    .child(fillet("right", t, flare));
+    .child(ActiveTabBottomCurve("left", t, flare))
+    .child(ActiveTabBottomCurve("right", t, flare));
   const hoverLayer = div()
     .id(`tab-hover-${tab.id}${copyId}`)
     .absolute()

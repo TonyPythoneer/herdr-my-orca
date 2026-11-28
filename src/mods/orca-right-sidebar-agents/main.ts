@@ -745,7 +745,7 @@ export default class AgentsPanel extends View {
       );
   }
 
-  scopeSwitch(
+  AgentSessionScopeToggleGroup(
     scope: string,
     workspaceAvailable: boolean,
     projectAvailable: boolean,
@@ -859,7 +859,7 @@ export default class AgentsPanel extends View {
           .child(div().truncate().text_size(12).font_semibold().child("Agent Session History"))
           .child(div().truncate().text_size(11).text_color(t.muted).child("Resume past sessions")),
       )
-      .child(this.scopeSwitch(scope, workspaceAvailable, projectAvailable, t))
+      .child(this.AgentSessionScopeToggleGroup(scope, workspaceAvailable, projectAvailable, t))
       .child(this.searchBar(t));
   }
 
