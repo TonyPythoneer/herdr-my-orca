@@ -9,7 +9,7 @@ import {
 import { h_flex, v_flex } from "gpui-base";
 import { closeOverlay, props, run, spaces } from "herdr";
 import { closePlan } from "./close-plan.js";
-import { DialogButton } from "../../shared/dialog-button.js";
+import { DialogButton } from "../../primitives/dialog-button.js";
 import type { ConfirmClose, HeaderProps, HeaderTheme } from "./types.js";
 import { headerTheme } from "./theme.js";
 

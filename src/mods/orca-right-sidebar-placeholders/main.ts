@@ -1,7 +1,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { theme, props } from "herdr";
-import { panelFrame } from "../../shared/panel-motion.js";
+import { panelFrame } from "../../components/right-sidebar/panel-motion.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 const MOD_NAME = "orca-right-sidebar-placeholders";

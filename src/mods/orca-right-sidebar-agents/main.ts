@@ -11,7 +11,7 @@ import {
   type SpaceInfo,
   type Status,
 } from "herdr";
-import { panelFrame } from "../../shared/panel-motion.js";
+import { panelFrame } from "../../components/right-sidebar/panel-motion.js";
 import { AGENT } from "../../config/definitions/agent-catalog.js";
 import { themeColor } from "../../shared/theme-color.js";
 

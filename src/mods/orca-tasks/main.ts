@@ -20,7 +20,7 @@ import {
   settings,
 } from "herdr";
 import { AGENT } from "../../config/definitions/agent-catalog.js";
-import { DialogButton } from "../../shared/dialog-button.js";
+import { DialogButton } from "../../primitives/dialog-button.js";
 import {
   PING_PROMPT,
   TASKS_FILE,

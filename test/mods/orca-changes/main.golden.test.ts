@@ -108,7 +108,7 @@ async function loadChanges(scope: Scope): Promise<MainModule> {
     copyText: (text: unknown, cx?: unknown) => scope.copyText(text, cx),
     reveal: (path: string, flag: boolean) => scope.reveal(path, flag),
   }));
-  vi.doMock("../../../src/shared/panel-motion.js", () => ({
+  vi.doMock("../../../src/components/right-sidebar/panel-motion.js", () => ({
     panelFrame: (inner: unknown) => scope.panelFrame(inner),
   }));
   vi.resetModules();

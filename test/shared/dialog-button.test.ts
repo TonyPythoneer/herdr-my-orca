@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { div } from "gpui-kit";
 import { callsOf } from "../stubs/gpui-kit";
-import { DialogButton } from "../../src/shared/dialog-button";
+import { DialogButton } from "../../src/primitives/dialog-button";
 
 type Call = ReturnType<typeof callsOf>[number];
 

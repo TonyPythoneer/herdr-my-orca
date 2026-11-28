@@ -48,7 +48,7 @@
       ]
     },
     {
-      "source": "src/shared/dialog-button.ts",
+      "source": "src/primitives/dialog-button.ts",
       "outputs": [
         "mods/orca-changes/dialog-button.js",
         "mods/orca-handoff/dialog-button.js",
@@ -77,7 +77,7 @@
       ]
     },
     {
-      "source": "src/shared/panel-motion.ts",
+      "source": "src/components/right-sidebar/panel-motion.ts",
       "outputs": [
         "mods/orca-files/panel-motion.js",
         "mods/orca-changes/panel-motion.js",

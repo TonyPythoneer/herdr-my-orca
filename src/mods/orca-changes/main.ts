@@ -41,8 +41,8 @@ import {
   pushConfigured,
   type ForcePushTarget,
 } from "./push-target.js";
-import { panelFrame } from "../../shared/panel-motion.js";
-import { DialogButton } from "../../shared/dialog-button.js";
+import { panelFrame } from "../../components/right-sidebar/panel-motion.js";
+import { DialogButton } from "../../primitives/dialog-button.js";
 import { themeColor } from "../../shared/theme-color.js";
 
 type Palette = Record<string, string | boolean>;

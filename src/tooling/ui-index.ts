@@ -17,7 +17,7 @@ export const SHARED_CONTROLS = ["IconButton", "DialogButton"];
 
 export const SHARED_CONTROL_FILES = new Set([
   "src/primitives/icon-button.ts",
-  "src/shared/dialog-button.ts",
+  "src/primitives/dialog-button.ts",
 ]);
 const CONTROL_CALL = new RegExp(`(?<!function\\s+)\\b(?:${SHARED_CONTROLS.join("|")})\\s*\\(`);
 

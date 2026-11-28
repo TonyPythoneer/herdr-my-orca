@@ -1,7 +1,7 @@
 import { describe, it } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { div } from "gpui-kit";
-import { panelFrame } from "../../src/shared/panel-motion";
+import { panelFrame } from "../../src/components/right-sidebar/panel-motion";
 import { callsOf } from "../stubs/gpui-kit";
 
 type Call = ReturnType<typeof callsOf>[number];
