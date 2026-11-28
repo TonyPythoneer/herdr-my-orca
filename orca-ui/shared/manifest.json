@@ -90,7 +90,7 @@
       "outputs": ["mods/orca-sidebar-projects/review-store.js"]
     },
     {
-      "source": "src/shared/scan.ts",
+      "source": "src/services/ports/scan.ts",
       "outputs": ["mods/orca-status-ports/scan.js"]
     },
     {
@@ -132,7 +132,7 @@
       ]
     },
     {
-      "source": "src/shared/transcript.ts",
+      "source": "src/services/agent-handoff/transcript.ts",
       "outputs": ["mods/orca-context-menu/transcript.js", "mods/orca-handoff/transcript.js"]
     },
     {

@@ -12,7 +12,7 @@ vi.mock("gpui-base", async () => {
 });
 vi.mock("herdr", async () => (await import("./host.js")).herdrMock());
 vi.mock("../../../src/shared/clip.ts", () => ({ copyText: () => {} }));
-vi.mock("../../../src/shared/transcript.ts", () => ({ buildBoundedSessionTranscript: () => null }));
+vi.mock("../../../src/services/agent-handoff/transcript.ts", () => ({ buildBoundedSessionTranscript: () => null }));
 
 import Menu from "../../../src/mods/orca-context-menu/main.js";
 

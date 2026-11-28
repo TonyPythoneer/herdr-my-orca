@@ -16,7 +16,7 @@ import {
   parseCwds,
   parseListeners,
   sections,
-} from "../../src/shared/scan";
+} from "../../src/services/ports/scan";
 
 const LSOF = [
   "p1097",

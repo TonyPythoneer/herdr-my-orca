@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { AsyncContext, Context } from "gpui-kit";
 import type { OverlaySpec } from "herdr";
 import Ports from "../../../src/mods/orca-status-ports/main.js";
-import type { Port } from "../../../src/shared/scan.ts";
+import type { Port } from "../../../src/services/ports/scan.ts";
 
 type Call = [string, unknown[]];
 type Node = { name: string; args: unknown[]; calls: Call[] };

@@ -31,7 +31,7 @@ vi.mock("../../../src/shared/clip.ts", async () => {
   const { host } = await import("./host.js");
   return { copyText: (text: unknown, cx: unknown) => host.onCopy?.(text, cx) };
 });
-vi.mock("../../../src/shared/transcript.ts", () => ({
+vi.mock("../../../src/services/agent-handoff/transcript.ts", () => ({
   buildBoundedSessionTranscript: (text: string) => text.trim() && `clean:${text.trim()}`,
 }));
 

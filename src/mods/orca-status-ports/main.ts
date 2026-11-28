@@ -37,7 +37,7 @@ import {
   parseListeners,
   sections,
   type Port,
-} from "../../shared/scan.js";
+} from "../../services/ports/scan.js";
 import { copyText } from "../../shared/clip.js";
 import { IconButton } from "../../primitives/icon-button.js";
 import { themeColor } from "../../shared/theme-color.js";

@@ -30,7 +30,7 @@ import {
   type TabInfo,
 } from "herdr";
 import { copyText } from "../../shared/clip.js";
-import { buildBoundedSessionTranscript } from "../../shared/transcript.js";
+import { buildBoundedSessionTranscript } from "../../services/agent-handoff/transcript.js";
 import { closeSideTabs, type CloseSide } from "./close-sides.js";
 import { closeRows } from "./close-space.js";
 import { themeColor } from "../../shared/theme-color.js";

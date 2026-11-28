@@ -26,7 +26,7 @@ import { DialogButton } from "../../shared/dialog-button.js";
 import {
   buildAgentSessionForkPrompt,
   buildAgentSessionContinuationPrompt,
-} from "../../shared/transcript.js";
+} from "../../services/agent-handoff/transcript.js";
 
 type AgentSpec = { id: string; name: string; run: string[] };
 
